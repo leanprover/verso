@@ -8,6 +8,7 @@ module
 public import Verso.Doc.Concrete
 public import Verso.Doc.DocName
 public import VersoBlog.Site
+meta import MultiVerso.Slug
 
 public section
 
@@ -38,6 +39,15 @@ scoped syntax withPosition(str ident (colGt (dir_spec <|> blog_spec))?) : page_s
 scoped syntax "static" str " ← " str : page_spec
 scoped syntax "static" str " <- " str : page_spec
 
+/--
+Mount a directory of rendered HTML content.
+
+The optional settings are the fields of `MountSettings`: whether the mount appears in navigation
+entries, and the fragments that the site leaves out on purpose.
+-/
+scoped syntax "mount" str " ← " str (" with " term)? : page_spec
+scoped syntax "mount" str " <- " str (" with " term)? : page_spec
+
 /-- A directory of pages -/
 scoped syntax "/" withPosition((colEq page_spec)+) : dir_spec
 
@@ -51,6 +61,17 @@ scoped syntax ident : post_spec
 scoped syntax num "-" num "-" num : date
 
 scoped syntax "site" site_spec : term
+
+/--
+Checks at elaboration time that a mount's name is a slug, so that the site configuration language
+never mangles a URL segment.
+-/
+meta def checkMountName (name : TSyntax `str) : MacroM Unit := do
+  let str := name.getString
+  if str.isEmpty || (Verso.Multi.Slug.isSlug? str).isNone then
+    Macro.throwErrorAt name <|
+      s!"'{str}' is not a slug, so it cannot name a mount. A mount's name is a URL segment made " ++
+      "of English letters, digits, '-', and '_'."
 
 namespace Internals
 scoped syntax "page" page_spec : term
@@ -84,3 +105,15 @@ macro_rules
     ``(Dir.static $name $d)
   | `(term| page static $name:str <- $d:str) =>
     ``(Dir.static $name $d)
+  | `(term| page mount $name:str ← $d:str) => do
+    checkMountName name
+    ``(Dir.mkMount $name $d)
+  | `(term| page mount $name:str <- $d:str) => do
+    checkMountName name
+    ``(Dir.mkMount $name $d)
+  | `(term| page mount $name:str ← $d:str with $settings) => do
+    checkMountName name
+    ``(Dir.mkMount $name $d $settings)
+  | `(term| page mount $name:str <- $d:str with $settings) => do
+    checkMountName name
+    ``(Dir.mkMount $name $d $settings)

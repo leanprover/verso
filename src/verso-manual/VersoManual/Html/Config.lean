@@ -10,7 +10,7 @@ import Verso.BEq
 public import Lean.Data.Json.FromToJson
 import VersoUtil.BinFiles.Z85
 public import VersoManual.Html.Features
-public import VersoManual.Html.JsFile
+public import Verso.Output.Html.Files
 public import VersoManual.LicenseInfo
 
 namespace Verso.Genre.Manual

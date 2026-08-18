@@ -15,6 +15,8 @@ public import VersoBlog.Site
 public import VersoBlog.Component
 public import Verso.Output.Html
 public import Verso.Output.Html.CssVars
+public import Verso.Output.Html.Files
+public import Verso.Output.Html.KaTeX
 public import Verso.Code
 public import Verso.Instances
 public import Verso.Doc.DocName
@@ -24,6 +26,7 @@ public section
 open Std (HashSet TreeMap)
 
 open Verso Doc Output Html HtmlT
+open Verso.Output.Html.Files
 open Verso.Genre Blog
 open SubVerso.Highlighting
 
@@ -88,21 +91,95 @@ instance [MonadReaderOf Components m] [MonadStateOf Component.State m] : MonadCo
   saveJs js := modify fun s => { s with headerJs := s.headerJs.insert js }
   saveCss css := modify fun s => { s with headerCss := s.headerCss.insert css }
 
+/-- The contents of a file that should be emitted with a page. -/
+inductive AssetContents where
+  /-- A text file. -/
+  | text (contents : String)
+  /-- A binary file. -/
+  | binary (contents : ByteArray)
+
+/--
+The files that a page's `<head>` needs beyond `builtinAssets`.
+
+Stylesheets are in cascade order and scripts are in load order, so neither is ever sorted by name.
+-/
+structure HeadAssets where
+  /-- The stylesheets. -/
+  css : Array CssFile := #[]
+  /-- The scripts. -/
+  js : Array JsFile := #[]
+
+instance : Append HeadAssets where
+  append x y := { css := x.css ++ y.css, js := x.js ++ y.js }
+
+instance : EmptyCollection HeadAssets := ⟨{}⟩
+
+/--
+Names assets that carry no name of their own by a hash of their contents, and puts them in the order
+of that hash, so that adding one leaves the order of the others unchanged.
+-/
+def hashNames (kind : String) (extension : String) (contents : HashSet String) :
+    Array (String × String) :=
+  contents.toArray.map (fun c => (s!"{kind}-{c.hash}{extension}", c)) |>.qsort (·.1 < ·.1)
+
+@[inherit_doc hashNames]
+def hashNamedCss (kind : String) (contents : HashSet String) : Array CssFile :=
+  (hashNames kind ".css" contents).map fun (filename, contents) => {filename, contents := ⟨contents⟩}
+
+@[inherit_doc hashNames]
+def hashNamedJs (kind : String) (contents : HashSet String) : Array JsFile :=
+  (hashNames kind ".js" contents).map fun (filename, contents) =>
+    {filename, contents := ⟨contents⟩, sourceMap? := none}
+
+/--
+The stylesheets and scripts that a mounted directory of rendered HTML content contributes to one
+page.
+
+The paths are already resolved against the mount point, and `builtinHeader` places them, so a theme
+that calls it needs nothing more. They are empty on a page that mounts nothing.
+-/
+structure MountedAssets where
+  /--
+  The mounted stylesheets that define `--verso-*` custom properties.
+
+  The header emits these ahead of its own definitions and everything after them, so that the site's
+  values win for every property it defines and the content's values stand for the rest.
+  -/
+  variableStyles : Array String := #[]
+  /-- The mounted stylesheets that style the content's markup. -/
+  contentStyles : Array String := #[]
+  /-- The mounted scripts, with their `defer` flags. -/
+  scripts : Array (String × Bool) := #[]
+deriving Inhabited
+
 structure Context where
   site : Site
   config : Config
   path : Multi.Path
   params : Params
-  builtInStyles : HashSet String
-  builtInScripts : HashSet String
-  jsFiles : Array String
-  cssFiles : Array String
+  /--
+  The files that the page's `<head>` needs, given the components that have been rendered so far.
+  -/
+  headAssets : Component.State → HeadAssets
+  /-- What the directories mounted on this page contribute to its `<head>`. -/
+  mounted : MountedAssets := {}
   components : Components
+
+/--
+The parameter keys used while rendering a template.
+-/
+structure RenderTrace where
+  /-- The parameter keys that were used. -/
+  params : HashSet String := {}
+deriving Inhabited
+
+instance : Append RenderTrace where
+  append x y := { params := x.params ∪ y.params }
 
 end Template
 
 abbrev TemplateT (m : Type → Type) (α : Type) : Type :=
-  ReaderT Template.Context (StateT Component.State m) α
+  ReaderT Template.Context (StateT Template.RenderTrace (StateT Component.State m)) α
 
 instance [Monad m] : Template.MonadComponents (TemplateT m) where
   componentImpls := do return (← read).components
@@ -319,11 +396,14 @@ instance : MonadConfig TemplateM where
 
 namespace Template
 
+def addTrace [MonadStateOf RenderTrace m] (key : String) : m Unit :=
+  modifyThe RenderTrace fun trace => { trace with params := trace.params.insert key }
 /--
 Returns the value of the given template, if it exists.
 If it exists but has the wrong type, an exception is thrown.
 -/
 def param? [TypeName α] (key : String) : TemplateM (Option α) := do
+  addTrace key
   let ctx ← readThe Context
   match ctx.params.get? key with
   | none => return none
@@ -336,41 +416,95 @@ Returns the value of the given template, if it exists. If it does not exist or i
 the wrong type, an exception is thrown.
 -/
 def param [TypeName α] (key : String) : TemplateM α := do
+  addTrace key
   match (← read).params.get? key with
   | none => throw <| .missingParam key
   | some val =>
     if let some v := val.get? (α := α) then return v
     else throw <| .wrongParamType key (TypeName.typeName α)
 
+open Verso.Code.Highlighted.WebAssets in
+/--
+The files that `builtinHeader` references, relative to the data directory.
+
+Everything that a page needs is served by the site itself, so a page depends on nothing on the
+network.
+-/
+def builtinAssets (selector : String) : Array (String × AssetContents) :=
+  #[("verso-vars.css", AssetContents.text «verso-vars.css»),
+    ("katex/katex.css", .text katex.css),
+    ("katex/katex.js", .text katex.js),
+    ("marked.js", .text marked),
+    ("marked.umd.min.js.map", .text marked.map),
+    ("math.js", .text (mathJs selector))] ++
+  katexFonts.map (fun (name, contents) => (name, .binary contents))
+
+/--
+Writes a file that a site's pages reference into the site's data directory.
+-/
+def writeAsset (root : System.FilePath) (name : String) (contents : AssetContents) : IO Unit := do
+  let path := root / dataDirName / name
+  path.parent.forM IO.FS.createDirAll
+  match contents with
+  | .text txt => IO.FS.writeFile path txt
+  | .binary bytes => IO.FS.writeBinFile path bytes
+
+/--
+Writes the files that `builtinHeader` references into a site's data directory.
+-/
+def writeBuiltinAssets (root : System.FilePath)
+    (selector : String) : IO Unit := do
+  for (name, contents) in builtinAssets selector do
+    writeAsset root name contents
+
+/--
+Writes the files that a page's `<head>` references into a site's data directory.
+-/
+def writeHeadAssets (root : System.FilePath) (assets : HeadAssets) : IO Unit := do
+  for css in assets.css do
+    writeAsset root css.filename (.text css.contents.css)
+  for js in assets.js do
+    writeAsset root js.filename (.text js.contents.js)
+    if let some sourceMap := js.sourceMap? then
+      writeAsset root sourceMap.filename (.text sourceMap.contents)
+
 /--
 Contains the contents of `<head>` that are needed for proper functioning of the site.
+
+A theme invokes this before defining its own custom properties, so that its definitions override the
+ones that the content ships with.
 -/
 def builtinHeader : TemplateM Html := do
   let siteRoot := String.join ((← currentPath).toList.map fun _ => "../") ++ "./"
+  let assets := (← read).headAssets (← getThe Component.State)
   let mut out := .empty
+  let mounted := (← read).mounted
   -- Establish that all relative paths should be relative to siteRoot
   out := out ++ {{<base href={{siteRoot}}/>}}
-  -- These should come first so later stylesheets can easily override them.
-  out := out ++ {{<style>{{«verso-vars.css»}}</style>}}
-  for style in (← read).builtInStyles do
-    out := out ++ {{<style>"\n"{{.text false style}}"\n"</style>"\n"}}
-  for script in (← read).builtInScripts do
-    out := out ++ {{<script>"\n"{{.text false script}}"\n"</script>"\n"}}
-  for js in (← read).jsFiles do
-    out := out ++ {{<script src=s!"-verso-data/{js}"></script>}}
-  for css in (← read).cssFiles do
-    out := out ++ {{<link rel="stylesheet" href=s!"-verso-data/{css}"/>}}
-  out := out ++ {{
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous"/>
-    <script defer="defer" src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
-  }}
-
-  -- Components
-  for style in (← get).headerCss do
-    out := out ++ {{<style>"\n"{{.text false style}}"\n"</style>"\n"}}
-  for script in (← get).headerJs do
-    out := out ++ {{<script>"\n"{{.text false script}}"\n"</script>"\n"}}
+  -- The custom properties come first so that later stylesheets can easily override them. A mount's
+  -- own definitions come first of all, so the site's values win for every property it defines and
+  -- the mount's values stand for the rest.
+  for css in mounted.variableStyles do
+    out := out ++ {{<link rel="stylesheet" href={{css}}/>}}
+  out := out ++ {{<link rel="stylesheet" href=s!"{dataDirName}/verso-vars.css"/>}}
+  out := out ++ {{<link rel="stylesheet" href=s!"{dataDirName}/katex/katex.css"/>}}
+  for css in assets.css do
+    out := out ++ {{<link rel="stylesheet" href=s!"{dataDirName}/{css.filename}"/>}}
+  out := out ++ {{<script defer="defer" src=s!"{dataDirName}/katex/katex.js"></script>}}
+  out := out ++ {{<script src=s!"{dataDirName}/marked.js"></script>}}
+  out := out ++ {{<script src=s!"{dataDirName}/math.js"></script>}}
+  for css in mounted.contentStyles do
+    out := out ++ {{<link rel="stylesheet" href={{css}}/>}}
+  for js in assets.js do
+    if js.defer then
+      out := out ++ {{<script defer="defer" src=s!"{dataDirName}/{js.filename}"></script>}}
+    else
+      out := out ++ {{<script src=s!"{dataDirName}/{js.filename}"></script>}}
+  for (js, defer) in mounted.scripts do
+    if defer then
+      out := out ++ {{<script defer="defer" src={{js}}></script>}}
+    else
+      out := out ++ {{<script src={{js}}></script>}}
   pure out
 
 

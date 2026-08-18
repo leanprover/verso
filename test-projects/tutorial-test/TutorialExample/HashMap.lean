@@ -20,7 +20,7 @@ exampleStyle := .inlineLean `HashMap
 
 This is a machine-generated tutorial used for testing the feature. Please don't attempt to learn from it. Think of it as more-realistic Lorem Ipsum.
 
-{name}`Std.HashMap` provides an efficient hash table implementation for key-value storage with average O(1) lookup, insertion, and deletion. This guide covers practical usage of hash maps in Lean 4.
+{name}`Std.HashMap` provides an efficient hash table implementation for key-value storage with average $`O(1)` lookup, insertion, and deletion. This guide covers practical usage of hash maps in Lean 4.
 
 # Importing and Setup
 

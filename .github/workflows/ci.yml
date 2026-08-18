@@ -145,6 +145,12 @@ jobs:
               run: |
                   inkscape --version
 
+            # The tests check that the tutorial emitter's own rendered HTML content loads through
+            # the same reader that a consuming site uses, so it is generated first.
+            - name: Generate the test tutorial site as rendered HTML content
+              run: |
+                  lake exe tutorial-example-rendered-html
+
             - name: Run tests
               run: |
                   lake test -- --verbose --check-tex
@@ -180,6 +186,22 @@ jobs:
             - name: Check internal links on the test tutorial site
               run: |
                   linkchecker --config=.linkchecker/linkcheckerrc --no-status ./_out/tut/
+
+            - name: Generate the site that mounts rendered HTML content
+              run: |
+                  lake exe mount-site --output _out/test-projects/mount-site
+
+            - name: Check internal links on the mounting site
+              run: |
+                  linkchecker --config=.linkchecker/linkcheckerrc --no-status ./_out/test-projects/mount-site/
+
+            # A site is served from wherever its root is mounted, so nothing that Verso emits may be
+            # root-relative. The fixture holds one on purpose, to pin that content may.
+            - name: Check that the generated sites work under a URL prefix
+              run: |
+                  ./scripts/check-url-prefix.sh _out/test-projects/demosite
+                  ./scripts/check-url-prefix.sh _out/tut
+                  ./scripts/check-url-prefix.sh _out/test-projects/mount-site --allow 'href="/"$'
 
             - name: Generate the manual
               run: |
@@ -268,7 +290,14 @@ jobs:
                     browser-tests/test_search_page.py \
                     browser-tests/test_toc_resize.py \
                     browser-tests/test_redirect.py \
+                    browser-tests/test_search_path_prefix.py \
                     browser-tests/test_katex.py -v
+
+            - name: Run the mounted content browser tests
+              run: |
+                  uv run --project browser-tests --extra test pytest \
+                    browser-tests/mount-site -v \
+                    --site-dir "$(pwd)/_out/test-projects/mount-site"
 
             - name: Build the VersoHtml site for browser tests
               run: |

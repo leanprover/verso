@@ -1,0 +1,8 @@
+.verso-content.content .fixture-intro {
+    color: var(--verso-text-color);
+}
+
+.verso-content.localNav .fixture-local-toc {
+    color: var(--verso-structure-color);
+    border-left: 1px solid var(--verso-fixture-rule-color);
+}

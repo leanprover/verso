@@ -11,8 +11,7 @@ import Lean.Data.Json.FromToJson
 import all MultiVerso.InternalId
 public meta import MultiVerso.NameMap
 public meta import MultiVerso
-public meta import VersoManual.Html.JsFile
-public meta import VersoManual.Html.CssFile
+public meta import Verso.Output.Html.Files
 public meta import VersoManual.Html.Features
 public meta import VersoManual.LicenseInfo
 public meta import VersoSearch
@@ -21,13 +20,14 @@ public meta import Verso.Output.Html
 public meta import MultiVerso.Manifest
 public meta import VersoManual.Basic
 import all VersoManual.Basic
-import VersoManual.Html.CssFile
+import Verso.Output.Html.Files
 
 open Lean
 open Plausible Gen Arbitrary
 open Verso Multi
 open Shrinkable
 open Std
+open Verso.Output.Html.Files
 
 /-!
 This module contains Plausible generators for most of the types that Verso regularly serializes or

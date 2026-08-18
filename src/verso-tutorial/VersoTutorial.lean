@@ -16,6 +16,7 @@ public import VersoBlog.Basic
 public import VersoBlog.Component
 public import VersoBlog.Template
 public import VersoBlog.Generate
+public import VersoBlog.RenderedHtml.Export
 public import VersoTutorial.Basic
 
 public section
@@ -477,7 +478,23 @@ def toSite (tuts : Tutorials) : EmitM Blog.Site := do
 def EmitM.blogConfig : EmitM Blog.Config := do
   return { verbose := (← EmitM.config).verbose }
 
-def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.TraverseState) (extraParams : Path → Blog.Template.Params:= fun _ => {}) : EmitM α := do
+/--
+Folds the assets that the manual genre accumulated during traversal into the blog genre's traversal
+state, so that one state describes everything that a tutorial page needs.
+-/
+def blogTraverseState
+    (state : Blog.TraverseState) (mSt : Manual.TraverseState) (remoteContent : AllRemotes) :
+    Blog.TraverseState :=
+  { state with
+    scripts := state.scripts.insertMany (mSt.extraJs |>.toArray |>.map (·.js)),
+    stylesheets := state.stylesheets.insertMany (mSt.extraCss |>.toArray |>.map (·.css)),
+    cssFiles := state.cssFiles ++ mSt.extraCssFiles.toArray,
+    jsFiles := state.jsFiles ++ mSt.extraJsFiles.toArray,
+    remoteContent := remoteContent
+  }
+
+def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.TraverseState)
+    (extraParams : Path → Blog.Template.Params:= fun _ => {}) : EmitM α := do
   let st ← getThe (Code.Hover.State _)
   let st' ← getThe Blog.Component.State
   let mSt ← readThe Manual.TraverseState
@@ -491,13 +508,7 @@ def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.Trav
     site,
     theme,
     ctxt := (← read).toBlogContext,
-    xref := { state with
-      scripts := state.scripts.insertMany (mSt.extraJs |>.toArray |>.map (·.js)),
-      stylesheets := state.stylesheets.insertMany (mSt.extraCss |>.toArray |>.map (·.css)),
-      cssFiles := state.cssFiles ++ (mSt.extraCssFiles |>.toArray |>.map fun css => (css.filename, css.contents.css)),
-      jsFiles := state.jsFiles ++ (mSt.extraJsFiles |>.toArray |>.map fun js => (js.filename, js.contents.js, js.sourceMap?.map (fun m => (m.filename, m.contents)))),
-      remoteContent := remoteContent
-    },
+    xref := blogTraverseState state mSt remoteContent,
     linkTargets,
     dir := (← read).config.destination,
     config := (← EmitM.blogConfig),
@@ -510,27 +521,22 @@ def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.Trav
   set st'
   return v
 
-open EmitM in
-def emit (tutorials : Tutorials) (navSite : Option Blog.Site) : EmitM Unit := do
+/--
+Writes the code archive of each tutorial and computes the local table of contents, returning the
+template parameters that the local navigation of each tutorial page needs.
 
-  let dir := (← read).config.destination
-  ensureDir dir
-  (← readThe Manual.TraverseState).writeFiles (dir / "-verso-data")
-
-  let site ← toSite tutorials
-  let (site, blogState) ← site.traverse (← blogConfig) (← read).components
-
-  let state ← readThe Manual.TraverseState
-
-  state.writeFiles dir
-
+`assetDir` is where the archives are written. It is the site's root for standalone output and the
+content's static directory for rendered HTML content, so a tutorial's links are the same in both.
+-/
+def prepareTutorials (tutorials : Tutorials) (site : Blog.Site) (assetDir : System.FilePath) :
+    EmitM (Path → Blog.Template.Params) := do
   let mut tutorialCode : HashMap String ((String × String) × Option LiveConfig) := {}
 
   for sec in tutorials.topics do
     for tut in sec.tutorials do
       let some metadata := tut.metadata
         | continue
-      let dir := dir / metadata.slug
+      let dir := assetDir / metadata.slug
       let code := getCode tut
       ensureDir dir
 
@@ -559,7 +565,7 @@ def emit (tutorials : Tutorials) (navSite : Option Blog.Site) : EmitM Unit := do
         else pure none)
     else pure {}
 
-  let extraParams := fun
+  return fun
     | #[p] =>
       if let some (zipFile, live?) := tutorialCode[p]? then
         if let some toc := tutorialTocs[p]? then
@@ -568,29 +574,93 @@ def emit (tutorials : Tutorials) (navSite : Option Blog.Site) : EmitM Unit := do
       else {}
     | _ => {}
 
+open EmitM in
+def emit (tutorials : Tutorials) (navSite : Option Blog.Site) : EmitM Unit := do
+
+  let dir := (← read).config.destination
+  ensureDir dir
+  (← readThe Manual.TraverseState).writeFiles (dir / "-verso-data")
+
+  -- A caller-supplied navigation site was not traversed here, so its mounts are resolved now.
+  let navSite ← navSite.mapM (·.resolveMounts)
+
+  let site ← toSite tutorials
+  let (site, blogState) ← site.traverse (← blogConfig) (← read).components
+
+  let state ← readThe Manual.TraverseState
+
+  state.writeFiles dir
+
+  let extraParams ← prepareTutorials tutorials site dir
+
   let theme := (← read).theme
   liftGenerate (site.generate theme) (navSite.getD site) blogState (extraParams := extraParams)
 
 
   writeFile (dir / "-verso-docs.json") (toString (← getThe <| Code.Hover.State _).dedup.docJson)
 
-  for (filename, contents, srcMap?) in blogState.jsFiles do
-    let filename := (dir / "-verso-data" / filename)
-    filename.parent.forM (IO.FS.createDirAll ·)
-    writeFile filename contents
-    if let some m := srcMap? then
-      let filename := (dir / "-verso-data" / m.1)
-      filename.parent.forM (IO.FS.createDirAll ·)
-      writeFile filename m.2
-  for (filename, contents, _) in theme.jsFiles do
-    let filename := (dir / "-verso-data" / filename)
-    filename.parent.forM (IO.FS.createDirAll ·)
-    writeFile filename contents
+  let xref := blogTraverseState blogState (← readThe Manual.TraverseState) (← read).remoteContent
+  Blog.Template.writeBuiltinAssets dir "body"
+  Blog.Template.writeHeadAssets dir (theme.headAssets xref (← getThe Blog.Component.State))
 
-  for (filename, contents) in theme.cssFiles ++ blogState.cssFiles  do
-    let filename := (dir / "-verso-data" / filename)
-    filename.parent.forM (IO.FS.createDirAll ·)
-    writeFile filename contents
+/--
+The name of the fragment that holds a tutorial page's local table of contents, its code download,
+and its live editor link.
+-/
+def localNavFragment : Slug := "localNav".sluggify
+
+open Verso.Genre.Blog.Template in
+/-- The template that renders the local navigation of a tutorial page as its own fragment. -/
+def localNavTemplate : Blog.Template := do
+  return (← param? "tutorialNav").getD .empty
+
+/--
+Identifies this version of Verso as the producer of a directory of rendered HTML content.
+
+Verso versions with Lean, so the release is identified through Lean's version string and the default
+toolchain.
+-/
+def defaultGenerator : RenderedHtmlContent.Generator where
+  tool := "verso-tutorial"
+  version := Lean.versionString
+  toolchain := defaultToolchain
+
+open EmitM in
+/--
+Renders the tutorials as a directory of rendered HTML content: page bodies, head requirements, and
+assets, with no page chrome.
+
+The traversal state's files, the code archives, the hover data, and the cross-reference database are
+written under the content's static directory, at the same paths that they occupy in the standalone
+output, so a tutorial's links are unchanged apart from the token prefix.
+-/
+def emitRenderedHtml
+    (tutorials : Tutorials) (navSite : Option Blog.Site)
+    (generator : RenderedHtmlContent.Generator) : EmitM Unit := do
+  let dir := (← read).config.destination
+  let assetDir := Verso.RenderedHtml.staticDir dir
+  ensureDir assetDir
+  (← readThe Manual.TraverseState).writeFiles (assetDir / "-verso-data")
+
+  -- A caller-supplied navigation site was not traversed here, so its mounts are resolved now.
+  let navSite ← navSite.mapM (·.resolveMounts)
+
+  let site ← toSite tutorials
+  let opts : Blog.RenderedHtmlOptions := {
+    generator,
+    fragments := #[(localNavFragment, localNavTemplate)]
+  }
+  let wrapper := opts.wrapperClass site
+  let (site, blogState) ← site.traverse (← blogConfig) (← read).components
+
+  (← readThe Manual.TraverseState).writeFiles assetDir
+
+  let extraParams ← prepareTutorials tutorials site assetDir
+
+  let theme := (← read).theme
+  let _ ←
+    liftGenerate (Blog.Site.writeRenderedHtml dir theme site opts wrapper)
+      (navSite.getD site) blogState (extraParams := extraParams)
 
 end
 
@@ -621,7 +691,7 @@ def SavedState.load (file : System.FilePath) : IO SavedState := do
 
 open Verso.CLI
 
-open Verso.Output.Html in
+open Verso.Output.Html Files in
 open Verso.Genre.Blog.Template in
 def defaultTheme := { Blog.Theme.default with
   pageTemplate :=  do
@@ -632,23 +702,24 @@ def defaultTheme := { Blog.Theme.default with
         {{← param "content"}}
       </article>
     }}
-  cssFiles := Blog.Theme.default.cssFiles ++ #[("local-toc.css", localToCStyle)]
+  cssFiles := Blog.Theme.default.cssFiles ++
+    #[({ filename := "local-toc.css", contents := localToCStyle } : CssFile)]
 }
 
-open scoped Verso.Genre.Blog.Template in
 /--
-Generates a tutorials site in HTML, based on `tutorials`.
+The option parsing, traversal, delay and resume handling, and emission that every kind of tutorial
+output shares.
 
-* `args` should be the command-line arguments provided to `main`
-* `theme` should be a theme for the blog genre. Tutorial pages are provided with an additional
-  template parameter `"tutorialNav"` with local navigation and code links.
+`xrefDir` is the directory that the cross-reference database is written to, relative to the
+destination.
 -/
-def tutorialsMain (tutorials : Tutorials) (args : List String)
-    (config : Config := {})
-    (theme : Blog.Theme := defaultTheme)
-    (navSite : Option Blog.Site := none)
-    (extensionImpls : ExtensionImpls := by exact extension_impls%)
-    (components : Blog.Components := by exact %registered_components) :
+def tutorialsCore (tutorials : Tutorials) (args : List String)
+    (config : Config)
+    (theme : Blog.Theme)
+    (xrefDir : System.FilePath → System.FilePath)
+    (emitter : Tutorials → EmitM Unit)
+    (extensionImpls : ExtensionImpls)
+    (components : Blog.Components) :
     IO UInt32 :=
   ReaderT.run go extensionImpls
 
@@ -657,21 +728,19 @@ where
     let config ← opts config args
 
     IO.FS.createDirAll config.destination
+    let xrefDest := xrefDir config.destination
 
     -- Traversal
     let (tutorials, state) ←
       match config.emit with
       | .immediately =>
         let (tutorials, state) ← traverse logger tutorials config.toConfig
-        let json := xrefJson state.domains state.externalTags
-
-        IO.FS.writeFile (config.destination / "xref.json") <| toString json
+        writeXref xrefDest state
         pure (tutorials, state)
       | .delay f =>
         let (tutorials, state) ← traverse logger tutorials config.toConfig
         SavedState.mk tutorials state |>.save f
-        let json := xrefJson state.domains state.externalTags
-        IO.FS.writeFile (config.destination / "xref.json") <| toString json
+        writeXref xrefDest state
         -- No HTML is emitted in this mode; returning early here causes the exit code to be derived
         -- from the surrounding `withLogger` based on whether errors were logged.
         return
@@ -687,7 +756,11 @@ where
     let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
 
     -- Emit HTML
-    let ((), _) ← (emit tutorials navSite).run config.toConfig logger state extensionImpls {} {} components theme remoteContent
+    let ((), _) ← (emitter tutorials).run config.toConfig logger state extensionImpls {} {} components theme remoteContent
+
+  writeXref (dest : System.FilePath) (state : Manual.TraverseState) : IO Unit := do
+    IO.FS.createDirAll dest
+    IO.FS.writeFile (dest / "xref.json") <| toString (xrefJson state.domains state.externalTags)
 
   opts (cfg : Config) : List String → ReaderT ExtensionImpls IO Config
     | ("--output"::dir::more) => opts { cfg with destination := dir } more
@@ -708,3 +781,48 @@ where
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
   termination_by args => args
+
+open scoped Verso.Genre.Blog.Template in
+/--
+Generates a tutorials site in HTML, based on `tutorials`.
+
+* `args` should be the command-line arguments provided to `main`
+* `theme` should be a theme for the blog genre. Tutorial pages are provided with an additional
+  template parameter `"tutorialNav"` with local navigation and code links.
+-/
+def tutorialsMain (tutorials : Tutorials) (args : List String)
+    (config : Config := {})
+    (theme : Blog.Theme := defaultTheme)
+    (navSite : Option Blog.Site := none)
+    (extensionImpls : ExtensionImpls := by exact extension_impls%)
+    (components : Blog.Components := by exact %registered_components) :
+    IO UInt32 :=
+  tutorialsCore tutorials args config theme id (emit · navSite) extensionImpls components
+
+open scoped Verso.Genre.Blog.Template in
+/--
+Generates a directory of rendered HTML content from `tutorials`: page bodies, head requirements, and
+assets, with no page chrome.
+
+A site that mounts the result renders it with its own theme, so the page chrome lives in one place
+and stays current for archived versions as well as new ones.
+
+* `args` should be the command-line arguments provided to `main`
+* `theme` should be a theme for the blog genre whose page template places the page's content only,
+  as `Blog.Theme.contentOnly` does.
+  The local table of contents and the code links become the `localNav` fragment rather than part of
+  the page, so a site that mounts the result places them itself.
+* `generator` identifies the tool that produced the content.
+
+A project that wants both output kinds calls this and `tutorialsMain`.
+-/
+def tutorialsRenderedHtmlMain (tutorials : Tutorials) (args : List String)
+    (config : Config := {})
+    (theme : Blog.Theme := Blog.Theme.contentOnly)
+    (navSite : Option Blog.Site := none)
+    (generator : RenderedHtmlContent.Generator := defaultGenerator)
+    (extensionImpls : ExtensionImpls := by exact extension_impls%)
+    (components : Blog.Components := by exact %registered_components) :
+    IO UInt32 :=
+  tutorialsCore tutorials args config theme Verso.RenderedHtml.staticDir
+    (emitRenderedHtml · navSite generator) extensionImpls components

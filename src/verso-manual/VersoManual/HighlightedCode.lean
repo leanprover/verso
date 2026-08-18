@@ -7,7 +7,7 @@ module
 import VersoManual.Basic
 public import VersoManual.License
 public import VersoManual.LicenseInfo.Licenses
-public import VersoManual.Html.JsFile
+public import Verso.Output.Html.Files
 public import Verso.Code.Highlighted.WebAssets
 
 namespace Verso.Genre.Manual
@@ -16,6 +16,7 @@ open Verso.Code
 open Verso.Code.Highlighted.WebAssets
 
 open Licenses
+open Verso.Output.Html.Files
 
 public class CanHighlightCode (α : Type) where
   addDependencies : α → α

@@ -16,6 +16,11 @@ multi.json
 single.json
 *.html
 !/doc/stats.html
+# Rendered HTML content fixtures are checked in and never regenerated. A new fixture directory
+# needs its own line here, or its fragments are silently left out of the repository.
+!/test-projects/rendered-html-fixture/**/*.html
+!/test-projects/rendered-html-sparse-fixture/**/*.html
+!/test-projects/rendered-html-conflict-fixture/**/*.html
 *.produced.out
 __pycache__
 test-projects/literate-config/lake-manifest.json

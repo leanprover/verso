@@ -15,6 +15,7 @@ public import SubVerso.Highlighting
 public import Verso.Code
 public import Verso.Doc
 public import Verso.Doc.Html
+public import Verso.Output.Html.Files
 public import Verso.Method
 public import MultiVerso
 
@@ -27,6 +28,7 @@ open Std (HashSet HashMap)
 open Lean (Json ToJson FromJson)
 
 open Verso Doc Output Html Code
+open Verso.Output.Html.Files
 open Verso.Multi
 open SubVerso.Highlighting
 
@@ -255,6 +257,9 @@ structure Components where
 deriving Inhabited
 
 
+/-- The directory, relative to a site's root, that holds the files that its pages reference. -/
+def dataDirName : String := "-verso-data"
+
 structure TraverseContext where
   path : Multi.Path := .root
   config : Config
@@ -268,19 +273,24 @@ structure TraverseState where
   pageIds : Lean.NameMap Blog.Info.PageMeta := {}
   scripts : HashSet String := {}
   stylesheets : HashSet String := {}
-  jsFiles : Array (String × String × Option (String × String)) := #[]
-  cssFiles : Array (String × String) := #[]
+  jsFiles : Array JsFile := #[]
+  cssFiles : Array CssFile := #[]
   errors : HashSet String := {}
   remoteContent : AllRemotes
 
-def TraverseState.addJsFile (st : TraverseState) (name content : String) (sourceMap : Option (String × String) := none) :=
-  if st.jsFiles.all (·.1 != name) then
-    {st with jsFiles := st.jsFiles.push (name, content, sourceMap)}
+def TraverseState.addJsFile (st : TraverseState) (name content : String)
+    (sourceMap : Option (String × String) := none) (defer : Bool := false)
+    (after : Array String := #[]) :=
+  if st.jsFiles.all (·.filename != name) then
+    {st with jsFiles := st.jsFiles.push {
+      filename := name, contents := ⟨content⟩, defer, after,
+      sourceMap? := sourceMap.map fun (filename, contents) => {filename, contents}
+    } }
   else st
 
 def TraverseState.addCssFile (st : TraverseState) (name content : String) :=
-  if st.cssFiles.all (·.1 != name) then
-    {st with cssFiles := st.cssFiles.push (name, content)}
+  if st.cssFiles.all (·.filename != name) then
+    {st with cssFiles := st.cssFiles.push {filename := name, contents := ⟨content⟩} }
   else st
 
 /-- The metadata used for non-blog-post pages -/

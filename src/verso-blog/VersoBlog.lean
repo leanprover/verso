@@ -12,6 +12,7 @@ public import VersoBlog.Basic
 public import VersoBlog.LiterateLeanPage
 public import VersoBlog.LiterateModuleDocs
 public import VersoBlog.Generate
+public import VersoBlog.RenderedHtml.Export
 public import VersoBlog.Site
 public import VersoBlog.Site.Syntax
 public import VersoBlog.Template
@@ -857,36 +858,16 @@ def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets Trave
       linkTargets := linkTargets,
       components := components
     }
-    let (((), st), _) ← site.generate theme initGenCtx .empty {} |>.run logger
+    let (((), st), components) ← site.generate theme initGenCtx .empty {} |>.run logger
     IO.FS.writeFile (cfg.destination.join "-verso-docs.json") (toString st.dedup.docJson)
-    for (name, content, srcMap?) in xref.jsFiles do
-      FS.ensureDir (cfg.destination.join "-verso-data")
-      IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
-      if let some (name, content) := srcMap? then
-        IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
-    for (name, content, _) in theme.jsFiles do
-      FS.ensureDir (cfg.destination.join "-verso-data")
-      IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
-    for (name, content) in theme.cssFiles ++ xref.cssFiles do
-      FS.ensureDir (cfg.destination.join "-verso-data")
-      IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
+    Template.writeBuiltinAssets cfg.destination "body"
+    Template.writeHeadAssets cfg.destination (theme.headAssets xref components)
 where
   opts (cfg : Config)
     | ("--output"::dir::more) => opts {cfg with destination := dir} more
     | ("--drafts"::more) => opts {cfg with showDrafts := true} more
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
-  urlAttr (name : String) : Bool := name ∈ ["href", "src", "data", "poster"]
-  rwAttr (attr : String × String) : ReaderT TraverseContext Id (String × String) := do
-    if urlAttr attr.fst && "/".isPrefixOf attr.snd then
-      let path := (← read).path
-      pure { attr with
-        snd := String.join (List.replicate path.size "../") ++ attr.snd.drop 1
-      }
-    else
-      pure attr
-  rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT TraverseContext Id (Option Html) := do
-    pure <| some <| .tag tag (← attrs.mapM rwAttr) content
 
 open Verso.Code.External
 

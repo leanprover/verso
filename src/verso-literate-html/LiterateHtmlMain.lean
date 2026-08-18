@@ -194,8 +194,8 @@ private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Boo
     <script src="popper.js"></script>
     <script src="tippy.js"></script>
     <script src="marked.js"></script>
-    <script>{{Html.text false highlightingJs}}</script>
-    <style>{{Html.text false highlightingStyle}}</style>
+    {{Html.script highlightingJs}}
+    {{Html.style highlightingStyle}}
     <link rel="stylesheet" href="tippy-border.css"/>
   }} else .empty
   let copyButtonTag : Html := if includeCodeAssets then {{
@@ -499,7 +499,7 @@ def main (args : List String) : IO UInt32 := do
     IO.FS.createDirAll (config.outputDir / "katex")
     IO.FS.writeFile (config.outputDir / "katex" / "katex.css") katex.css
     IO.FS.writeFile (config.outputDir / "katex" / "katex.js") katex.js
-    IO.FS.writeFile (config.outputDir / "katex" / "math.js") math.js
+    IO.FS.writeFile (config.outputDir / "katex" / "math.js") mathJs
     for (name, contents) in katexFonts do
       let path := config.outputDir / name
       path.parent.forM IO.FS.createDirAll

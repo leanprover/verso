@@ -163,6 +163,24 @@ def testBlog (_ : Config) : IO Unit := do
   if fails > 0 then
     throw <| IO.userError s!"{fails} blog tests failed"
 
+def testRenderedHtml (_ : Config) : IO Unit := do
+  IO.println "Running rendered HTML content format tests..."
+  let fails ← Tests.RenderedHtml.runRenderedHtmlTests
+  if fails > 0 then
+    throw <| IO.userError s!"{fails} rendered HTML content format tests failed"
+
+def testRenderedHtmlExport (_ : Config) : IO Unit := do
+  IO.println "Running rendered HTML content export tests..."
+  let fails ← Tests.RenderedHtmlExport.runRenderedHtmlExportTests
+  if fails > 0 then
+    throw <| IO.userError s!"{fails} rendered HTML content export tests failed"
+
+def testRenderedHtmlMount (_ : Config) : IO Unit := do
+  IO.println "Running rendered HTML content mounting tests..."
+  let fails ← Tests.RenderedHtmlMount.runRenderedHtmlMountTests
+  if fails > 0 then
+    throw <| IO.userError s!"{fails} rendered HTML content mounting tests failed"
+
 def testServe (_ : Config) : IO Unit := do
   IO.println "Running serve tests..."
   let fails ← Verso.Tests.Serve.runServeTests
@@ -363,6 +381,9 @@ def tests := [
   testSerialization,
   testSearchJs,
   testBlog,
+  testRenderedHtml,
+  testRenderedHtmlExport,
+  testRenderedHtmlMount,
   testServe,
   testStemmer,
   testTexOutput "sample-doc" SampleDoc.doc,

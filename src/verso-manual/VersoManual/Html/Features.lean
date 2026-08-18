@@ -8,8 +8,7 @@ public import Lean.Data.Json
 import Std.Data.HashSet
 import Verso.BEq
 public import VersoManual.Html.DataFile
-public import VersoManual.Html.JsFile
-public import VersoManual.Html.CssFile
+public import Verso.Output.Html.Files
 import Verso.Output.Html.KaTeX
 public import VersoManual.LicenseInfo
 import VersoManual.LicenseInfo.Licenses
@@ -21,6 +20,7 @@ namespace Verso.Genre.Manual
 open Lean
 open Std
 open Verso.Output.Html
+open Verso.Output.Html.Files
 
 /--
 A built-in feature supported by the HTML backend of the manual genre.
@@ -94,7 +94,7 @@ public def emitFiles : HtmlFeature → System.FilePath → IO Unit
     IO.FS.createDirAll (dir / "katex")
     IO.FS.writeFile (dir / "katex" / "katex.css") katex.css
     IO.FS.writeFile (dir / "katex" / "katex.js") katex.js
-    IO.FS.writeFile (dir / "katex" / "math.js") math.js
+    IO.FS.writeFile (dir / "katex" / "math.js") mathJs
     for (name, contents) in katexFonts do
       let path := dir / name
       path.parent.forM IO.FS.createDirAll
