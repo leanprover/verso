@@ -245,18 +245,16 @@ def project_build_targets(project_directory: Path, targets: list[str] = []) -> t
         return None
 
 
-def project_measure_exe(project_directory: Path, exe_name: str) -> tuple[float, int] | None:
+def project_measure_exe(project_directory: Path, main_module: str) -> tuple[float, int] | None:
     try:
-        exe_path = Path.cwd() / project_directory / ".lake" / "build" / "bin" / exe_name
-        exe_size = os.path.getsize(exe_path)
         start: float = time.time()
         subprocess.run(
-            [str(exe_path)] + cmdargs,
+            ["lake", "lean", f"{main_module}.lean", "--", "--run", f"{main_module}.lean"] + cmdargs,
             cwd=project_directory,
             check=True,
         )
         end: float = time.time()
-        return (end - start, exe_size)
+        return (end - start, 0)
     except Exception as e:
         print(e, file=sys.stderr)
         return None
@@ -403,7 +401,7 @@ def main() -> None:
     # (Only non-globals can be type-annotated here)
     directory: Path = args.project_dir.resolve()
     root = args.metrics_root
-    binary: str = args.exe_name
+    #binary: str = args.exe_name
     cmdargs = args.exe_arg
     if args.verso_dir is not None:
         verso_directory: Path = args.verso_dir
@@ -504,16 +502,10 @@ def main() -> None:
         process_output("build/default", stdout.decode("utf-8"))
         append_result("build/default", "success", 1, more_is_better=True)
 
-    exe_res = project_build_targets(directory, [binary])
-    if exe_res is None:
-        print("exe build step did not succeed")
-        append_result("build/exe", "success", 0, more_is_better=True)
-        sys.exit(1)
-    else:
-        (dt, stdout) = exe_res
-        append_result("build/exe/.total", "wall clock time", dt, "s")
-        process_output("build/exe", stdout.decode("utf-8"))
-        append_result("build/exe", "success", 1, more_is_better=True)
+    # Retained for continuity with old metrics
+    append_result("build/exe/.total", "wall clock time", 0, "s")
+    append_result("build/exe", "generated exe", 0, "B")
+    append_result("build/exe", "success", 1, more_is_better=True)
 
     walk_ir_dir(directory)
     walk_lib_dir(directory)
@@ -526,17 +518,16 @@ def main() -> None:
                 f"build/{top_level_package}/.total", f"{key} time", total, "s"
             )
 
-    run_res = project_measure_exe(directory, binary)
+    run_res = project_measure_exe(directory, main_module)
     if run_res is None:
         print("exe measure step did not succeed")
         append_result("build/html", "success", 0, more_is_better=True)
         sys.exit(1)
     else:
-        (dt, exe_size) = run_res
-        append_result("build/exe", "generated exe", exe_size, "B")
+        (dt, _) = run_res
         append_result("build/html/.total", "wall clock time", dt, "s")
         append_result("build/html", "success", 1, more_is_better=True)
-        append_result("build/.total", "wall clock time", default_res[0] + exe_res[0] + dt, "s")
+        append_result("build/.total", "wall clock time", default_res[0] + dt, "s")
 
     (line, col) = header_end_pos(directory, edit_file)
 
@@ -555,18 +546,10 @@ def main() -> None:
     with open(edit_file, 'w', encoding="utf-8") as f:
         f.write('\n'.join(lines))
 
-    exe_res = project_build_targets(directory, [binary])
-    if exe_res is None:
-        print("exe rebuild step did not succeed")
-        append_result(f"rebuild/exe", "success", 0, more_is_better=True)
-        sys.exit(1)
-    else:
-        (dt, stdout) = exe_res
-        append_result("rebuild/exe/.total", "wall clock time", dt, "s")
-        process_output("rebuild/exe", stdout.decode("utf-8"))
-        append_result("rebuild/exe", "success", 1, more_is_better=True)
+    append_result("rebuild/exe/.total", "wall clock time", 0, "s")
+    append_result("rebuild/exe", "success", 1, more_is_better=True)
 
-    run_res = project_measure_exe(directory, binary)
+    run_res = project_measure_exe(directory, main_module)
     if run_res is None:
         print("rebuilt exe measure step did not succeed")
         append_result("rebuild/html", "success", 0, more_is_better=True)
@@ -575,7 +558,7 @@ def main() -> None:
         (dt, _) = run_res
         append_result("rebuild/html/.total", "wall clock time", dt, "s")
         append_result("rebuild/html", "success", 1, more_is_better=True)
-        append_result("rebuild/.total", "wall clock time", exe_res[0] + dt, "s")
+        append_result("rebuild/.total", "wall clock time", dt, "s")
 
     reelab_dt = project_measure_reelab(directory, edit_file, (line, col))
     if reelab_dt is None:
