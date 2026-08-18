@@ -385,7 +385,7 @@ def main() -> None:
     )
     parser.add_argument("-r", "--metrics-root", type=str, help="first component of reported Radar metric names", required=True)
     parser.add_argument("-e", "--exe-name", type=str, help="name of the Verso doc generator lean_exe", required=True)
-    parser.add_argument("-f", "--edit-file", type=Path, help="measure CLI re-build and LSP re-elab times after editing this file", required=True)
+    # parser.add_argument("-f", "--edit-file", type=Path, help="measure CLI re-build and LSP re-elab times after editing this file", required=True)
     parser.add_argument("--exe-arg", action="append", help="additional argument to pass to the doc generator (use --exe-arg=--foo syntax)", default=[])
     parser.add_argument("--opt", type=str, help="optimization level for native compilation (must be o0 if provided)")
     parser.add_argument("--project-url", type=str, help="Git URL of the project to benchmark")
@@ -418,14 +418,41 @@ def main() -> None:
     else:
         use_o0_optimization = False
 
-    if not str(args.edit_file).endswith('.lean'):
-        print(f"--edit-file must end with .lean (got '{args.edit_file}')", file=sys.stderr)
-        sys.exit(1)
+    # if not str(args.edit_file).endswith('.lean'):
+    #     print(f"--edit-file must end with .lean (got '{args.edit_file}')", file=sys.stderr)
+    #     sys.exit(1)
+    # else:
+    #     # Hack: compute Lean module name assuming project_directory is the Lake srcDir
+    #     mod_name = str(args.edit_file[:-5].replace('/', '.'))
+    #     # Relativize to project directory
+    #     args.edit_file = directory / args.edit_file
+
+    if str(args.project_dir) == "lean4-cs1":
+        main_module = "Main"
+        targets = []
+        edit_file = Path("FPCourse/Unit1/Week00_AlgebraicTypes.lean")
+    elif str(args.project_dir) == "sherlock":
+        main_module = "SherlockMain"
+        targets = []
+        edit_file = Path("Sherlock/Study001.lean")
+    elif str(args.project_dir) == "refman":
+        main_module = "Main"
+        # The default targets *except* doc-generating `lean_exe`s (generate-manual and generate-tutorials)
+        targets = ["IndexMap", "IndexMapGrind", "Manual", "@/subversoExtractMod", "@/extract-lakefile", "Main", "Tutorial", "TutorialMain"]
+        edit_file = Path("Manual/Tactics.lean")
+    elif str(args.project_dir) == "verso-natson":
+        main_module = "BlueprintMain"
+        targets = []
+        edit_file = Path("CarlesonBlueprint/Chapters/Main.lean")
     else:
-        # Hack: compute Lean module name assuming project_directory is the Lake srcDir
-        mod_name = str(args.edit_file)[:-5].replace('/', '.')
-        # Relativize to project directory
-        args.edit_file = directory / args.edit_file
+        # # Hack: compute Lean module name assuming project_directory is the Lake srcDir
+        # mod_name = str(args.edit_file)[:-5].replace('/', '.')
+        # # Relativize to project directory
+        # args.edit_file = directory / args.edit_file
+        raise Exception("unknown package")
+
+    mod_name = str(edit_file)[:-5].replace('/', '.')
+    edit_file = directory / edit_file
 
     if not args.skip_checkout:
         if args.project_url is None:
@@ -466,7 +493,7 @@ def main() -> None:
     if not args.pre_build_cmd is None:
         subprocess.run([args.pre_build_cmd], cwd=directory, check=True)
 
-    default_res = project_build_targets(directory, [])
+    default_res = project_build_targets(directory, targets)
     if default_res is None:
         print("default build step did not succeed")
         append_result("build/default", "success", 0, more_is_better=True)
@@ -511,9 +538,9 @@ def main() -> None:
         append_result("build/html", "success", 1, more_is_better=True)
         append_result("build/.total", "wall clock time", default_res[0] + exe_res[0] + dt, "s")
 
-    (line, col) = header_end_pos(directory, args.edit_file)
+    (line, col) = header_end_pos(directory, edit_file)
 
-    with open(args.edit_file, 'r', encoding="utf-8") as f:
+    with open(edit_file, 'r', encoding="utf-8") as f:
         lines = f.read().split("\n")
     if col == 0:
         lines.insert(line, DUMMY_COMMAND)
@@ -525,7 +552,7 @@ def main() -> None:
         lines.insert(line+1, l[col:])
         lines.insert(line+1, DUMMY_COMMAND)
 
-    with open(args.edit_file, 'w', encoding="utf-8") as f:
+    with open(edit_file, 'w', encoding="utf-8") as f:
         f.write('\n'.join(lines))
 
     exe_res = project_build_targets(directory, [binary])
@@ -550,7 +577,7 @@ def main() -> None:
         append_result("rebuild/html", "success", 1, more_is_better=True)
         append_result("rebuild/.total", "wall clock time", exe_res[0] + dt, "s")
 
-    reelab_dt = project_measure_reelab(directory, args.edit_file, (line, col))
+    reelab_dt = project_measure_reelab(directory, edit_file, (line, col))
     if reelab_dt is None:
         print("LSP re-elaboration step did not succeed")
         append_result(f"lsp-elab/{mod_name}", "success", 0, more_is_better=True)
