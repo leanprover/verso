@@ -633,41 +633,48 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
             if s.isEmpty then none else some s.toName
         Elab.Term.withLevelNames us
       else id
+    let oldEnv ← getEnv
+    let (newMsgs, type, tree, hls) ←
+      try
+        setEnv env
+        match Parser.runParserCategory env `term altStr (← getFileName) with
+        | .error e => throwErrorAt str e
+        | .ok stx => withOptions (fun _ => opts) <| runWithOpenDecls scopes <| runWithVariables scopes fun _ => do
+          let (newMsgs, type, tree) ← do
+            let initMsgs ← Core.getMessageLog
+            try
+              Core.resetMessageLog
+              let (tree', t) ← do
+                let expectedType ← config.type.mapM fun (s : StrLit) => do
+                  match Parser.runParserCategory env `term s.getString (← getFileName) with
+                  | .error e => throwErrorAt str e
+                  | .ok stx => withEnableInfoTree false do
+                    let t ← leveller <| Elab.Term.elabType stx
+                    Term.synthesizeSyntheticMVarsNoPostponing
+                    let t ← instantiateMVars t
+                    if t.hasExprMVar || t.hasLevelMVar then
+                      throwErrorAt s "Type contains metavariables: {t}"
+                    pure t
 
-    match Parser.runParserCategory env `term altStr (← getFileName) with
-    | .error e => throwErrorAt str e
-    | .ok stx => withOptions (fun _ => opts) <| runWithOpenDecls scopes <| runWithVariables scopes fun _ => do
-      let (newMsgs, type, tree) ← do
-        let initMsgs ← Core.getMessageLog
-        try
-          Core.resetMessageLog
-          let (tree', t) ← do
-
-            let expectedType ← config.type.mapM fun (s : StrLit) => do
-              match Parser.runParserCategory env `term s.getString (← getFileName) with
-              | .error e => throwErrorAt str e
-              | .ok stx => withEnableInfoTree false do
-                let t ← leveller <| Elab.Term.elabType stx
+                let e ← leveller <| Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
                 Term.synthesizeSyntheticMVarsNoPostponing
-                let t ← instantiateMVars t
-                if t.hasExprMVar || t.hasLevelMVar then
-                  throwErrorAt s "Type contains metavariables: {t}"
-                pure t
+                let e ← Term.levelMVarToParam (← instantiateMVars e)
+                let t ← Meta.inferType e >>= instantiateMVars >>= (Meta.ppExpr ·)
+                let t := Std.Format.group <| (← Meta.ppExpr e) ++ (" :" ++ .line) ++ t
 
-            let e ← leveller <| Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
-            Term.synthesizeSyntheticMVarsNoPostponing
-            let e ← Term.levelMVarToParam (← instantiateMVars e)
-            let t ← Meta.inferType e >>= instantiateMVars >>= (Meta.ppExpr ·)
-            let t := Std.Format.group <| (← Meta.ppExpr e) ++ (" :" ++ .line) ++ t
+                Term.synthesizeSyntheticMVarsNoPostponing
+                let ctx := PartialContextInfo.commandCtx {
+                  env, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace, openDecls, options := opts, ngen
+                }
+                pure <| (InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`VersoBlog.leanInline, code⟩) (← getInfoState).trees), t)
+              pure (← Core.getMessageLog, t, tree')
+            finally
+              Core.setMessageLog initMsgs
+          let hls ← highlight stx #[] (PersistentArray.empty.push tree)
+          pure (newMsgs, type, tree, hls)
+      finally
+        setEnv oldEnv
 
-            Term.synthesizeSyntheticMVarsNoPostponing
-            let ctx := PartialContextInfo.commandCtx {
-              env, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace, openDecls, options := opts, ngen
-            }
-            pure <| (InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`VersoBlog.leanInline, code⟩) (← getInfoState).trees), t)
-          pure (← Core.getMessageLog, t, tree')
-        finally
-          Core.setMessageLog initMsgs
       pushInfoTree tree
 
       if let `(inline|role{%$s $f $_*}%$e[$_*]) ← getRef then
@@ -678,7 +685,6 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
           logMessage {msg with
             isSilent := msg.isSilent || msg.severity != .error
           }
-      let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
       `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote config.exampleContext.getId) } $(quote hls)) #[Inline.code $(quote str.getString)])
 
