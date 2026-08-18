@@ -54,4 +54,8 @@ class TestMountedContent:
         # The mounted content is marked as Verso content, and the site's own code on the same
         # page is not, which is what keeps the two releases' scripts off each other's markup.
         expect(page.locator(f"{MOUNTED}[data-verso-docs]")).to_have_count(1)
-        expect(page.locator(f"{SITE_TOKEN}").locator("xpath=ancestor::*[contains(@class,'verso-content')]")).to_have_count(0)
+        expect(
+            page.locator(f"{SITE_TOKEN}").locator(
+                "xpath=ancestor::*[contains(@class,'verso-content')]"
+            )
+        ).to_have_count(0)

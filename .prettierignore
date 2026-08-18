@@ -8,6 +8,11 @@ html-multi
 htmlout
 .playwright-browsers
 
+# Hand-written fixtures, whose exact markup and JSON are what the tests read
+test-projects/rendered-html-fixture
+test-projects/rendered-html-sparse-fixture
+test-projects/rendered-html-conflict-fixture
+
 # Vendored files
 vendored-js
 *.min.js

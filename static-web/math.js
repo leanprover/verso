@@ -12,14 +12,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function owns(versoRoot, el) {
         const owner = el.closest(".verso-content");
-        return owner === versoRoot ||
-            (owner === null && !(versoRoot.classList && versoRoot.classList.contains("verso-content")));
+        return (
+            owner === versoRoot ||
+            (owner === null &&
+                !(versoRoot.classList && versoRoot.classList.contains("verso-content")))
+        );
     }
 
     function renderAll(versoRoot, selector, displayMode) {
         for (const m of versoRoot.querySelectorAll(selector)) {
-            if (!owns(versoRoot, m)) { continue; }
-            if (m.dataset.versoMathRendered) { continue; }
+            if (!owns(versoRoot, m)) {
+                continue;
+            }
+            if (m.dataset.versoMathRendered) {
+                continue;
+            }
             m.dataset.versoMathRendered = "true";
             katex.render(m.textContent, m, { throwOnError: false, displayMode: displayMode });
         }
