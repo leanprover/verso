@@ -123,11 +123,14 @@ meta def elabTestGuard : Command.CommandElab
       if (lines.drop 1).any (fun l => !l.trimAscii.isEmpty) then firstLine ++ "…" else firstLine
     let ns ← getCurrNamespace
     let env ← getEnv
+    -- Use the module name as part of the test name to avoid conflicts
+    let modName ← getMainModule
+    let qualified (n : String) : Name := `_root_ ++ modName ++ ns ++ Name.mkSimple n
     let mut name := base
     let mut n := 1
     -- In a `module`, the generated definition is private, so probe its mangled name as well.
-    while env.contains (ns ++ Name.mkSimple name)
-        || env.contains (mkPrivateName env (ns ++ Name.mkSimple name)) do
+    while env.contains (qualified name)
+        || env.contains (mkPrivateName env (qualified name)) do
       n := n + 1
       name := s!"{base} ({n})"
     let verdict ←
@@ -138,7 +141,7 @@ meta def elabTestGuard : Command.CommandElab
             $(quote (← getFileName))
             $(quote startPos.line) $(quote startPos.column)
             $(quote endPos.line) $(quote endPos.column))
-    elabCommand (← `(@[test] def $(mkIdent (Name.mkSimple name)) : Errata.TestResult := $verdict))
+    elabCommand (← `(@[test] def $(mkIdent (qualified name)) : Errata.TestResult := $verdict))
     -- Report a failure at build time, as `#test_msgs` does.
     unless passed do
       let body := m!"Errata #test_guard: the expression did not evaluate to `true`:\n{source}"
