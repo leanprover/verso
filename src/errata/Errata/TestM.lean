@@ -156,7 +156,18 @@ action wrote.
 def captureOutput (act : TestM Unit) : TestM OutputLog := do
   let log ← IO.mkRef (#[] : Array Output)
   let emit (o : Output) : IO Unit := log.modify (·.push o)
-  IO.withStdout (captureStream emit .stdout) <| IO.withStderr (captureStream emit .stderr) act
+  let completed ← IO.mkRef false
+  try
+    IO.withStdout (captureStream emit .stdout) <| IO.withStderr (captureStream emit .stderr) act
+    completed.set true
+  finally
+    -- An action that does not complete never receives this log, and what it wrote is what explains
+    -- the failure, so the fragments are handed to the enclosing capture instead.
+    unless ← completed.get do
+      for o in ← log.get do
+        match o with
+        | .stdout s => IO.print s
+        | .stderr s => IO.eprint s
   return { log := ← log.get }
 
 /--
@@ -184,8 +195,20 @@ succeeds. An escaping {name}`IO.Error` is not an expected failure: it propagates
 error, so broken setup is not mistaken for a passing negative test.
 -/
 def expectFail (act : TestM Unit) (loc : Location := by exact here%) : TestM Unit := do
-  try
-    act
-  catch _ =>
+  let ctx ← read
+  let before := (← ctx.log.get).size
+  let threw ←
+    try
+      act
+      pure false
+    catch _ =>
+      pure true
+  if threw then return
+  -- A nested `result` records a failure rather than propagating it, so the results it recorded are
+  -- inspected too. Those results describe the expected failure, so they are dropped along with it.
+  -- A recorded error is a broken setup rather than an expected failure, and stands.
+  let logged ← ctx.log.get
+  if (logged.extract before logged.size).any (·.status matches .fail _) then
+    ctx.log.set (logged.extract 0 before)
     return
   failAt loc "expected the action to fail, but it passed"
