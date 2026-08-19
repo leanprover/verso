@@ -94,6 +94,45 @@ def goldenRoundTrip : Test :=
     assertFileExists goldenPath
     goldenFile goldenPath "contents\n"
 
+/-- Runs one action as a test in a fresh context, returning the results it recorded. -/
+private def resultsOf (act : Test) : TestM (Array Result) := do
+  let cfg ← mkContext
+  runEntry cfg <|
+    TestEntry.of "p" "M" "inner" { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ } act
+
+/-- Output written before a failure reaches the enclosing result, where it explains the failure. -/
+@[test]
+def captureOutputKeepsOutputOnFailure : Test := do
+  let results ← resultsOf (discard <| captureOutput (do IO.println "diagnostic"; fail "boom"))
+  assertEq 1 results.size
+  let r := results[0]!
+  assertTrue (r.status matches .fail _)
+  assertContains "diagnostic" r.output.all
+
+/-- Output from an action that completes stays with the capture, rather than reaching the result. -/
+@[test]
+def captureOutputDivertsOnSuccess : Test := do
+  let results ← resultsOf do
+    let captured ← captureOutput (IO.println "quiet")
+    assertContains "quiet" captured.all
+  assertEq 1 results.size
+  assertTrue results[0]!.status.isSuccess
+  assertTrue results[0]!.output.isEmpty
+
+/-- A failure that a nested `result` recorded still satisfies `expectFail`. -/
+@[test]
+def expectFailSeesNestedResult : Test := do
+  let results ← resultsOf (expectFail (result "inner" (assertEq 1 2)))
+  assertEq 1 results.size
+  assertTrue results[0]!.status.isSuccess
+
+/-- An error inside `expectFail` is not an expected failure, even when a nested `result` records it. -/
+@[test]
+def expectFailRejectsNestedError : Test := do
+  let results ← resultsOf
+    (expectFail (result "inner" (show IO Unit from throw (.userError "broken setup"))))
+  assertTrue (results.any (!·.status.isSuccess))
+
 -- `here%` reports its own position, so the expected column below is the indentation of the line it
 -- sits on, and the expected span is the five characters of the token itself.
 def indentedHere : Location :=
