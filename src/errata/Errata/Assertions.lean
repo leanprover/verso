@@ -15,21 +15,10 @@ set_option doc.verso true
 
 namespace Errata
 
-/--
-Asserts that a condition holds. In a {lit}`do` block, {lit}`assert cond` and
-{lit}`assert cond msg` invoke this assertion.
--/
-def assert (cond : Bool) (message : String := "assertion failed")
+/-- Asserts that a condition holds. -/
+def assertTrue (cond : Bool) (message : String := "assertion failed")
     (loc : Location := by exact here%) : TestM Unit :=
   unless cond do failAt loc message
-
--- The `assert` statement of `do` blocks parses its whole argument list as one term, so an
--- application there is the condition followed by the message.
-macro_rules
-  | `(doElem| assert $p:term) =>
-    match p with
-    | `($cond $message) => `(doElem| Errata.assert $cond $message)
-    | cond => `(doElem| Errata.assert $cond)
 
 /-- Asserts that the actual value equals the expected value, reporting both when they differ. -/
 def assertEq {α} [BEq α] [Repr α] (expected actual : α)
