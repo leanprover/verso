@@ -60,11 +60,12 @@ meta def elabTestMsgs : Command.CommandElab
     let endPos := fileMap.toPosition (tk.getTailPos?.getD 0)
     let declName := `_root_ ++ (← getMainModule) ++
       Name.mkSimple s!"errataMsgTest_L{startPos.line}_C{startPos.column}"
+    let detail := s!"Expected:\n{expected}\n\nActual:\n{actual}"
     let verdict ←
       if passed then
         `(Errata.TestResult.pass)
       else
-        `(Errata.TestResult.mismatch "compile-time messages do not match" $(quote actual)
+        `(Errata.TestResult.mismatch "compile-time messages do not match" $(quote detail)
             $(quote (← getFileName))
             $(quote startPos.line) $(quote startPos.column)
             $(quote endPos.line) $(quote endPos.column))
@@ -74,8 +75,7 @@ meta def elabTestMsgs : Command.CommandElab
       let fixRef := (dc?.map (·.raw)).getD tk
       let hint ← liftCoreM <| MessageData.hint m!"Update the expected output:"
         #[{ suggestion := suggestedDoc actual }] (ref? := some fixRef)
-      let body := m!"Errata #test_msgs: the messages do not match.\n\n\
-        Expected:\n{expected}\n\nActual:\n{actual}"
+      let body := m!"Errata #test_msgs: the messages do not match.\n\n{detail}"
       if (← getOptions).getBool `errata.failOnError false then
         logErrorAt tk (body ++ hint)
       else

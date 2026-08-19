@@ -52,6 +52,21 @@ partial def filesUnder (dir : System.FilePath) : IO (Array System.FilePath) := d
 private def relativeTo (base file : System.FilePath) : String :=
   (file.toString.drop (base.toString.length + 1)).copy
 
+/-- The offset of the first byte at which two contents differ, within the length they share. -/
+private def firstDifference (a b : ByteArray) : Option Nat := Id.run do
+  for i in [0 : min a.size b.size] do
+    if a[i]! != b[i]! then return some i
+  return none
+
+/-- Describes how two contents differ, for content that is not text. -/
+private def binaryDifference (want got : ByteArray) : String :=
+  let place :=
+    match firstDifference want got with
+    | some i => s!"binary content differs at byte {i}"
+    | none => "binary content differs in length"
+  if want.size == got.size then place
+  else s!"{place}: expected {want.size} bytes, produced {got.size} bytes"
+
 /-- Compares a produced directory tree against a golden tree, or rewrites it under `--update-golden`. -/
 def goldenDir (expected actual : System.FilePath)
     (loc : Location := by exact here%) : TestM Unit := do
@@ -62,7 +77,7 @@ def goldenDir (expected actual : System.FilePath)
     for file in actualFiles do
       let dest := expected / relativeTo actual file
       if let some parent := dest.parent then IO.FS.createDirAll parent
-      IO.FS.writeFile dest (← IO.FS.readFile file)
+      IO.FS.writeBinFile dest (← IO.FS.readBinFile file)
     -- Remove expected files that the produced output no longer contains.
     if ← expected.pathExists then
       for file in ← filesUnder expected do
@@ -77,10 +92,15 @@ def goldenDir (expected actual : System.FilePath)
     let want := expected / rel
     unless ← want.pathExists do
       failAt loc s!"file not present in the golden directory: {rel}"
-    let wantContent ← IO.FS.readFile want
-    let gotContent ← IO.FS.readFile file
+    let wantContent ← IO.FS.readBinFile want
+    let gotContent ← IO.FS.readBinFile file
     unless wantContent == gotContent do
-      failAt loc s!"golden mismatch for {rel}" (detail? := some (goldenDiff wantContent gotContent))
+      -- A diff is only meaningful for text; other content is described by size.
+      let detail :=
+        match String.fromUTF8? wantContent, String.fromUTF8? gotContent with
+        | some wantText, some gotText => goldenDiff wantText gotText
+        | _, _ => binaryDifference wantContent gotContent
+      failAt loc s!"golden mismatch for {rel}" (detail? := some detail)
   for file in ← filesUnder expected do
     let rel := relativeTo expected file
     unless ← (actual / rel).pathExists do
