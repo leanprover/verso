@@ -45,11 +45,11 @@ def Verbosity.increase : Verbosity → Verbosity
   | .quiet => .verbose
   | .verbose | .superVerbose => .superVerbose
 
-/-- A line and column within a source file, counting from one. -/
+/-- A line and column within a source file, following Lean's own source positions. -/
 structure Position where
   /-- The line, counting from one. -/
   line : Nat
-  /-- The column, counting from one. -/
+  /-- The column, counting from zero. -/
   column : Nat
 deriving Repr, Inhabited, BEq, DecidableEq
 
@@ -166,8 +166,8 @@ def Result.testName (result : Result) : String :=
   else result.test ++ "." ++ ".".intercalate result.resultPath.toList
 
 /--
-The module as a Lake target specification ({lit}`package/module`). This is the unit of execution:
-passing it to {lit}`lake test` re-runs the module that produced the result.
+The package-qualified module that defines the test ({lit}`package/module`). Reports use it to label
+each result and to group the results of one module together.
 -/
 def Result.moduleTarget (result : Result) : String :=
   result.package ++ "/" ++ result.moduleName

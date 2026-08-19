@@ -94,6 +94,17 @@ def goldenRoundTrip : Test :=
     assertFileExists goldenPath
     goldenFile goldenPath "contents\n"
 
+-- `here%` reports its own position, so the expected column below is the indentation of the line it
+-- sits on, and the expected span is the five characters of the token itself.
+def indentedHere : Location :=
+  here%
+
+/-- Source positions follow Lean's convention: lines count from one and columns from zero. -/
+@[test]
+def positionConvention : Test := do
+  assertEq 2 indentedHere.startPos.column
+  assertEq 5 (indentedHere.endPos.column - indentedHere.startPos.column)
+
 /-- The `Verbosity` predicates and accumulation behave as the report relies on. -/
 @[test]
 def verbosityLevels : Test := do
@@ -131,11 +142,11 @@ def runnerArgParsing : Test := do
   result "seed" do
     assertEq (some (some 42)) ((parseOptions ["--seed", "42"]).toOption.map (·.seed))
   result "non-numeric seed rejected" do
-    assert ((parseOptions ["--seed", "x"]) matches .error _)
+    assertTrue ((parseOptions ["--seed", "x"]) matches .error _)
   result "junit path" do
     assertEq (some (some "r.xml")) ((parseOptions ["--junit", "r.xml"]).toOption.map (·.junitPath))
   result "missing junit path rejected" do
-    assert ((parseOptions ["--junit"]) matches .error _)
+    assertTrue ((parseOptions ["--junit"]) matches .error _)
   result "test options after --" do
     let opts := (parseOptions ["--", "--golden", "on", "--flag=v=1", "--golden", "two"]).toOption
     assertEq (some #["on", "two"]) (opts.map (·.options.getD "golden" #[]))
@@ -143,11 +154,11 @@ def runnerArgParsing : Test := do
   result "valueless test option" do
     assertEq (some #[""]) ((parseOptions ["--", "--fast"]).toOption.map (·.options.getD "fast" #[]))
   result "unknown flag rejected" do
-    assert ((parseOptions ["--golden", "on"]) matches .error _)
+    assertTrue ((parseOptions ["--golden", "on"]) matches .error _)
   result "misplaced library name diagnosed" do
     match parseOptions ["--verbose", "ErrataTests"] with
     | .error msg => assertContains "ErrataTests" msg
-    | .ok _ => assert false "expected an error"
+    | .ok _ => assertTrue false "expected an error"
 
 /-- At silent verbosity the report hides passes but shows failures and the summary line. -/
 @[test]
