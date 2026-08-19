@@ -111,6 +111,8 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
           reached. Import it, using `import all {moduleName}` if it belongs to the module system."
     let moduleStr := moduleName.toString
     for test in testExt.getModuleEntries env idx do
+      -- The internal name is used here, because the user-facing name can be ambiguous for private
+      -- tests
       let userName := privateToUserName test.name
       let testName := testNameBelow moduleName userName
       let range ← findDeclarationRanges? test.name
@@ -125,5 +127,5 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
             (Errata.Location.mk $(quote test.file)
               (Errata.Position.mk $(quote pos.line) $(quote pos.column))
               (Errata.Position.mk $(quote endPos.line) $(quote endPos.column)))
-            (@$(mkIdent userName)) (docstring? := $docStx))
+            (@$(mkCIdent test.name)) (docstring? := $docStx))
   elabTerm (← `(#[$entries,*])) expectedType?
