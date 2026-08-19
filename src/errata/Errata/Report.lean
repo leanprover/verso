@@ -73,9 +73,10 @@ private def printSuppressed (s : Suppressed) : IO Unit := do
     IO.println s!"    (... and {", ".intercalate parts.toList})"
 
 /--
-Prints a human-readable report and returns the number of failures. Failures and errors are printed
-at every verbosity. Verbosity 0 shows nothing else; 1 also shows passes and skips but truncates each
-test's passes and skips after a cap, summarizing the rest; 2 shows everything.
+Prints a human-readable report and returns the number of failures. Failures and errors are printed at
+every verbosity. {name}`Verbosity.quiet` adds passes and skips, truncating each test's after a cap and
+summarizing the remainder; {name}`Verbosity.verbose` shows them all; and
+{name}`Verbosity.superVerbose` also shows every test's docstring.
 -/
 def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
   let cap := 50
@@ -166,9 +167,9 @@ instance : ToJson OutputLog where
 instance : FromJson OutputLog where
   fromJson? j := return { log := ← FromJson.fromJson? j }
 
-/-- The suite a result belongs to: its module. -/
+/-- The suite a result belongs to: its package-qualified module. -/
 private def suiteOf (r : Result) : String :=
-  r.moduleName
+  r.moduleTarget
 
 /-- The case name of a result: the test name below the module. -/
 private def caseOf (r : Result) : String :=
@@ -177,7 +178,7 @@ private def caseOf (r : Result) : String :=
 private def countWhere (results : Array Result) (p : Status → Bool) : Nat :=
   results.foldl (fun n r => if p r.status then n + 1 else n) 0
 
-/-- Groups results by their module in a single pass, keeping each module's first-seen order. -/
+/-- Groups results by their package-qualified module in a single pass, keeping first-seen order. -/
 private def byModule (results : Array Result) : Array (String × Array Result) := Id.run do
   let mut order : Array String := #[]
   let mut groups : Std.HashMap String (Array Result) := {}
@@ -190,8 +191,10 @@ private def byModule (results : Array Result) : Array (String × Array Result) :
 /-- Renders the results as JUnit XML, grouping by the module path. -/
 def junitReport (results : Array Result) : String := Id.run do
   let mut out := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n"
-  for (suite, cases) in byModule results do
+  -- Every case in a group shares a package and a module, since the group is keyed by both.
+  for (_, cases) in byModule results do
     let pkg := (cases[0]?.map (·.package)).getD ""
+    let suite := (cases[0]?.map (·.moduleName)).getD ""
     let failures := countWhere cases (fun s => s matches .fail _)
     let errors := countWhere cases (fun s => s matches .error _)
     let skipped := countWhere cases (fun s => s matches .skip _)
