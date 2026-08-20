@@ -22,6 +22,20 @@ public def ensureDir (dir : System.FilePath) : IO Unit := do
     throw (↑ s!"Not a directory: {dir}")
 
 /--
+Ensures that {name}`dir` exists, is a directory, and is empty, removing whatever was there.
+
+A build that writes a directory calls this before writing anything, so that the directory holds what
+this build produced and nothing that an earlier one left behind. A name derived from a file's
+contents changes when the contents do, so a file that a rebuild no longer produces would otherwise
+stay.
+-/
+public def replaceDir (dir : System.FilePath) : IO Unit := do
+  if ← dir.pathExists then
+    if ← dir.isDir then removeDirAll dir
+    else removeFile dir
+  createDirAll dir
+
+/--
 Recursively copies a directory of files from {name}`src` to {name}`tgt`. Any errors are reported via
 {name}`MonadBuildLog`, and paths that don't satisfy {name}`copyFile` are skipped.
 -/

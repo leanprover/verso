@@ -97,9 +97,8 @@ Writes a rendered HTML content directory, returning the manifest that it wrote.
 
 The page path density, path syntax, and destination checks that `Verso.RenderedHtml.load` performs
 are applied here as well, so a producer fails where the content can be fixed. The destination check
-covers the static directory as it stands on disk, so a producer writes its static files first.
-
-Any existing fragments directory is replaced.
+covers the static directory as it stands on disk, so a producer writes its static files first, having
+emptied the directory before that.
 -/
 def write (dir : System.FilePath) (out : Output) : IO RenderedHtmlContent := do
   let mut pages : TreeMap Multi.Path RenderedHtmlContent.Page comparePaths := {}
@@ -155,9 +154,6 @@ def write (dir : System.FilePath) (out : Output) : IO RenderedHtmlContent := do
   }
 
   IO.FS.createDirAll dir
-  let fragmentRoot := fragmentsDir dir
-  if ← fragmentRoot.pathExists then
-    IO.FS.removeDirAll fragmentRoot
   for (file, contents) in fragmentFiles do
     let dest := dir / file
     dest.parent.forM IO.FS.createDirAll

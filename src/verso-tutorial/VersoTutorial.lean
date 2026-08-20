@@ -633,11 +633,14 @@ assets, with no page chrome.
 The traversal state's files, the code archives, the hover data, and the cross-reference database are
 written under the content's static directory, at the same paths that they occupy in the standalone
 output, so a tutorial's links are unchanged apart from the token prefix.
+
+The destination is emptied first, so the directory holds what this build produced and nothing else.
 -/
 def emitRenderedHtml
     (tutorials : Tutorials) (navSite : Option Blog.Site)
     (generator : RenderedHtmlContent.Generator) : EmitM Unit := do
   let dir := (← read).config.destination
+  Verso.FS.replaceDir dir
   let assetDir := Verso.RenderedHtml.staticDir dir
   ensureDir assetDir
   (← readThe Manual.TraverseState).writeFiles (assetDir / "-verso-data")

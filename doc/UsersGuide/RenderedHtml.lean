@@ -272,7 +272,7 @@ tag := "rendered-html-mounting"
 %%%
 
 In the {ref "website"}[website genre], a site mounts a directory with the `mount` form of the site configuration language.
-For example, this site mounds a content directory under `/page/` and another under `/guides/archive/`:
+For example, this site mounts a content directory under `/page/` and another under `/guides/archive/`:
 ```lean -show
 open Verso.Genre.Blog Site Syntax
 opaque MySite.Front : Part Page
