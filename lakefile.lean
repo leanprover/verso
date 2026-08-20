@@ -242,7 +242,7 @@ private def splitArgs (args : List String) : Except String (List String × List 
       e.g. `lake run Errata.run --test-options {opt}`."
   | none => .ok (names, rest)
 
-/-- Usage information for `lake test`. -/
+/-- Usage information for `lake run Errata.run`. -/
 private def usage : String := include_str "src/errata/Errata/usage.txt"
 
 script run (args) do
