@@ -159,6 +159,52 @@ def captureOutputDivertsOnSuccess : Test := do
   assertTrue results[0]!.status.isSuccess
   assertTrue results[0]!.output.isEmpty
 
+/--
+A live output destination writes to the real stdout, so printing from it does not re-enter the
+capture. The counter is bounded so that a regression fails this test instead of exhausting the stack.
+-/
+@[test]
+def writeOutputDoesNotRecurse : Test := do
+  let depth ← IO.mkRef 0
+  let cfg ← mkContext
+  let ctx := { cfg with
+    writeOutput := fun o => do
+      depth.modify (· + 1)
+      if (← depth.get) < 5 then
+        match o with
+        | .stdout s => IO.print s
+        | .stderr s => IO.eprint s }
+  discard <| runEntry ctx <|
+    TestEntry.of "p" "M" "prints" { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ }
+      (IO.println "live" : Test)
+  assertEq 1 (← depth.get)
+
+/--
+A live output destination that fails does not fail the test that happened to be printing. It is
+reported once and then left alone, rather than retried for every fragment.
+-/
+@[test]
+def writeOutputFailureIsContained : Test := do
+  let calls ← IO.mkRef 0
+  let statuses ← IO.mkRef (#[] : Array Status)
+  let cfg ← mkContext
+  let ctx := { cfg with
+    writeOutput := fun _ => do
+      calls.modify (· + 1)
+      throw (.userError "broken pipe") }
+  let out ← captureOutput do
+    for name in ["first", "second"] do
+      let entry := TestEntry.of "p" "M" name
+        { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ } (IO.println "output" : Test)
+      for r in ← runEntry ctx entry do
+        statuses.modify (·.push r.status)
+  result "the printing tests are not blamed" do
+    assertTrue ((← statuses.get).all (·.isSuccess))
+  result "the destination is left alone after it fails" do
+    assertEq 1 (← calls.get)
+  result "the failure is reported" do
+    assertContains "live output destination failed" out.all
+
 /-- A failure that a nested `result` recorded still satisfies `expectFail`. -/
 @[test]
 def expectFailSeesNestedResult : Test := do
@@ -226,8 +272,10 @@ def verbosityLevels : Test := do
   assertEq Verbosity.superVerbose Verbosity.verbose.increase
   assertEq Verbosity.superVerbose Verbosity.superVerbose.increase
 
-/-- The runner's command line: the `-v` forms select the verbosity, declared flags parse, and
-options for the tests go after `--`. -/
+/--
+The runner's command line: the `-v` forms select the verbosity, declared flags parse, and options
+for the tests go after `--`.
+-/
 @[test]
 def runnerArgParsing : Test := do
   result "default verbosity" do
@@ -263,6 +311,12 @@ def runnerArgParsing : Test := do
     | .error msg => assertContains "ErrataTests" msg
     | .ok _ => assertTrue false "expected an error"
 
+/-- A run that discovers nothing says so, rather than reporting success silently. -/
+@[test]
+def emptyRunWarns : Test := do
+  let out ← captureOutput (discard <| runMain #[] [])
+  assertContains "no tests were discovered" out.all
+
 /-- At silent verbosity the report hides passes but shows failures and the summary line. -/
 @[test]
 def reportSilent : Test := do
@@ -292,8 +346,10 @@ def reportTruncates : Test := do
   assertEq 61 (verbose.stdout.splitOn "ok    ").length
   assertEq 1 (verbose.stdout.splitOn "(... and").length
 
-/-- Truncation never suppresses a failure or error: past the cap they print in full and only the
-passes around them are summarized. -/
+/--
+Truncation never suppresses a failure or error: past the cap they print in full and only the passes
+around them are summarized.
+-/
 @[test]
 def reportTruncationShowsFailures : Test := do
   let many := (Array.range 60).map fun i =>
