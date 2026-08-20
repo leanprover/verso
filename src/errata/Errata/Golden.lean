@@ -28,8 +28,7 @@ def goldenFile (expected : System.FilePath) (actual : String)
     (loc : Location := by exact here%) : TestM Unit := do
   let ctx ← read
   if ctx.updateGolden then
-    if let some parent := expected.parent then IO.FS.createDirAll parent
-    IO.FS.writeFile expected actual
+    writeFile expected actual
   else if ← expected.pathExists then
     let want ← IO.FS.readFile expected
     unless want == actual do
@@ -71,13 +70,18 @@ private def binaryDifference (want got : ByteArray) : String :=
 def goldenDir (expected actual : System.FilePath)
     (loc : Location := by exact here%) : TestM Unit := do
   let ctx ← read
+  unless ← actual.isDir do
+    failAt loc s!"missing produced directory {actual}"
+      (detail? := some "The code under test did not create it as a directory.")
   let actualFiles ← filesUnder actual
   if ctx.updateGolden then
+    -- The golden tree is recorded even when the produced tree holds no files, so that a later run
+    -- compares against it rather than reporting it as missing.
+    IO.FS.createDirAll expected
     let actualRels := actualFiles.map (relativeTo actual)
     for file in actualFiles do
       let dest := expected / relativeTo actual file
-      if let some parent := dest.parent then IO.FS.createDirAll parent
-      IO.FS.writeBinFile dest (← IO.FS.readBinFile file)
+      writeBinFile dest (← IO.FS.readBinFile file)
     -- Remove expected files that the produced output no longer contains.
     if ← expected.pathExists then
       for file in ← filesUnder expected do

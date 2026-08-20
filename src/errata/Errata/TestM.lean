@@ -122,23 +122,38 @@ def skip (reason : String) : TestM Unit := do
   let ctx ← read
   ctx.log.modify (·.push (ctx.skip reason))
 
-/-- A stream that hands each write to a destination as a fragment tagged by the stream it came from. -/
+/-- Writes a file, creating all parent directories if necessary. -/
+def writeFile (path : System.FilePath) (contents : String) : IO Unit := do
+  if let some parent := path.parent then IO.FS.createDirAll parent
+  IO.FS.writeFile path contents
+
+/-- Writes a binary file, creating all parent directories if necessary. -/
+def writeBinFile (path : System.FilePath) (contents : ByteArray) : IO Unit := do
+  if let some parent := path.parent then IO.FS.createDirAll parent
+  IO.FS.writeBinFile path contents
+
+/--
+A stream that hands each write to a destination as a fragment tagged by the stream it came from.
+
+A write of raw bytes is decoded, and rejected if it is not valid {lit}`UTF-8`.
+-/
 private def captureStream (emit : Output → IO Unit) (mk : String → Output) : IO.FS.Stream where
   flush := pure ()
   read _ := pure .empty
   write bytes :=
     match String.fromUTF8? bytes with
     | some s => emit (mk s)
-    | none => throw (.userError "captured test output was not valid UTF-8")
+    | none =>
+      throw (.userError "a raw byte write to a captured stream was not valid UTF-8")
   getLine := pure ""
   putStr s := emit (mk s)
   isTty := pure false
 
 /--
 Runs a test action with the given context, capturing its outcome as data rather than letting it
-propagate. The action's stdout and stderr are recorded, in order and tagged by stream, and returned
-alongside the outcome. Each fragment is also handed to the context's output destination as it is
-written, so a live runner can stream output while the test runs.
+propagate. The action's stdout and stderr are recorded as text, in order and tagged by stream, and
+returned alongside the outcome. Each fragment is also handed to the context's output destination as
+it is written, so a live runner can stream output while the test runs.
 -/
 def runCapturing (ctx : Context) (act : TestM Unit) :
     IO (Except IO.Error (Except TestFailure Unit) × OutputLog) := do
@@ -149,9 +164,9 @@ def runCapturing (ctx : Context) (act : TestM Unit) :
   return (outcome, { log := ← log.get })
 
 /--
-Runs an action with stdout and stderr captured into a fresh log, then returns the captured output
-in order. The redirection is local to the action, so a test can make assertions about what the
-action wrote.
+Runs an action with stdout and stderr captured into a fresh log, then returns the captured text in
+order. The redirection is local to the action, so a test can make assertions about what the action
+wrote.
 -/
 def captureOutput (act : TestM Unit) : TestM OutputLog := do
   let log ← IO.mkRef (#[] : Array Output)
