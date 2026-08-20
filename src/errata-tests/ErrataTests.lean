@@ -129,9 +129,33 @@ def expectFailSeesNestedResult : Test := do
 /-- An error inside `expectFail` is not an expected failure, even when a nested `result` records it. -/
 @[test]
 def expectFailRejectsNestedError : Test := do
-  let results ← resultsOf
-    (expectFail (result "inner" (show IO Unit from throw (.userError "broken setup"))))
+  let results ← resultsOf <|
+    expectFail (result "inner" (show IO Unit from throw (.userError "broken setup")))
   assertTrue (results.any (!·.status.isSuccess))
+
+/-- An error inside `expectFail` stands even when a sibling result recorded a failure. -/
+@[test]
+def expectFailKeepsErrorBesideFailure : Test := do
+  let results ← resultsOf <| expectFail do
+    result "a" <| assertEq 1 2
+    result "b" <| show IO Unit from throw (.userError "broken setup")
+  assertTrue (results.any (·.status matches .error _))
+
+/-- A nested failure satisfies `expectFail` whether or not the action goes on to throw. -/
+@[test]
+def expectFailAgreesAcrossPaths : Test := do
+  let thrown ← resultsOf (expectFail (do result "a" (assertEq 1 2); assertEq 3 4))
+  let recorded ← resultsOf (expectFail (do result "a" (assertEq 1 2); result "b" (assertEq 3 4)))
+  result "action throws afterwards" (assertTrue (thrown.all (·.status.isSuccess)))
+  result "action records only" (assertTrue (recorded.all (·.status.isSuccess)))
+
+/-- Results other than the expected failure survive `expectFail`. -/
+@[test]
+def expectFailKeepsPassingResults : Test := do
+  let results ← resultsOf <| expectFail do
+    result "ok" (assertEq 1 1)
+    result "a" (assertEq 1 2)
+  assertTrue (results.any (fun r => r.status.isSuccess && r.testName.endsWith "ok"))
 
 -- `here%` reports its own position, so the expected column below is the indentation of the line it
 -- sits on, and the expected span is the five characters of the token itself.
@@ -266,3 +290,7 @@ def alternativeFailure : Test := expectFail failure
 /-- `<|>` recovers from an assertion failure by running the alternative. -/
 @[test]
 def alternativeOrElse : Test := failure <|> assertEq 1 1
+
+-- Two guards whose first source line is identical must get distinct generated names.
+#test_guard 1 + 1 == 2
+#test_guard 1 + 1 == 2
