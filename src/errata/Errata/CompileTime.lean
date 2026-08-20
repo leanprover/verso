@@ -125,12 +125,14 @@ meta def elabTestGuard : Command.CommandElab
     let env ← getEnv
     -- Use the module name as part of the test name to avoid conflicts
     let modName ← getMainModule
-    let qualified (n : String) : Name := `_root_ ++ modName ++ ns ++ Name.mkSimple n
+    -- `_root_` marks the name as absolute for the declaration, but it's not _really_ part of the name
+    let declared (n : String) : Name := modName ++ ns ++ Name.mkSimple n
+    let qualified (n : String) : Name := `_root_ ++ declared n
     let mut name := base
     let mut n := 1
     -- In a `module`, the generated definition is private, so probe its mangled name as well.
-    while env.contains (qualified name)
-        || env.contains (mkPrivateName env (qualified name)) do
+    while env.contains (declared name)
+        || env.contains (mkPrivateName env (declared name)) do
       n := n + 1
       name := s!"{base} ({n})"
     let verdict ←

@@ -203,12 +203,12 @@ def expectFail (act : TestM Unit) (loc : Location := by exact here%) : TestM Uni
       pure false
     catch _ =>
       pure true
-  if threw then return
-  -- A nested `result` records a failure rather than propagating it, so the results it recorded are
-  -- inspected too. Those results describe the expected failure, so they are dropped along with it.
-  -- A recorded error is a broken setup rather than an expected failure, and stands.
+  -- A nested `result` records a failure rather than propagating it, so the results the action
+  -- recorded are inspected too. Their failures are the expected failure and are dropped.
+  -- Everything else is retained because a recorded error is a broken setup rather than a failure.
   let logged ← ctx.log.get
-  if (logged.extract before logged.size).any (·.status matches .fail _) then
-    ctx.log.set (logged.extract 0 before)
-    return
-  failAt loc "expected the action to fail, but it passed"
+  let added := logged.extract before logged.size
+  let failedInside := added.any (·.status matches .fail _)
+  ctx.log.set (logged.extract 0 before ++ added.filter (fun r => !(r.status matches .fail _)))
+  unless threw || failedInside do
+    failAt loc "expected the action to fail, but it passed"
