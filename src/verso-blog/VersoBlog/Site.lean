@@ -56,7 +56,7 @@ inductive Dir where
   content no longer has.
   -/
   | mount
-      (name : Multi.Slug) (source : System.FilePath) (settings : MountSettings)
+      (name : String) (source : System.FilePath) (settings : MountSettings)
       (manifest : Option RenderedHtmlContent)
 deriving Inhabited, Repr
 
@@ -64,27 +64,7 @@ def Dir.name : Dir → String
   | .page n .. => n
   | .blog n .. => n
   | .static n .. => n
-  | .mount n .. => n.toString
-
-/--
-Builds a mount, when `name` is a well-formed slug.
-
-A mount's name is a URL segment and the first component of every page ID that the mount registers,
-so it must already be a slug; for any other name, the result is `none`.
--/
-def Dir.mount? (name : String) (source : System.FilePath) (settings : MountSettings := {}) :
-    Option Dir :=
-  if name.isEmpty then none
-  else (Multi.Slug.isSlug? name).map (Dir.mount · source settings none)
-
-/--
-Builds a mount from a name that has already been checked to be a slug.
--/
-def Dir.mkMount (name : String) (source : System.FilePath) (settings : MountSettings := {}) : Dir :=
-  match Dir.mount? name source settings with
-  | some dir => dir
-  | none =>
-    panic! s!"'{name}' is not a slug, so it cannot name a mount"
+  | .mount n .. => n
 
 /--
 The page ID under which a mounted page is registered.
@@ -93,8 +73,8 @@ Page IDs are namespaced by the mount, because a site that mounts several version
 content holds every internal page path once per version. The root page of a mount is the mount's
 name by itself.
 -/
-def mountPageId (name : Multi.Slug) (path : Multi.Path) : Lean.Name :=
-  path.foldl (fun n seg => n.str seg) (.mkSimple name.toString)
+def mountPageId (name : String) (path : Multi.Path) : Lean.Name :=
+  path.foldl (fun n seg => n.str seg) (.mkSimple name)
 
 /--
 Registers a page ID, reporting a conflict rather than overwriting one that is already present with a
@@ -140,7 +120,7 @@ partial def Dir.traverse1 (dir : Dir) : Blog.TraverseM Dir := do
       .blog name id txt' <$> posts.mapM BlogPost.traverse1
   | .static .. => pure dir
   | .mount name _source _settings manifest? =>
-    withReader (fun ctxt => {ctxt with path := ctxt.path ++ [name.toString]}) <| do
+    withReader (fun ctxt => {ctxt with path := ctxt.path ++ [name]}) <| do
       let path ← (·.path) <$> read
       match manifest? with
       | none =>
@@ -214,16 +194,14 @@ where
 /--
 Inserts a mount into a site at the given path, which names the page that is to hold it.
 
-A name that is not a slug and a path that names something other than a page are errors.
+An empty name and a path that names something other than a page are errors.
 -/
 def Site.insertMount
     (site : Site) (path : List String) (name : String) (source : System.FilePath)
     (settings : MountSettings := {}) : IO Site := do
-  let some dir := Dir.mount? name source settings
-    | throw <| .userError <|
-        s!"'{name}' is not a slug, so it cannot name a mount. A mount's name is a URL segment " ++
-        "made of English letters, digits, '-', and '_'."
-  site.insertDir path dir
+  if name.isEmpty then
+    throw <| .userError "A mount's name is a URL segment, so it cannot be empty."
+  site.insertDir path (.mount name source settings none)
 
 /-- Perform a single pass of the traverse step on a site -/
 def Site.traverse1 (site : Site) : Blog.TraverseM Site := do

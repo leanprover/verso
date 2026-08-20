@@ -8,4 +8,4 @@ import TutorialExample.Site
 
 open Verso.Genre Tutorial
 
-def main := tutorialsRenderedHtmlMain content (config := { destination := "_out/tutorial-content/v1" })
+def main := tutorialsRenderedHtmlMain content (config := { destination := "_out/tutorial-content/v4.30.0" })

@@ -737,9 +737,7 @@ where
     let (tutorials, state) ←
       match config.emit with
       | .immediately =>
-        let (tutorials, state) ← traverse logger tutorials config.toConfig
-        writeXref xrefDest state
-        pure (tutorials, state)
+        traverse logger tutorials config.toConfig
       | .delay f =>
         let (tutorials, state) ← traverse logger tutorials config.toConfig
         SavedState.mk tutorials state |>.save f
@@ -760,6 +758,9 @@ where
 
     -- Emit HTML
     let ((), _) ← (emitter tutorials).run config.toConfig logger state extensionImpls {} {} components theme remoteContent
+
+    -- An emitter may empty its destination, so the cross-reference database is written afterwards.
+    writeXref xrefDest state
 
   writeXref (dest : System.FilePath) (state : Manual.TraverseState) : IO Unit := do
     IO.FS.createDirAll dest

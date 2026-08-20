@@ -42,7 +42,7 @@ def sparseFixtureDir : System.FilePath := "test-projects/rendered-html-sparse-fi
 def conflictFixtureDir : System.FilePath := "test-projects/rendered-html-conflict-fixture"
 
 /-- The directory that `tutorial-example-rendered-html` writes. -/
-def tutorialContent : System.FilePath := "_out/tutorial-content/v1"
+def tutorialContent : System.FilePath := "_out/tutorial-content/v4.30.0"
 
 /-- A page that a mount can sit under. -/
 private def holder (title : String) : Verso.Doc.Part Page :=
@@ -51,7 +51,7 @@ private def holder (title : String) : Verso.Doc.Part Page :=
 /-- A site that mounts `dirs`, each under the name it is paired with, at the top level. -/
 def mountingSite (dirs : Array (String × System.FilePath)) : Site :=
   .page `mounting (holder "Mounting") <|
-    dirs.map fun (name, dir) => Dir.mkMount name dir
+    dirs.map fun (name, dir) => .mount name dir {} none
 
 /-- A site whose root is a blog, so it holds no directories. -/
 def blogRootedSite : Site :=
@@ -134,10 +134,12 @@ private def expectRejected (what : String) (expected : List String) (act : IO α
         fail s!"{what} was rejected, but the message did not mention '{e}': {message}"
 
 private def testPageIds : TestM Unit := do
-  let site := mountingSite #[("fixture", fixtureDir), ("fixture-again", fixtureDir)]
+  let site :=
+    mountingSite #[("fixture", fixtureDir), ("fixture-again", fixtureDir), ("v4.30.0", fixtureDir)]
   let (xref, errors) ← traverseOnly site
   for name in ["fixture", "fixture.guide", "fixture.guide.first", "fixture.guide.«step-1»",
-      "«fixture-again»", "«fixture-again».guide", "«fixture-again».guide.«step-1»"] do
+      "«fixture-again»", "«fixture-again».guide", "«fixture-again».guide.«step-1»",
+      "«v4.30.0»", "«v4.30.0».guide", "«v4.30.0».guide.«step-1»"] do
     let id := (Syntax.decodeNameLit s!"`{name}").getD .anonymous
     check (xref.pageIds.find? id |>.isSome)
       s!"Mounting registers the page ID '{name}': {xref.pageIds.toList.map (·.fst)}"
@@ -156,10 +158,8 @@ private def testRejections : TestM Unit := do
       ["files"] "fixture" fixtureDir
   expectRejected "Inserting a mount under a mount" ["not a page"] <|
     (mountingSite #[("fixture", fixtureDir)]).insertMount ["fixture"] "inner" fixtureDir
-  expectRejected "Inserting a mount whose name is not a slug" ["slug"] <|
-    (Site.page `s (holder "S") #[]).insertMount [] "not a slug" fixtureDir
   -- An empty name would put the mount's root page where its holder's own page goes.
-  expectRejected "Inserting a mount whose name is empty" ["slug"] <|
+  expectRejected "Inserting a mount whose name is empty" ["empty"] <|
     (Site.page `s (holder "S") #[]).insertMount [] "" fixtureDir
   -- Two directories of the same name would generate into the same place.
   expectRejected "Inserting a mount whose name is taken" ["already holds"] <|
@@ -191,8 +191,8 @@ private def testFragmentReports : TestM Unit := do
 
     let dropping :=
       Site.page `mounting (holder "Mounting")
-        #[Dir.mkMount "fixture" fixtureDir
-            { droppedFragments := #["localNav".sluggify] }]
+        #[.mount "fixture" fixtureDir
+            { droppedFragments := #["localNav".sluggify] } none]
     let (_, warnings) ←
       generate (tmp / "silent") dropping (mountingTheme "black" (withLocalNav := false))
     check (!warnings.any (mentions ·.text "localNav"))
@@ -248,6 +248,8 @@ private def testTutorialOutput : TestM Unit := do
       "The tutorial emitter ships its custom property definitions"
     check (manifest.generator.tool == "verso-tutorial")
       s!"The tutorial emitter names itself: {manifest.generator.tool}"
+    check (← (Verso.RenderedHtml.staticDir tutorialContent / "xref.json").pathExists)
+      "The tutorial emitter's output holds the cross-reference database"
 
 /--
 Runs the rendered HTML content mounting tests, returning the number of failures.

@@ -62,17 +62,6 @@ scoped syntax num "-" num "-" num : date
 
 scoped syntax "site" site_spec : term
 
-/--
-Checks at elaboration time that a mount's name is a slug, so that the site configuration language
-never mangles a URL segment.
--/
-meta def checkMountName (name : TSyntax `str) : MacroM Unit := do
-  let str := name.getString
-  if str.isEmpty || (Verso.Multi.Slug.isSlug? str).isNone then
-    Macro.throwErrorAt name <|
-      s!"'{str}' is not a slug, so it cannot name a mount. A mount's name is a URL segment made " ++
-      "of English letters, digits, '-', and '_'."
-
 namespace Internals
 scoped syntax "page" page_spec : term
 scoped syntax "post" post_spec : term
@@ -105,15 +94,11 @@ macro_rules
     ``(Dir.static $name $d)
   | `(term| page static $name:str <- $d:str) =>
     ``(Dir.static $name $d)
-  | `(term| page mount $name:str ← $d:str) => do
-    checkMountName name
-    ``(Dir.mkMount $name $d)
-  | `(term| page mount $name:str <- $d:str) => do
-    checkMountName name
-    ``(Dir.mkMount $name $d)
-  | `(term| page mount $name:str ← $d:str with $settings) => do
-    checkMountName name
-    ``(Dir.mkMount $name $d $settings)
-  | `(term| page mount $name:str <- $d:str with $settings) => do
-    checkMountName name
-    ``(Dir.mkMount $name $d $settings)
+  | `(term| page mount $name:str ← $d:str) =>
+    ``(Dir.mount $name $d {} none)
+  | `(term| page mount $name:str <- $d:str) =>
+    ``(Dir.mount $name $d {} none)
+  | `(term| page mount $name:str ← $d:str with $settings) =>
+    ``(Dir.mount $name $d $settings none)
+  | `(term| page mount $name:str <- $d:str with $settings) =>
+    ``(Dir.mount $name $d $settings none)

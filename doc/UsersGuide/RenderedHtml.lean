@@ -297,8 +297,6 @@ A mount may appear wherever a directory may: beneath any page, whether at the to
 
 {docstring Verso.Genre.Blog.Site.insertMount}
 
-{docstring Verso.Genre.Blog.Dir.mount?}
-
 {docstring Verso.RenderedHtml.load}
 
 {docstring Verso.RenderedHtml.Loaded}

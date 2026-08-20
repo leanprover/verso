@@ -118,7 +118,7 @@ def dirLinks : Site → TemplateM (Array Html)
           let label :=
             if let some manifest := manifest? then
               Html.text false manifest.titleHtml
-            else Html.text true name.toString
+            else Html.text true name
           pure <| some {{<li><a href=s!"{name}/">{{label}}</a></li>}}
         else
           pure none

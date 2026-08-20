@@ -7,7 +7,7 @@ it. Nothing static shows how they behave together, so these tests drive a browse
 
 from playwright.sync_api import expect, Page
 
-MOUNTED_PAGE = "/tutorials/v1/hashmap/"
+MOUNTED_PAGE = "/tutorials/v4.30.0/hashmap/"
 
 # The site's own content on a mounted page.
 SITE_MATH = "#site-math"
