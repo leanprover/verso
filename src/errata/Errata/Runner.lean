@@ -70,7 +70,8 @@ def mkContext (verbosity : Verbosity := .silent) (updateGolden : Bool := false)
     (options : OptionMap := {}) (seed : Option Nat := none) : IO Context := do
   let log ← IO.mkRef (#[] : Array Result)
   let usedOptions ← IO.mkRef ({} : Std.HashSet String)
-  return { verbosity, updateGolden, options, seed, log, usedOptions }
+  let outputFailed ← IO.mkRef false
+  return { verbosity, updateGolden, options, seed, log, usedOptions, outputFailed }
 
 /-- The settings parsed from the runner's command line. -/
 structure Options where
@@ -168,8 +169,10 @@ def optionsOfParsed (p : Cli.Parsed) : Except String Options := do
     options := ← projectOptions (p.variableArgsAs! String).toList
   }
 
-/-- Parses the runner's command line into settings: the declared flags, then any options for the
-tests themselves after a {lit}`--` separator. -/
+/--
+Parses the runner's command line into settings: the declared flags, then any options for the tests
+themselves after a {lit}`--` separator.
+-/
 def parseOptions (args : List String) : Except String Options :=
   match (runnerCmd fun _ => pure 0).parse args with
   | .error e => .error e.kind.msg

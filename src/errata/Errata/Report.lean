@@ -50,8 +50,10 @@ private def printResult (verbosity : Verbosity) (r : Result) : IO Unit := do
     printDoc
     unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
 
-/-- A running tally of results suppressed by truncation. Only passes and skips are ever suppressed;
-failures and errors always print. -/
+/--
+A running tally of results suppressed by truncation. Only passes and skips are ever suppressed;
+failures and errors always print.
+-/
 private structure Suppressed where
   passed : Nat := 0
   skipped : Nat := 0
