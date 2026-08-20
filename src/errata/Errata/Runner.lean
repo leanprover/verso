@@ -194,6 +194,8 @@ def runMain (entries : Array TestEntry) (args : List String) : IO UInt32 := do
     writeReport opts.jsonPath jsonReport
     writeReport opts.markdownPath markdownReport
     let failures ← humanReport opts.verbosity results
+    if entries.isEmpty then
+      IO.eprintln "warning: no tests were discovered"
     -- Warn about options that were supplied but never read by any test (typos, removed flags).
     let used ← cfg.usedOptions.get
     let unused := opts.options.toList.filterMap fun (k, _) => if used.contains k then none else some k
