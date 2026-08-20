@@ -158,7 +158,19 @@ it is written, so a live runner can stream output while the test runs.
 def runCapturing (ctx : Context) (act : TestM Unit) :
     IO (Except IO.Error (Except TestFailure Unit) × OutputLog) := do
   let log ← IO.mkRef (#[] : Array Output)
-  let emit (o : Output) : IO Unit := do log.modify (·.push o); ctx.writeOutput o
+  -- The destination runs with the streams that were in place before the redirection, so writing to
+  -- stdout from it reaches the runner instead of re-entering this capture.
+  let realOut ← IO.getStdout
+  let realErr ← IO.getStderr
+  let emit (o : Output) : IO Unit := do
+    log.modify (·.push o)
+    unless ← ctx.outputFailed.get do
+      try
+        IO.withStdout realOut <| IO.withStderr realErr <| ctx.writeOutput o
+      catch e =>
+        ctx.outputFailed.set true
+        -- Saying so can fail in turn, when the destination that just failed was stderr itself.
+        try realErr.putStr s!"warning: live output destination failed: {e}\n" catch _ => pure ()
   let outcome ← IO.withStdout (captureStream emit .stdout) <|
     IO.withStderr (captureStream emit .stderr) <| ((act ctx).run).toBaseIO
   return (outcome, { log := ← log.get })

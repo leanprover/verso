@@ -52,5 +52,12 @@ structure Context where
   /--
   Receives each captured output fragment as it is written, in order. The default discards them; a
   live runner sets it to stream output as the test produces it.
+
+  It runs with the streams that were in place before the test's output was redirected, so it may
+  print in case of internal errors.
   -/
   writeOutput : Output → IO Unit := fun _ => pure ()
+  /--
+  Whether a write to the output destination has failed. If true, further attempts are suppressed.
+  -/
+  outputFailed : IO.Ref Bool
