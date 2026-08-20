@@ -94,11 +94,51 @@ def goldenRoundTrip : Test :=
     assertFileExists goldenPath
     goldenFile goldenPath "contents\n"
 
+/-- A golden file is written through directories that do not exist yet. -/
+@[test]
+def goldenFileCreatesDirectories : Test :=
+  IO.FS.withTempDir fun dir =>
+    withReader ({ · with updateGolden := true }) do
+      let goldenPath := dir / "nested" / "deeper" / "expected.txt"
+      goldenFile goldenPath "contents\n"
+      assertFileExists goldenPath
+
 /-- Runs one action as a test in a fresh context, returning the results it recorded. -/
 private def resultsOf (act : Test) : TestM (Array Result) := do
   let cfg ← mkContext
   runEntry cfg <|
     TestEntry.of "p" "M" "inner" { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ } act
+
+/-- A missing produced directory is a golden failure at the call site, not a bare error. -/
+@[test]
+def goldenDirReportsMissingOutput : Test := do
+  let results ← IO.FS.withTempDir fun dir =>
+    resultsOf (goldenDir (dir / "expected") (dir / "never-created"))
+  assertEq 1 results.size
+  assertTrue (results[0]!.status matches .fail _)
+
+/-- A produced directory with no files in it can be recorded and then compared. -/
+@[test]
+def goldenDirHandlesEmptyOutput : Test := do
+  let results ← IO.FS.withTempDir fun dir => do
+    let expected := dir / "expected"
+    let actual := dir / "actual"
+    IO.FS.createDirAll actual
+    resultsOf do
+      withReader ({ · with updateGolden := true }) (goldenDir expected actual)
+      goldenDir expected actual
+  assertEq 1 results.size
+  assertTrue results[0]!.status.isSuccess
+
+/-- A file where a directory was expected is a golden failure, not a raw error. -/
+@[test]
+def goldenDirRejectsNonDirectory : Test := do
+  let results ← IO.FS.withTempDir fun dir => do
+    let actual := dir / "actual"
+    IO.FS.writeFile actual "not a directory\n"
+    resultsOf (goldenDir (dir / "expected") actual)
+  assertEq 1 results.size
+  assertTrue (results[0]!.status matches .fail _)
 
 /-- Output written before a failure reaches the enclosing result, where it explains the failure. -/
 @[test]

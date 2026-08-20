@@ -57,7 +57,7 @@ meta def elabTestMsgs : Command.CommandElab
     -- qualifies it so that two modules with a `#test_msgs` at the same position do not collide.
     let fileMap ← getFileMap
     let startPos := fileMap.toPosition (tk.getPos?.getD 0)
-    let endPos := fileMap.toPosition (tk.getTailPos?.getD 0)
+    let endPos := fileMap.toPosition (tk.getTailPos?.getD (tk.getPos?.getD 0))
     let declName := `_root_ ++ (← getMainModule) ++
       Name.mkSimple s!"errataMsgTest_L{startPos.line}_C{startPos.column}"
     let detail := s!"Expected:\n{expected}\n\nActual:\n{actual}"

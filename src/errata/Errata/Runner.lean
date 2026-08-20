@@ -187,9 +187,12 @@ def runMain (entries : Array TestEntry) (args : List String) : IO UInt32 := do
     let cfg ← mkContext (verbosity := opts.verbosity) (updateGolden := opts.updateGolden)
       (options := opts.options) (seed := opts.seed)
     let results ← run cfg entries
-    if let some path := opts.junitPath then IO.FS.writeFile path (junitReport results)
-    if let some path := opts.jsonPath then IO.FS.writeFile path (jsonReport results)
-    if let some path := opts.markdownPath then IO.FS.writeFile path (markdownReport results)
+    let writeReport (path? : Option String) (render : Array Result → String) : IO Unit := do
+      if let some path := path? then
+        writeFile path (render results)
+    writeReport opts.junitPath junitReport
+    writeReport opts.jsonPath jsonReport
+    writeReport opts.markdownPath markdownReport
     let failures ← humanReport opts.verbosity results
     -- Warn about options that were supplied but never read by any test (typos, removed flags).
     let used ← cfg.usedOptions.get
