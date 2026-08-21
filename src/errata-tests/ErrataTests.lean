@@ -233,6 +233,26 @@ def captureRejectsDanglingBytes : Test := do
   assertEq 1 results.size
   assertTrue (results[0]!.status matches .error _)
 
+/-- Output mixed from raw writes and prints is recorded in the order it was produced. -/
+@[test]
+def captureOrdersMixedWrites : Test := do
+  let captured ← captureOutput do
+    let out ← IO.getStdout
+    out.write "é".toUTF8
+    IO.print "x"
+    out.write "û".toUTF8
+  assertEq "éxû" captured.stdout
+
+/-- Text printed while a raw code point is unfinished is malformed output, not reordered output. -/
+@[test]
+def capturePrintDuringPartialWriteRejected : Test := do
+  let results ← resultsOf do
+    let out ← IO.getStdout
+    out.write ("é".toUTF8.extract 0 1)
+    IO.print "x"
+  assertEq 1 results.size
+  assertTrue (results[0]!.status matches .error _)
+
 /-- Dangling bytes at the end of a failing test do not displace the test's own failure. -/
 @[test]
 def danglingBytesKeepFailure : Test := do

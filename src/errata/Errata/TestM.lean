@@ -147,20 +147,26 @@ private def captureStream (emit : Output → IO Unit) (mk : String → Output) :
   let pending ← IO.mkRef ByteArray.empty
   let invalid : IO.Error :=
     .userError "a raw byte write to a captured stream was not valid UTF-8"
+  let write (bytes : ByteArray) : IO Unit := do
+    let (ready, rest) := splitUtf8Tail ((← pending.get) ++ bytes)
+    match String.fromUTF8? ready with
+    | some s =>
+      pending.set rest
+      unless s.isEmpty do emit (mk s)
+    | none =>
+      pending.set .empty
+      throw invalid
   let stream : IO.FS.Stream := {
+    -- A flush partway through a code point is not an error: the partial sequence stays buffered
+    -- for the write that completes it.
     flush := pure ()
     read := fun _ => pure .empty
-    write := fun bytes => do
-      let (ready, rest) := splitUtf8Tail ((← pending.get) ++ bytes)
-      match String.fromUTF8? ready with
-      | some s =>
-        pending.set rest
-        unless s.isEmpty do emit (mk s)
-      | none =>
-        pending.set .empty
-        throw invalid
+    write
     getLine := pure ""
-    putStr := fun s => emit (mk s)
+    -- Text goes through the byte pathway, so output mixed from `putStr` and raw writes is
+    -- recorded in the order it was produced, and text interrupting an unfinished code point is
+    -- reported as the malformed stream it is.
+    putStr := fun s => write s.toUTF8
     isTty := pure false
   }
   let close : IO Unit := do
