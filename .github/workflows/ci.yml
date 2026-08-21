@@ -159,8 +159,11 @@ jobs:
               run: |
                   if [ -f errata-summary.md ]; then cat errata-summary.md >> "$GITHUB_STEP_SUMMARY"; fi
 
+            # Publishing a check run needs a token with `checks: write`, which pull requests from
+            # forks never receive; those runs get their results from the job summary and the
+            # uploaded artifact instead.
             - name: Publish the JUnit test report
-              if: always()
+              if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
               uses: dorny/test-reporter@v1
               with:
                   name: Errata tests
