@@ -200,19 +200,22 @@ it is written, so a live runner can stream output while the test runs.
 def runCapturing (ctx : Context) (act : TestM Unit) :
     IO (Except IO.Error (Except TestFailure Unit) × OutputLog) := do
   let log ← IO.mkRef (#[] : Array Output)
-  -- The destination runs with the streams that were in place before the redirection, so writing to
-  -- stdout from it reaches the runner instead of re-entering this capture.
-  let realOut ← IO.getStdout
-  let realErr ← IO.getStderr
+  -- The destination runs with the streams from before the outermost capture, so writing to stdout
+  -- from it reaches the runner instead of re-entering a capture at any level.
+  let real ←
+    match ctx.realStreams? with
+    | some streams => pure streams
+    | none => do pure { stdout := ← IO.getStdout, stderr := ← IO.getStderr : RealStreams }
+  let ctx := { ctx with realStreams? := some real }
   let emit (o : Output) : IO Unit := do
     log.modify (·.push o)
     unless ← ctx.outputFailed.get do
       try
-        IO.withStdout realOut <| IO.withStderr realErr <| ctx.writeOutput o
+        IO.withStdout real.stdout <| IO.withStderr real.stderr <| ctx.writeOutput o
       catch e =>
         ctx.outputFailed.set true
         -- Saying so can fail in turn, when the destination that just failed was stderr itself.
-        try realErr.putStr s!"warning: live output destination failed: {e}\n" catch _ => pure ()
+        try real.stderr.putStr s!"warning: live output destination failed: {e}\n" catch _ => pure ()
   let (outStream, outClose) ← captureStream emit .stdout
   let (errStream, errClose) ← captureStream emit .stderr
   -- Closing inside the captured action makes dangling bytes at the end of the test an error of the
