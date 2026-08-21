@@ -174,6 +174,8 @@ Runs a test action with the given context, capturing its outcome as data rather 
 propagate. The action's stdout and stderr are recorded as text, in order and tagged by stream, and
 returned alongside the outcome. Each fragment is also handed to the context's output destination as
 it is written, so a live runner can stream output while the test runs.
+
+Output from tasks or subprocesses spawned by the test is not captured.
 -/
 def runCapturing (ctx : Context) (act : TestM Unit) :
     IO (Except IO.Error (Except TestFailure Unit) × OutputLog) := do
