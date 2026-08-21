@@ -326,7 +326,7 @@ def positionConvention : Test := do
   assertEq 2 indentedHere.startPos.column
   assertEq 5 (indentedHere.endPos.column - indentedHere.startPos.column)
 
-/-- The `Verbosity` predicates and accumulation behave as the report relies on. -/
+/-- The `Verbosity` predicates behave as the report relies on. -/
 @[test]
 def verbosityLevels : Test := do
   assertEq false Verbosity.silent.showsPasses
@@ -339,10 +339,6 @@ def verbosityLevels : Test := do
   assertEq false Verbosity.superVerbose.truncates
   assertEq false Verbosity.verbose.showsAllDocstrings
   assertEq true Verbosity.superVerbose.showsAllDocstrings
-  assertEq Verbosity.quiet Verbosity.silent.increase
-  assertEq Verbosity.verbose Verbosity.quiet.increase
-  assertEq Verbosity.superVerbose Verbosity.verbose.increase
-  assertEq Verbosity.superVerbose Verbosity.superVerbose.increase
 
 /--
 The runner's command line: the `-v` forms select the verbosity, declared flags parse, and options

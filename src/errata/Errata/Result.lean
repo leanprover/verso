@@ -39,12 +39,6 @@ def Verbosity.showsAllDocstrings : Verbosity → Bool
   | .superVerbose => true
   | .silent | .quiet | .verbose => false
 
-/-- The next verbosity up, for an accumulating {lit}`-v` / {lit}`-vv` / {lit}`-vvv`. -/
-def Verbosity.increase : Verbosity → Verbosity
-  | .silent => .quiet
-  | .quiet => .verbose
-  | .verbose | .superVerbose => .superVerbose
-
 /-- A line and column within a source file, following Lean's own source positions. -/
 structure Position where
   /-- The line, counting from one. -/
