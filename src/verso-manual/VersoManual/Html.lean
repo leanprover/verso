@@ -16,6 +16,7 @@ import VersoManual.Html.Style
 namespace Verso.Genre.Manual.Html
 open Std (HashSet)
 open Verso.Output Html Multi
+open Verso.Output.Html.Files
 
 public structure Toc.Meta where
   title : Html
@@ -456,8 +457,8 @@ public def page
         <script src="toc-resize.js" defer="defer"></script>
         {{extraJsFiles.map fun f => ({{<script src=s!"{f.1}" {{if f.2 then defer else #[]}}></script>}})}}
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
-        {{extraCss.toArray.map ({{<style>{{Html.text false ·.css}}</style>}})}}
-        {{extraJs.toArray.map ({{<script>{{Html.text false ·.js}}</script>}})}}
+        {{extraCss.toArray.map (Html.style ·.css)}}
+        {{extraJs.toArray.map (Html.script ·.js)}}
         {{extraHead}}
       </head>
       <body>
@@ -518,20 +519,4 @@ public def page
 
 
 public def relativize (path : Path) (html : Html) : Html :=
-  html.visitM (m := ReaderT Path Id) (tag := rwTag) |>.run path
-where
-  urlAttr (name : String) : Bool := name ∈ ["href", "src", "data", "poster"]
-  rwAttr (attr : String × String) : ReaderT Path Id (String × String) := do
-    if urlAttr attr.fst && "/".isPrefixOf attr.snd then
-      let path := (← read)
-      pure { attr with
-        snd := path.relativize attr.snd
-      }
-    else
-      pure attr
-  rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT Path Id (Option Html) := do
-    if tag == "base" then return none
-    -- Don't rewrite URLs that come from remote content. This attribute is inserted by the `ref`
-    -- role when referring to remote content.
-    if attrs.any (·.1 == "data-verso-remote") then return none
-    return some <| .tag tag (← attrs.mapM rwAttr) content
+  html.rewriteUrls (path.relativize ·)

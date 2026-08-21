@@ -61,11 +61,31 @@ The URL layout of a site is specified via a {name Blog.Site}`Site`:
 {docstring Blog.Dir}
 
 These are usually constructed using a small embedded configuration language.
+A page is written as its URL segment followed by the name of the document that it renders, further
+pages are indented beneath a `/`, a blog is introduced by `with`, a directory of files that are
+served verbatim by `static`, and a directory of {ref "rendered-html"}[rendered HTML content] by
+`mount`:
+
+```
+def mySite : Site := site MySite.Front /
+  static "static" ← "static_files"
+  "about" MySite.About
+  "blog" MySite.Blog with
+    MySite.Blog.FirstPost
+  "tutorials" MySite.Tutorials /
+    mount "v1" ← "content/v1"
+    mount "v0" ← "content/v0" with {showInNav := false}
+```
+
+The settings after `with` in a `mount` form are a {name Blog.MountSettings}`MountSettings`.
 
 A blog is rendered using a theme, which is a collection of templates.
 Templates are monadic functions that construct {name Verso.Output.Html}`Html` from a set of dynamically-typed parameters.
 
 {docstring Blog.Theme}
+
+A theme that is used to produce {ref "rendered-html"}[rendered HTML content] keeps its chrome in its
+primary template, because the export renders the page template alone.
 
 {docstring Blog.Template}
 

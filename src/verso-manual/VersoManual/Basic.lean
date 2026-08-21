@@ -29,6 +29,7 @@ set_option doc.verso true
 
 public section
 
+open Verso.Output.Html.Files
 open Lean (Name Json NameMap ToJson FromJson)
 open Std (HashSet HashMap TreeSet)
 open Verso.Doc

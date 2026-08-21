@@ -1,0 +1,26 @@
+/* The site's own theme. It defines the `--verso-*` properties that it wants mounted content to
+   pick up, and styles the class names that a mounted fragment carries. */
+body {
+    font-family: var(--verso-text-font-family);
+    color: var(--verso-text-color);
+    margin: 0 auto;
+    max-width: 60rem;
+    padding: 1rem;
+}
+
+nav.top ol {
+    display: flex;
+    gap: 1rem;
+    list-style: none;
+    padding: 0;
+}
+
+.verso-content.localNav {
+    border-left: 3px solid var(--verso-structure-color);
+    padding-left: 1rem;
+}
+
+.verso-content.localNav ol {
+    list-style: none;
+    padding-left: 0;
+}

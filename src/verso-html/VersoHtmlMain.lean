@@ -44,8 +44,8 @@ private def headContents : Html := {{
 
   <script src="popper.js"></script>
   <script src="tippy.js"></script>
-  <script>{{Html.text false highlightingJs}}</script>
-  <style>{{Html.text false highlightingStyle}}</style>
+  {{Html.script highlightingJs}}
+  {{Html.style highlightingStyle}}
   <link rel="stylesheet" href="verso-vars.css"/>
   <link rel="stylesheet" href="tippy-border.css"/>
   <link rel="stylesheet" href="code.css"/>

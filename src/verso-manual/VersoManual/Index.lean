@@ -23,6 +23,8 @@ open Verso.ArgParse
 open Lean (ToJson FromJson quote)
 open Std (HashMap HashSet)
 
+open Verso.Output.Html.Files
+
 namespace Verso.Genre.Manual.Index
 
 
@@ -473,7 +475,7 @@ where
 
     main .theIndex nav {
       position: sticky;
-      top: var(--verso-header-height);
+      top: var(--verso-header-height, 0px);
       background: white;
       font-family: var(--verso-structure-font-family);
     }
@@ -483,7 +485,7 @@ where
          know the height of the page header, but the index header height varies, so
          we use the maximum height it gets which also works well for readers with
          wide screens */
-      scroll-margin-top: calc(var(--verso-header-height) + 7.5rem);
+      scroll-margin-top: calc(var(--verso-header-height, 0px) + 7.5rem);
     }
 
     @media screen and (max-width: 700px) {
@@ -495,7 +497,7 @@ where
       main .theIndex [id] {
         /* On mobile, the index header is not sticky, so we just need to
         be below the page header. */
-        scroll-margin-top: var(--verso-header-height);
+        scroll-margin-top: var(--verso-header-height, 0px);
       }
     }
 

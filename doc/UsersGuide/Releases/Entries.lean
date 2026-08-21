@@ -22,6 +22,7 @@ public import UsersGuide.Releases.Entries.LiterateHtmlKatex
 public import UsersGuide.Releases.Entries.LiterateProgramming
 public import UsersGuide.Releases.Entries.MethodInMultiVerso
 public import UsersGuide.Releases.Entries.ReleaseNotesChapter
+public import UsersGuide.Releases.Entries.RenderedHtmlContent
 public import UsersGuide.Releases.Entries.RoleDiagnostics
 public import UsersGuide.Releases.Entries.SearchPriority
 public import UsersGuide.Releases.Entries.VersionedReleaseNotes

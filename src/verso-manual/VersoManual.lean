@@ -66,6 +66,7 @@ open Verso.Code (LinkTargets)
 open Verso.Code.Hover (Dedup State)
 open Verso.ArgParse
 open Verso (Logger Severity withLogger BuildLogT)
+open Verso.Output.Html.Files
 
 namespace Verso.Genre
 
@@ -470,18 +471,9 @@ partial def toc [Monad m] [Html.ToHtml Manual m (Doc.Inline Manual)] [MonadLiftT
       children := children.toList
     }
 
-partial def sortJs (extraJs : Array (Bool × StaticJsFile)) : Array (Bool × StaticJsFile) :=
-  helper #[] extraJs
-where
-  -- partial because library doesn't include that the sum of the size of the partitions is the size
-  -- of the original
-  helper (acc todo : Array (Bool × StaticJsFile)) : Array (Bool × StaticJsFile) :=
-    if todo.isEmpty then acc
-    else
-      let (ok, notYet) := todo.partition (fun f => f.2.after.all (fun f' => acc.any (·.2.filename == f')))
-      if ok.isEmpty then acc ++ todo
-      else
-        helper (acc ++ ok) notYet
+@[inherit_doc sortByAfter]
+def sortJs (extraJs : Array (Bool × StaticJsFile)) : Array (Bool × StaticJsFile) :=
+  sortByAfter (·.2) extraJs
 
 def page (toc : List Html.Toc)
     (path : Path) (textTitle : String) (htmlBookTitle contents : Html)

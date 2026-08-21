@@ -10,49 +10,57 @@ public import VersoBlog.Component
 public section
 
 open Verso Code Highlighted WebAssets
+open Verso.Output.Html.Files
 
 namespace Verso.Genre.Blog.Traverse
 
 open Doc
 
-def renderMathJs : String :=
-"document.addEventListener(\"DOMContentLoaded\", () => {
-    for (const m of document.querySelectorAll(\".math.inline\")) {
-        katex.render(m.textContent, m, {throwOnError: false, displayMode: false});
-    }
-    for (const m of document.querySelectorAll(\".math.display\")) {
-        katex.render(m.textContent, m, {throwOnError: false, displayMode: true});
-    }
-});"
-
 def addCssFile (filename contents : String) : TraverseM Unit := do
-  for (fn, css) in (← get).cssFiles do
-    if filename == fn then
-      if contents != css then
+  for css in (← get).cssFiles do
+    if filename == css.filename then
+      if contents != css.contents.css then
         reportError s!"Attempted to add different content for CSS file {filename}"
       return
 
   modify fun s => s.addCssFile filename contents
 
-def addJsFile (filename contents : String) (sourceMap? : Option (String × String) := none) : TraverseM Unit := do
-  for (fn, js, map?) in (← get).jsFiles do
-    if filename == fn then
-      if contents != js then
+def addJsFile (filename contents : String) (sourceMap? : Option (String × String) := none)
+    (defer : Bool := false) (after : Array String := #[]) : TraverseM Unit := do
+  let sourceMap? := sourceMap?.map fun (filename, contents) => ({filename, contents} : JsSourceMap)
+  for js in (← get).jsFiles do
+    if filename == js.filename then
+      if contents != js.contents.js then
         reportError s!"Attempted to add different content for JS file {filename}"
-      if sourceMap? != map? then
+      if sourceMap? != js.sourceMap? then
         reportError s!"Attempted to add different source map for JS file {filename}"
       return
 
-  modify fun s => s.addJsFile filename contents sourceMap?
+  modify fun s => s.addJsFile filename contents (sourceMap?.map (fun m => (m.filename, m.contents))) defer after
+
+/--
+Adds the stylesheets and scripts used by rendered Lean code.
+
+The file `"highlighting.js"` includes a specific selector that's used to apply it to a particular
+part of the page. Tutorials and blogs use the same traversal, and tutorials support rendering their
+content as mountable HTML archives, so the file must be able to support both the whole page and a
+specific sub-region.
+
+Traversal emits the standard version of the script. When HTML is bundled, this script is replaced by
+one that targets the wrapper elements for the bundled content.
+-/
+def addCodeAssets : TraverseM Unit :=
+  modify fun st => st
+    |>.addCssFile "highlighting.css" highlightingStyle
+    |>.addCssFile "tippy-border.css" tippy.border.css
+    |>.addJsFile "popper.js" popper (some ("popper.min.js.map", popper.map))
+    |>.addJsFile "tippy.js" tippy (some ("tippy-bundle.umd.min.js.map", tippy.map))
+    |>.addJsFile "highlighting.js" highlightingJs
+         (after := #["popper.js", "tippy.js"])
 
 def genreBlock (g : Genre) [bg : BlogGenre g] : Blog.BlockExt → Array (Block g) → Blog.TraverseM (Option (Block g))
     | .highlightedCode .., _contents | .message .., _contents => do
-      modify fun st => {st with
-        stylesheets := st.stylesheets.insert highlightingStyle,
-        scripts := st.scripts.insert highlightingJs
-      } |>.addJsFile "popper.js" popper (some ("popper.min.js.map", popper.map))
-        |>.addJsFile "tippy.js" tippy (some ("tippy-bundle.umd.min.js.map", tippy.map))
-        |>.addCssFile "tippy-border.css" tippy.border.css
+      addCodeAssets
       pure none
     | .component name json, contents => do
       let some blk := (← read).components.blocks.find? name
@@ -72,12 +80,7 @@ def genreBlock (g : Genre) [bg : BlogGenre g] : Blog.BlockExt → Array (Block g
 
 def genreInline (g : Genre) [bg : BlogGenre g] : Blog.InlineExt → Array (Inline g) → Blog.TraverseM (Option (Inline g))
     | .highlightedCode .., _contents | .customHighlight .., _contents | .message .., _contents => do
-      modify fun st => {st with
-        stylesheets := st.stylesheets.insert highlightingStyle,
-        scripts := st.scripts.insert highlightingJs
-      } |>.addJsFile "popper.js" popper (some ("popper.min.js.map", popper.map))
-        |>.addJsFile "tippy.js" tippy (some ("tippy-bundle.umd.min.js.map", tippy.map))
-        |>.addCssFile "tippy-border.css" tippy.border.css
+      addCodeAssets
       pure none
     | .label x, _contents => do
       -- Add as target if not already present

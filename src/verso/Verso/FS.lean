@@ -22,6 +22,16 @@ public def ensureDir (dir : System.FilePath) : IO Unit := do
     throw (↑ s!"Not a directory: {dir}")
 
 /--
+Removes {name}`path`, which may name a file or a directory tree, if it exists.
+
+If the path does not exist, nothing happens.
+-/
+public def removeTree (path : System.FilePath) : IO Unit := do
+  if ← path.pathExists then
+    if ← path.isDir then removeDirAll path
+    else removeFile path
+
+/--
 Recursively copies a directory of files from {name}`src` to {name}`tgt`. Any errors are reported via
 {name}`MonadBuildLog`, and paths that don't satisfy {name}`copyFile` are skipped.
 -/
@@ -43,3 +53,12 @@ public partial def copyRecursively
         while !buf.isEmpty do
           h'.write buf
           buf ← h.read 1024
+
+/--
+Replaces the directory tree at {name}`tgt` with a copy of {name}`src`, which may be a file or a
+directory tree. If {name}`tgt` already exists, it is deleted.
+-/
+public def replaceTree
+    [Monad m] [MonadLiftT IO m] [MonadBuildLog m] (src tgt : System.FilePath) : m Unit := do
+  (removeTree tgt : IO _)
+  copyRecursively src tgt
