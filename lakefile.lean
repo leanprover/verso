@@ -269,6 +269,8 @@ script run (args) do
       IO.eprintln s!"error: {msg}"
       IO.eprintln usage
       return 1
+  -- `--wfail` is the runner's warnings-as-errors flag; the driver's own warnings honor it too.
+  let wfail := runnerArgs.contains "--wfail"
   -- Search the named libraries, or every library in the package by default. A name may be a bare
   -- `Library` in this package or a `package/Library` reaching into a dependency, following Lake's
   -- target syntax. A library whose source lives in the generated-runner directory has no source
@@ -334,12 +336,14 @@ script run (args) do
       let missed ← unreachableModules lib known
       unless missed.isEmpty do unreachable := unreachable.push (lib, missed)
   unless unreachable.isEmpty do
-    IO.eprintln "warning: these modules are not reachable from their library's roots, so any tests \
-      they define are not discovered. Import them from a root, or widen the library's `globs` \
-      (e.g. `globs := #[Glob.andSubmodules `Root]`):"
+    let level := if wfail then "error" else "warning"
+    IO.eprintln s!"{level}: these modules are not reachable from their library's roots, so any \
+      tests they define are not discovered. Import them from a root, or widen the library's \
+      `globs` (e.g. `globs := #[Glob.andSubmodules `Root]`):"
     for (lib, mods) in unreachable do
       for mod in mods do
         IO.eprintln s!"  {lib.name}: {mod}"
+    if wfail then return 1
   -- Write the generated sources, plus a `selection` file naming the chosen test set. The generated
   -- targets depend on that file, so a changed selection invalidates them through Lake's own trace.
   let dir := ws.root.dir / errataRunnerDir

@@ -26,6 +26,6 @@ In particular, there were no universal conventions about output or failure repor
 
 Tests are marked with the `@[test]` attribute, and a test's value can have any type with an `IsTest` instance.
 Each test's docstring and source range are saved for failure reporting.
-The test runner discovers every test in the package; it can restrict the run to named libraries, rerun property tests with a fixed seed, update golden files, and write JUnit XML, JSON, and Markdown reports.
+The test runner discovers every test in the package; it can restrict the run to named libraries, rerun property tests with a fixed seed, update golden files, fail the run on warnings with `--wfail`, and write JUnit XML, JSON, and Markdown reports.
 
 Elaboration-time tests can be written with `#test_msgs` and `#test_guard`, variants of `#guard_msgs` and `#guard` that run their check at compile time and record the outcome as a test case, reported together with the rest of the suite.
