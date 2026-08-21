@@ -118,12 +118,14 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
   return failed + errors
 
 /--
-Drops the control characters XML 1.0 forbids even when escaped: those below {lit}`U+0020` other than
-tab, newline, and carriage return.
+Drops the characters XML 1.0 forbids even when escaped: those below {lit}`U+0020` other than tab,
+newline, and carriage return, and the noncharacters {lit}`U+FFFE` and {lit}`U+FFFF`.
 -/
 private def dropXmlForbidden (s : String) : String :=
   s.foldl (init := "") fun acc c =>
-    if c == '\t' || c == '\n' || c == '\r' || Nat.ble 0x20 c.toNat then acc.push c else acc
+    if c == '\uFFFE' || c == '\uFFFF' then acc
+    else if c == '\t' || c == '\n' || c == '\r' || Nat.ble 0x20 c.toNat then acc.push c
+    else acc
 
 /--
 Escapes text for XML and drops characters XML 1.0 forbids even when escaped, so a captured ANSI escape

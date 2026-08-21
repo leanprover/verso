@@ -140,6 +140,30 @@ def goldenDirRejectsNonDirectory : Test := do
   assertEq 1 results.size
   assertTrue (results[0]!.status matches .fail _)
 
+/-- A directory standing where the golden tree has a file is a missing file, not a pass. -/
+@[test]
+def goldenDirRejectsDirectoryForFile : Test := do
+  let results ← IO.FS.withTempDir fun dir => do
+    let expected := dir / "expected"
+    let actual := dir / "actual"
+    writeFile (expected / "d") "contents\n"
+    IO.FS.createDirAll (actual / "d")
+    resultsOf (goldenDir expected actual)
+  assertEq 1 results.size
+  assertTrue (results[0]!.status matches .fail _)
+
+/-- A file standing where the golden tree has a directory is a golden failure, not a raw error. -/
+@[test]
+def goldenDirRejectsFileForDirectory : Test := do
+  let results ← IO.FS.withTempDir fun dir => do
+    let expected := dir / "expected"
+    let actual := dir / "actual"
+    writeFile (expected / "d" / "inner") "contents\n"
+    writeFile (actual / "d") "not a directory\n"
+    resultsOf (goldenDir expected actual)
+  assertEq 1 results.size
+  assertTrue (results[0]!.status matches .fail _)
+
 /-- Output written before a failure reaches the enclosing result, where it explains the failure. -/
 @[test]
 def captureOutputKeepsOutputOnFailure : Test := do
@@ -158,6 +182,34 @@ def captureOutputDivertsOnSuccess : Test := do
   assertEq 1 results.size
   assertTrue results[0]!.status.isSuccess
   assertTrue results[0]!.output.isEmpty
+
+/-- A raw write may end partway through a code point; the write that completes it is joined on. -/
+@[test]
+def captureJoinsSplitWrites : Test := do
+  let bytes := "é".toUTF8
+  let captured ← captureOutput do
+    let out ← IO.getStdout
+    out.write (bytes.extract 0 1)
+    out.write (bytes.extract 1 bytes.size)
+  assertEq "é" captured.stdout
+
+/-- Bytes whose code point is never completed are an error, not silently dropped. -/
+@[test]
+def captureRejectsDanglingBytes : Test := do
+  let results ← resultsOf do
+    let out ← IO.getStdout
+    out.write ("é".toUTF8.extract 0 1)
+  assertEq 1 results.size
+  assertTrue (results[0]!.status matches .error _)
+
+/-- A raw write with no valid decoding is rejected at the write itself. -/
+@[test]
+def captureRejectsInvalidBytes : Test := do
+  let results ← resultsOf do
+    let out ← IO.getStdout
+    out.write (ByteArray.mk #[0xFF])
+  assertEq 1 results.size
+  assertTrue (results[0]!.status matches .error _)
 
 /--
 A live output destination writes to the real stdout, so printing from it does not re-enter the
@@ -311,11 +363,14 @@ def runnerArgParsing : Test := do
     | .error msg => assertContains "ErrataTests" msg
     | .ok _ => assertTrue false "expected an error"
 
-/-- A run that discovers nothing says so, rather than reporting success silently. -/
+/-- A run that discovers nothing fails: a test tool with no tests is a broken setup, not a pass. -/
 @[test]
-def emptyRunWarns : Test := do
-  let out ← captureOutput (discard <| runMain #[] [])
+def emptyRunFails : Test := do
+  let code ← IO.mkRef (0 : UInt32)
+  let out ← captureOutput do
+    code.set (← runMain #[] [])
   assertContains "no tests were discovered" out.all
+  assertEq 1 (← code.get).toNat
 
 /-- At silent verbosity the report hides passes but shows failures and the summary line. -/
 @[test]
@@ -333,6 +388,16 @@ def reportVerbose : Test := do
   let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
   let out ← captureOutput do discard <| humanReport .verbose #[pass]
   assertContains "ok    p/M  t" out.stdout
+
+/-- Characters XML 1.0 forbids are dropped from the JUnit report rather than emitted. -/
+@[test]
+def junitDropsForbiddenChars : Test := do
+  let bad := (Char.ofNat 0xFFFF).toString ++ (Char.ofNat 0xFFFE).toString ++ (Char.ofNat 0x1).toString
+  let r : Result := { package := "p", moduleName := "M", test := "t",
+                      status := .fail { message := s!"bad{bad}char" } }
+  let xml := junitReport #[r]
+  assertContains "badchar" xml
+  assertTrue (!xml.contains (Char.ofNat 0xFFFF) && !xml.contains (Char.ofNat 0xFFFE))
 
 /-- A test's results are truncated after the cap at quiet verbosity, with a summary, but not at verbose. -/
 @[test]
