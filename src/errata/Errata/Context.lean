@@ -55,13 +55,13 @@ structure Context where
   /-- The option names read during the run, shared across all tests, for reporting unused options. -/
   usedOptions : IO.Ref (HashSet String)
   /--
-  Receives each captured output fragment as it is written, in order. The default discards them; a
-  live runner sets it to stream output as the test produces it.
+  Receives each captured output fragment as it is written, in order. A live runner sets it to
+  stream output as the test produces it, and it is {lean}`none` when no runner is listening.
 
   It runs with the streams that were in place before the test's output was redirected, so it may
   print in case of internal errors.
   -/
-  writeOutput : Output → IO Unit := fun _ => pure ()
+  writeOutput : Option (Output → IO Unit) := none
   /--
   Whether a write to the output destination has failed. If true, further attempts are suppressed.
   -/
