@@ -91,8 +91,9 @@ meta def testNameBelow (moduleName declName : Name) : String :=
 
 /--
 {lit}`getAllTests% "package" Mod.A Mod.B ...` reads the tests recorded by {lit}`@[test]` in the
-named modules and expands to the array of {name}`TestEntry` values that run them. Each module must
-be imported, with {lit}`import all` for module-system modules, so its tests are reachable.
+named modules and every imported module below them, and expands to the array of {name}`TestEntry`
+values that run them. Each module must be imported, with {lit}`import all` for module-system
+modules, so its tests are reachable.
 -/
 syntax (name := getAllTests) "getAllTests%" str ident* : term
 
@@ -103,29 +104,33 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
     | throwUnsupportedSyntax
   let package := pkg.getString
   let env ← getEnv
+  let moduleNames := env.allImportedModuleNames
   let mut entries : Array Term := #[]
   for modStx in mods do
-    let moduleName := modStx.getId
-    let some idx := env.getModuleIdx? moduleName
-      | throwErrorAt modStx "Module `{moduleName}` is not imported, so its tests cannot be \
-          reached. Import it, using `import all {moduleName}` if it belongs to the module system."
-    let moduleStr := moduleName.toString
-    for test in testExt.getModuleEntries env idx do
-      -- The internal name is used here, because the user-facing name can be ambiguous for private
-      -- tests
-      let userName := privateToUserName test.name
-      let testName := testNameBelow moduleName userName
-      let range ← findDeclarationRanges? test.name
-      let pos := (range.map (·.range.pos)).getD ⟨0, 0⟩
-      let endPos := (range.map (·.range.endPos)).getD ⟨0, 0⟩
-      -- The docstring captured when the attribute was applied, so the report and widget can show it.
-      let docStx ← match test.docstring? with
-        | some doc => `(some $(quote doc))
-        | none => `((none : Option String))
-      entries := entries.push <| ←
-        `(Errata.TestEntry.of $(quote package) $(quote moduleStr) $(quote testName)
-            (Errata.Location.mk $(quote test.file)
-              (Errata.Position.mk $(quote pos.line) $(quote pos.column))
-              (Errata.Position.mk $(quote endPos.line) $(quote endPos.column)))
-            (@$(mkCIdent test.name)) (docstring? := $docStx))
+    let rootName := modStx.getId
+    unless (env.getModuleIdx? rootName).isSome do
+      throwErrorAt modStx "Module `{rootName}` is not imported, so its tests cannot be \
+          reached. Import it, using `import all {rootName}` if it belongs to the module system."
+    for h : idx in [0 : moduleNames.size] do
+      let moduleName := moduleNames[idx]
+      unless rootName.isPrefixOf moduleName do continue
+      let moduleStr := moduleName.toString
+      for test in testExt.getModuleEntries env idx do
+        -- The internal name is used here, because the user-facing name can be ambiguous for private
+        -- tests
+        let userName := privateToUserName test.name
+        let testName := testNameBelow moduleName userName
+        let range ← findDeclarationRanges? test.name
+        let pos := (range.map (·.range.pos)).getD ⟨0, 0⟩
+        let endPos := (range.map (·.range.endPos)).getD ⟨0, 0⟩
+        -- The docstring captured when the attribute was applied, so the report and widget can show it.
+        let docStx ← match test.docstring? with
+          | some doc => `(some $(quote doc))
+          | none => `((none : Option String))
+        entries := entries.push <| ←
+          `(Errata.TestEntry.of $(quote package) $(quote moduleStr) $(quote testName)
+              (Errata.Location.mk $(quote test.file)
+                (Errata.Position.mk $(quote pos.line) $(quote pos.column))
+                (Errata.Position.mk $(quote endPos.line) $(quote endPos.column)))
+              (@$(mkCIdent test.name)) (docstring? := $docStx))
   elabTerm (← `(#[$entries,*])) expectedType?
