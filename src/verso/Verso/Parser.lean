@@ -626,7 +626,26 @@ mutual
 
   partial def linkTarget := ref <|> url
   where
-    notUrlEnd := satisfyEscFn (· ∉ ")\n".toList) "not ')' or newline" >> takeUntilEscFn (· ∈ ")\n".toList)
+    notUrlEnd := takeUrlTarget 0 false
+    takeUrlTarget (depth : Nat) (seen : Bool) : ParserFn := fun c s =>
+      let i := s.pos
+      if h : c.atEnd i then s
+      else
+        match c.get' i h with
+        | '\\' =>
+          let s := s.next' c i h
+          let i := s.pos
+          if h : c.atEnd i then s.mkEOIError
+          else takeUrlTarget depth true c (s.next' c i h)
+        | '\n' => s
+        | '(' => takeUrlTarget (depth + 1) true c (s.next' c i h)
+        | ')' =>
+          match depth with
+          | 0 =>
+            if seen then s
+            else s.mkUnexpectedError "not ')' or newline"
+          | depth' + 1 => takeUrlTarget depth' true c (s.next' c i h)
+        | _ => takeUrlTarget depth true c (s.next' c i h)
     notRefEnd := satisfyEscFn (· ∉ "]\n".toList) "not ']' or newline" >> takeUntilEscFn (· ∈ "]\n".toList)
     ref : ParserFn :=
       nodeFn ``Lean.Doc.Syntax.ref <|
@@ -666,6 +685,8 @@ mutual
   partial def inline (ctxt : InlineCtxt) : ParserFn :=
     text <|> linebreak ctxt <|> delimitedInline ctxt
 end
+
+def versoTextLine (allowNewlines := true) : ParserFn := many1Fn (inline { allowNewlines })
 
 open Lean.Parser Term in
 def metadataContents : Parser :=
@@ -772,7 +793,7 @@ mutual
   partial def descItem (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``desc <|
       colonFn >>
-      withCurrentColumn fun c => textLine >> ignoreFn (manyFn blankLine) >>
+      withCurrentColumn fun c => versoTextLine >> ignoreFn (manyFn blankLine) >>
       fakeAtom "=>" >>
       takeWhileFn (· == ' ') >>
       recoverSkip (guardColumn (· ≥ c) s!"indentation at least {c}" >>
@@ -817,7 +838,7 @@ mutual
     nodeFn ``para <|
       atomicFn (takeWhileFn (· == ' ') >> notFollowedByFn blockOpener "block opener" >> guardMinColumn ctxt.minIndent) >>
       withInfoSyntaxFn skip.fn (fun info => fakeAtom "para{" (info := info)) >>
-      textLine >>
+      versoTextLine >>
       withInfoSyntaxFn skip.fn (fun info => fakeAtom "}" (info := info))
 
   partial def header (ctxt : BlockCtxt) : ParserFn :=
@@ -831,7 +852,7 @@ mutual
             (show ParserFn from fun _ s => s.pushSyntax <| Syntax.mkNumLit (toString <| c' - c - 1)) >>
             fakeAtom ")") >>
       fakeAtom "{" >>
-      textLine (allowNewlines := false) >>
+      versoTextLine (allowNewlines := false) >>
       fakeAtom "}"
 
   partial def codeBlock (ctxt : BlockCtxt) : ParserFn :=
@@ -967,7 +988,7 @@ mutual
     nodeFn ``footnote_ref <|
       atomicFn (ignoreFn (bol >> eatSpaces >> guardMinColumn c.minIndent) >> strFn "[^" >> nodeFn strLitKind (asStringFn (quoted := true) (many1Fn (satisfyEscFn (· != ']') "not ']'"))) >> strFn "]:") >>
       eatSpaces >>
-      notFollowedByFn blockOpener "block opener" >> guardMinColumn c.minIndent >> textLine
+      notFollowedByFn blockOpener "block opener" >> guardMinColumn c.minIndent >> versoTextLine
 
   partial def block (c : BlockCtxt) : ParserFn :=
     block_command c <|> unorderedList c <|> orderedList c <|> definitionList c <|> header c <|> codeBlock c <|> directive c <|> blockquote c <|> linkRef c <|> footnoteRef c <|> para c <|> metadataBlock
@@ -988,7 +1009,7 @@ open Lean Elab Term
 
 public def stringToInlines [Monad m] [MonadFileMap m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
   withRef s do
-    return (← parseMarkupStrLit textLine s).getArgs
+    return (← parseMarkupStrLit versoTextLine s).getArgs
 
 open Lean Elab Term in
 public def stringToBlocks [Monad m] [MonadFileMap m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
