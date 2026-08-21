@@ -640,7 +640,7 @@ def emitRenderedHtml
     (tutorials : Tutorials) (navSite : Option Blog.Site)
     (generator : RenderedHtmlContent.Generator) : EmitM Unit := do
   let dir := (← read).config.destination
-  Verso.FS.replaceDir dir
+  Verso.FS.removeTree dir
   let assetDir := Verso.RenderedHtml.staticDir dir
   ensureDir assetDir
   (← readThe Manual.TraverseState).writeFiles (assetDir / "-verso-data")

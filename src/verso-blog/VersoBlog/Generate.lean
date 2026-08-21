@@ -268,7 +268,7 @@ partial def Dir.walk (emit : PageEmitter) (theme : Theme) (dir : Dir) : Generate
           s!"The mount '{name}' at '{mountPath.link}' was not resolved. " ++
           "Call `Site.resolveMounts` before building a generation context from a site."
     let dest ← currentDir
-    replaceDir dest
+    removeTree dest
     let staticFiles := Verso.RenderedHtml.staticDir source
     if ← staticFiles.pathExists then
       IO.println s!"Copying the mounted files of '{name}' to '{dest}'"
@@ -308,9 +308,7 @@ partial def Dir.walk (emit : PageEmitter) (theme : Theme) (dir : Dir) : Generate
         "on purpose."
   | .static _ file => do
     IO.println s!"Copying from static '{file}' to '{(← currentDir)}'"
-    let dest ← currentDir
-    replaceDir dest
-    copyRecursively file dest
+    replaceTree file (← currentDir)
 
 def Site.walk (emit : PageEmitter) (theme : Theme) (site : Site) : GenerateM Unit := do
   match site with
