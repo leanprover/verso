@@ -87,6 +87,8 @@ structure Options where
   jsonPath : Option String := none
   /-- Writes a Markdown report to this path. -/
   markdownPath : Option String := none
+  /-- Fails the run if warnings are logged, as Lake's `--wfail` does for builds. -/
+  wfail : Bool := false
   /-- Project-specific options, as a multi-map so repeated options accumulate. -/
   options : OptionMap := {}
 
@@ -106,6 +108,7 @@ def runnerCmd (handler : Cli.Parsed → IO UInt32) : Cli.Cmd :=
       junit : String;          "Write a JUnit XML report to the given path."
       json : String;           "Write a JSON report to the given path."
       markdown : String;       "Write a Markdown report (for a CI job summary) to the given path."
+      wfail;                   "Fail the run if warnings are logged."
 
     ARGS:
       ...testOption : String;  "Options for the tests themselves; see below."
@@ -166,6 +169,7 @@ def optionsOfParsed (p : Cli.Parsed) : Except String Options := do
     junitPath := ← pathFlag p "junit",
     jsonPath := ← pathFlag p "json",
     markdownPath := ← pathFlag p "markdown",
+    wfail := p.hasFlag "wfail",
     options := ← projectOptions (p.variableArgsAs! String).toList
   }
 
@@ -201,11 +205,15 @@ def runMain (entries : Array TestEntry) (args : List String) : IO UInt32 := do
       IO.eprintln "error: no tests were discovered"
       return 1
     -- Warn about options that were supplied but never read by any test (typos, removed flags).
+    -- Under `--wfail`, the warning is an error and fails the run.
     let used ← cfg.usedOptions.get
     let unused := opts.options.toList.filterMap fun (k, _) => if used.contains k then none else some k
     unless unused.isEmpty do
-      IO.eprintln s!"warning: option(s) provided but never read: {", ".intercalate unused}"
+      let level := if opts.wfail then "error" else "warning"
+      IO.eprintln s!"{level}: option(s) provided but never read: {", ".intercalate unused}"
     -- A process exit status keeps only its low 8 bits, so report a failing run as 1 rather than the
     -- count, which a multiple of 256 would otherwise wrap to 0.
-    return if failures == 0 then 0 else 1
+    if failures != 0 then return 1
+    if opts.wfail && !unused.isEmpty then return 1
+    return 0
   cmd.validate args

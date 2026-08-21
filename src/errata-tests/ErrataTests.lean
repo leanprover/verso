@@ -233,6 +233,19 @@ def captureRejectsDanglingBytes : Test := do
   assertEq 1 results.size
   assertTrue (results[0]!.status matches .error _)
 
+/-- Under --wfail, an option no test read fails the run instead of only warning. -/
+@[test]
+def wfailPromotesUnusedOptions : Test := do
+  let entry := TestEntry.of "p" "M" "t"
+    { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ } (pure () : Test)
+  let lax ← IO.mkRef (0 : UInt32)
+  let wfail ← IO.mkRef (0 : UInt32)
+  discard <| captureOutput do
+    lax.set (← runMain #[entry] ["--", "--bogus=1"])
+    wfail.set (← runMain #[entry] ["--wfail", "--", "--bogus=1"])
+  assertEq 0 (← lax.get)
+  assertEq 1 (← wfail.get)
+
 /-- The detail given to a true-assertion is attached to its failure. -/
 @[test]
 def assertTrueAttachesDetail : Test := do
