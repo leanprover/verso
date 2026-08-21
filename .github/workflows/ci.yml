@@ -152,7 +152,7 @@ jobs:
 
             - name: Run tests
               run: |
-                  lake test -- --test-options --verbose --junit=errata-report.xml --markdown=errata-summary.md -- --check-tex
+                  lake test -- --test-options --verbose --wfail --junit=errata-report.xml --markdown=errata-summary.md -- --check-tex
 
             - name: Add test results to the job summary
               if: always()
