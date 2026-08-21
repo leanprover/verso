@@ -233,6 +233,18 @@ def captureRejectsDanglingBytes : Test := do
   assertEq 1 results.size
   assertTrue (results[0]!.status matches .error _)
 
+/-- Dangling bytes at the end of a failing test do not displace the test's own failure. -/
+@[test]
+def danglingBytesKeepFailure : Test := do
+  let results ← resultsOf do
+    let out ← IO.getStdout
+    out.write ("é".toUTF8.extract 0 1)
+    fail "the real failure"
+  assertEq 1 results.size
+  match results[0]!.status with
+  | .fail f => assertEq "the real failure" f.message
+  | s => fail s!"expected the assertion failure, got {repr s}"
+
 /-- A raw write with no valid decoding is rejected at the write itself. -/
 @[test]
 def captureRejectsInvalidBytes : Test := do
