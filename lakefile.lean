@@ -311,12 +311,14 @@ script run (args) do
       if isModule then moduleMods := moduleMods.push moduleName
       else nonModuleMods := nonModuleMods.push moduleName
   -- A module that sits under a library's roots without being reachable from them is never built, so
-  -- any tests it defines are silently left out. Only libraries that already carry tests are worth
-  -- checking. That is a configuration slip rather than a test failure, so report it and run anyway.
+  -- any tests it defines are silently left out. A library is checked when it was named on the
+  -- command line, since naming it declares that its tests are expected, or when its built modules
+  -- carry tests. That is a configuration slip rather than a test failure, so report it and run
+  -- anyway.
   let testMods := moduleMods ++ nonModuleMods
   let mut unreachable : Array (Lake.LeanLib × Array Lean.Name) := #[]
   for (lib, mods) in libMods do
-    if mods.any (testMods.contains ·) then
+    if !libNames.isEmpty || mods.any (testMods.contains ·) then
       let known := mods.foldl (init := Lean.NameSet.empty) (·.insert ·)
       let missed ← unreachableModules lib known
       unless missed.isEmpty do unreachable := unreachable.push (lib, missed)
