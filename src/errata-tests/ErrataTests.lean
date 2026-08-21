@@ -9,6 +9,8 @@ module
 
 public import Errata
 public meta import Errata
+import all ErrataTests.Fixture
+import all ErrataTests.Fixture.Sub
 
 open Errata
 
@@ -64,6 +66,13 @@ error: Module `NoSuchModule` is not imported, so its tests cannot be reached. Im
 -/
 #test_msgs in
 example : Array TestEntry := getAllTests% "verso" NoSuchModule
+
+/-- A module below several named roots contributes its tests once. -/
+@[test]
+def discoveryDeduplicates : Test := do
+  -- `ErrataTests.Fixture.Sub` lies below both roots, so exactly the two fixture tests are found.
+  let entries := (getAllTests% "verso" ErrataTests.Fixture ErrataTests.Fixture.Sub)
+  assertEq 2 entries.size
 
 /-- A property test. -/
 @[test]

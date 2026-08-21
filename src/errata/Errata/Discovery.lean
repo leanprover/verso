@@ -94,8 +94,9 @@ meta def testNameBelow (moduleName declName : Name) : String :=
 /--
 {lit}`getAllTests% "package" Mod.A Mod.B ...` reads the tests recorded by {lit}`@[test]` in the
 named modules and every imported module below them, and expands to the array of {name}`TestEntry`
-values that run them. Each module must be imported, with {lit}`import all` for module-system
-modules, so its tests are reachable.
+values that run them. A module that lies below more than one of the named modules contributes its
+tests once. Each module must be imported, with {lit}`import all` for module-system modules, so its
+tests are reachable.
 -/
 syntax (name := getAllTests) "getAllTests%" str ident* : term
 
@@ -108,6 +109,9 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
   let env ← getEnv
   let moduleNames := env.allImportedModuleNames
   let mut entries : Array Term := #[]
+  -- One root's name may extend another's, putting a module below both; each module's tests are
+  -- gathered once.
+  let mut seen : NameSet := {}
   for modStx in mods do
     let rootName := modStx.getId
     unless (env.getModuleIdx? rootName).isSome do
@@ -116,6 +120,8 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
     for h : idx in [0 : moduleNames.size] do
       let moduleName := moduleNames[idx]
       unless rootName.isPrefixOf moduleName do continue
+      if seen.contains moduleName then continue
+      seen := seen.insert moduleName
       let moduleStr := moduleName.toString
       for test in testExt.getModuleEntries env idx do
         -- The internal name is used here, because the user-facing name can be ambiguous for private
