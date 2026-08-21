@@ -5,6 +5,8 @@ Author: David Thrane Christiansen
 -/
 module
 
+public import Lean.Data.Position
+
 public section
 
 set_option linter.missingDocs true
@@ -39,22 +41,16 @@ def Verbosity.showsAllDocstrings : Verbosity → Bool
   | .superVerbose => true
   | .silent | .quiet | .verbose => false
 
-/-- A line and column within a source file, following Lean's own source positions. -/
-structure Position where
-  /-- The line, counting from one. -/
-  line : Nat
-  /-- The column, counting from zero. -/
-  column : Nat
-deriving Repr, Inhabited, BEq, DecidableEq
-
-/-- A source span, used in failure messages and editor integration. -/
+/--
+A source span, used in failure messages and editor integration.
+-/
 structure Location where
   /-- The source file that contains the span. -/
   file : String
   /-- The start of the span. -/
-  startPos : Position
+  startPos : Lean.Position
   /-- The end of the span. -/
-  endPos : Position
+  endPos : Lean.Position
 deriving Repr, Inhabited, BEq, DecidableEq
 
 /-- A test failure, carrying the information needed to explain it. -/

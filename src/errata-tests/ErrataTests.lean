@@ -72,7 +72,7 @@ def addComm : Test :=
 
 open Lean (toJson fromJson?)
 
-deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Position
+deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Lean.Position
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Location
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for TestFailure
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Status

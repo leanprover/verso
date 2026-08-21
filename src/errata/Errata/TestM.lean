@@ -56,14 +56,6 @@ instance : Alternative TestM where
   failure := failHere "failure"
   orElse x y := tryCatch x fun _ => y ()
 
-/--
-Runs an action with the current failure location set to a call site, which defaults to the caller.
-A user-defined assertion helper can wrap its checks in this so their failures report at the helper's
-call site rather than inside the helper.
--/
-def withLocation (loc : Location := by exact here%) (act : TestM α) : TestM α :=
-  withReader ({ · with location := loc }) act
-
 /-- All values supplied for a project option, in order; records that the option was read. -/
 def optionValues (name : String) : TestM (Array String) := do
   let ctx ← read
@@ -86,22 +78,6 @@ def Context.mkResult (ctx : Context) (status : Status) (durationMs : Nat := 0) :
   resultPath := ctx.resultPath, status, durationMs, description? := ctx.description?
 }
 
-/-- A passing result for the current scope. -/
-def Context.pass (ctx : Context) (durationMs : Nat := 0) : Result :=
-  ctx.mkResult .pass durationMs
-
-/-- A failed result for the current scope. -/
-def Context.fail (ctx : Context) (failure : TestFailure) (durationMs : Nat := 0) : Result :=
-  ctx.mkResult (.fail failure) durationMs
-
-/-- A result for the current scope that raised an error. -/
-def Context.error (ctx : Context) (message : String) (durationMs : Nat := 0) : Result :=
-  ctx.mkResult (.error message) durationMs
-
-/-- A skipped result for the current scope. -/
-def Context.skip (ctx : Context) (reason : String) (durationMs : Nat := 0) : Result :=
-  ctx.mkResult (.skip reason) durationMs
-
 /--
 The result a captured run contributes beyond any nested results it recorded.
 
@@ -113,14 +89,14 @@ def Context.resultOfOutcome (ctx : Context)
     (outcome : Except IO.Error (Except TestFailure Unit)) (output : OutputLog) (durationMs : Nat)
     (hasNested : Bool) : Option Result :=
   match outcome with
-  | .error e => some { ctx.error (toString e) durationMs with output }
-  | .ok (.error f) => some { ctx.fail f durationMs with output }
-  | .ok (.ok ()) => if hasNested then none else some { ctx.pass durationMs with output }
+  | .error e => some { ctx.mkResult (.error (toString e)) durationMs with output }
+  | .ok (.error f) => some { ctx.mkResult (.fail f) durationMs with output }
+  | .ok (.ok ()) => if hasNested then none else some { ctx.mkResult .pass durationMs with output }
 
 /-- Records a skipped result for the current scope. -/
 def skip (reason : String) : TestM Unit := do
   let ctx ← read
-  ctx.log.modify (·.push (ctx.skip reason))
+  ctx.log.modify (·.push (ctx.mkResult (.skip reason)))
 
 /-- Writes a file, creating all parent directories if necessary. -/
 def writeFile (path : System.FilePath) (contents : String) : IO Unit := do

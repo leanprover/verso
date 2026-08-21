@@ -38,13 +38,10 @@ def goldenFile (expected : System.FilePath) (actual : String)
       (detail? := some "Run with --update-golden to create it.")
 
 /-- All files below a directory, recursively, in a deterministic order. -/
-partial def filesUnder (dir : System.FilePath) : IO (Array System.FilePath) := do
+def filesUnder (dir : System.FilePath) : IO (Array System.FilePath) := do
   let mut out : Array System.FilePath := #[]
-  for entry in ← dir.readDir do
-    if ← entry.path.isDir then
-      out := out ++ (← filesUnder entry.path)
-    else
-      out := out.push entry.path
+  for entry in ← dir.walkDir do
+    unless ← entry.isDir do out := out.push entry
   return out.qsort (·.toString < ·.toString)
 
 /-- The path of a file relative to a base directory. -/

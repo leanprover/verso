@@ -17,10 +17,6 @@ set_option doc.verso true
 
 namespace Errata
 
-/-- The number of results that did not pass. -/
-def failureCount (results : Array Result) : Nat :=
-  results.foldl (fun n r => if r.status.isSuccess then n else n + 1) 0
-
 private def indentLines (text : String) : String :=
   "\n".intercalate ((text.splitOn "\n").map (fun l => "    " ++ l))
 
@@ -182,7 +178,7 @@ private def caseOf (r : Result) : String :=
   r.testName
 
 private def countWhere (results : Array Result) (p : Status → Bool) : Nat :=
-  results.foldl (fun n r => if p r.status then n + 1 else n) 0
+  results.countP (p ·.status)
 
 /-- Groups results by their package-qualified module in a single pass, keeping first-seen order. -/
 private def byModule (results : Array Result) : Array (String × Array Result) := Id.run do
