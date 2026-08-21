@@ -220,7 +220,7 @@ def writeOutputDoesNotRecurse : Test := do
   let depth ← IO.mkRef 0
   let cfg ← mkContext
   let ctx := { cfg with
-    writeOutput := fun o => do
+    writeOutput := some fun o => do
       depth.modify (· + 1)
       if (← depth.get) < 5 then
         match o with
@@ -241,7 +241,7 @@ def writeOutputDeliversNestedFragmentsOnce : Test := do
   let received ← IO.mkRef (#[] : Array String)
   let cfg ← mkContext
   let ctx := { cfg with
-    writeOutput := fun o => do
+    writeOutput := some fun o => do
       if (← received.get).size < 5 then
         match o with
         | .stdout s => received.modify (·.push s); IO.print s
@@ -261,7 +261,7 @@ def writeOutputFailureIsContained : Test := do
   let statuses ← IO.mkRef (#[] : Array Status)
   let cfg ← mkContext
   let ctx := { cfg with
-    writeOutput := fun _ => do
+    writeOutput := some fun _ => do
       calls.modify (· + 1)
       throw (.userError "broken pipe") }
   let out ← captureOutput do
