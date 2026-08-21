@@ -20,6 +20,13 @@ open Std (HashMap HashSet)
 /-- A multi-map from option names to all the values supplied for them. -/
 abbrev OptionMap := HashMap String (Array String)
 
+/-- The standard streams from before a test's output was captured. -/
+structure RealStreams where
+  /-- The stdout from before the capture. -/
+  stdout : IO.FS.Stream
+  /-- The stderr from before the capture. -/
+  stderr : IO.FS.Stream
+
 /-- The run-wide configuration and per-test state threaded through every test. -/
 structure Context where
   /-- The reporting verbosity. -/
@@ -61,3 +68,9 @@ structure Context where
   Whether a write to the output destination has failed. If true, further attempts are suppressed.
   -/
   outputFailed : IO.Ref Bool
+  /--
+  The streams from before the outermost capture, under which the output destination runs. The
+  outermost capture records them, and a capture nested inside it reuses them, so a {lit}`writeOutput`
+  handler that prints reaches the runner's own streams from any nesting depth.
+  -/
+  realStreams? : Option RealStreams := none

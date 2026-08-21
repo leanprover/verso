@@ -232,6 +232,26 @@ def writeOutputDoesNotRecurse : Test := do
   assertEq 1 (← depth.get)
 
 /--
+A fragment printed inside a nested result reaches the live output destination exactly once. The
+destination is cut off after a few fragments so that a regression fails this test with a short
+array instead of flooding it.
+-/
+@[test]
+def writeOutputDeliversNestedFragmentsOnce : Test := do
+  let received ← IO.mkRef (#[] : Array String)
+  let cfg ← mkContext
+  let ctx := { cfg with
+    writeOutput := fun o => do
+      if (← received.get).size < 5 then
+        match o with
+        | .stdout s => received.modify (·.push s); IO.print s
+        | .stderr s => IO.eprint s }
+  discard <| runEntry ctx <|
+    TestEntry.of "p" "M" "nested" { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ }
+      (result "inner" (IO.println "hi") : Test)
+  assertEq #["hi\n"] (← received.get)
+
+/--
 A live output destination that fails does not fail the test that happened to be printing. It is
 reported once and then left alone, rather than retried for every fragment.
 -/
