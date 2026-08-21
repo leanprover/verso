@@ -7,7 +7,7 @@ require plausible from git "https://github.com/leanprover-community/plausible"@"
 require illuminate from git "https://github.com/leanprover/illuminate"@"main"
 
 package verso where
-  precompileModules := false -- temporarily disabled to work around an issue with nightly-2025-03-30
+  precompileModules := true
   leanOptions := #[⟨`experimental.module, true⟩]
 
 @[default_target]
