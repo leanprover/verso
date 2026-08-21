@@ -328,9 +328,7 @@ meta def elabCommands (config : LeanBlockConfig) (str : StrLit)
 
 
       let nonSilentMsgs := cmdState.messages.toArray.filter (!·.isSilent)
-      -- One batched highlighting pass shares the alias-table and info-table setup across the
-      -- whole block's commands. Unparsed regions (e.g. text skipped by parse-error recovery)
-      -- are included in the output verbatim.
+      -- One batched highlighting pass shares caches between the whole block's commands.
       let hlArr ← highlightMany cmds nonSilentMsgs cmdTrees
         (includeUnparsed := true) (startPos? := some startPos)
       let hls := hlArr.foldl (· ++ ·) Highlighted.empty
