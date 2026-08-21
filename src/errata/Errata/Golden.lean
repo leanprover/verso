@@ -1,0 +1,106 @@
+/-
+Copyright (c) 2026 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: David Thrane Christiansen
+-/
+module
+
+public import Errata.TestM
+import Lean.Util.Diff
+
+public section
+
+set_option linter.missingDocs true
+set_option doc.verso true
+
+namespace Errata
+
+/--
+A line-by-line diff of expected against actual output. Lines marked {lit}`-` are in the expected
+output only, and lines marked {lit}`+` are in the actual output only.
+-/
+private def goldenDiff (expected actual : String) : String :=
+  let diff := Lean.Diff.diff (expected.splitOn "\n").toArray (actual.splitOn "\n").toArray
+  "- expected, + actual:\n" ++ Lean.Diff.linesToString diff
+
+/-- Compares a produced string against a golden file, or rewrites it under `--update-golden`. -/
+def goldenFile (expected : System.FilePath) (actual : String)
+    (loc : Location := by exact here%) : TestM Unit := do
+  let ctx ← read
+  if ctx.updateGolden then
+    writeFile expected actual
+  else if ← expected.pathExists then
+    let want ← IO.FS.readFile expected
+    unless want == actual do
+      failAt loc s!"golden mismatch for {expected}" (detail? := some (goldenDiff want actual))
+  else
+    failAt loc s!"missing golden file {expected}"
+      (detail? := some "Run with --update-golden to create it.")
+
+/-- All files below a directory, recursively, in a deterministic order. -/
+def filesUnder (dir : System.FilePath) : IO (Array System.FilePath) := do
+  let mut out : Array System.FilePath := #[]
+  for entry in ← dir.walkDir do
+    unless ← entry.isDir do out := out.push entry
+  return out.qsort (·.toString < ·.toString)
+
+/-- The path of a file relative to a base directory. -/
+private def relativeTo (base file : System.FilePath) : String :=
+  (file.toString.drop (base.toString.length + 1)).copy
+
+/-- The offset of the first byte at which two contents differ, within the length they share. -/
+private def firstDifference (a b : ByteArray) : Option Nat := Id.run do
+  for i in [0 : min a.size b.size] do
+    if a[i]! != b[i]! then return some i
+  return none
+
+/-- Describes how two contents differ, for content that is not text. -/
+private def binaryDifference (want got : ByteArray) : String :=
+  let place :=
+    match firstDifference want got with
+    | some i => s!"binary content differs at byte {i}"
+    | none => "binary content differs in length"
+  if want.size == got.size then place
+  else s!"{place}: expected {want.size} bytes, produced {got.size} bytes"
+
+/-- Compares a produced directory tree against a golden tree, or rewrites it under `--update-golden`. -/
+def goldenDir (expected actual : System.FilePath)
+    (loc : Location := by exact here%) : TestM Unit := do
+  let ctx ← read
+  unless ← actual.isDir do
+    failAt loc s!"missing produced directory {actual}"
+      (detail? := some "The code under test did not create it as a directory.")
+  let actualFiles ← filesUnder actual
+  if ctx.updateGolden then
+    -- The recorded tree is replaced wholesale, so a path that changed shape between file and
+    -- directory updates as cleanly as changed content. The golden tree is recorded even when the
+    -- produced tree holds no files, so that a later run compares against it rather than reporting
+    -- it as missing.
+    if ← expected.isDir then IO.FS.removeDirAll expected
+    else if ← expected.pathExists then IO.FS.removeFile expected
+    IO.FS.createDirAll expected
+    for file in actualFiles do
+      writeBinFile (expected / relativeTo actual file) (← IO.FS.readBinFile file)
+    return
+  unless ← expected.pathExists do
+    failAt loc s!"missing golden directory {expected}"
+      (detail? := some "Run with --update-golden to create it.")
+  -- Membership is decided against the walked file lists rather than by a filesystem probe, so a
+  -- directory standing where a file belongs counts as that file being absent.
+  let expectedRels := (← filesUnder expected).map (relativeTo expected)
+  let actualRels := actualFiles.map (relativeTo actual)
+  for rel in actualRels do
+    unless expectedRels.contains rel do
+      failAt loc s!"file not present in the golden directory: {rel}"
+    let wantContent ← IO.FS.readBinFile (expected / rel)
+    let gotContent ← IO.FS.readBinFile (actual / rel)
+    unless wantContent == gotContent do
+      -- A diff is only meaningful for text; other content is described by size.
+      let detail :=
+        match String.fromUTF8? wantContent, String.fromUTF8? gotContent with
+        | some wantText, some gotText => goldenDiff wantText gotText
+        | _, _ => binaryDifference wantContent gotContent
+      failAt loc s!"golden mismatch for {rel}" (detail? := some detail)
+  for rel in expectedRels do
+    unless actualRels.contains rel do
+      failAt loc s!"file missing from the produced output: {rel}"

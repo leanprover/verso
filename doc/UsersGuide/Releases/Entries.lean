@@ -24,4 +24,5 @@ public import UsersGuide.Releases.Entries.MethodInMultiVerso
 public import UsersGuide.Releases.Entries.ReleaseNotesChapter
 public import UsersGuide.Releases.Entries.RoleDiagnostics
 public import UsersGuide.Releases.Entries.SearchPriority
+public import UsersGuide.Releases.Entries.TestFramework
 public import UsersGuide.Releases.Entries.VersionedReleaseNotes
