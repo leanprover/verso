@@ -270,12 +270,6 @@ def headerValue (response : String) (name : String) : Option String :=
 def unicodeNames : List String :=
   ["øllebrød", "اَلْعَرَبِيَّةُ", "中文文件", "नमस्ते", "All goals proved!🎉", "𝔏𝔢𝔞𝔫"]
 
-/-- Expects an action to throw; the check passes exactly when it does. -/
-private def rejects {α} (act : IO α) (loc : Location := by exact here%) : TestM Unit := do
-  match ← act.toBaseIO with
-  | .ok _ => failAt loc "expected an error, but the action succeeded"
-  | .error _ => pure ()
-
 /--
 Every in-process integration check against the mock transport passes, reported as one result per
 check.
@@ -306,7 +300,7 @@ def integration : Test := do
   let check (name : String) (raw : String) (pred : String → Bool) : TestM Unit := do
     result name do
       let response ← runRequest handler raw
-      unless pred response do fail "unexpected response" (detail? := some response)
+      assertTrue (pred response) "unexpected response" (detail? := some response)
   check "index 200" (get "/") fun r => r.startsWith "HTTP/1.1 200" && (r.splitOn "home").length > 1
   check "missing 404" (get "/nope") (·.startsWith "HTTP/1.1 404")
   check "post 405" "POST / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
@@ -338,23 +332,22 @@ def integration : Test := do
   -- Caching: validators are present, and a conditional request revalidates to 304.
   let first ← runRequest handler (get "/data.txt")
   result "cache validators" do
-    unless first.startsWith "HTTP/1.1 200"
+    assertTrue (first.startsWith "HTTP/1.1 200"
         && (first.toLower.splitOn "cache-control: no-cache").length > 1
-        && (first.toLower.splitOn "last-modified:").length > 1 do
-      fail "unexpected response" (detail? := some first)
+        && (first.toLower.splitOn "last-modified:").length > 1)
+      "unexpected response" (detail? := some first)
   result "conditional 304" do
     let some etag := headerValue first "etag"
       | fail "no ETag header on the response" (detail? := some first)
     let cond := s!"GET /data.txt HTTP/1.1\r\nHost: x\r\nIf-None-Match: {etag}\r\nConnection: close\r\n\r\n"
     let response ← runRequest handler cond
-    unless response.startsWith "HTTP/1.1 304" do
-      fail "unexpected response" (detail? := some response)
+    assertTrue (response.startsWith "HTTP/1.1 304") "unexpected response" (detail? := some response)
   -- A custom Cache-Control rule replaces the default rather than producing a duplicate.
   let over ← runRequest overrideHandler (get "/data.txt")
   result "custom header override" do
-    unless (over.toLower.splitOn "cache-control: max-age=99").length == 2
-        && (over.toLower.splitOn "cache-control: no-cache").length == 1 do
-      fail "unexpected response" (detail? := some over)
+    assertTrue ((over.toLower.splitOn "cache-control: max-age=99").length == 2
+        && (over.toLower.splitOn "cache-control: no-cache").length == 1)
+      "unexpected response" (detail? := some over)
   -- A directory without an index file is served as a generated HTML listing of its entries.
   IO.FS.createDirAll (root / "listing")
   IO.FS.writeFile (root / "listing" / "note.txt") "hi"
@@ -363,58 +356,54 @@ def integration : Test := do
   -- With listings disabled, the same directory is refused.
   result "no-listing 403" do
     let response ← runRequest noListingHandler (get "/listing/")
-    unless response.startsWith "HTTP/1.1 403" do
-      fail "unexpected response" (detail? := some response)
+    assertTrue (response.startsWith "HTTP/1.1 403") "unexpected response" (detail? := some response)
   -- A directory requested without a trailing slash redirects to add one.
   check "trailing slash redirect" (get "/listing") fun r =>
     r.startsWith "HTTP/1.1 301" && (r.toLower.splitOn "location: /listing/").length == 2
   -- With the redirect disabled, the directory is served in place.
   result "no-trailing-slash serves in place" do
     let response ← runRequest noSlashHandler (get "/listing")
-    unless response.startsWith "HTTP/1.1 200" do
-      fail "unexpected response" (detail? := some response)
+    assertTrue (response.startsWith "HTTP/1.1 200") "unexpected response" (detail? := some response)
   -- A configured redirect rule returns a 301 whose location carries the path beneath the prefix.
   result "redirect rule" do
     let red ← runRequest redirectHandler (get "/old/page")
-    unless red.startsWith "HTTP/1.1 301" && (red.toLower.splitOn "location: /new/page").length == 2 do
-      fail "unexpected response" (detail? := some red)
+    assertTrue (red.startsWith "HTTP/1.1 301" && (red.toLower.splitOn "location: /new/page").length == 2)
+      "unexpected response" (detail? := some red)
   -- CORS: a preflight is answered with 204, and a GET carries the cross-origin header.
   result "cors preflight" do
     let pre ← runRequest corsHandler "OPTIONS / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
-    unless pre.startsWith "HTTP/1.1 204"
-        && (pre.toLower.splitOn "access-control-allow-methods").length > 1 do
-      fail "unexpected response" (detail? := some pre)
+    assertTrue (pre.startsWith "HTTP/1.1 204"
+        && (pre.toLower.splitOn "access-control-allow-methods").length > 1)
+      "unexpected response" (detail? := some pre)
   result "cors get header" do
     let response ← runRequest corsHandler (get "/data.txt")
-    unless (response.toLower.splitOn "access-control-allow-origin: *").length > 1 do
-      fail "unexpected response" (detail? := some response)
+    assertTrue ((response.toLower.splitOn "access-control-allow-origin: *").length > 1)
+      "unexpected response" (detail? := some response)
   -- Without CORS, OPTIONS is not allowed.
   result "options 405" do
     let response ← runRequest handler "OPTIONS / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
-    unless response.startsWith "HTTP/1.1 405" do
-      fail "unexpected response" (detail? := some response)
+    assertTrue (response.startsWith "HTTP/1.1 405") "unexpected response" (detail? := some response)
   -- A Range request returns the requested slice with 206 and a Content-Range header.
   result "range 206" do
     let ranged ← runRequest handler "GET /data.txt HTTP/1.1\r\nHost: x\r\nRange: bytes=2-5\r\nConnection: close\r\n\r\n"
-    unless ranged.startsWith "HTTP/1.1 206"
+    assertTrue (ranged.startsWith "HTTP/1.1 206"
         && (ranged.toLower.splitOn "content-range: bytes 2-5/10").length == 2
-        && (ranged.splitOn "2345").length > 1 do
-      fail "unexpected response" (detail? := some ranged)
+        && (ranged.splitOn "2345").length > 1)
+      "unexpected response" (detail? := some ranged)
   -- An unsatisfiable range is rejected with 416.
   result "range 416" do
     let response ← runRequest handler "GET /data.txt HTTP/1.1\r\nHost: x\r\nRange: bytes=50-60\r\nConnection: close\r\n\r\n"
-    unless response.startsWith "HTTP/1.1 416" do
-      fail "unexpected response" (detail? := some response)
+    assertTrue (response.startsWith "HTTP/1.1 416") "unexpected response" (detail? := some response)
   -- Relaxing symlink confinement still does not permit `..` to climb above the mount.
   result "follow-symlinks still confines traversal" do
     let escaped ← runRequest followHandler (get "/%2e%2e/secret.txt")
-    unless !escaped.startsWith "HTTP/1.1 200" && (escaped.splitOn "TOPSECRET").length == 1 do
-      fail "unexpected response" (detail? := some escaped)
+    assertTrue (!escaped.startsWith "HTTP/1.1 200" && (escaped.splitOn "TOPSECRET").length == 1)
+      "unexpected response" (detail? := some escaped)
   -- An encoded slash must not smuggle `..` past confinement, even with symlinks relaxed.
   result "follow-symlinks still confines encoded-slash traversal" do
     let slashEscaped ← runRequest followHandler (get "/..%2Fsecret.txt")
-    unless !slashEscaped.startsWith "HTTP/1.1 200" && (slashEscaped.splitOn "TOPSECRET").length == 1 do
-      fail "unexpected response" (detail? := some slashEscaped)
+    assertTrue (!slashEscaped.startsWith "HTTP/1.1 200" && (slashEscaped.splitOn "TOPSECRET").length == 1)
+      "unexpected response" (detail? := some slashEscaped)
   -- A complete configuration parses into ports, mounts, redirects, and headers.
   result "valid config" do
     let goodConfig :=
@@ -430,23 +419,23 @@ def integration : Test := do
         "config fields not parsed as expected"
   -- An unknown top-level key is rejected.
   result "unknown key rejected" <|
-    rejects (parseServeConfig "nonsense = 1")
+    assertThrowsIO (parseServeConfig "nonsense = 1")
   -- A status that is not a redirect code is rejected.
   result "bad redirect status rejected" <|
-    rejects (parseServeConfig "[[redirects]]\nfrom = \"/a\"\nto = \"/b\"\nstatus = 404")
+    assertThrowsIO (parseServeConfig "[[redirects]]\nfrom = \"/a\"\nto = \"/b\"\nstatus = 404")
   -- Redirect targets are emitted as Location headers, so invalid header values are rejected.
   result "invalid redirect target rejected" <|
-    rejects (parseServeConfig "[[redirects]]\nfrom = \"/a\"\nto = \"/b\nX: y\"")
+    assertThrowsIO (parseServeConfig "[[redirects]]\nfrom = \"/a\"\nto = \"/b\nX: y\"")
   -- An invalid header name in the config is rejected when the file is parsed.
   result "invalid header name rejected" <|
-    rejects (parseServeConfig "[[headers]]\npath = \"/\"\nset = { \"bad name\" = \"x\" }")
+    assertThrowsIO (parseServeConfig "[[headers]]\npath = \"/\"\nset = { \"bad name\" = \"x\" }")
   -- Entries missing a required field are rejected rather than filled with a silent default.
   result "mount without dir rejected" <|
-    rejects (parseServeConfig "[[mounts]]\npath = \"/api\"")
+    assertThrowsIO (parseServeConfig "[[mounts]]\npath = \"/api\"")
   result "redirect without target rejected" <|
-    rejects (parseServeConfig "[[redirects]]\nfrom = \"/old\"")
+    assertThrowsIO (parseServeConfig "[[redirects]]\nfrom = \"/old\"")
   result "header without set rejected" <|
-    rejects (parseServeConfig "[[headers]]\npath = \"/\"")
+    assertThrowsIO (parseServeConfig "[[headers]]\npath = \"/\"")
   -- An empty or whitespace-only config behaves the same as no file: defaults throughout.
   result "empty config defaults" do
     for blank in ["", "   \n  \t\n"] do
@@ -464,8 +453,8 @@ def integration : Test := do
     | .ok _ => fail "unknown entry keys accepted"
     | .error e =>
       let msg := toString e
-      unless (msg.splitOn "bad1").length > 1 && (msg.splitOn "bad2").length > 1 do
-        fail "not every unknown entry key is reported" (detail? := some msg)
+      assertTrue ((msg.splitOn "bad1").length > 1 && (msg.splitOn "bad2").length > 1)
+        "not every unknown entry key is reported" (detail? := some msg)
   -- Mount directories in a config file are resolved relative to the file's own directory.
   let cfgDir := tmp / "proj"
   IO.FS.createDirAll cfgDir
@@ -475,14 +464,14 @@ def integration : Test := do
     assertTrue (loaded.mounts.size == 1 && loaded.mounts[0]!.dir == cfgDir / "site")
   -- An explicit config path that is missing is fatal; an existing one is returned.
   result "missing config path fatal" <|
-    rejects (resolveConfigFile { configPath := some (tmp / "nope.toml") })
+    assertThrowsIO (resolveConfigFile { configPath := some (tmp / "nope.toml") })
   result "existing config path found" do
     match ← (resolveConfigFile { configPath := some (cfgDir / "verso-serve.toml") }).toBaseIO with
     | .ok (some _) => pure ()
     | _ => fail "existing config path not found"
   -- A mount whose directory is missing is fatal; an existing one resolves to an absolute root.
   result "missing mount dir fatal" <|
-    rejects (resolveMounts #[{ urlPrefix := "/", dir := tmp / "absent" }])
+    assertThrowsIO (resolveMounts #[{ urlPrefix := "/", dir := tmp / "absent" }])
   result "existing mount dir resolved" do
     match ← (resolveMounts #[{ urlPrefix := "/", dir := root }]).toBaseIO with
     | .ok rms => assertTrue (rms.size == 1 && rms[0]!.root.isAbsolute) "mount dir not resolved"
