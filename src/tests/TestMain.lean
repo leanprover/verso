@@ -360,7 +360,7 @@ def testBuildLog (_ : Config) : IO Unit := do
 /-- Runs Errata's own tests, reporting them the way the Errata runner does. -/
 def testErrata (config : Config) : IO Unit := do
   let verbosity := if config.verbose then Errata.Verbosity.quiet else .silent
-  let cfg ← Errata.mkContext (verbosity := verbosity) (updateGolden := config.updateExpected)
+  let cfg ← Errata.mkContext (updateGolden := config.updateExpected)
   let results ← Errata.run cfg errataTests
   let failures ← Errata.humanReport verbosity results
   unless failures == 0 do
