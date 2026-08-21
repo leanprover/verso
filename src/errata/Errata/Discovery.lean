@@ -132,7 +132,7 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
         entries := entries.push <| ←
           `(Errata.TestEntry.of $(quote package) $(quote moduleStr) $(quote testName)
               (Errata.Location.mk $(quote test.file)
-                (Errata.Position.mk $(quote pos.line) $(quote pos.column))
-                (Errata.Position.mk $(quote endPos.line) $(quote endPos.column)))
+                (Lean.Position.mk $(quote pos.line) $(quote pos.column))
+                (Lean.Position.mk $(quote endPos.line) $(quote endPos.column)))
               (@$(mkCIdent test.name)) (docstring? := $docStx))
   elabTerm (← `(#[$entries,*])) expectedType?
