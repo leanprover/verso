@@ -66,12 +66,12 @@ def run (cfg : Context) (entries : Array TestEntry) : IO (Array Result) := do
   return all
 
 /-- A base context with the given settings and a fresh, empty log. -/
-def mkContext (verbosity : Verbosity := .silent) (updateGolden : Bool := false)
+def mkContext (updateGolden : Bool := false)
     (options : OptionMap := {}) (seed : Option Nat := none) : IO Context := do
   let log ← IO.mkRef (#[] : Array Result)
   let usedOptions ← IO.mkRef ({} : Std.HashSet String)
   let outputFailed ← IO.mkRef false
-  return { verbosity, updateGolden, options, seed, log, usedOptions, outputFailed }
+  return { updateGolden, options, seed, log, usedOptions, outputFailed }
 
 /-- The settings parsed from the runner's command line. -/
 structure Options where
@@ -187,7 +187,7 @@ def runMain (entries : Array TestEntry) (args : List String) : IO UInt32 := do
       | .error msg =>
         IO.eprintln s!"error: {msg}"
         return 1
-    let cfg ← mkContext (verbosity := opts.verbosity) (updateGolden := opts.updateGolden)
+    let cfg ← mkContext (updateGolden := opts.updateGolden)
       (options := opts.options) (seed := opts.seed)
     let results ← run cfg entries
     let writeReport (path? : Option String) (render : Array Result → String) : IO Unit := do
