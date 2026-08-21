@@ -60,9 +60,11 @@ meta initialize testExt : SimplePersistentEnvExtension TestDecl (Array TestDecl)
     addImportedFn := fun es => es.foldl Array.append #[]
   }
 
-/-- Records a declaration as a test, capturing the source file that defines it and its docstring.
+/--
+Records a declaration as a test, capturing the source file that defines it and its docstring.
 The docstring is read here, while it is still in the live environment, since a downstream build does
-not load the imported docstrings. -/
+not load the imported docstrings.
+-/
 meta def recordTest (decl : Name) : AttrM Unit := do
   (checkIsTest decl).run'
   let docstring? ← findDocString? (← getEnv) decl

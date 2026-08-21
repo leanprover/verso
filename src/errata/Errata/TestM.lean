@@ -132,8 +132,10 @@ def writeBinFile (path : System.FilePath) (contents : ByteArray) : IO Unit := do
   if let some parent := path.parent then IO.FS.createDirAll parent
   IO.FS.writeBinFile path contents
 
-/-- The number of bytes in the {lit}`UTF-8` sequence a lead byte introduces, or {name}`none` for a
-continuation or invalid byte. -/
+/--
+The number of bytes in the {lit}`UTF-8` sequence a lead byte introduces, or {name}`none` for a
+continuation or invalid byte.
+-/
 private def utf8SeqLength (b : UInt8) : Option Nat :=
   if b &&& 0x80 == 0 then some 1
   else if b &&& 0xE0 == 0xC0 then some 2
