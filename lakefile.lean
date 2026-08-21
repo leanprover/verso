@@ -160,22 +160,26 @@ lean_lib ErrataTests where
   srcDir := "src/errata-tests"
   roots := #[`ErrataTests]
 
+-- The directory below the package's Lake directory where the Errata driver writes the generated
+-- runner sources.
+def errataRunnerDir : System.FilePath := defaultLakeDir / "errata-runner"
+
 -- The selected test set, written by the driver. The generated targets depend on it, so changing
 -- the selection changes their trace and Lake rebuilds them rather than relinking a stale object.
 input_file errataSelection where
   text := true
-  path := ".lake/errata-runner/selection"
+  path := errataRunnerDir / "selection"
 
 -- The generated discovered-tests module (`allTests`), written by the Errata driver.
 lean_lib ErrataGenerated where
-  srcDir := ".lake/errata-runner"
+  srcDir := errataRunnerDir
   roots := #[`ErrataDiscovered]
   needs := #[errataSelection]
 
 -- The generated, discovered test runner. Its source is written by the Errata test driver.
 lean_exe «errata-runner» where
   root := `ErrataRunnerMain
-  srcDir := ".lake/errata-runner"
+  srcDir := errataRunnerDir
   supportInterpreter := true
   needs := #[errataSelection]
 
@@ -267,8 +271,9 @@ script run (args) do
       return 1
   -- Search the named libraries, or every library in the package by default. A name may be a bare
   -- `Library` in this package or a `package/Library` reaching into a dependency, following Lake's
-  -- target syntax. The generated runner lib has no source until this script writes it, and no tests.
-  let candidates := ws.root.leanLibs.filter (·.name != `ErrataGenerated)
+  -- target syntax. A library whose source lives in the generated-runner directory has no source
+  -- until this script writes it, and no tests of its own.
+  let candidates := ws.root.leanLibs.filter (·.config.srcDir != errataRunnerDir)
   let libs ←
     if libNames.isEmpty then pure candidates
     else do
@@ -337,7 +342,7 @@ script run (args) do
         IO.eprintln s!"  {lib.name}: {mod}"
   -- Write the generated sources, plus a `selection` file naming the chosen test set. The generated
   -- targets depend on that file, so a changed selection invalidates them through Lake's own trace.
-  let dir := ws.root.dir / ".lake" / "errata-runner"
+  let dir := ws.root.dir / errataRunnerDir
   IO.FS.createDirAll dir
   let selection := "\n".intercalate ((moduleMods ++ nonModuleMods).map (·.toString) |>.qsort (· < ·)).toList
   for (name, src) in
