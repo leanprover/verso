@@ -139,6 +139,28 @@ def goldenDirHandlesEmptyOutput : Test := do
   assertEq 1 results.size
   assertTrue results[0]!.status.isSuccess
 
+/-- Updating absorbs a path that changed shape between file and directory, in both directions. -/
+@[test]
+def goldenDirUpdatesAcrossShapeChanges : Test := do
+  let results ← IO.FS.withTempDir fun dir => do
+    let expected := dir / "expected"
+    let actual := dir / "actual"
+    IO.FS.createDirAll expected
+    IO.FS.writeFile (expected / "d") "was a file\n"
+    IO.FS.createDirAll (actual / "d")
+    IO.FS.writeFile (actual / "d" / "inner") "now a directory\n"
+    resultsOf do
+      -- First update: the golden file `d` becomes a directory holding `inner`.
+      withReader ({ · with updateGolden := true }) (goldenDir expected actual)
+      goldenDir expected actual
+      -- Second update, the other way: the produced `d` is a file again.
+      IO.FS.removeDirAll (actual / "d")
+      IO.FS.writeFile (actual / "d") "a file once more\n"
+      withReader ({ · with updateGolden := true }) (goldenDir expected actual)
+      goldenDir expected actual
+  assertEq 1 results.size
+  assertTrue results[0]!.status.isSuccess
+
 /-- A file where a directory was expected is a golden failure, not a raw error. -/
 @[test]
 def goldenDirRejectsNonDirectory : Test := do
