@@ -108,6 +108,103 @@ function outputBlock(chunks, execStartTime, hovered, setHovered) {
     );
 }
 
+/**
+ * @typedef {{stream: string, text: string, time?: number}} Chunk
+ * @typedef {{status: string, durationMs: number, message?: string, detail?: string,
+ *            output?: Chunk[], description?: string}} Outcome
+ * @typedef {{phase: string, chunks: Chunk[], startTime: number, buildMs: number,
+ *            execStartTime: number}} RunFields
+ *
+ * The run's lifecycle as a single state, so that contradictory combinations (a verdict alongside
+ * an error, a spinner alongside an outcome) cannot be represented:
+ *
+ *   idle       no run for this test, and no recorded outcome to show
+ *   running    a run is in progress, streaming output
+ *   done       a finished run's outcome (live or restored from the session cache)
+ *   cancelled  the run was stopped before it produced an outcome
+ *   failed     the run could not be carried out at all
+ *
+ * All timings come from the server, which records them per run: they survive the widget being
+ * remounted while the run continues, and the server is on the same machine, so its clock agrees
+ * with the client's.
+ *
+ * @typedef {{tag: "idle"}
+ *   | ({tag: "running"} & RunFields)
+ *   | ({tag: "done", outcome: Outcome} & RunFields)
+ *   | {tag: "cancelled", chunks: Chunk[]}
+ *   | {tag: "failed", error: string, chunks: Chunk[]}} RunUi
+ */
+
+/** @type {RunUi} */
+const idleState = { tag: "idle" };
+
+/**
+ * A finished state showing a recorded outcome, with no live chunks or timings of its own.
+ * @param outcome {Outcome}
+ * @returns {RunUi}
+ */
+function doneState(outcome) {
+    return { tag: "done", outcome, phase: "", chunks: [], startTime: 0, buildMs: 0, execStartTime: 0 };
+}
+
+/**
+ * Steps the run state by one event:
+ *
+ *   reset    the cursor moved onto a (possibly different) test; show its cached outcome, if any
+ *   start    the user started a run; the client's clock stands in for the start time until the
+ *            server reports the authoritative one
+ *   server   a reply from `awaitOutput`; it may arrive in any state, since the widget reconnects
+ *            to runs it did not start
+ *   cancel   the user stopped the run
+ *   fail     an RPC call failed, so there is no run to wait for
+ *
+ * @param st {RunUi}
+ * @param ev {any}
+ * @returns {RunUi}
+ */
+function step(st, ev) {
+    switch (ev.type) {
+        case "reset":
+            return ev.outcome ? doneState(ev.outcome) : idleState;
+        case "start":
+            return {
+                tag: "running",
+                phase: "building",
+                chunks: [],
+                startTime: ev.now,
+                buildMs: 0,
+                execStartTime: 0,
+            };
+        case "server": {
+            const res = ev.res;
+            // Zero-valued fields in a reply mean "no news"; the server's values otherwise win.
+            const prev =
+                st.tag === "running"
+                    ? st
+                    : { phase: "running", chunks: [], startTime: 0, buildMs: 0, execStartTime: 0 };
+            const merged = {
+                phase: res.phase || prev.phase,
+                chunks:
+                    res.chunks && res.chunks.length ? prev.chunks.concat(res.chunks) : prev.chunks,
+                startTime: res.startTime || prev.startTime,
+                buildMs: res.buildMs || prev.buildMs,
+                execStartTime: res.execStartTime || prev.execStartTime,
+            };
+            if (!res.done) return { tag: "running", ...merged };
+            if (res.outcome) return { tag: "done", outcome: res.outcome, ...merged };
+            // Done without an outcome: nothing is running server-side. That ends a watched run
+            // (stopped from elsewhere, or its process died); in any other state it is no news.
+            return st.tag === "running" ? { tag: "cancelled", chunks: st.chunks } : st;
+        }
+        case "cancel":
+            return { tag: "cancelled", chunks: st.tag === "running" ? st.chunks : [] };
+        case "fail":
+            return { tag: "failed", error: ev.error, chunks: st.tag === "running" ? st.chunks : [] };
+        default:
+            return st;
+    }
+}
+
 export default function (props) {
     const rs = useRpcSession();
     // Keyed by both the test and a hash of its source, so editing the test changes the key and
@@ -115,18 +212,12 @@ export default function (props) {
     const version = props.version || "";
     const cacheKey = JSON.stringify(props.decl) + "@" + version;
 
-    const [outcome, setOutcome] = React.useState(() => resultCache.get(cacheKey) || null);
-    const [running, setRunning] = React.useState(false);
-    const [cancelled, setCancelled] = React.useState(false);
+    const [st, dispatch] = React.useReducer(step, undefined, function () {
+        const cached = resultCache.get(cacheKey);
+        return cached ? doneState(cached) : idleState;
+    });
+    // Milliseconds since the run started, ticking while it does.
     const [elapsed, setElapsed] = React.useState(0);
-    const [error, setError] = React.useState(null);
-    const [live, setLive] = React.useState([]);
-    const [phase, setPhase] = React.useState("running");
-    // When the run started (epoch ms), recorded server-side so it survives a reconnect.
-    const [startTime, setStartTime] = React.useState(0);
-    // How long the build took (ms), and when the test body started (epoch ms) for output offsets.
-    const [buildMs, setBuildMs] = React.useState(0);
-    const [execStartTime, setExecStartTime] = React.useState(0);
     // The output chunk under the cursor, highlighted with its timestamp shown.
     const [hovered, setHovered] = React.useState(null);
     // Whether the file has no unsaved changes; the test runs the saved version, so Run is gated on it.
@@ -140,24 +231,27 @@ export default function (props) {
 
     // Bumped on each run start, cancel, and unmount so a superseded await loop ignores late replies.
     const gen = React.useRef(0);
-    const liveRef = React.useRef([]);
     // The number of chunks already pulled from the server, so a reconnect replays from the start.
     const sinceRef = React.useRef(0);
     // The last phase the widget saw; "" forces the next await to return the run's current phase at once.
     const phaseRef = React.useRef("");
-    const startedAt = React.useRef(0);
+
+    const running = st.tag === "running";
+    const runStart = running ? st.startTime : 0;
 
     React.useEffect(
         function () {
-            if (!running) return undefined;
-            const timer = setInterval(function () {
-                setElapsed(Date.now() - startedAt.current);
-            }, 100);
+            if (!running || !runStart) return undefined;
+            function update() {
+                setElapsed(Math.max(0, Date.now() - runStart));
+            }
+            update();
+            const timer = setInterval(update, 100);
             return function () {
                 clearInterval(timer);
             };
         },
-        [running],
+        [running, runStart],
     );
 
     function loop(myGen) {
@@ -169,34 +263,15 @@ export default function (props) {
         }).then(
             function (res) {
                 if (gen.current !== myGen) return;
-                if (res.startTime) setStartTime(res.startTime);
-                if (res.buildMs) setBuildMs(res.buildMs);
-                if (res.execStartTime) setExecStartTime(res.execStartTime);
-                if (res.phase) {
-                    setPhase(res.phase);
-                    phaseRef.current = res.phase;
-                }
-                if (res.chunks && res.chunks.length) {
-                    liveRef.current = liveRef.current.concat(res.chunks);
-                    setLive(liveRef.current);
-                    sinceRef.current = res.nextSince;
-                    setRunning(true);
-                }
-                if (res.done) {
-                    if (res.outcome) {
-                        resultCache.set(cacheKey, res.outcome);
-                        setOutcome(res.outcome);
-                    }
-                    setRunning(false);
-                    return;
-                }
-                setRunning(true);
-                loop(myGen);
+                if (res.phase) phaseRef.current = res.phase;
+                if (res.chunks && res.chunks.length) sinceRef.current = res.nextSince;
+                if (res.done && res.outcome) resultCache.set(cacheKey, res.outcome);
+                dispatch({ type: "server", res: res });
+                if (!res.done) loop(myGen);
             },
             function (err) {
                 if (gen.current !== myGen) return;
-                setError((err && err.message) || String(err));
-                setRunning(false);
+                dispatch({ type: "fail", error: (err && err.message) || String(err) });
             },
         );
     }
@@ -210,18 +285,8 @@ export default function (props) {
             gen.current = myGen;
             sinceRef.current = 0;
             phaseRef.current = "";
-            liveRef.current = [];
-            setLive([]);
-            setOutcome(resultCache.get(cacheKey) || null);
-            setRunning(false);
-            setCancelled(false);
-            setError(null);
-            setPhase("running");
-            setStartTime(0);
-            setBuildMs(0);
-            setExecStartTime(0);
+            dispatch({ type: "reset", outcome: resultCache.get(cacheKey) || null });
             setHovered(null);
-            startedAt.current = Date.now();
             loop(myGen);
             let cancelledCheck = false;
             let cleanTimer = null;
@@ -249,17 +314,10 @@ export default function (props) {
     function run() {
         const myGen = gen.current + 1;
         gen.current = myGen;
-        liveRef.current = [];
-        setLive([]);
         sinceRef.current = 0;
-        setOutcome(null);
-        setError(null);
-        setCancelled(false);
-        setPhase("building");
         phaseRef.current = "building";
-        startedAt.current = Date.now();
+        dispatch({ type: "start", now: Date.now() });
         setElapsed(0);
-        setRunning(true);
         rs.call("Errata.Widget.startTest", {
             decl: props.decl,
             module: props.module,
@@ -270,16 +328,14 @@ export default function (props) {
             },
             function (err) {
                 if (gen.current !== myGen) return;
-                setError((err && err.message) || String(err));
-                setRunning(false);
+                dispatch({ type: "fail", error: (err && err.message) || String(err) });
             },
         );
     }
 
     function cancel() {
         gen.current += 1;
-        setRunning(false);
-        setCancelled(true);
+        dispatch({ type: "cancel" });
         rs.call("Errata.Widget.cancelTest", { decl: props.decl }).catch(function () {});
     }
 
@@ -297,7 +353,7 @@ export default function (props) {
                       disabled: !clean,
                       title: clean ? undefined : "Save the file to run the test",
                   },
-                  outcome || error || cancelled ? "Run again" : "Run",
+                  st.tag === "idle" ? "Run" : "Run again",
               ),
         e(
             "span",
@@ -314,8 +370,13 @@ export default function (props) {
             : null,
     );
 
+    const outcome = st.tag === "done" ? st.outcome : null;
+    const timings = st.tag === "running" || st.tag === "done" ? st : null;
+    const execStartTime = timings ? timings.execStartTime : 0;
+
     // Prefer the live, server-timestamped chunks; fall back to a cached outcome's output.
-    const chunks = live.length ? live : outcome && outcome.output ? outcome.output : [];
+    const liveChunks = st.tag === "idle" ? [] : st.chunks;
+    const chunks = liveChunks.length ? liveChunks : outcome && outcome.output ? outcome.output : [];
 
     function copyOutput() {
         const text = chunks
@@ -429,31 +490,31 @@ export default function (props) {
 
     // The primary status/progress element, then dimmed badges: start time, build and run durations.
     let primary = null;
-    if (running) {
-        const label = phase === "building" ? "Building… " : "Running… ";
+    if (st.tag === "running") {
+        const label = st.phase === "building" ? "Building… " : "Running… ";
         primary = e(
             "span",
             { style: { opacity: 0.8 } },
             label,
             e("span", { style: { fontFamily: monoFont } }, formatDuration(elapsed)),
         );
-    } else if (error) {
-        primary = e("span", { style: { color: STATUS_COLORS.error } }, "could not run: " + error);
-    } else if (outcome) {
+    } else if (st.tag === "failed") {
+        primary = e("span", { style: { color: STATUS_COLORS.error } }, "could not run: " + st.error);
+    } else if (st.tag === "done") {
         primary = e(
             "span",
-            { style: { color: STATUS_COLORS[outcome.status] || "inherit", fontWeight: 600 } },
-            (STATUS_SYMBOLS[outcome.status] || "") +
+            { style: { color: STATUS_COLORS[st.outcome.status] || "inherit", fontWeight: 600 } },
+            (STATUS_SYMBOLS[st.outcome.status] || "") +
                 " " +
-                (STATUS_LABELS[outcome.status] || outcome.status),
+                (STATUS_LABELS[st.outcome.status] || st.outcome.status),
         );
-    } else if (cancelled) {
+    } else if (st.tag === "cancelled") {
         primary = e("span", { style: { opacity: 0.7 } }, "cancelled");
     }
 
     const badges = [];
-    if (startTime) badges.push("Start " + formatClock(startTime));
-    if (buildMs) badges.push("Build " + formatDuration(buildMs));
+    if (timings && timings.startTime) badges.push("Start " + formatClock(timings.startTime));
+    if (timings && timings.buildMs) badges.push("Build " + formatDuration(timings.buildMs));
     if (outcome) badges.push("Run " + formatDuration(outcome.durationMs));
 
     const infoRow =
