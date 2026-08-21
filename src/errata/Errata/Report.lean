@@ -28,9 +28,11 @@ private def indentLines (text : String) : String :=
 private def locationText (l : Location) : String :=
   s!"{l.file}:{l.startPos.line}:{l.startPos.column}"
 
-/-- Prints one result: its status line, its docstring when shown, and for a failure its detail and
-captured output. A failure or error shows its docstring; a pass or skip shows it only when the
-verbosity does. -/
+/--
+Prints one result: its status line, its docstring when shown, and for a failure its detail and
+captured output. A failure or error always shows its docstring; a pass or skip shows it only at a
+verbosity that shows all docstrings.
+-/
 private def printResult (verbosity : Verbosity) (r : Result) : IO Unit := do
   let name := s!"{r.moduleTarget}  {r.testName}"
   let printDoc : IO Unit := do
