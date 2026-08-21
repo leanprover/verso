@@ -5,6 +5,11 @@
 declare module "react" {
     export function createElement(type: any, props?: any, ...children: any[]): any;
     export function useState(initial: any): [any, (value: any) => void];
+    export function useReducer<S, A>(
+        reducer: (state: S, action: A) => S,
+        initialArg: any,
+        init?: (arg: any) => S,
+    ): [S, (action: A) => void];
     export function useEffect(effect: () => void | (() => void), deps?: any[]): void;
     export function useRef(initial: any): { current: any };
     export interface ToggleEvent<T = Element> {
