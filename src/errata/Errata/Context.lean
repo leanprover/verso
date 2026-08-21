@@ -29,8 +29,6 @@ structure RealStreams where
 
 /-- The run-wide configuration and per-test state threaded through every test. -/
 structure Context where
-  /-- The reporting verbosity. -/
-  verbosity : Verbosity := .silent
   /-- Whether golden checks rewrite their expected files instead of comparing. -/
   updateGolden : Bool := false
   /-- Project-specific options, as a multi-map so repeated options accumulate. -/
