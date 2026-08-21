@@ -200,11 +200,16 @@ def runCapturing (ctx : Context) (act : TestM Unit) :
   let (outStream, outClose) ← captureStream emit .stdout
   let (errStream, errClose) ← captureStream emit .stderr
   -- Closing inside the captured action makes dangling bytes at the end of the test an error of the
-  -- test itself.
+  -- test itself. When the test already failed, that failure is the report's verdict, and a
+  -- dangling-byte error at close does not displace it.
   let body : IO (Except TestFailure Unit) := do
     let r ← (act ctx).run
-    outClose
-    errClose
+    match r with
+    | .ok () =>
+      outClose
+      errClose
+    | .error _ =>
+      try outClose; errClose catch _ => pure ()
     return r
   let outcome ← IO.withStdout outStream <| IO.withStderr errStream <| body.toBaseIO
   return (outcome, { log := ← log.get })
