@@ -91,13 +91,15 @@ def goldenDir (expected actual : System.FilePath)
   unless ← expected.pathExists do
     failAt loc s!"missing golden directory {expected}"
       (detail? := some "Run with --update-golden to create it.")
-  for file in actualFiles do
-    let rel := relativeTo actual file
-    let want := expected / rel
-    unless ← want.pathExists do
+  -- Membership is decided against the walked file lists rather than by a filesystem probe, so a
+  -- directory standing where a file belongs counts as that file being absent.
+  let expectedRels := (← filesUnder expected).map (relativeTo expected)
+  let actualRels := actualFiles.map (relativeTo actual)
+  for rel in actualRels do
+    unless expectedRels.contains rel do
       failAt loc s!"file not present in the golden directory: {rel}"
-    let wantContent ← IO.FS.readBinFile want
-    let gotContent ← IO.FS.readBinFile file
+    let wantContent ← IO.FS.readBinFile (expected / rel)
+    let gotContent ← IO.FS.readBinFile (actual / rel)
     unless wantContent == gotContent do
       -- A diff is only meaningful for text; other content is described by size.
       let detail :=
@@ -105,7 +107,6 @@ def goldenDir (expected actual : System.FilePath)
         | some wantText, some gotText => goldenDiff wantText gotText
         | _, _ => binaryDifference wantContent gotContent
       failAt loc s!"golden mismatch for {rel}" (detail? := some detail)
-  for file in ← filesUnder expected do
-    let rel := relativeTo expected file
-    unless ← (actual / rel).pathExists do
+  for rel in expectedRels do
+    unless actualRels.contains rel do
       failAt loc s!"file missing from the produced output: {rel}"

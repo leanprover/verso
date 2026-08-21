@@ -132,22 +132,64 @@ def writeBinFile (path : System.FilePath) (contents : ByteArray) : IO Unit := do
   if let some parent := path.parent then IO.FS.createDirAll parent
   IO.FS.writeBinFile path contents
 
+/-- The number of bytes in the {lit}`UTF-8` sequence a lead byte introduces, or {name}`none` for a
+continuation or invalid byte. -/
+private def utf8SeqLength (b : UInt8) : Option Nat :=
+  if b &&& 0x80 == 0 then some 1
+  else if b &&& 0xE0 == 0xC0 then some 2
+  else if b &&& 0xF0 == 0xE0 then some 3
+  else if b &&& 0xF8 == 0xF0 then some 4
+  else none
+
+/--
+Splits bytes into a prefix ready to decode and a tail that is the start of an unfinished
+{lit}`UTF-8` code point. Bytes that cannot be completed by any continuation go in the prefix, where
+decoding reports them as invalid.
+-/
+private def splitUtf8Tail (bytes : ByteArray) : ByteArray × ByteArray := Id.run do
+  for back in [1 : 4] do
+    if back > bytes.size then break
+    let i := bytes.size - back
+    if let some len := utf8SeqLength bytes[i]! then
+      if i + len > bytes.size then
+        return (bytes.extract 0 i, bytes.extract i bytes.size)
+      else
+        break
+  return (bytes, .empty)
+
 /--
 A stream that hands each write to a destination as a fragment tagged by the stream it came from.
 
-A write of raw bytes is decoded, and rejected if it is not valid {lit}`UTF-8`.
+A write of raw bytes may end partway through a {lit}`UTF-8` code point; the trailing bytes wait in a
+buffer for the write that completes them. Bytes that decode to nothing valid are rejected. The
+returned action ends the capture, rejecting any buffered bytes whose code point never arrived.
 -/
-private def captureStream (emit : Output → IO Unit) (mk : String → Output) : IO.FS.Stream where
-  flush := pure ()
-  read _ := pure .empty
-  write bytes :=
-    match String.fromUTF8? bytes with
-    | some s => emit (mk s)
-    | none =>
-      throw (.userError "a raw byte write to a captured stream was not valid UTF-8")
-  getLine := pure ""
-  putStr s := emit (mk s)
-  isTty := pure false
+private def captureStream (emit : Output → IO Unit) (mk : String → Output) :
+    IO (IO.FS.Stream × IO Unit) := do
+  let pending ← IO.mkRef ByteArray.empty
+  let invalid : IO.Error :=
+    .userError "a raw byte write to a captured stream was not valid UTF-8"
+  let stream : IO.FS.Stream := {
+    flush := pure ()
+    read := fun _ => pure .empty
+    write := fun bytes => do
+      let (ready, rest) := splitUtf8Tail ((← pending.get) ++ bytes)
+      match String.fromUTF8? ready with
+      | some s =>
+        pending.set rest
+        unless s.isEmpty do emit (mk s)
+      | none =>
+        pending.set .empty
+        throw invalid
+    getLine := pure ""
+    putStr := fun s => emit (mk s)
+    isTty := pure false
+  }
+  let close : IO Unit := do
+    unless (← pending.get).isEmpty do
+      pending.set .empty
+      throw invalid
+  return (stream, close)
 
 /--
 Runs a test action with the given context, capturing its outcome as data rather than letting it
@@ -171,8 +213,16 @@ def runCapturing (ctx : Context) (act : TestM Unit) :
         ctx.outputFailed.set true
         -- Saying so can fail in turn, when the destination that just failed was stderr itself.
         try realErr.putStr s!"warning: live output destination failed: {e}\n" catch _ => pure ()
-  let outcome ← IO.withStdout (captureStream emit .stdout) <|
-    IO.withStderr (captureStream emit .stderr) <| ((act ctx).run).toBaseIO
+  let (outStream, outClose) ← captureStream emit .stdout
+  let (errStream, errClose) ← captureStream emit .stderr
+  -- Closing inside the captured action makes dangling bytes at the end of the test an error of the
+  -- test itself.
+  let body : IO (Except TestFailure Unit) := do
+    let r ← (act ctx).run
+    outClose
+    errClose
+    return r
+  let outcome ← IO.withStdout outStream <| IO.withStderr errStream <| body.toBaseIO
   return (outcome, { log := ← log.get })
 
 /--
@@ -184,8 +234,13 @@ def captureOutput (act : TestM Unit) : TestM OutputLog := do
   let log ← IO.mkRef (#[] : Array Output)
   let emit (o : Output) : IO Unit := log.modify (·.push o)
   let completed ← IO.mkRef false
+  let (outStream, outClose) ← captureStream emit .stdout
+  let (errStream, errClose) ← captureStream emit .stderr
   try
-    IO.withStdout (captureStream emit .stdout) <| IO.withStderr (captureStream emit .stderr) act
+    IO.withStdout outStream <| IO.withStderr errStream do
+      act
+      outClose
+      errClose
     completed.set true
   finally
     -- An action that does not complete never receives this log, and what it wrote is what explains
