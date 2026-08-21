@@ -72,18 +72,15 @@ def goldenDir (expected actual : System.FilePath)
       (detail? := some "The code under test did not create it as a directory.")
   let actualFiles ← filesUnder actual
   if ctx.updateGolden then
-    -- The golden tree is recorded even when the produced tree holds no files, so that a later run
-    -- compares against it rather than reporting it as missing.
+    -- The recorded tree is replaced wholesale, so a path that changed shape between file and
+    -- directory updates as cleanly as changed content. The golden tree is recorded even when the
+    -- produced tree holds no files, so that a later run compares against it rather than reporting
+    -- it as missing.
+    if ← expected.isDir then IO.FS.removeDirAll expected
+    else if ← expected.pathExists then IO.FS.removeFile expected
     IO.FS.createDirAll expected
-    let actualRels := actualFiles.map (relativeTo actual)
     for file in actualFiles do
-      let dest := expected / relativeTo actual file
-      writeBinFile dest (← IO.FS.readBinFile file)
-    -- Remove expected files that the produced output no longer contains.
-    if ← expected.pathExists then
-      for file in ← filesUnder expected do
-        unless actualRels.contains (relativeTo expected file) do
-          IO.FS.removeFile file
+      writeBinFile (expected / relativeTo actual file) (← IO.FS.readBinFile file)
     return
   unless ← expected.pathExists do
     failAt loc s!"missing golden directory {expected}"
