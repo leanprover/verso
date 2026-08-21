@@ -15,10 +15,10 @@ set_option doc.verso true
 
 namespace Errata
 
-/-- Asserts that a condition holds. -/
+/-- Asserts that a condition holds, attaching the detail to the failure when given. -/
 def assertTrue (cond : Bool) (message : String := "assertion failed")
-    (loc : Location := by exact here%) : TestM Unit :=
-  unless cond do failAt loc message
+    (detail? : Option String := none) (loc : Location := by exact here%) : TestM Unit :=
+  unless cond do failAt loc message (detail? := detail?)
 
 /-- Asserts that the actual value equals the expected value, reporting both when they differ. -/
 def assertEq {α} [BEq α] [Repr α] (expected actual : α)
@@ -43,6 +43,20 @@ def assertNotContains (unexpected actual : String) (message : String := "unexpec
     (loc : Location := by exact here%) : TestM Unit :=
   unless (actual.find? unexpected).isNone do
     failAt loc message (detail? := some s!"expected not to contain: {unexpected}\nactual: {actual}")
+
+/--
+Asserts that an action throws an {name}`IO.Error`. The predicate picks the subset of acceptable
+errors: the assertion fails when the action succeeds, and when it throws an error the predicate
+rejects. The name says {lit}`IO` because the expectation is about a thrown {name}`IO.Error`, as
+opposed to failure in some other error monad.
+-/
+def assertThrowsIO {α} (act : IO α) (acceptable : IO.Error → Bool := fun _ => true)
+    (loc : Location := by exact here%) : TestM Unit := do
+  match ← act.toBaseIO with
+  | .ok _ => failAt loc "expected an IO error, but the action succeeded"
+  | .error e =>
+    unless acceptable e do
+      failAt loc "the action threw an unacceptable IO error" (detail? := some (toString e))
 
 /-- Asserts that a file exists. -/
 def assertFileExists (path : System.FilePath)

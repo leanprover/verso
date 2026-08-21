@@ -233,6 +233,29 @@ def captureRejectsDanglingBytes : Test := do
   assertEq 1 results.size
   assertTrue (results[0]!.status matches .error _)
 
+/-- The detail given to a true-assertion is attached to its failure. -/
+@[test]
+def assertTrueAttachesDetail : Test := do
+  let results ← resultsOf (assertTrue false "boom" (detail? := some "why"))
+  assertEq 1 results.size
+  match results[0]!.status with
+  | .fail f => assertEq (some "why") f.detail?
+  | s => fail s!"expected a failure, got {repr s}"
+
+/-- An expected IO error passes, and the predicate picks which errors are acceptable. -/
+@[test]
+def assertThrowsIOAccepts : Test := do
+  assertThrowsIO (throw (IO.userError "nope") : IO Unit)
+  assertThrowsIO (throw (IO.userError "nope") : IO Unit)
+    (acceptable := fun e => e matches .userError _)
+
+/-- A successful action fails the throw assertion, as does an error the predicate rejects. -/
+@[test]
+def assertThrowsIORejects : Test := do
+  expectFail (assertThrowsIO (pure () : IO Unit))
+  expectFail <|
+    assertThrowsIO (throw (IO.userError "nope") : IO Unit) (acceptable := fun _ => false)
+
 /-- Output mixed from raw writes and prints is recorded in the order it was produced. -/
 @[test]
 def captureOrdersMixedWrites : Test := do
