@@ -189,13 +189,14 @@ def runCapturing (ctx : Context) (act : TestM Unit) :
   let ctx := { ctx with realStreams? := some real }
   let emit (o : Output) : IO Unit := do
     log.modify (·.push o)
-    unless ← ctx.outputFailed.get do
-      try
-        IO.withStdout real.stdout <| IO.withStderr real.stderr <| ctx.writeOutput o
-      catch e =>
-        ctx.outputFailed.set true
-        -- Saying so can fail in turn, when the destination that just failed was stderr itself.
-        try real.stderr.putStr s!"warning: live output destination failed: {e}\n" catch _ => pure ()
+    if let some dest := ctx.writeOutput then
+      unless ← ctx.outputFailed.get do
+        try
+          IO.withStdout real.stdout <| IO.withStderr real.stderr <| dest o
+        catch e =>
+          ctx.outputFailed.set true
+          -- Saying so can fail in turn, when the destination that just failed was stderr itself.
+          try real.stderr.putStr s!"warning: live output destination failed: {e}\n" catch _ => pure ()
   let (outStream, outClose) ← captureStream emit .stdout
   let (errStream, errClose) ← captureStream emit .stderr
   -- Closing inside the captured action makes dangling bytes at the end of the test an error of the
