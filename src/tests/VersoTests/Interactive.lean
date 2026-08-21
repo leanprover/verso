@@ -14,7 +14,8 @@ Use a shell harness to test the LSP server.
 -/
 @[test]
 def interactive : Test := do
-  let out ← IO.Process.output { cmd := "src/tests/interactive/run_interactive.sh" }
-  IO.print out.stdout
-  IO.eprint out.stderr
-  assertTrue (out.exitCode == 0) s!"interactive LSP tests failed with exit code {out.exitCode}"
+  -- The child inherits the real stdio so its per-case progress is visible while it runs; a hang in
+  -- CI then shows how far the suite got instead of a killed job with no output.
+  let child ← IO.Process.spawn { cmd := "src/tests/interactive/run_interactive.sh" }
+  let exitCode ← child.wait
+  assertTrue (exitCode == 0) s!"interactive LSP tests failed with exit code {exitCode}"
