@@ -144,7 +144,15 @@ const idleState = { tag: "idle" };
  * @returns {RunUi}
  */
 function doneState(outcome) {
-    return { tag: "done", outcome, phase: "", chunks: [], startTime: 0, buildMs: 0, execStartTime: 0 };
+    return {
+        tag: "done",
+        outcome,
+        phase: "",
+        chunks: [],
+        startTime: 0,
+        buildMs: 0,
+        execStartTime: 0,
+    };
 }
 
 /**
@@ -199,7 +207,11 @@ function step(st, ev) {
         case "cancel":
             return { tag: "cancelled", chunks: st.tag === "running" ? st.chunks : [] };
         case "fail":
-            return { tag: "failed", error: ev.error, chunks: st.tag === "running" ? st.chunks : [] };
+            return {
+                tag: "failed",
+                error: ev.error,
+                chunks: st.tag === "running" ? st.chunks : [],
+            };
         default:
             return st;
     }
@@ -499,7 +511,11 @@ export default function (props) {
             e("span", { style: { fontFamily: monoFont } }, formatDuration(elapsed)),
         );
     } else if (st.tag === "failed") {
-        primary = e("span", { style: { color: STATUS_COLORS.error } }, "could not run: " + st.error);
+        primary = e(
+            "span",
+            { style: { color: STATUS_COLORS.error } },
+            "could not run: " + st.error,
+        );
     } else if (st.tag === "done") {
         primary = e(
             "span",
