@@ -975,7 +975,7 @@ severity accent to distinguish them.
   border: none;
 }
 
-.error .verso-message, .error .verso-message .token, .error .verso-message label {
+.error .verso-message, .error .verso-message label {
   color: var(--verso-message-error-color, #cc0000);
 }
 
@@ -1020,7 +1020,7 @@ severity accent to distinguish them.
   border: none;
 }
 
-.warning .verso-message, .warning .verso-message .token, .warning .verso-message label {
+.warning .verso-message, .warning .verso-message label {
   color: var(--verso-message-warning-color, black);
 }
 
@@ -1048,7 +1048,7 @@ severity accent to distinguish them.
   border: none;
 }
 
-.information .verso-message, .information .verso-message .token, .information .verso-message label {
+.information .verso-message, .information .verso-message label {
   color: var(--verso-message-info-color, black);
 }
 
