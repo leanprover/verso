@@ -2,7 +2,9 @@
 Copyright (c) 2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
+-/
 
+/-
 Round-trip property tests for Verso's serialization. The generators and the `roundTripOk`/`isEqOk`
 helpers live in `VersoTests.SerializationGenerators`; they construct Verso types whose constructors are private, so
 they stay module-internal there and are reached here through `import all`.
