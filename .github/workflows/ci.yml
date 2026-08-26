@@ -163,7 +163,9 @@ jobs:
             # forks never receive; those runs get their results from the job summary and the
             # uploaded artifact instead.
             - name: Publish the JUnit test report
-              if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+              if:
+                  always() && (github.event_name != 'pull_request' ||
+                  github.event.pull_request.head.repo.full_name == github.repository)
               uses: dorny/test-reporter@v1
               with:
                   name: Errata tests
