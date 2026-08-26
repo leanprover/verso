@@ -2,7 +2,9 @@
 Copyright (c) 2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
+-/
 
+/-
 Property tests for blog identifier generation. This is a non-`module` file because `VersoBlog`
 itself is not part of the module system; the Errata runner imports it through its non-module main.
 -/
