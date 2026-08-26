@@ -13,7 +13,7 @@ release_note
   version := ⟨4, 34, 0⟩
   breaking := false
   tag := "feat-test-framework"
-  prs := [956]
+  prs := [956, 957]
 
 #doc (Manual) "Test Framework" =>
 
