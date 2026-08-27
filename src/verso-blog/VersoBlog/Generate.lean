@@ -15,6 +15,7 @@ public section
 open Verso Doc Output Html HtmlT FS
 open Verso.Code.Hover (State)
 open Verso.Code (LinkTargets)
+open Lean (Html)
 
 namespace Verso.Genre.Blog
 

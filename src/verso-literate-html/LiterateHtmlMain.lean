@@ -194,8 +194,8 @@ private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Boo
     <script src="popper.js"></script>
     <script src="tippy.js"></script>
     <script src="marked.js"></script>
-    <script>{{Html.text false highlightingJs}}</script>
-    <style>{{Html.text false highlightingStyle}}</style>
+    <script>{{Html.raw highlightingJs}}</script>
+    <style>{{Html.raw highlightingStyle}}</style>
     <link rel="stylesheet" href="tippy-border.css"/>
   }} else .empty
   let copyButtonTag : Html := if includeCodeAssets then {{

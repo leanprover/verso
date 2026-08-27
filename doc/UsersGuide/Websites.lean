@@ -63,7 +63,7 @@ The URL layout of a site is specified via a {name Blog.Site}`Site`:
 These are usually constructed using a small embedded configuration language.
 
 A blog is rendered using a theme, which is a collection of templates.
-Templates are monadic functions that construct {name Verso.Output.Html}`Html` from a set of dynamically-typed parameters.
+Templates are monadic functions that construct {name Lean.Html}`Html` from a set of dynamically-typed parameters.
 
 {docstring Blog.Theme}
 

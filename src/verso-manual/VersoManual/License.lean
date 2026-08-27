@@ -15,7 +15,7 @@ import VersoManual.Basic
 
 
 
-open Lean (ToJson FromJson)
+open Lean (ToJson FromJson Html)
 
 open Verso ArgParse Doc Elab
 
@@ -45,7 +45,7 @@ private def paragraphedHtml (text : String) : Html :=
 def LicenseInfo.toHtml (license : LicenseInfo) (headerLevel : Nat) : Html :=
   let {identifier, dependency, howUsed, link, text} := license
   {{<section class="license-info">
-      {{.tag s!"h{headerLevel}" #[] dependency }}
+      {{.element s!"h{headerLevel}" #[] dependency }}
       {{link.map (fun url => {{<a class="link" href={{url}}>{{url}}</a>}}) |>.getD .empty}}
       {{howUsed.map paragraphedHtml |>.getD .empty}}
       <code class="spdx">{{identifier}}</code>
@@ -56,7 +56,7 @@ where
     | (hdr?, txt) =>
       let hdrHtml :=
         if let some hdr := hdr? then
-          Html.tag s!"h{headerLevel+1}" #[] hdr
+          Html.element s!"h{headerLevel+1}" #[] hdr
         else
           .empty
       {{<section>{{hdrHtml}}{{paragraphedHtml txt}}</section>}}

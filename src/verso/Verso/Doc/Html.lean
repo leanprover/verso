@@ -13,6 +13,7 @@ public import Verso.BuildLog
 namespace Verso.Doc.Html
 
 open Verso Output Doc Html
+open Lean (Html)
 open Verso (Severity SourceSpan MonadBuildLog Logger)
 open Verso.Code (HighlightHtmlM)
 
@@ -86,7 +87,7 @@ public instance [Monad m] : MonadLift (HighlightHtmlM genre) (HtmlT genre m) whe
 open HtmlT
 
 public def mkPartHeader (level : Nat) (contents : Html) (headerAttrs : Array (String × String) := #[]) : Html :=
-  .tag s!"h{level}" headerAttrs contents
+  .element s!"h{level}" headerAttrs contents
 
 public class ToHtml (genre : Genre) (m : Type → Type) (α : Type u) where
   toHtml (val : α) : HtmlT genre m Html
@@ -118,19 +119,19 @@ section
 open ToHtml
 
 partial def Inline.toHtml [Monad m] [GenreHtml g m] : Inline g → HtmlT g m Html
-  | .text str => pure <| .text true str
+  | .text str => return .text str
   | .link content dest => do
     pure {{ <a href={{dest}}> {{← content.mapM toHtml}} </a> }}
   | .image alt dest => do
     pure {{ <img src={{dest}} alt={{alt}}/> }}
   | .footnote name content => do
       pure {{ <details class="footnote"><summary>"["{{name}}"]"</summary>{{← content.mapM toHtml}}</details>}}
-  | .linebreak str => pure <| Html.text false str
+  | .linebreak str => return .raw str
   | .emph content => do
     pure {{ <em> {{← content.mapM toHtml }} </em> }}
   | .bold content => do
     pure {{ <strong> {{← content.mapM toHtml}} </strong> }}
-  | .code str => pure {{ <code> {{str}} </code> }}
+  | .code str => return {{ <code> {{str}} </code> }}
   | .math mode str => do
      let classes := "math " ++ match mode with | .inline => "inline" | .display => "display"
      pure {{ <code class={{classes}}>{{str}}</code> }}
@@ -162,7 +163,7 @@ partial def Block.toHtml [Monad m] [GenreHtml g m] [TraverseBlock g] (b : Block 
         }}
       </dl>
     }}
-  | .code content => pure #[{{ <pre> {{ content }} </pre>}}]
+  | .code content => return {{ <pre> {{ content }} </pre>}}
   | .concat items => Html.seq <$> items.mapM Block.toHtml
   | .other container content => GenreHtml.block Inline.toHtml Block.toHtml container content
 

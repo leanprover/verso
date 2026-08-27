@@ -24,6 +24,7 @@ public section
 open Std (HashSet TreeMap)
 
 open Verso Doc Output Html HtmlT
+open Lean (Html)
 open Verso.Genre Blog
 open SubVerso.Highlighting
 
@@ -47,11 +48,11 @@ def getD [TypeName α] (value : Val) (default : α) : α :=
 end Params.Val
 
 instance : Coe String Template.Params.Val where
-  coe str := ⟨.mk str, #[.mk <| Html.text true str]⟩
+  coe str := ⟨.mk str, #[.mk <| Html.text str]⟩
 
 instance : Coe Html Template.Params.Val where
   coe
-   | .text true str => ↑str
+   | .text str => ↑str
    | other => ⟨.mk other, #[]⟩
 
 
@@ -163,7 +164,7 @@ def blockHtml (g : Genre)
   | .htmlDetails classes summary, contents => do
     pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM goB}}</details>}}
   | .htmlWrapper name attrs, contents => do
-    Html.tag name attrs <$> contents.mapM goB
+    Html.element name attrs <$> contents.mapM goB
   | .htmlDiv classes, contents => do
     pure {{ <div class={{classes}}> {{← contents.mapM goB}} </div> }}
   | .blob html, _ => pure html
@@ -194,7 +195,7 @@ def blockHtml (g : Genre)
       let contents := contents.extract 1
       return {{
         <section>
-          {{ .tag s!"h{lvl + 1}" #[] (← first.mapM goI) }}
+          {{ .element s!"h{lvl + 1}" #[] (← first.mapM goI) }}
           {{ ← contents.mapM goB }}
         </section>
       }}
@@ -353,9 +354,9 @@ def builtinHeader : TemplateM Html := do
   -- These should come first so later stylesheets can easily override them.
   out := out ++ {{<style>{{«verso-vars.css»}}</style>}}
   for style in (← read).builtInStyles do
-    out := out ++ {{<style>"\n"{{.text false style}}"\n"</style>"\n"}}
+    out := out ++ {{<style>"\n"{{.raw style}}"\n"</style>"\n"}}
   for script in (← read).builtInScripts do
-    out := out ++ {{<script>"\n"{{.text false script}}"\n"</script>"\n"}}
+    out := out ++ {{<script>"\n"{{.raw script}}"\n"</script>"\n"}}
   for js in (← read).jsFiles do
     out := out ++ {{<script src=s!"-verso-data/{js}"></script>}}
   for css in (← read).cssFiles do
@@ -368,9 +369,9 @@ def builtinHeader : TemplateM Html := do
 
   -- Components
   for style in (← get).headerCss do
-    out := out ++ {{<style>"\n"{{.text false style}}"\n"</style>"\n"}}
+    out := out ++ {{<style>"\n"{{.raw style}}"\n"</style>"\n"}}
   for script in (← get).headerJs do
-    out := out ++ {{<script>"\n"{{.text false script}}"\n"</script>"\n"}}
+    out := out ++ {{<script>"\n"{{.raw script}}"\n"</script>"\n"}}
   pure out
 
 
