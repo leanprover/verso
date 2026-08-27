@@ -171,7 +171,7 @@ input_file errataSelection where
   path := errataRunnerDir / "selection"
 
 -- The generated discovered-tests module (`allTests`), written by the Errata driver.
-lean_lib ErrataGenerated where
+lean_lib ErrataDiscovered where
   srcDir := errataRunnerDir
   roots := #[`ErrataDiscovered]
   needs := #[errataSelection]
