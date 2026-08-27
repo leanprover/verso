@@ -11,6 +11,7 @@ public section
 
 open Verso.Genre.Blog Template
 open Verso Doc Output Html
+open Lean (Html)
 
 namespace Verso.Genre.Blog
 
@@ -307,7 +308,7 @@ def post : Template := do
        | some md => {{
         <div class="metadata">
           <div class="authors">
-            {{(md : Post.PartMetadata).authors.map ({{<span class="author">{{Html.text true ·}}</span>}}) |>.toArray}}
+            {{(md : Post.PartMetadata).authors.map ({{<span class="author">{{Html.text ·}}</span>}}) |>.toArray}}
           </div>
           <div class="date">
             {{md.date.toIso8601String}}
@@ -352,7 +353,7 @@ def archiveEntry : Template := do
          | some md => {{
           <div class="metadata">
             <div class="authors">
-              {{(md : Post.PartMetadata).authors.map ({{<span class="author">{{Html.text true ·}}</span>}}) |>.toArray}}
+              {{(md : Post.PartMetadata).authors.map ({{<span class="author">{{Html.text ·}}</span>}}) |>.toArray}}
             </div>
             <div class="date">
               {{md.date.toIso8601String}}

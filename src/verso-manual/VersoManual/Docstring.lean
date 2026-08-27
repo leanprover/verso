@@ -1621,7 +1621,7 @@ def optionDocs.descr : BlockDescr := withHighlighting {
     open Verso.Output Html in do
       let .ok (name, defaultValue) := FromJson.fromJson? (α := Name × Highlighted) info
         | do reportError "Failed to deserialize docstring data while generating HTML for an option"; pure .empty
-      let x : Html := Html.text true <| Name.toString name
+      let x : Html := Html.text <| Name.toString name
 
       let xref ← HtmlT.state
       let idAttr := xref.htmlId id

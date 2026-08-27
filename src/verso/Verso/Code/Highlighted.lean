@@ -17,7 +17,7 @@ import VersoUtil.WfRec
 
 open SubVerso.Highlighting
 open Verso.Output Html
-open Lean (Json ToJson FromJson Quote)
+open Lean (Json ToJson FromJson Quote Html)
 open Std (HashMap)
 
 namespace SubVerso.Highlighting
@@ -503,11 +503,11 @@ defmethod Token.htmlContent (tok : Token) : HighlightHtmlM g Html := do
       iter := iter.next h
       str := str.push c
       if c == '.' then
-        html := html ++ .text true str
+        html := html ++ .text str
         str := ""
         if iter ≠ content.endPos then
-          html := html ++ .text false "&shy;"
-    if !str.isEmpty then html := html ++ .text true str
+          html := html ++ .raw "&shy;"
+    if !str.isEmpty then html := html ++ .text str
     return html
   else
     return content
@@ -606,9 +606,9 @@ where
 
 /-- HTML that renders no visible content. -/
 partial def isEmptyHtml : Html → Bool
-  | .text _ s => s.isEmpty
+  | .text s | .raw s => s.isEmpty
   | .seq xs => xs.all isEmptyHtml
-  | .tag .. => false
+  | .element .. => false
 
 /--
 Removes the attributes named in `attrs` from `html`, returning their values alongside the
@@ -620,11 +620,11 @@ partial def takeAttrs (attrs : Array String) (html : Html) : Array (String × St
   go attrs html
 where
   go (remaining : Array String) : Html → Array (String × String) × Html
-    | html@(.tag name as contents) =>
+    | html@(.element name as contents) =>
       let here := as.filter (remaining.contains ·.1)
       let (found, contents') := go (remaining.filter (fun r => !here.any (·.1 == r))) contents
       if here.isEmpty && found.isEmpty then (#[], html)
-      else (here ++ found, .tag name (as.filter (!remaining.contains ·.1)) contents')
+      else (here ++ found, .element name (as.filter (!remaining.contains ·.1)) contents')
     | html@(.seq xs) =>
       let trimmed := xs.popWhile isEmptyHtml
       let trimmed := trimmed.extract (trimmed.findIdx (!isEmptyHtml ·)) trimmed.size
@@ -665,7 +665,7 @@ public partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g H
       pure {{<span class={{"has-info " ++ cls}} {{spanAttrs}}>
           <span class="hover-container">
             <span class={{"hover-info messages"}}>
-              {{←  infos.mapM fun (s, info) => do return {{
+              {{← infos.mapM fun (s, info) => do return {{
                 <code class={{"verso-message " ++ s.«class»}}>{{← info.toHtml [] 10 toHtml}}</code> }}
               }}
             </span>
@@ -690,7 +690,7 @@ public partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g H
             {{← if info.isEmpty then
                 pure {{"All goals completed! 🐙"}}
               else
-                .seq <$> info.mapIdxM (fun i x => x.toHtml toHtml i)}}
+                info.mapIdxM (fun i x => x.toHtml toHtml i)}}
           </span>
         </span>
       }}
