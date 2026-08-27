@@ -1,12 +1,12 @@
 Errata test runner
 
 Usage:
-  lake run Errata.run                                      run every test in the package
-  lake run Errata.run LIBRARY...                           run the tests in the given libraries
-  lake run Errata.run LIBRARY... --test-options OPTION...  pass runner options after the marker
+  lake test                                         run every test in the package
+  lake test -- LIBRARY...                           run the tests in the given libraries
+  lake test -- LIBRARY... --test-options OPTION...  pass runner options after the marker
 
 Tokens before `--test-options` name libraries. A library is a bare `Library` in this package or a
 `package/Library` reaching into a dependency. Everything after the marker goes to the test runner.
 
 The runner documents its own options, including how to pass options to the tests themselves:
-  lake run Errata.run --test-options --help
+  lake test -- --test-options --help
