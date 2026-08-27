@@ -892,7 +892,7 @@ where
     else
       pure attr
   rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT TraverseContext Id (Option Html) := do
-    pure <| some <| .tag tag (← attrs.mapM rwAttr) content
+    pure <| some <| .element tag (← attrs.mapM rwAttr) content
 
 open Verso.Code.External
 

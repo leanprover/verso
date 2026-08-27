@@ -236,7 +236,7 @@ partial def localContentsCore [Monad m] [MonadLiftT IO m] [ToHtml Manual m (Doc.
     let shortTitle := p.metadata.bind (·.shortTitle)
     let titleHtml ←
       if let some title := shortTitle then
-        pure (Html.ofString title)
+        pure (Html.text title)
       else
         let (html, _) ← p.title.mapM (Manual.toHtml (m := m) opts ctxt xref {} {} {} ·) |>.run {}
         pure html

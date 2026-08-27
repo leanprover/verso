@@ -117,8 +117,8 @@ block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String
         return {{
           <table class={{«class»}} {{attrs}}>
             {{← rows.mapIdxM fun i r => do
-              let cols ← Output.Html.seq <$> r.mapM fun c => do
-                let cell : Output.Html ← c.mapM goB
+              let cols ← Html.seq <$> r.mapM fun c => do
+                let cell : Html ← c.mapM goB
                 if header && i == 0 then
                   pure {{<th>{{cell}}</th>}}
                 else

@@ -24,7 +24,7 @@ open SubVerso.Compat.Frontend (processCommands)
 open SubVerso.Highlighting (Highlighted highlightFrontendResult)
 open Verso.Code (HighlightHtmlM)
 open Verso.Doc (Genre)
-open Verso.Output (Html)
+open Verso.Output
 open Lean Elab Command
 
 namespace Verso.NestedTacticHtmlTest
@@ -115,8 +115,8 @@ def hasClass (attrs : Array (String × String)) (cls : String) : Bool :=
 
 /-- The concatenated text content of an HTML fragment. -/
 partial def htmlText : Html → String
-  | .text _ s => s
-  | .tag _ _ contents => htmlText contents
+  | .text s | .raw s => s
+  | .element _ _ contents => htmlText contents
   | .seq xs => xs.foldl (fun acc x => acc ++ htmlText x) ""
 
 /-- The direct children of an HTML fragment. -/
@@ -126,9 +126,9 @@ def directChildren : Html → Array Html
 
 /-- Whether an HTML fragment renders as nothing visible (whitespace or empty). -/
 partial def htmlInsignificant : Html → Bool
-  | .text _ s => s.trimAscii.isEmpty
+  | .text s | .raw s => s.trimAscii.isEmpty
   | .seq xs => xs.all htmlInsignificant
-  | .tag .. => false
+  | .element .. => false
 
 /-- The last visible element of an HTML fragment, looking through `.seq` tails. -/
 partial def htmlLastVisible? : Html → Option Html
@@ -139,12 +139,12 @@ partial def htmlLastVisible? : Html → Option Html
 def childSpanWithClass (contents : Html) (cls : String) : Option Html :=
   (directChildren contents).find? fun h =>
     match h with
-    | .tag "span" a _ => hasClass a cls
+    | .element "span" a _ => hasClass a cls
     | _ => false
 
 /-- Whether `html` is a `<span class="tactic">` whose own state shows "no goals". -/
 def isNoGoalsState : Html → Bool
-  | .tag "span" attrs contents =>
+  | .element "span" attrs contents =>
     if hasClass attrs "tactic" then
       match childSpanWithClass contents "tactic-state" with
       | some s => htmlText s |>.contains "All goals completed"
@@ -156,7 +156,7 @@ def isNoGoalsState : Html → Bool
 def labelContents (contents : Html) : Html :=
   let html? :=
     directChildren contents |>.findSome? fun
-      | .tag "label" _ c => some c
+      | .element "label" _ c => some c
       | _ => none
   html?.getD .empty
 
@@ -167,15 +167,15 @@ states nested inside each one. A toggle is a `<span class="tactic">` whose own s
 -/
 partial def proofStates : Html → List ProofState
   | .seq xs => xs.toList.flatMap proofStates
-  | .tag name attrs contents =>
+  | .element name attrs contents =>
     if name == "span" && hasClass attrs "tactic" then
       let label := labelContents contents
-      [{ noGoals := isNoGoalsState (.tag name attrs contents),
+      [{ noGoals := isNoGoalsState (.element name attrs contents),
          endsWithNoGoals := htmlLastVisible? label |>.map isNoGoalsState |>.getD false,
          children := proofStates label }]
     else
       proofStates contents
-  | .text .. => []
+  | _ => []
 
 /--
 Whether any proof state with goals ends with a no-goals proof state — the redundant nesting that

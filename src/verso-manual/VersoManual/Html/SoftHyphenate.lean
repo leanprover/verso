@@ -12,11 +12,12 @@ set_option doc.verso true
 namespace Verso.Genre.Manual
 
 open Verso.Output Html
+open Lean (Html)
 
 private def addShy (xs : Array Html) : Array Html :=
   if xs.isEmpty then xs
-  else if let some (Verso.Output.Html.tag "wbr" ..) := xs.back? then xs
-  else  xs.push (.text false "&shy;")
+  else if let some (.element "wbr" ..) := xs.back? then xs
+  else  xs.push (.raw "&shy;")
 
 /--
 Adds soft hyphenation opportunities ({lit}`<wbr>` or {lit}`&shy;`) to a single text node, allowing
@@ -36,7 +37,7 @@ public def softHyphenateText (esc : Bool) (str : String) : Html := Id.run do
     let current := iter.get h
     let iter' := iter.next h
     if prior == some '.' && current != '.' then
-      strs := strs.push (.text esc <| str.extract start iter)
+      strs := strs.push (.ofString esc <| str.extract start iter)
       -- Break lines after dots without hyphens
       strs := strs.push {{<wbr/>}}
       start := iter
@@ -45,7 +46,7 @@ public def softHyphenateText (esc : Bool) (str : String) : Html := Id.run do
         if !strs.isEmpty then
           strs := addShy strs
         -- Break lines at case changes with hyphens
-        strs := strs.push (.text esc <| str.extract start iter)
+        strs := strs.push (.ofString esc <| str.extract start iter)
         start := iter
 
     prior := some current
@@ -53,7 +54,7 @@ public def softHyphenateText (esc : Bool) (str : String) : Html := Id.run do
 
   if start != iter then
     strs := addShy strs
-    strs := strs.push (.text esc <| str.extract start iter)
+    strs := strs.push (.ofString esc <| str.extract start iter)
 
   if h : strs.size = 1 then strs[0] else .seq strs
 
@@ -65,7 +66,7 @@ HTML, allowing browsers to break the word at that point. Line break opportunitie
 {lit}`Verso.<wbr>Genre.<wbr>Manual.<wbr>soft&shy;Hyphenate&shy;Identifiers`.
 -/
 public def softHyphenateTextNodes (html : Html) : Html :=
-  html.visitM (m := Id) (text := rwText)
+  html.visitM (m := Id) (text := rwText true) (raw := rwText false)
 where
   rwText esc str := pure (some (softHyphenateText esc str))
 
@@ -79,8 +80,8 @@ hyphenation opportunities on transitions from lower-case to upper-case letters, 
 Here, “identifiers” refers to text nodes found within `<code>` tags.
 -/
 public partial def softHyphenateIdentifiers (html : Html) : Html :=
-  html.visitM (m := Id) (tag := rwTag)
+  html.visitM (m := Id) (element := rwTag)
 where
   rwTag
-    | "code", attrs, content => pure (some (.tag "code" attrs (softHyphenateTextNodes content)))
+    | "code", attrs, content => pure (some (.element "code" attrs (softHyphenateTextNodes content)))
     | _, _, _ => pure none

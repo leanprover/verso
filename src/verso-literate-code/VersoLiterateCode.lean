@@ -148,7 +148,7 @@ partial def md2Html (md : MD4Lean.Document) (trackHeadings : Bool := false)
         let hId := toString slug
         let titleHtml := texts title
         hdgs := hdgs.push { level := n, title := titleHtml, htmlId := hId }
-        out := out ++ .tag s!"h{n + 1}" #[("id", hId)] titleHtml
+        out := out ++ .element s!"h{n + 1}" #[("id", hId)] titleHtml
       else
         out := out ++ block (.header n title)
     | b => out := out ++ block b
@@ -167,10 +167,10 @@ where
         </tbody>
       </table>
     }}
-  | .header n title => .tag s!"h{n + 1}" #[] <| texts title
+  | .header n title => .element s!"h{n + 1}" #[] <| texts title
   | .blockquote bs => {{<blockquote>{{blocks bs}}</blockquote>}}
   | .hr => {{<hr/>}}
-  | .html xs => .text false (String.join xs.toList)
+  | .html xs => .raw (String.join xs.toList)
   | .code _ _ _ ss => {{<pre><code>{{String.join ss.toList}}</code></pre>}}
 
   blocks : Array MD4Lean.Block → Html
@@ -196,7 +196,7 @@ where
   | .img src title alt => {{<img src={{attr src}} title={{attr title}} alt={{String.join <| Array.toList <| alt.filterMap fun | .normal s => some s | _ => none}}/>}}
   | .u xs => texts xs -- TODO
   | .wikiLink _target txt => texts txt -- TODO
-  | .entity x => .text false x
+  | .entity x => .raw x
   | .latexMath _x => .empty -- TODO
   | .latexMathDisplay _x => .empty -- TODO
 

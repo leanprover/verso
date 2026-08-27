@@ -44,21 +44,21 @@ info: Verso.Doc.Part.mk
 #guard_msgs in
   #eval code1.toPart
 /--
-info: Verso.Output.Html.tag
+info: Lean.Html.element
   "section"
   #[]
-  (Verso.Output.Html.seq
-    #[Verso.Output.Html.tag "h1" #[] (Verso.Output.Html.seq #[Verso.Output.Html.text true "More writing"]),
-      Verso.Output.Html.tag
+  (Lean.Html.seq
+    #[Lean.Html.element "h1" #[] (Lean.Html.seq #[Lean.Html.text "More writing"]),
+      Lean.Html.element
         "section"
         #[]
-        (Verso.Output.Html.seq
-          #[Verso.Output.Html.tag "h2" #[] (Verso.Output.Html.seq #[Verso.Output.Html.text true "Section 1"]),
-            Verso.Output.Html.tag "p" #[] (Verso.Output.Html.seq #[Verso.Output.Html.text true "Here's some code"]),
-            Verso.Output.Html.tag
+        (Lean.Html.seq
+          #[Lean.Html.element "h2" #[] (Lean.Html.seq #[Lean.Html.text "Section 1"]),
+            Lean.Html.element "p" #[] (Lean.Html.text "Here's some code"),
+            Lean.Html.element
               "pre"
               #[]
-              (Verso.Output.Html.text true "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
+              (Lean.Html.text "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
 -/
 #guard_msgs in
   #eval Doc.Genre.none.toHtml (m := Id) {} () () {} {} {} code1.toPart |>.run .empty |>.fst

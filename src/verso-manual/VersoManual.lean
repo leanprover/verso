@@ -424,7 +424,8 @@ def emitTeX (config : Config) (text : Part Manual) : EmitM Unit := do
   for (f, content) in extra.extraFiles do
     IO.FS.writeFile (dir / f) content
 
-open Verso.Output (Html)
+open Verso.Output
+open Lean (Html)
 
 instance [Monad m] : Inhabited (StateT (State Html) m Html.Toc) := ⟨pure default⟩
 
@@ -463,7 +464,7 @@ partial def toc [Monad m] [Html.ToHtml Manual m (Doc.Inline Manual)] [MonadLiftT
     let children ← sub.mapM (fun p => toc depth' opts (ctxt'.inPart p) state definitionIds linkTargets p)
     pure {
       title := titleHtml,
-      shortTitle := meta.bind (·.shortTitle) |>.map Html.ofString,
+      shortTitle := meta.bind (·.shortTitle) |>.map Html.text,
       path := ctxt'.path,
       id := v.toString,
       sectionNum := ctxt.sectionNumber.mapM _root_.id,
