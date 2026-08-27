@@ -48,7 +48,7 @@ block_extension Block.literateDocstringPart (level : Nat) where
     let contents := contents.extract 1
     pure {{
       <section>
-        {{.tag s!"h{level + 1}" #[] title}}
+        {{.element s!"h{level + 1}" #[] title}}
         {{← contents.mapM goB}}
       </section>
     }}

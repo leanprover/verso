@@ -284,7 +284,7 @@ by every genre at once.
 emitted search assets. It is spliced into every {lit}`src`/{lit}`href`, with a trailing
 slash added automatically if missing.
 -/
-public def searchAssetTags (searchDir : String := "-verso-search") : Verso.Output.Html :=
+public def searchAssetTags (searchDir : String := "-verso-search") : Html :=
   open Verso.Output.Html in
   let d := if searchDir.endsWith "/" then searchDir else searchDir ++ "/"
   -- Deferring the four scripts keeps them off the render-blocking path. `search-init.js` below is a

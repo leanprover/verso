@@ -8,6 +8,7 @@ import VersoBlog
 import DemoSite
 
 open Verso Genre Blog Site Syntax
+open Lean (Html)
 
 open Output Html Template Theme in
 def theme : Theme := { Theme.default with
