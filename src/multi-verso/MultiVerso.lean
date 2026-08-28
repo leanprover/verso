@@ -285,6 +285,12 @@ public instance : GetElem? RefDomain String (Array RefObject) fun dom name => na
   getElem dom name ok := dom.contents[name]'ok
   getElem? dom name := dom.contents[name]?
 
+/--
+Returns the canonical names used in {name}`domain`, in sorted order.
+-/
+public def RefDomain.canonicalNames (domain : RefDomain) : Array String :=
+  domain.contents.keysArray.qsortOrd
+
 private def RefDomain.structEq (x y : RefDomain) :=
   let ⟨t1, d1, c1⟩ := x
   let ⟨t2, d2, c2⟩ := y
