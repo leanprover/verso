@@ -97,13 +97,13 @@ public def bucket
       if hasSection entry then
         -- The entry's own metadata is kept; only its permalink comes from the release note.
         some { entry with
-          metadata := some { entry.metadata.getD {} with tag := some (metadata.tag : Manual.Tag) },
+          metadata := some { entry.metadata.getD {} with tag := some metadata.tag },
           content := entry.content.extract 1 }
       else none
     some <| Part.mk
       #[Inline.text title]
       title
-      (some { tag := some (tag : Manual.Tag) })
+      (some { tag := some tag })
       #[ Doc.Block.other
            (Block.release (toString version) { title, version })
            #[],
@@ -252,7 +252,7 @@ private def summaryTags (part : Part Manual) : Array (Option String) :=
   (bucket ⟨4, 33, 0⟩ false #[(testMetadata, entry)]).any fun part =>
     part.subParts.all fun s =>
       (s.metadata.map (·.draft)).getD false &&
-      (s.metadata.bind (·.tag)) == some ("entry" : Manual.Tag)
+      (s.metadata.bind (·.tag)) == some "entry"
 
 end Tests
 
