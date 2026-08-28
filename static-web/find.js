@@ -104,8 +104,7 @@ if (paramName) {
         // This workaround was introduced in August 2026 and should be removed when it
         // seems unlikely for old permalinks to be a significant problem.
         const nameSlug = sluggify(paramName);
-        const searchDomains =
-            domains && domains.length > 0 ? domains : Object.keys(xref);
+        const searchDomains = domains && domains.length > 0 ? domains : Object.keys(xref);
         for (const domain of searchDomains) {
             if (!xref.hasOwnProperty(domain)) continue;
             const contents = xref[domain]["contents"];
