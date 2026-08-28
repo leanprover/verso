@@ -180,6 +180,28 @@ metadata is untouched.
   pure (name, htmlId state id,
     (state.getDomainObject? sectionDomain "some-tag").isNone, resolved, failed)
 
+/-
+Two parts that claim the same name produce a single, readable duplicate error.
+-/
+/--
+info: Duplicate tag 'some tag': its slug 'some-tag' is already in use
+An error was encountered!
+---
+info: true
+-/
+#guard_msgs in
+#eval show IO _ from do
+  let (_, _, failed) ← runTraverse do
+    let first ← freshId
+    let md1 : PartMetadata := { tag := some "some tag", id := some first }
+    let part1 : Doc.Part Manual := .mk #[Doc.Inline.text "A"] "A" (some md1) #[] #[]
+    let _ ← tagPart part1 md1 (·.id) (·.xrefTag) (·.tag) savePartXref
+    let second ← freshId
+    let md2 : PartMetadata := { tag := some "some tag", id := some second }
+    let part2 : Doc.Part Manual := .mk #[Doc.Inline.text "B"] "B" (some md2) #[] #[]
+    let _ ← tagPart part2 md2 (·.id) (·.xrefTag) (·.tag) savePartXref
+  pure failed
+
 /-! Tests for suggesting alternatives to unresolved cross-references. -/
 
 /-- info: "" -/
@@ -196,5 +218,48 @@ At most five targets are suggested.
 /-- info: "\nDid you mean one of these?\n * 'tag1'\n * 'tag2'\n * 'tag3'\n * 'tag4'\n * 'tag5'" -/
 #guard_msgs in
 #eval suggestRefTargets #["tag6", "tag5", "tag4", "tag3", "tag2", "tag1"] "tag"
+
+/-! Tests for the unresolved-reference error message with {name}`unresolvedRefMessage`. -/
+
+/-
+A name that is absent from the domain gets suggestions of nearby names.
+-/
+/--
+info: "No destination found for tag 'some tg' in Verso.Genre.Manual.section\nDid you mean one of these?\n * 'some tag'"
+-/
+#guard_msgs in
+#eval show IO _ from do
+  let (_, state, _) ← runTraverse do
+    let id ← freshId
+    modify (·.saveDomainObject sectionDomain "some tag" id)
+  pure (unresolvedRefMessage state none "some tg")
+
+/-
+A name that is present in the domain failed to resolve for another reason, which the message
+states instead of suggesting the name to itself.
+-/
+/--
+info: "Ref some tag in Verso.Genre.Manual.section has 2 targets, can only link to one"
+-/
+#guard_msgs in
+#eval show IO _ from do
+  let (_, state, _) ← runTraverse do
+    let first ← freshId
+    let second ← freshId
+    modify (·.saveDomainObject sectionDomain "some tag" first
+      |>.saveDomainObject sectionDomain "some tag" second)
+  pure (unresolvedRefMessage state none "some tag")
+
+/-
+A name whose domain object has no targets at all, which happens when only data was saved for it.
+-/
+/--
+info: "No link target registered for some tag in Verso.Genre.Manual.section"
+-/
+#guard_msgs in
+#eval show IO _ from do
+  let (_, state, _) ← runTraverse do
+    modify (·.saveDomainObjectData sectionDomain "some tag" .null)
+  pure (unresolvedRefMessage state none "some tag")
 
 end Verso.Tests.Tags

@@ -96,13 +96,22 @@ def suggestRefTargets (candidates : Array String) (name : String) : String :=
   else suggestions.foldl (init := "\nDid you mean one of these?") (· ++ s!"\n * '{·}'")
 
 /--
-The error message for a cross-reference to {name}`name` that traversal could not resolve, with
-suggestions of nearby names from the domain's contents in {name}`st`.
+The error message for a cross-reference to {name}`name` that traversal could not resolve.
+
+When the name is absent from the domain, nearby names from the domain's contents in {name}`st`
+are suggested. When the name is present, resolution failed for another reason, such as the name
+having multiple targets. The resulting message preserves this.
 -/
 def unresolvedRefMessage (st : TraverseState) (domain : Option Name) (name : String) : String :=
   let domain := domain.getD sectionDomain
-  let candidates := st.domains[domain]?.map (·.canonicalNames) |>.getD #[]
-  s!"No destination found for tag '{name}' in {domain}{suggestRefTargets candidates name}"
+  if (st.getDomainObject? domain name).isSome then
+    match st.resolveDomainObject domain name with
+    | .error e => e
+    | .ok _ =>
+      s!"'{name}' in {domain} was not resolved during traversal; the document may need more traversal passes"
+  else
+    let candidates := st.domains[domain]?.map (·.canonicalNames) |>.getD #[]
+    s!"No destination found for tag '{name}' in {domain}{suggestRefTargets candidates name}"
 
 inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (remote : Option String) (resolvedDestination : Option Link := none) where
   data := ToJson.toJson (RefInfo.mk canonicalName domain remote resolvedDestination)

@@ -230,9 +230,10 @@ structure PartMetadata where
   /--
   This part's cross-referencing tag.
 
-  This field is set during traversal, which turns the initial value into a unique external tag.
+  This field is set during traversal, which derives a unique external tag from the part's
+  canonical name.
   -/
-  xrefTag : Option Tag := tag.map .provided
+  xrefTag : Option Tag := none
   /-- If this part ends up as the root of a file, use this name for it -/
   file : Option String := none
   /-- The internal unique ID, which is automatically assigned during traversal. -/
@@ -1447,7 +1448,8 @@ def tagPart
     -- Ensure uniqueness
     if let some id' := (← get).tags[t]? then
       if id != id' then
-        reportError s!"Duplicate tag '{t}'"
+        unless t matches Tag.provided _ do
+          reportError s!"Duplicate tag '{t}'"
     else
       modify fun st => {st with tags := st.tags.insert t id}
     let path := (← readThe TraverseContext).path

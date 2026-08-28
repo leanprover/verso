@@ -58,8 +58,20 @@ deriving BEq, Hashable, DecidableEq, Inhabited, Repr, ToJson, FromJson
 open Manual (Tag InternalId) in
 /-- Metadata on tutorials. -/
 structure Tutorial.PartMetadata where
-  /-- The main tag for the part, used for cross-references. -/
-  tag : Option Tag := none
+  /--
+  This part's canonical name.
+
+  The canonical name is used for stable cross references. It also serves as the basis
+  for the section's HTML ID.
+  -/
+  tag : Option String := none
+  /--
+  This part's cross-referencing tag.
+
+  This field is set during traversal, which derives a unique external tag from the part's
+  canonical name.
+  -/
+  xrefTag : Option Tag := none
   /-- Use this filename component in the URL. -/
   slug : String
   /-- The internal unique ID, which is automatically assigned during traversal. -/
@@ -203,7 +215,7 @@ instance : Traverse Tutorial TraverseM where
     «meta» := { «meta» with id := some id }
 
     -- Next, assign a tag, prioritizing user-chosen external IDs.
-    «meta» := { «meta» with tag := ← tagPart part «meta» (·.id) (·.tag) (fun _ => none) savePartXref }
+    «meta» := { «meta» with xrefTag := ← tagPart part «meta» (·.id) (·.xrefTag) (·.tag) savePartXref }
 
     -- Traverse the metadata's description
     «meta» := { «meta» with summary := ← withReader (TraversePart.inPart part) <| Genre.traverseInline Manual «meta».summary }
