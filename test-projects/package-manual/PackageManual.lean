@@ -155,8 +155,15 @@ instance : Zipper (List α) Dir (ListZipper α) where
 {include 1 PackageManual.DocFeatures}
 
 # Notes
+%%%
+tag := "margin-notes"
+%%%
 
 Use {lean}`margin` to create a marginal note.{margin}[Marginal notes should be used like footnotes.]
+
+Margin notes are numbered sequentially throughout a page, with matching numbers on the reference mark in the text and on the note itself.
+This page has enough notes that the later ones have two-digit numbers:
+two{margin}[Note two] three{margin}[Note three] four{margin}[Note four] five{margin}[Note five] six{margin}[Note six] seven{margin}[Note seven] eight{margin}[Note eight] nine{margin}[Note nine] ten{margin}[Note ten] eleven{margin}[Note eleven] twelve{margin}[Note twelve].
 
 # Citations
 

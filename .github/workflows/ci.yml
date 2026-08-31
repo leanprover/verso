@@ -286,6 +286,16 @@ jobs:
                     browser-tests/verso-html -v \
                     --site-dir "$(pwd)/_out/verso-html"
 
+            - name: Build the package-manual site for browser tests
+              run: |
+                  lake exe packagedocs --output _out/package-manual
+
+            - name: Run package-manual browser tests
+              run: |
+                  uv run --project browser-tests --extra test pytest \
+                    browser-tests/package-manual -v \
+                    --site-dir "$(pwd)/_out/package-manual/html-multi"
+
             - name: Upload docs to artifact storage
               if: github.ref != 'refs/heads/main'
               uses: actions/upload-artifact@v7
