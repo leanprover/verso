@@ -93,7 +93,10 @@ default ToC width these are the old 1400px and 1500px viewport breakpoints):
   background-color: var(--lean-accent-light-blue);
 }
 
-body {
+/* The counter must be established inside <main>, whose container declaration (see
+   Html/Style.lean) applies style containment: a counter established outside the
+   containment boundary cannot be incremented by the notes within it. */
+.content-wrapper {
   counter-reset: margin-note-counter;
 }
 .marginalia .note {
