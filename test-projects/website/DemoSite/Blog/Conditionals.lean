@@ -152,7 +152,7 @@ Here's an inductive type and a structure:
 ```lean demo
 inductive A where
   | a1 | a2
-  | a3 (n : Nat)
+  | a3 : Nat → A
   | a4 : (n : Nat) → n = 3 → A
 
 structure S where
@@ -189,7 +189,7 @@ def quoted (str : String) : m Syntax := do
   let s ← `(a b c #[x, $(quote str), z])
   pure s
 
-example : ¬(quoted (m := m) = fun x => pure .missing) := by
+example : ¬(quoted (m := m) = fun _ => pure .missing) := by
   unfold quoted
   intro h
   let g : String → m Syntax := fun str => do
