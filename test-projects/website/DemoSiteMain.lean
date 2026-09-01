@@ -78,6 +78,7 @@ literate_post litPost' from DemoSite.LiteratePage in "." as "Literate Trees (pos
 
 def demoSite : Site := site DemoSite.Front /
   static "static" ← "test-projects/website/static_files"
+  static "robots.txt" ← "test-projects/website/robots.txt"
   "about" DemoSite.About
   "PHOAS" litPage
   "mod-doc-lit" litPage'

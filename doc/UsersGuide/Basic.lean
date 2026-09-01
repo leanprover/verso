@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 import VersoManual
 import UsersGuide.Markup
 import UsersGuide.Websites
+import UsersGuide.RenderedHtml
 import UsersGuide.Manuals
 import UsersGuide.Elab
 import UsersGuide.Extensions
@@ -109,6 +110,8 @@ Mixing incompatible features results in an ordinary Lean type error.
 {include 0 UsersGuide.Output}
 
 {include 0 UsersGuide.Websites}
+
+{include 0 UsersGuide.RenderedHtml}
 
 {include 0 UsersGuide.Manuals}
 

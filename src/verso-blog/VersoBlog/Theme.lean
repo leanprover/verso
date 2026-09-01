@@ -10,6 +10,7 @@ public import VersoBlog.Template
 public section
 
 open Verso.Genre.Blog Template
+open Verso.Output.Html.Files
 open Verso Doc Output Html
 
 namespace Verso.Genre.Blog
@@ -70,11 +71,11 @@ structure Theme where
   /--
   CSS files to be referenced in `<head>` and added to generated code.
   -/
-  cssFiles : Array (String × String) := #[]
+  cssFiles : Array CssFile := #[]
   /--
   JS files to be referenced in `<head>` or at the end of `<body>` and added to generated code.
   -/
-  jsFiles : Array (String × String × Bool) := #[]
+  jsFiles : Array JsFile := #[]
 
 def Theme.override (path : Array String) (override : Template.Override) (theme : Theme) : Theme :=
   { theme with
@@ -82,12 +83,43 @@ def Theme.override (path : Array String) (override : Template.Override) (theme :
 
 namespace Theme
 
+open Template in
+/--
+Computes the files that a page's `<head>` needs. Stylesheets are in an appropriate cascade order and
+scripts are in the right load order.
+
+Verso's own stylesheets come first, so that a theme's stylesheets override them, and the components
+that a page rendered come last.
+-/
+def headAssets (theme : Theme) (state : TraverseState) (components : Component.State) :
+    HeadAssets where
+  css :=
+    hashNamedCss "style" state.stylesheets ++
+    state.cssFiles ++
+    theme.cssFiles ++
+    hashNamedCss "component" components.headerCss
+  js :=
+    sortByAfter (·.toStaticJsFile) <|
+    state.jsFiles ++
+    hashNamedJs "script" state.scripts ++
+    theme.jsFiles ++
+    hashNamedJs "component" components.headerJs
+
 def dirLinks : Site → TemplateM (Array Html)
   | .page _ _ subs =>
     subs.filterMapM fun
       | .page name _id txt .. | .blog name _id txt .. =>
         if txt.metadata.map (·.showInNav) |>.getD true then
           pure <| some {{<li><a href=s!"{name}/">{{txt.titleString}}</a></li>}}
+        else
+          pure none
+      | .mount name _source settings manifest? =>
+        if settings.showInNav then
+          let label :=
+            if let some manifest := manifest? then
+              Html.text false manifest.titleHtml
+            else Html.text true name
+          pure <| some {{<li><a href=s!"{name}/">{{label}}</a></li>}}
         else
           pure none
       | .static .. => pure none
@@ -269,10 +301,10 @@ def primary : Template := do
         <meta name="color-scheme" content="light dark"/>
         <!-- Stop favicon requests -->
         <link rel="icon" href="data:," />
-        <style>{{defaultBlogStyle}}</style>
-        <style>":root { --justify-important: left; }"</style>
         <title>{{← param (α := String) "title"}}</title>
         {{← builtinHeader}}
+        <style>{{defaultBlogStyle}}</style>
+        <style>":root { --justify-important: left; }"</style>
       </head>
       <body>
         <header>
@@ -295,11 +327,20 @@ def page : Template := do
     </article>
   }}
 
+/--
+Places the page's content and nothing else.
+
+Rendered HTML content holds page bodies, and a consuming site places the title itself, so a theme
+meant for export renders a page as its content alone.
+-/
+def contentOnly : Template := do
+  param (α := Html) "content"
+
 def post : Template := do
   let catAddr ← do
-    if let some p := (← param? "path") then
-      pure <| fun slug => p ++ "/" ++ slug
-    else pure <| fun slug => slug
+    if let some (p : String) := (← param? "path") then
+      pure <| fun slug => p ++ slug ++ "/"
+    else pure <| fun slug => slug ++ "/"
   pure {{
     <h1>{{← param "title"}}</h1>
     {{ match (← param? "metadata") with
@@ -334,13 +375,15 @@ def category : Template := do
 def archiveEntry : Template := do
   let post : BlogPost ← param "post"
   let summary ← param "summary"
-  let target ← if let some p := (← param? "path") then
-      pure <| p ++ "/" ++ (← post.postName')
-    else post.postName'
+  let target ← do
+    let name ← post.postName'
+    if let some (p : String) := (← param? "path") then
+      pure <| p ++ name ++ "/"
+    else pure <| name ++ "/"
   let catAddr ← do
-    if let some p := (← param? "path") then
-      pure <| fun slug => p ++ "/" ++ slug
-    else pure <| fun slug => slug
+    if let some (p : String) := (← param? "path") then
+      pure <| fun slug => p ++ slug ++ "/"
+    else pure <| fun slug => slug ++ "/"
 
   return #[{{
     <li>
@@ -382,3 +425,12 @@ def default : Theme where
   postTemplate := post
   categoryTemplate := category
   archiveEntryTemplate := archiveEntry
+
+/--
+A theme whose page template places the page's content only.
+
+A producer of rendered HTML content uses it, or a theme of its own that does the same, because a
+consumer places the page's title and the chrome around it.
+-/
+def contentOnly : Theme :=
+  { default with pageTemplate := Default.contentOnly }

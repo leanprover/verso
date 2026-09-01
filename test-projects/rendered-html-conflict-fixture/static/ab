@@ -1,0 +1,1 @@
+A static file whose name is a string prefix of the page path "abc" but not a segment prefix.

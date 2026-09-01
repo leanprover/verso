@@ -110,16 +110,16 @@ where
 /--
 Converts a string to a valid slug, mangling as appropriate.
 -/
-def asSlug (str : String) : String :=
-  let rec loop (iter : String.Legacy.Iterator) (acc : String) : String :=
-    if iter.atEnd then acc
-    else
-      let c := iter.curr
-      loop iter.next <|
-        if c ∈ Slug.validChars then acc.push c
-        else if c.isWhitespace then acc.push '-'
-        else acc ++ mangle c
-  loop (String.Legacy.iter str) ""
+def asSlug (str : String) : String := Id.run do
+  let mut iter := str.startPos
+  let mut out := ""
+  while h : iter ≠ str.endPos do
+    let c := iter.get h
+    if c ∈ Slug.validChars then out := out.push c
+    else if c.isWhitespace then out := out.push '-'
+    else out := out ++ mangle c
+    iter := iter.next h
+  return out
 
 /--
 A slug is a well-formed string.
@@ -137,12 +137,6 @@ instance : ToString Slug := ⟨Slug.toString⟩
 
 instance : ToJson Slug where
   toJson s := ToJson.toJson s.toString
-
-instance : FromJson Slug where
-  fromJson? v := private do
-    let s : String ← FromJson.fromJson? v
-    if asSlug s = s then pure ⟨s⟩
-    else throw s!"String {s} contains invalid characters"
 
 namespace Slug
 
@@ -162,6 +156,19 @@ instance : DecidableRel (@LE.le Slug _) := fun s1 s2 =>
 
 defmethod String.sluggify (str : String) : Slug :=
   ⟨asSlug str⟩
+
+/--
+Returns {lean}`some str` as a slug if it is already a valid slug, or {name}`none` otherwise.
+-/
+def isSlug? (str : String) : Option Slug :=
+  if wf str then some str.sluggify else none
+
+instance : FromJson Slug where
+  fromJson? v := do
+    let s : String ← FromJson.fromJson? v
+    match isSlug? s with
+    | some slug => pure slug
+    | none => throw s!"String {s} contains invalid characters"
 
 /--
 Appends two slugs by appending their underlying strings.

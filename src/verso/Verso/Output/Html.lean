@@ -226,6 +226,110 @@ public partial def visitM [Monad m]
     let elts' ← elts.mapM (visitM (text := text) (tag := tag) (seq := seq))
     pure <| (← seq elts').getD (.seq elts')
 
+/-- The attributes whose value is a single URL. -/
+public def urlAttributes : List String :=
+  ["href", "src", "data", "poster", "action", "formaction", "cite"]
+
+/--
+The attributes whose value is a list of image candidates, each a URL and an optional descriptor,
+separated by commas.
+-/
+public def srcsetAttributes : List String := ["srcset", "imagesrcset"]
+
+/-- The attributes whose value is a list of URLs separated by whitespace. -/
+public def urlListAttributes : List String := ["ping"]
+
+/--
+Applies `rewrite` to every URL in a list of image candidates, such as that in the `srcset` attribute.
+-/
+public def rewriteSrcset (rewrite : String → String) (value : String) : String := Id.run do
+  /-
+  A candidate is a URL followed by an optional descriptor, and candidates are separated by commas. A
+  URL may itself contain a comma, so a candidate's URL ends at whitespace or at a trailing comma
+  rather than at the first comma. Whitespace, commas, and descriptors are preserved as they stand.
+  -/
+  let mut out := ""
+  let mut pos := value.startPos
+  while h : pos ≠ value.endPos do
+    let c := pos.get h
+    if c.isWhitespace || c == ',' then
+      out := out.push c
+      pos := pos.next h
+    else
+      -- The URL runs to whitespace. The commas at its end separate it from the next candidate
+      -- rather than belonging to it, so they are the tail from the last other character onwards.
+      let urlStart := pos
+      let mut urlEnd := pos
+      while h : pos ≠ value.endPos do
+        let c := pos.get h
+        if c.isWhitespace then break
+        pos := pos.next h
+        if c != ',' then urlEnd := pos
+      out := out ++ rewrite (value.extract urlStart urlEnd) ++ value.extract urlEnd pos
+      if urlEnd == pos then
+        -- No comma ended the URL, so a descriptor may follow. It runs to the comma that ends the
+        -- candidate, and a comma inside parentheses is part of it.
+        let descStart := pos
+        let mut depth := 0
+        while h : pos ≠ value.endPos do
+          let c := pos.get h
+          if c == ',' && depth == 0 then break
+          if c == '(' then depth := depth + 1
+          else if c == ')' then depth := depth - 1
+          pos := pos.next h
+        out := out ++ value.extract descStart pos
+  return out
+
+/--
+Applies `rewrite` to every URL in a list of URLs separated by whitespace, such as that in the `ping`
+attribute.
+
+The whitespace between them is preserved.
+-/
+public def rewriteUrlList (rewrite : String → String) (value : String) : String := Id.run do
+  let mut out := ""
+  let mut pos := value.startPos
+  while h : pos ≠ value.endPos do
+    let c := pos.get h
+    if c.isWhitespace then
+      out := out.push c
+      pos := pos.next h
+    else
+      let urlStart := pos
+      while h : pos ≠ value.endPos do
+        if (pos.get h).isWhitespace then break
+        pos := pos.next h
+      out := out ++ rewrite (value.extract urlStart pos)
+  return out
+
+
+/--
+Applies `rewrite` to the value of every URL-valued attribute in the tree.
+
+The URL-valued attributes are those in `urlAttributes`, `srcsetAttributes`, and `urlListAttributes`.
+The last two hold lists, so each URL in them reaches `rewrite` on its own. A `<base>` element and an
+element carrying `data-verso-remote` keep their own attributes, because the first establishes what
+relative URLs mean and the second holds a URL that belongs to remote content.
+
+Every URL-valued attribute reaches `rewrite`, so each caller decides which URLs to leave alone.
+-/
+public def rewriteUrls (rewrite : String → String) (html : Html) : Html :=
+  html.visitM (m := Id) (tag := rwTag)
+where
+  rwAttr (attr : String × String) : String × String :=
+    if urlAttributes.contains attr.fst then { attr with snd := rewrite attr.snd }
+    else if srcsetAttributes.contains attr.fst then
+      { attr with snd := rewriteSrcset rewrite attr.snd }
+    else if urlListAttributes.contains attr.fst then
+      { attr with snd := rewriteUrlList rewrite attr.snd }
+    else attr
+  rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : Id (Option Html) := do
+    if tag == "base" then return none
+    -- Don't rewrite URLs that come from remote content. This attribute is inserted by the `ref`
+    -- role when referring to remote content.
+    if attrs.any (·.1 == "data-verso-remote") then return none
+    return some <| .tag tag (attrs.map rwAttr) content
+
 public section
 
 declare_syntax_cat tag_name
@@ -396,3 +500,17 @@ where
   breakline' tag := if breakLines && tag ∈ newlineAfter then newline (indent + 2) else ""
   attrsAsString xs := String.join <| xs.toList.map (fun ⟨k, v⟩ => s!" {k}=\"{escapeAttr v}\"")
   escapeAttr str := str |>.replace "&" "&amp;" |>.replace "\"" "&quot;"
+
+/--
+Places `js` into a script tag with attributes `attrs`.
+-/
+public def script (js : String) (attrs : Array (String × String) := #[]) := {{
+  <script {{attrs}}>{{Html.text false js}}</script>
+}}
+
+/--
+Places `css` into a style tag with attributes `attrs`.
+-/
+public def style (css : String) (attrs : Array (String × String) := #[]) := {{
+  <style {{attrs}}>{{Html.text false css}}</style>
+}}

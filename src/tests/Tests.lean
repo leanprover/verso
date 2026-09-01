@@ -38,6 +38,9 @@ import Tests.ParserRegression
 import Tests.Paths
 import Tests.PorterStemmer
 import Tests.Refs
+import Tests.RenderedHtml
+import Tests.RenderedHtmlExport
+import Tests.RenderedHtmlMount
 import Tests.SearchJs
 import Tests.ExtensionResolution
 import Tests.Serialization

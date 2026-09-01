@@ -1,0 +1,1 @@
+An example file that the fixture's pages link to.

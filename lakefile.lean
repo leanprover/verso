@@ -40,6 +40,11 @@ lean_lib VersoSearch where
   needs := #[staticWeb]
 
 @[default_target]
+lean_lib VersoRenderedHtml where
+  srcDir := "src/verso-rendered-html"
+  roots := #[`VersoRenderedHtml]
+
+@[default_target]
 lean_lib VersoBlog where
   srcDir := "src/verso-blog"
   roots := #[`VersoBlog]
@@ -213,6 +218,23 @@ lean_lib TutorialExample where
 lean_exe «tutorial-example» where
   srcDir := "test-projects/tutorial-test"
   root := `TutorialExampleMain
+  supportInterpreter := true
+
+-- A site that mounts directories of rendered HTML content and renders them with its own theme
+lean_lib MountSite where
+  srcDir := "test-projects/mount-site"
+  roots := #[`MountSite]
+
+@[default_target]
+lean_exe «mount-site» where
+  srcDir := "test-projects/mount-site"
+  root := `MountSiteMain
+  supportInterpreter := true
+
+@[default_target]
+lean_exe «tutorial-example-rendered-html» where
+  srcDir := "test-projects/tutorial-test"
+  root := `TutorialRenderedHtmlMain
   supportInterpreter := true
 
 private def leanOptionArgs (m : Module) : Array String := Id.run do

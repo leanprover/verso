@@ -397,9 +397,9 @@ def docstringStyle := r#"
   position: relative;
   border: solid 1px #98B2C0;
   border-radius: .5rem;
-  padding-top: var(--verso--box-padding);
-  margin-top: var(--verso--box-vertical-margin);
-  margin-bottom: var(--verso--box-vertical-margin);
+  padding-top: var(--verso--box-padding, 1rem);
+  margin-top: var(--verso--box-vertical-margin, 1.5rem);
+  margin-bottom: var(--verso--box-vertical-margin, 1.5rem);
 }
 
 .namedocs .text {
@@ -409,7 +409,7 @@ def docstringStyle := r#"
   display: flow-root;
   /* Add a padding. this is the same as the margin applied to the first and last child.
      The effect is that the padding looks the same size on all sides. */
-  padding: 0 var(--verso--box-padding);
+  padding: 0 var(--verso--box-padding, 1rem);
   border-top: 1px solid #98B2C0;
 }
 
@@ -420,7 +420,7 @@ def docstringStyle := r#"
 .namedocs .signature {
   font-family: var(--verso-code-font-family);
   margin-top: 0 !important;
-  margin-left: var(--verso--box-padding) !important;
+  margin-left: var(--verso--box-padding, 1rem) !important;
   margin-bottom: .75rem !important;
 }
 
@@ -481,10 +481,10 @@ def docstringStyle := r#"
 
 /* These margins work together with the padding on .text */
 .namedocs .text > :first-child {
-  margin-top: var(--verso--box-padding);
+  margin-top: var(--verso--box-padding, 1rem);
 }
 .namedocs .text > :last-child {
-  margin-bottom: var(--verso--box-padding);
+  margin-bottom: var(--verso--box-padding, 1rem);
 }
 
 .namedocs .methods td, .namedocs .fields td {

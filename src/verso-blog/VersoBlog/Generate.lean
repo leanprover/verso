@@ -38,6 +38,8 @@ structure Generate.Context where
   rewriteHtml : Option (TraverseContext → Html → BuildLogT IO Html) := none
   components : Components := {}
   theme : Theme
+  /-- What the directory mounted at the current path contributes to the page's `<head>`. -/
+  mounted : Template.MountedAssets := {}
   extraParams : Multi.Path → Template.Params := fun _ => {}
 
 def Generate.Context.templateContext (ctxt : Generate.Context) (params : Template.Params) : Template.Context :=
@@ -46,10 +48,8 @@ def Generate.Context.templateContext (ctxt : Generate.Context) (params : Templat
     config := ctxt.config,
     params := params ++ ctxt.extraParams path,
     path,
-    builtInStyles := ctxt.xref.stylesheets,
-    builtInScripts := ctxt.xref.scripts.insert Traverse.renderMathJs,
-    jsFiles := ctxt.theme.jsFiles.map (·.1) ++ ctxt.xref.jsFiles.map (·.1),
-    cssFiles := ctxt.theme.cssFiles.map (·.1) ++ ctxt.xref.cssFiles.map (·.1),
+    headAssets := ctxt.theme.headAssets ctxt.xref,
+    mounted := ctxt.mounted,
     components := ctxt.components
   }
 
@@ -108,24 +108,40 @@ def forPart [BlogGenre g] [GenreHtml g ComponentM]
   ]
 end Params
 
-def render (template : Template) (params : Params) : GenerateM Html := do
-  match template ((← read).templateContext params) (← getThe _) with
+/-- Renders a template, returning what it read while it rendered. -/
+def renderTraced (template : Template) (params : Params) : GenerateM (Html × RenderTrace) := do
+  match template ((← read).templateContext params) {} (← getThe _) with
   | .error err =>
     let message := match err with
     | .missingParam p => ↑ s!"Missing parameter: '{p}'"
     | .wrongParamType p t => ↑ s!"Parameter '{p}' doesn't have a {t} fallback"
     throw message
-  | .ok (v, st') =>
+  | .ok ((v, trace), st') =>
     set st'
-    pure v
+    pure (v, trace)
 
-def renderMany (templates : List Template) (params : Params) : GenerateM Html := do
+def render (template : Template) (params : Params) : GenerateM Html :=
+  (·.fst) <$> template.renderTraced params
+
+/--
+Renders a chain of templates, passing each one's output to the next as the `"content"` parameter,
+and returning what they read while they rendered.
+-/
+def renderManyTraced (templates : List Template) (params : Params) :
+    GenerateM (Html × RenderTrace) := do
     let mut params := params
     let mut output := Html.empty
+    let mut trace := {}
     for template in templates do
-      output ← template.render params
+      let (out, t) ← template.renderTraced params
+      output := out
+      trace := trace ++ t
       params := params.insert "content" ↑output
-    pure output
+    pure (output, trace)
+
+@[inherit_doc renderManyTraced]
+def renderMany (templates : List Template) (params : Params) : GenerateM Html :=
+  (·.fst) <$> renderManyTraced templates params
 
 end Template
 
@@ -153,24 +169,35 @@ open Generate
 
 open Template.Params (forPart)
 
-def dirPathToString (path : List String) (trailing : Bool := false) : String :=
-  if trailing then
-    "/".intercalate path ++ "/"
-  else
-    "/".intercalate path
-
-def writePage (theme : Theme) (params : Template.Params) (template : Template := theme.pageTemplate) : GenerateM Unit := do
+def writePage (theme : Theme) (params : Template.Params) (template : Template := theme.pageTemplate) :
+    GenerateM Template.RenderTrace := do
   ensureDir <| (← currentDir)
   let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (← currentPath) |>.getD ⟨template, id⟩
-  let output ← rewriteOutput <| ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| params
+  let (rendered, trace) ←
+    Template.renderManyTraced [baseTemplate, theme.primaryTemplate] (modParams params)
+  let output ← rewriteOutput rendered
   let header := (← read).header
   IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
     h.putStrLn header
     h.putStrLn output.asString
+  return trace
 
-def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array BlogPost) : GenerateM Unit := do
+/--
+How a walk over a site turns one page into output.
+
+The walk hands over the page's template parameters and the template that renders it. Writing a
+standalone HTML page is one emitter; collecting rendered HTML content is another.
+-/
+abbrev PageEmitter := Template.Params → Template → GenerateM Template.RenderTrace
+
+/-- The emitter that writes standalone HTML pages. -/
+def writePageEmitter (theme : Theme) : PageEmitter := fun params template =>
+  writePage theme params template
+
+def walkBlog (emit : PageEmitter) (theme : Theme) (id : Lean.Name) (txt : Part Page)
+    (posts : Array BlogPost) : GenerateM Unit := do
   -- path from site to here
-  let pathToBlog := dirPathToString (← currentPath).toList
+  let pathToBlog := (← currentPath).relativeLink
 
   for post in posts do
     if post.contents.metadata.map (·.draft) == some true && !(← showDrafts) then continue
@@ -181,7 +208,7 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
         | none => forPart post.contents
         | some md => (·.insert "metadata" ⟨.mk md, #[]⟩) <$> forPart post.contents
       let postParams := postParams.insert "path" ⟨.mk pathToBlog, #[]⟩
-      writePage theme postParams (template := theme.postTemplate)
+      let _ ← emit postParams theme.postTemplate
 
   let «meta» ←
     match (← read).xref.blogs.find? id with
@@ -204,7 +231,7 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
         </ul>
       }}
       let catParams := Template.Params.ofList [("title", cat.name), ("category", ⟨.mk cat, #[]⟩), ("posts", ⟨.mk postList, #[]⟩)]
-      writePage theme catParams (template := theme.categoryTemplate)
+      let _ ← emit catParams theme.categoryTemplate
 
   let postList := {{
     <ul class="post-list">
@@ -214,41 +241,90 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
   }}
   let path ← currentPath
   let allCats : Post.Categories := .mk <| meta.categories.toArray.map fun (c, _) =>
-    (dirPathToString (trailing := true) <| (path / c.slug).toList, c)
+    ((path / c.slug).relativeLink, c)
   let pageParams : Template.Params := (← forPart txt).insert "posts" ⟨.mk postList, #[]⟩ |>.insert "categories" ⟨.mk allCats, #[]⟩
-  writePage theme pageParams
+  let _ ← emit pageParams theme.pageTemplate
 where
   summarize (p : BlogPost) : GenerateM Html := do
     Html.seq <$> p.summary.mapM (GenerateM.toHtml Post)
 
 
-partial def Dir.generate (theme : Theme) (dir : Dir) : GenerateM Unit :=
+partial def Dir.walk (emit : PageEmitter) (theme : Theme) (dir : Dir) : GenerateM Unit :=
   inDir dir <|
   match dir with
   | .page _ _ txt subPages => do
     IO.println s!"Generating page '{← currentDir}'"
     -- TODO more configurable template context
-    writePage theme (← forPart txt)
+    let _ ← emit (← forPart txt) theme.pageTemplate
     for p in subPages do
-      p.generate theme
+      p.walk emit theme
   | .blog _ id txt posts => do
     IO.println s!"Generating blog section '{← currentDir}'"
-    writeBlog theme id txt posts
+    walkBlog emit theme id txt posts
+  | .mount name source settings manifest? => do
+    let mountPath ← currentPath
+    let some manifest := manifest?
+      | reportError <|
+          s!"The mount '{name}' at '{mountPath.link}' was not resolved. " ++
+          "Call `Site.resolveMounts` before building a generation context from a site."
+    let dest ← currentDir
+    removeTree dest
+    let staticFiles := Verso.RenderedHtml.staticDir source
+    if ← staticFiles.pathExists then
+      IO.println s!"Copying the mounted files of '{name}' to '{dest}'"
+      copyRecursively staticFiles dest
+    -- The substituted root is the mount path relative to the site root, with no leading slash, so
+    -- it resolves against the `<base href>` that `builtinHeader` emits.
+    let root := "/".intercalate mountPath.toList
+    let mounted : Template.MountedAssets := {
+      variableStyles := manifest.stylesheets.filterMap fun css =>
+        if css.role.placesAsVariables then some s!"{root}/{css.mountPath}" else none,
+      contentStyles := manifest.stylesheets.filterMap fun css =>
+        if css.role.placesAsVariables then none else some s!"{root}/{css.mountPath}",
+      scripts := manifest.scripts.map fun js => (s!"{root}/{js.mountPath}", js.defer)
+    }
+    let mut placed : Std.HashSet String := {}
+    let mut declared : Std.HashSet String := {}
+    for (pagePath, mountedPage) in manifest.pages do
+      for (fragmentName, _) in mountedPage.fragments do
+        declared := declared.insert fragmentName.toString
+      let trace ←
+        withReader (fun c => {c with ctxt.path := mountPath ++ pagePath, mounted}) <| do
+          IO.println s!"Generating mounted page '{← currentDir}'"
+          let mut params : Template.Params := .ofList [
+            ("title", ⟨.mk mountedPage.title, #[.mk (Html.text false mountedPage.titleHtml)]⟩)]
+          for (fragmentName, fragment) in mountedPage.fragments do
+            let text ← IO.FS.readFile (source / fragment.file)
+            let text := Verso.RenderedHtml.substitute fragment.rootToken root text
+            params := params.insert s!"fragments.{fragmentName}" ⟨.mk (Html.text false text), #[]⟩
+          emit params theme.pageTemplate
+      placed := placed.insertMany trace.params
+    for fragmentName in declared.toArray.qsort (· < ·) do
+      if placed.contains s!"fragments.{fragmentName}" then continue
+      if settings.droppedFragments.any (·.toString == fragmentName) then continue
+      reportWarning <|
+        s!"The mount '{name}' at '{mountPath.link}' declares the fragment '{fragmentName}', " ++
+        "which no template placed. List it among the mount's dropped fragments to leave it out " ++
+        "on purpose."
   | .static _ file => do
     IO.println s!"Copying from static '{file}' to '{(← currentDir)}'"
-    let dest ← currentDir
-    if ← dest.pathExists then
-      if ← dest.isDir then
-        IO.FS.removeDirAll dest
-      else
-        IO.FS.removeFile dest
-    copyRecursively file dest
+    replaceTree file (← currentDir)
 
-def Site.generate (theme : Theme) (site : Site) : GenerateM Unit := do
+def Site.walk (emit : PageEmitter) (theme : Theme) (site : Site) : GenerateM Unit := do
   match site with
   | .page _ txt subPages =>
-    writePage theme (← forPart txt)
+    let _ ← emit (← forPart txt) theme.pageTemplate
     for p in subPages do
-      p.generate theme
+      p.walk emit theme
   | .blog id txt posts =>
-    writeBlog theme id txt posts
+    walkBlog emit theme id txt posts
+
+def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array BlogPost) :
+    GenerateM Unit :=
+  walkBlog (writePageEmitter theme) theme id txt posts
+
+def Dir.generate (theme : Theme) (dir : Dir) : GenerateM Unit :=
+  dir.walk (writePageEmitter theme) theme
+
+def Site.generate (theme : Theme) (site : Site) : GenerateM Unit :=
+  site.walk (writePageEmitter theme) theme

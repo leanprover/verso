@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 module
 import VersoUtil.BinFiles
 meta import VersoUtil.BinFiles
+public import Verso.Output.Html.Wrappers
 
 open Verso.BinFiles
 
@@ -25,6 +26,9 @@ The minified KaTeX JS file's contents, to be placed parallel to the CSS and font
 public def katex.js : String :=
   include_str "../../../../../vendored-js/katex/katex.min.js"
 
+/-- The version of KaTeX that Verso vendors. -/
+public def katex.version : String := "0.16.22"
+
 /--
 The KaTeX font files. Keys are filenames of the form `katex/fonts/...`.
 -/
@@ -32,7 +36,13 @@ public def katexFonts : Array (String × ByteArray):=
   (include_bin_dir "../../../../../vendored-js/katex/fonts").map fun (name, contents) =>
     (name.dropPrefix "../../../../../vendored-js/" |>.copy, contents)
 
+private def mathJsTemplate := include_str "../../../../../static-web/math.js"
+
 /--
-A short script that renders all Verso math using KaTeX.
+A short script that renders Verso math using KaTeX within each element that matches `selector`.
+
+The script marks what it has rendered, so a page that carries it from several Verso releases renders
+each piece of math once.
 -/
-public def math.js := include_str "../../../../../static-web/math.js"
+public def mathJs (selector : String := "body") : String :=
+  mathJsTemplate.replace "\"%%VERSO_WRAPPERS%%\"" selector.quote

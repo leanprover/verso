@@ -8,6 +8,7 @@ module
 public import Verso.Doc.Concrete
 public import Verso.Doc.DocName
 public import VersoBlog.Site
+meta import MultiVerso.Slug
 
 public section
 
@@ -37,6 +38,15 @@ scoped syntax withPosition(str ident (colGt (dir_spec <|> blog_spec))?) : page_s
 /-- Include a static files directory -/
 scoped syntax "static" str " ← " str : page_spec
 scoped syntax "static" str " <- " str : page_spec
+
+/--
+Mount a directory of rendered HTML content.
+
+The optional settings are the fields of `MountSettings`: whether the mount appears in navigation
+entries, and the fragments that the site leaves out on purpose.
+-/
+scoped syntax "mount" str " ← " str (" with " term)? : page_spec
+scoped syntax "mount" str " <- " str (" with " term)? : page_spec
 
 /-- A directory of pages -/
 scoped syntax "/" withPosition((colEq page_spec)+) : dir_spec
@@ -84,3 +94,11 @@ macro_rules
     ``(Dir.static $name $d)
   | `(term| page static $name:str <- $d:str) =>
     ``(Dir.static $name $d)
+  | `(term| page mount $name:str ← $d:str) =>
+    ``(Dir.mount $name $d {} none)
+  | `(term| page mount $name:str <- $d:str) =>
+    ``(Dir.mount $name $d {} none)
+  | `(term| page mount $name:str ← $d:str with $settings) =>
+    ``(Dir.mount $name $d $settings none)
+  | `(term| page mount $name:str <- $d:str with $settings) =>
+    ``(Dir.mount $name $d $settings none)

@@ -41,6 +41,8 @@ They are typically produced using an embedded DSL that is available when the nam
 
 {docstring Html.visitM}
 
+{docstring Html.rewriteUrls}
+
 {docstring Html.format}
 
 {docstring Html.asString}
@@ -151,7 +153,7 @@ The element's text content is the TeX code, which is not processed while generat
 For example, `` $`\frac{1}{2}` `` is represented in HTML as `<code class="math inline">\frac{1}{2}</code>`.
 
 Math is typeset in the browser using the bundled KaTeX library.
-When a page has loaded, the script in {name}`Html.math.js` renders every element with these classes.
+When a page has loaded, the script produced by {name}`Html.mathJs` renders every element with these classes.
 Pages that contain mathematical notation should include this script together with KaTeX itself: its stylesheet ({name}`Html.katex.css`), its code ({name}`Html.katex.js`), and its fonts ({name}`Html.katexFonts`).
 The stylesheet refers to the fonts by relative paths, so the file layout described in their docstrings should be preserved.
 
@@ -161,4 +163,4 @@ The stylesheet refers to the fonts by relative paths, so the file layout describ
 
 {docstring Html.katexFonts}
 
-{docstring Html.math.js}
+{docstring Html.mathJs}
