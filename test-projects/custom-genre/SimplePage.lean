@@ -264,7 +264,7 @@ def render (doc : Part SimplePage) : IO UInt32 := do
 
     IO.println "Writing to index.html"
     IO.FS.withFile "index.html" .write fun h => do
-      h.putStrLn html.asString
+      h.putStrLn html.render
 
 end SimplePage
 

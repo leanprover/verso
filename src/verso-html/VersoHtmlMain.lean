@@ -95,7 +95,7 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
 
   IO.FS.createDirAll outFile
 
-  IO.FS.writeFile (outFile / "index.html") <| "<!DOCTYPE html>\n" ++ contents.asString
+  IO.FS.writeFile (outFile / "index.html") <| "<!DOCTYPE html>\n" ++ contents.render
 
 def emitDir (outDir : System.FilePath) (dir : Dir) : EmitM Unit := do
   let root := dir
@@ -141,7 +141,7 @@ def emitSearchResultsPage (outDir : System.FilePath) : IO Unit := do
     </html>
   }}
   IO.FS.createDirAll (outDir / "search")
-  IO.FS.writeFile (outDir / "search" / "index.html") <| "<!DOCTYPE html>\n" ++ pageHtml.asString
+  IO.FS.writeFile (outDir / "search" / "index.html") <| "<!DOCTYPE html>\n" ++ pageHtml.render
 
 def main (args : List String) : IO UInt32 := do
   let config ←

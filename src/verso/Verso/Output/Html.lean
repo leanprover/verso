@@ -76,49 +76,9 @@ public def labeledGroup
       contents
     ]
 
-open Verso.Output.Html (mustClose newlineAfter) in
-/--
-Converts HTML into a string that's suitable for sending to browsers, but is also readable.
--/
-public partial def asString (html : Html) (indent : Nat := 0) (breakLines := true) : String :=
-  match html with
-  | .raw str => str
-  | .text str => str.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;"
-  | .element "pre" attrs body =>
-    "<pre" ++ attrsAsString attrs ++ ">" ++
-    body.asString (indent := 0) (breakLines := false) ++
-    "</pre>" ++ breakline "pre"
-  | .element "code" attrs body =>
-    "<code" ++ attrsAsString attrs ++ ">" ++
-    body.asString (indent := 0) (breakLines := false) ++
-    "</code>" ++ breakline "code"
-  | .element name attrs (.seq #[]) =>
-    if name ∈ mustClose then
-      "<" ++ name ++ attrsAsString attrs ++ "></" ++ name ++ ">" ++ breakline name
-    else
-      "<" ++ name ++ attrsAsString attrs ++ ">" ++ breakline name
-  | .element name attrs (.seq #[subElem]) =>
-    "<" ++ name ++ attrsAsString attrs ++ ">" ++ breakline' name ++
-    subElem.asString (indent := indent + 2) (breakLines := breakLines) ++
-    s!"</{name}>" ++ breakline name
-  | .element name attrs body =>
-      "<" ++ name ++ attrsAsString attrs ++ ">" ++ breakline' name ++
-      body.asString (indent := indent + 2) (breakLines := breakLines) ++
-      s!"</{name}>" ++ breakline name
-  | .seq elts => String.join (elts.toList.map (·.asString (indent := indent) (breakLines := breakLines)))
-where
-  newline i := "\n" ++ String.ofList (List.replicate i ' ')
-  breakline tag := if breakLines && tag ∈ newlineAfter then newline indent else ""
-  breakline' tag := if breakLines && tag ∈ newlineAfter then newline (indent + 2) else ""
-  attrsAsString xs := String.join <| xs.toList.map (fun ⟨k, v⟩ => s!" {k}=\"{escapeAttr v}\"")
-  escapeAttr str := str |>.replace "&" "&amp;" |>.replace "\"" "&quot;"
-
-/-- The default `DOCTYPE` for HTML5. -/
-public abbrev doctype := "<!DOCTYPE html>"
-
 end Lean.Html
 
-/-! ## JSX-like syntax -/
+/-! ## Django/Handlebars-like syntax -/
 
 namespace Verso.Output.Html
 open Lean
@@ -230,4 +190,75 @@ elab_rules : term
     let h ← h.mapM fun (x : TSyntax `html) => withRef x <| elabHtml x
     return h.foldl (init := (.const ``Html.empty [])) (mkApp2 (.const ``Html.append []))
 
+/-- The default `DOCTYPE` for HTML5. -/
+public abbrev doctype := "<!DOCTYPE html>"
+
 end Verso.Output.Html
+
+/-! ## Deprecation aliases -/
+
+namespace Verso.Output
+
+-- Constants with same name and type are re-exported in the old namespace.
+export Lean (Html Html.seq Html.empty Html.append Html.setAttribute Html.setAttribute!
+  Html.labeledGroup)
+
+-- Constants whose name or type changed become deprecated protected abbrevs in the old namespace.
+namespace Html
+
+@[deprecated Lean.Html.ofString (since := "2026-09-02")]
+protected abbrev text : Bool → String → Html := Lean.Html.ofString
+
+@[deprecated Lean.Html.element (since := "2026-09-02")]
+protected abbrev tag : String → Array (String × String) → Html → Html := Lean.Html.element
+
+@[deprecated Lean.Html.text (since := "2026-09-02")]
+protected abbrev ofString : String → Html := Lean.Html.text
+
+@[deprecated Lean.Html.ofArray (since := "2026-09-02")]
+protected abbrev fromArray : Array Html → Html := Lean.Html.ofArray
+
+@[deprecated Lean.Html.ofList (since := "2026-09-02")]
+protected abbrev fromList : List Html → Html := Lean.Html.ofList
+
+@[deprecated Lean.Html.rewritePostM +typeChanged (since := "2026-09-02")]
+protected abbrev visitM [Monad m]
+    (text : (escape : Bool) → String → m (Option Html) := (fun _ _ => pure none))
+    (tag : (name : String) → (attrs : Array (String × String)) → (contents : Html) → m (Option Html) := fun _ _ _ => pure none)
+    (seq : Array Html → m (Option Html) := fun _ => pure none)
+    (html : Html) : m Html :=
+  html.rewritePostM fun h => match h with
+    | .text s => return (← text true s).getD h
+    | .raw s => return (← text false s).getD h
+    | .element t a c => return (← tag t a c).getD h
+    | .seq a => return (← seq a).getD h
+
+set_option linter.unusedVariables false in
+@[deprecated Lean.Html.render +typeChanged (since := "2026-09-02")]
+protected abbrev asString (html : Html) (indent : Nat := 0) (breakLines := true) : String :=
+  html.render
+
+end Verso.Output.Html
+
+-- Constants whose name or type changed, and which are commonly used with dot notation,
+-- also get a deprecated alias in the new namespace.
+namespace Lean.Html
+
+@[deprecated Lean.Html.rewritePostM +typeChanged (since := "2026-09-02")]
+public abbrev visitM [Monad m]
+    (text : (escape : Bool) → String → m (Option Html) := (fun _ _ => pure none))
+    (tag : (name : String) → (attrs : Array (String × String)) → (contents : Html) → m (Option Html) := fun _ _ _ => pure none)
+    (seq : Array Html → m (Option Html) := fun _ => pure none)
+    (html : Html) : m Html :=
+  html.rewritePostM fun h => match h with
+    | .text s => return (← text true s).getD h
+    | .raw s => return (← text false s).getD h
+    | .element t a c => return (← tag t a c).getD h
+    | .seq a => return (← seq a).getD h
+
+set_option linter.unusedVariables false in
+@[deprecated Lean.Html.render +typeChanged (since := "2026-09-02")]
+public abbrev asString (html : Html) (indent : Nat := 0) (breakLines := true) : String :=
+  html.render
+
+end Lean.Html

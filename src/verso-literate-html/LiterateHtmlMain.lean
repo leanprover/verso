@@ -362,7 +362,7 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod)
 
   IO.FS.createDirAll outFile
 
-  IO.FS.writeFile (outFile / "index.html") <| "<!DOCTYPE html>\n" ++ pageHtml.asString
+  IO.FS.writeFile (outFile / "index.html") <| "<!DOCTYPE html>\n" ++ pageHtml.render
 
 def emitDir (outDir : System.FilePath) (dir : Dir)
     (srcDirs : Lean.NameMap System.FilePath := {}) : EmitM Unit := do
@@ -399,7 +399,7 @@ partial def emitLandingPage (outDir : System.FilePath) (dir : Dir) (litConfig : 
       </body>
     </html>
   }}
-  IO.FS.writeFile (outDir / "index.html") <| "<!DOCTYPE html>\n" ++ pageContents.asString
+  IO.FS.writeFile (outDir / "index.html") <| "<!DOCTYPE html>\n" ++ pageContents.render
 where
   buildToc (dir : Dir) : Html :=
     if dir.children.isEmpty then .empty
@@ -449,7 +449,7 @@ def emitSearchResultsPage (outDir : System.FilePath) (litConfig : LiterateConfig
     </html>
   }}
   IO.FS.createDirAll (outDir / "search")
-  IO.FS.writeFile (outDir / "search" / "index.html") <| "<!DOCTYPE html>\n" ++ pageContents.asString
+  IO.FS.writeFile (outDir / "search" / "index.html") <| "<!DOCTYPE html>\n" ++ pageContents.render
 
 open Verso Output Doc Html in
 /--
@@ -479,7 +479,7 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
     | some siteTitle => s!"{modLabel} — {siteTitle}"
     | none => modLabel
   let pageHtml := page landingPageTitle siteRoot headContents mod.name root htmlId? body (pageToc := tocHtml) (litConfig := litConfig)
-  IO.FS.writeFile (outDir / "index.html") <| "<!DOCTYPE html>\n" ++ pageHtml.asString
+  IO.FS.writeFile (outDir / "index.html") <| "<!DOCTYPE html>\n" ++ pageHtml.render
   return hlState
 
 def main (args : List String) : IO UInt32 := do

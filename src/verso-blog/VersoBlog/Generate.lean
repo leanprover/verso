@@ -167,7 +167,7 @@ def writePage (theme : Theme) (params : Template.Params) (template : Template :=
   let header := (← read).header
   IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
     h.putStrLn header
-    h.putStrLn output.asString
+    h.putStrLn output.render
 
 def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array BlogPost) : GenerateM Unit := do
   -- path from site to here
