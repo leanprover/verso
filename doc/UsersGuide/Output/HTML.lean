@@ -40,9 +40,9 @@ In Verso, they are typically produced using an embedded DSL that is available wh
 
 {docstring Html.append}
 
-{docstring Html.visitM}
+{docstring Html.rewritePostM}
 
-{docstring Html.asString}
+{docstring Html.render}
 
 HTML documents are written in double curly braces, in a syntax very much like HTML itself.
 The differences are:
@@ -58,19 +58,12 @@ def mkList (xs : List Html) : Html :=
   {{ <ul> {{ xs.map ({{<li>{{·}}</li>}}) }} </ul>}}
 
 #eval mkList ["A", {{<emph>"B"</emph>}}, "C"]
-  |>.asString
+  |>.render
   |> IO.println
 ```
 
 ```leanOutput htmllist
-<ul>
-  <li>
-    A</li>
-  <li>
-    <emph>B</emph></li>
-  <li>
-    C</li>
-  </ul>
+<ul><li>A</li><li><emph>B</emph></li><li>C</li></ul>
 ```
 
 # Conventions
