@@ -113,7 +113,7 @@ public def Dedup.insert (table : Dedup α) (val : α) : Nat × Dedup α :=
 public def Dedup.get? (table : Dedup α) (id : Nat) : Option α := table.contentId[id]?
 
 public def Dedup.docJson (table : Dedup Html) : Json :=
-  table.contentId.fold (init := .mkObj []) fun out id html => out.setObjVal! (toString id) (.str html.asString)
+  table.contentId.fold (init := .mkObj []) fun out id html => out.setObjVal! (toString id) (.str html.render)
 
 public structure IdSupply where
   nextId : Nat := 0

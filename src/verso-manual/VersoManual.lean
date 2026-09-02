@@ -546,7 +546,7 @@ def emitXrefsJson (dir : System.FilePath) (state : TraverseState) : IO Unit := d
 def emitFindHtml (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseState) (xrefJson : String) (config : Config) : IO Unit := do
   emitXrefsJson dir state
   ensureDir (dir / "find")
-  IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (relativizeLinks <| xref toc xrefJson find.js state config).asString)
+  IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (relativizeLinks <| xref toc xrefJson find.js state config).render)
 
 open Output.Html in
 /--
@@ -581,7 +581,7 @@ def emitSearchResultsHtml
   ensureDir (dir / "search")
   IO.FS.writeFile
     (dir / "search" / "index.html")
-    (Html.doctype ++ (relativizeLinks <| searchResultsPage toc bookTitle state config).asString)
+    (Html.doctype ++ (relativizeLinks <| searchResultsPage toc bookTitle state config).render)
 
 
 section
@@ -789,7 +789,7 @@ where
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn <| Html.asString <| relativizeLinks <|
+      h.putStrLn <| Html.render <| relativizeLinks <|
         page toc ctxt.path text.titleString titleToShow pageContent state config.toConfig thisPageToc (showNavButtons := false)
 
 
@@ -910,7 +910,7 @@ where
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn <| Html.asString <| relativizeLinks <|
+      h.putStrLn <| Html.render <| relativizeLinks <|
         page bookContents ctxt.path part.titleString bookTitle pageContent state config.toConfig thisPageToc
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do

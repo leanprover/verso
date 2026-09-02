@@ -13,24 +13,24 @@ open Verso.Genre.Manual
 /-- info: "blahNotCode<code><a>foo&shy;Bar&shy;Baz</a></code>" -/
 #guard_msgs in
 open Verso.Output Html in
-#eval softHyphenateIdentifiers {{"blahNotCode"<code><a>"fooBarBaz"</a></code>}} |>.asString
+#eval softHyphenateIdentifiers {{"blahNotCode"<code><a>"fooBarBaz"</a></code>}} |>.render
 
-/-- info: "<code>abc.<wbr>def.<wbr>ghi.<wbr>jkl</code>" -/
+/-- info: "<code>abc.<wbr/>def.<wbr/>ghi.<wbr/>jkl</code>" -/
 #guard_msgs in
 open Verso.Output Html in
-#eval softHyphenateIdentifiers {{<code>"abc.def.ghi.jkl"</code>}} |>.asString
+#eval softHyphenateIdentifiers {{<code>"abc.def.ghi.jkl"</code>}} |>.render
 
-/-- info: "<code>ABC.<wbr>DEF</code>" -/
+/-- info: "<code>ABC.<wbr/>DEF</code>" -/
 #guard_msgs in
 open Verso.Output Html in
-#eval softHyphenateIdentifiers {{<code>"ABC.DEF"</code>}} |>.asString
+#eval softHyphenateIdentifiers {{<code>"ABC.DEF"</code>}} |>.render
 
-/-- info: "blahNotCode<code><a>fooBa.<wbr>rBaz.<wbr>ab&shy;CD</a></code>" -/
+/-- info: "blahNotCode<code><a>fooBa.<wbr/>rBaz.<wbr/>ab&shy;CD</a></code>" -/
 #guard_msgs in
 open Verso.Output Html in
-#eval softHyphenateIdentifiers {{"blahNotCode"<code><a>"fooBa.rBaz.abCD"</a></code>}} |>.asString
+#eval softHyphenateIdentifiers {{"blahNotCode"<code><a>"fooBa.rBaz.abCD"</a></code>}} |>.render
 
-/-- info: "blahNotCode<code><a>fooBa...<wbr>rBaz.<wbr>ab&shy;CD</a></code>" -/
+/-- info: "blahNotCode<code><a>fooBa...<wbr/>rBaz.<wbr/>ab&shy;CD</a></code>" -/
 #guard_msgs in
 open Verso.Output Html in
-#eval softHyphenateIdentifiers {{"blahNotCode"<code><a>"fooBa...rBaz.abCD"</a></code>}} |>.asString
+#eval softHyphenateIdentifiers {{"blahNotCode"<code><a>"fooBa...rBaz.abCD"</a></code>}} |>.render

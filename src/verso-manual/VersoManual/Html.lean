@@ -519,7 +519,8 @@ public def page
 
 
 public def relativize (path : Path) (html : Html) : Html :=
-  html.visitM (m := ReaderT Path Id) (element := rwTag) |>.run path
+  html.rewritePostM (m := ReaderT Path Id)
+    (fun | .element t a c => rwTag t a c | h => return h) |>.run path
 where
   urlAttr (name : String) : Bool := name ∈ ["href", "src", "data", "poster"]
   rwAttr (attr : String × String) : ReaderT Path Id (String × String) := do
@@ -530,9 +531,9 @@ where
       }
     else
       pure attr
-  rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT Path Id (Option Html) := do
-    if tag == "base" then return none
+  rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT Path Id Html := do
+    if tag == "base" then return .element tag attrs content
     -- Don't rewrite URLs that come from remote content. This attribute is inserted by the `ref`
     -- role when referring to remote content.
-    if attrs.any (·.1 == "data-verso-remote") then return none
-    return some <| .element tag (← attrs.mapM rwAttr) content
+    if attrs.any (·.1 == "data-verso-remote") then return .element tag attrs content
+    return .element tag (← attrs.mapM rwAttr) content

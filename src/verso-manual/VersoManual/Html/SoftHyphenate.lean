@@ -66,9 +66,10 @@ HTML, allowing browsers to break the word at that point. Line break opportunitie
 {lit}`Verso.<wbr>Genre.<wbr>Manual.<wbr>soft&shy;Hyphenate&shy;Identifiers`.
 -/
 public def softHyphenateTextNodes (html : Html) : Html :=
-  html.visitM (m := Id) (text := rwText true) (raw := rwText false)
-where
-  rwText esc str := pure (some (softHyphenateText esc str))
+  html.rewritePost fun
+    | .text s => softHyphenateText true s
+    | .raw s => softHyphenateText false s
+    | h => h
 
 /--
 Adds soft hyphenation opportunities ({lit}`<wbr>` or {lit}`&shy;`) to identifiers in HTML, allowing
@@ -80,8 +81,6 @@ hyphenation opportunities on transitions from lower-case to upper-case letters, 
 Here, “identifiers” refers to text nodes found within `<code>` tags.
 -/
 public partial def softHyphenateIdentifiers (html : Html) : Html :=
-  html.visitM (m := Id) (element := rwTag)
-where
-  rwTag
-    | "code", attrs, content => pure (some (.element "code" attrs (softHyphenateTextNodes content)))
-    | _, _, _ => pure none
+  html.rewritePost fun
+    | .element "code" attrs content => .element "code" attrs (softHyphenateTextNodes content)
+    | h => h
