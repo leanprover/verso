@@ -50,7 +50,7 @@ private def renderDoc : IO String := do
         |>.run remotes
         |>.run extension_impls%
         |>.run logger
-    rendered.set html.asString
+    rendered.set html.render
   unless exitCode == 0 do
     throw <| IO.userError "Manual docstring HTML rendering logged errors"
   rendered.get

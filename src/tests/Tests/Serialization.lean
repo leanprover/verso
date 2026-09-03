@@ -260,30 +260,31 @@ where
   html : Nat → Gen Html
     | 0 => text
     | n + 1 =>
-      oneOf #[text, tag n, seq n] (by simp)
-  text := .text <$> arbitrary <*> arbitrary
+      oneOf #[text, raw, tag n, seq n] (by simp)
+  text := .text <$> arbitrary
+  raw := .raw <$> arbitrary
   tag n := do
     let name ← arbitrary
     let attrs ← sizedArrayOf do return (← arbitrary, ← arbitrary)
     let content ← (html n).resize (· - 1)
-    return .tag name attrs content
+    return .element name attrs content
   seq n := .seq <$> sizedArrayOf (html n)
 
 partial instance : Shrinkable Html where
   shrink := shrinkHtml
 where
   shrinkHtml
-    | .text true s =>
-      .text false s :: (shrink s |>.map (.text true))
-    | .text false s =>
-      shrink s |>.map (.text true)
+    | .text s =>
+      .raw s :: (shrink s |>.map .text)
+    | .raw s =>
+      shrink s |>.map .text
     | .seq xs =>
       have : Shrinkable Html := ⟨shrinkHtml⟩
       shrink xs |>.map (.seq)
-    | .tag name attrs content =>
-      (shrink name |>.map (.tag · attrs content)) ++
-      (shrink attrs |>.map (.tag name · content)) ++
-      (shrinkHtml content |>.map (.tag name attrs ·))
+    | .element name attrs content =>
+      (shrink name |>.map (.element · attrs content)) ++
+      (shrink attrs |>.map (.element name · content)) ++
+      (shrinkHtml content |>.map (.element name attrs ·))
 end
 
 section
@@ -403,7 +404,7 @@ def testRefObject := testProp <| ∀ (obj : RefObject), roundTripOk obj
 def testRemoteInfo := testProp <| ∀ (info : RemoteInfo), roundTripOk info
 def testAllRemotes := testProp <| ∀ (remotes : AllRemotes), roundTripOk remotes
 def testTraverseState := testProp <| ∀ (st : Verso.Genre.Manual.TraverseState), roundTripOk st
-def testHtml := testProp <| ∀ (html : Verso.Output.Html), roundTripOk html
+def testHtml := testProp <| ∀ (html : Html), roundTripOk html
 def testDataFile := testProp <| ∀ (f : Verso.Genre.Manual.DataFile), roundTripOk f
 def testNumbering := testProp <| ∀ (n : Verso.Genre.Manual.Numbering), roundTripOk n
 def testXrefSource := testProp <| ∀ (src : XrefSource), isEqOk (XrefSource.fromJson? src.toJson) src

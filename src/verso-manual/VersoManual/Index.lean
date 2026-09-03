@@ -20,7 +20,7 @@ open Verso Genre Manual
 open Verso.Multi
 open Verso.Doc.Elab
 open Verso.ArgParse
-open Lean (ToJson FromJson quote)
+open Lean (ToJson FromJson quote Html)
 open Std (HashMap HashSet)
 
 namespace Verso.Genre.Manual.Index
@@ -324,7 +324,7 @@ instance : Hashable IndexCat where
     | .letter c => mixHash 7 (hash c.toNat)
 
 open Output.Html in
-def IndexCat.header : IndexCat → Output.Html
+def IndexCat.header : IndexCat → Html
   | .symbolic => "Symbols"
   | .digit => "0–9"
   | .letter c => c.toUpper.toString
@@ -447,7 +447,7 @@ def theIndex.descr : BlockDescr where
         let r := v.render
         let out ← r.mapM fun (cat, entries) => do
           let h := (← read).1.headerLevel + 1
-          let hdr := Output.Html.tag s!"h{h}" #[("id", s!"---index-hdr-{cat.id}")] (cat.header)
+          let hdr := Html.element s!"h{h}" #[("id", s!"---index-hdr-{cat.id}")] (cat.header)
           let entries' ← entries.mapM fun e => do
             return softHyphenateIdentifiers {{<li>{{← e.toHtml goI}}</li>}}
           return {{<div class="division">{{hdr ++ {{<ol>{{entries'}}</ol>}} }}</div>}}

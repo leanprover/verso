@@ -453,7 +453,8 @@ def emitTeX (config : Config) (text : Part Manual) : EmitM Unit := do
   for (f, content) in extra.extraFiles do
     IO.FS.writeFile (dir / f) content
 
-open Verso.Output (Html)
+open Verso.Output
+open Lean (Html)
 
 instance [Monad m] : Inhabited (StateT (State Html) m Html.Toc) := ⟨pure default⟩
 
@@ -492,7 +493,7 @@ partial def toc [Monad m] [Html.ToHtml Manual m (Doc.Inline Manual)] [MonadLiftT
     let children ← sub.mapM (fun p => toc depth' opts (ctxt'.inPart p) state definitionIds linkTargets p)
     pure {
       title := titleHtml,
-      shortTitle := meta.bind (·.shortTitle) |>.map Html.ofString,
+      shortTitle := meta.bind (·.shortTitle) |>.map Html.text,
       path := ctxt'.path,
       id := v.toString,
       sectionNum := ctxt.sectionNumber.mapM _root_.id,
@@ -574,7 +575,7 @@ def emitXrefsJson (dir : System.FilePath) (state : TraverseState) : IO Unit := d
 def emitFindHtml (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseState) (xrefJson : String) (config : Config) : IO Unit := do
   emitXrefsJson dir state
   ensureDir (dir / "find")
-  IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (relativizeLinks <| xref toc xrefJson find.js state config).asString)
+  IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (relativizeLinks <| xref toc xrefJson find.js state config).render)
 
 open Output.Html in
 /--
@@ -609,7 +610,7 @@ def emitSearchResultsHtml
   ensureDir (dir / "search")
   IO.FS.writeFile
     (dir / "search" / "index.html")
-    (Html.doctype ++ (relativizeLinks <| searchResultsPage toc bookTitle state config).asString)
+    (Html.doctype ++ (relativizeLinks <| searchResultsPage toc bookTitle state config).render)
 
 
 section
@@ -817,7 +818,7 @@ where
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn <| Html.asString <| relativizeLinks <|
+      h.putStrLn <| Html.render <| relativizeLinks <|
         page toc ctxt.path text.titleString titleToShow pageContent state config.toConfig thisPageToc (showNavButtons := false)
 
 
@@ -938,7 +939,7 @@ where
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn <| Html.asString <| relativizeLinks <|
+      h.putStrLn <| Html.render <| relativizeLinks <|
         page bookContents ctxt.path part.titleString bookTitle pageContent state config.toConfig thisPageToc
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do
