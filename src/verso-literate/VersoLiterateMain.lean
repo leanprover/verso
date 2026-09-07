@@ -144,7 +144,11 @@ def findHighestM [Monad m] (stx : Syntax) (fn : Syntax → Option α) : m (Array
 Finds the definition sites of each constant in an info tree, and replaces each docstring with a
 reference to the definition for later substitution.
 -/
-def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax := do
+partial def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax := do
+  -- `#guard_msgs` takes the messages it expects as a doc comment, which documents nothing: it must
+  -- not be attached to the declaration in the command that `#guard_msgs` wraps.
+  if stx.isOfKind ``Lean.guardMsgsCmd then
+    return stx.setArg 4 (← findDocstringDefs stx[4] t)
   -- Find the definition sites of all constants in this info tree
   let defSites := t.deepestNodes fun _ i _ =>
     match i with
