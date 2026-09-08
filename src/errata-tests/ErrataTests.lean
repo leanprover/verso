@@ -13,6 +13,7 @@ public import Errata
 public meta import Errata
 import all ErrataTests.Fixture
 import all ErrataTests.Fixture.Sub
+import all ErrataTests.Docstrings
 
 open Errata
 
@@ -75,6 +76,75 @@ def discoveryDeduplicates : Test := do
   -- `ErrataTests.Fixture.Sub` lies below both roots, so exactly the two fixture tests are found.
   let entries := (getAllTests% "verso" ErrataTests.Fixture ErrataTests.Fixture.Sub)
   assertEq 2 entries.size
+
+/-- The docstring of a test in the docstring fixture module, when it has one. -/
+private def fixtureDocstring (test : String) : Option String :=
+  (getAllTests% "verso" ErrataTests.Docstrings).find? (·.test == test) |>.bind (·.docstring?)
+
+/-- A Markdown docstring is captured as written. -/
+@[test]
+def markdownDocstringCaptured : Test := do
+  let some doc := fixtureDocstring "markdownDoc" | assertTrue false "docstring missing"
+  assertContains "with `code`, _emphasis_ and **strong** text." doc
+  assertContains "* item one\n* item two" doc
+
+/-- A Verso docstring is captured as Markdown: its roles become plain Markdown. -/
+@[test]
+def versoDocstringCaptured : Test := do
+  let some doc := fixtureDocstring "versoDoc" | assertTrue false "docstring missing"
+  assertContains "names `Nat.succ` and `x`, with *emphasis* and **strong** text." doc
+  assertNotContains "{name}" doc
+  assertNotContains "{lit}" doc
+  assertContains "* item one" doc
+  assertContains "* item two" doc
+
+/--
+A Verso role with its own Markdown renderer is rendered by it when the docstring is captured. The
+renderer runs in the capturing scope, so the name it shortens comes out fully qualified.
+-/
+@[test]
+def customRoleDocstringRendered : Test := do
+  let some doc := fixtureDocstring "customRoleDoc" | assertTrue false "docstring missing"
+  assertContains "Refers to `ErrataTests.Docstrings.docstringTarget`, whose name" doc
+
+/-- A test's docstring travels with its results. -/
+@[test]
+def docstringReachesResults : Test := do
+  let cfg ← mkContext
+  let results ← runEntry cfg <|
+    TestEntry.of "p" "M" "documented" { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ }
+      (pure () : Test) (docstring? := some "What it checks.")
+  assertTrue (results.all (·.description? == some "What it checks."))
+
+/--
+The human-readable report shows a failure's docstring, indented below its status line, and shows a
+pass's docstring only when every docstring is shown.
+-/
+@[test]
+def reportShowsDocstring : Test := do
+  let pass : Result :=
+    { package := "p", moduleName := "M", test := "t", status := .pass,
+      description? := some "Passing doc." }
+  let fail : Result :=
+    { package := "p", moduleName := "M", test := "u", status := .fail { message := "boom" },
+      description? := some "Failing doc.
+Second line." }
+  let silent ← captureOutput do discard <| humanReport .silent #[pass, fail]
+  assertContains "FAIL  p/M  u: boom\n    Failing doc.\n    Second line.\n" silent.stdout
+  assertNotContains "Passing doc." silent.stdout
+  let verbose ← captureOutput do discard <| humanReport .verbose #[pass]
+  assertNotContains "Passing doc." verbose.stdout
+  let all ← captureOutput do discard <| humanReport .superVerbose #[pass]
+  assertContains "ok    p/M  t" all.stdout
+  assertContains "\n    Passing doc.\n" all.stdout
+
+/-- The Markdown report includes a failure's docstring as Markdown. -/
+@[test]
+def markdownReportShowsDocstring : Test := do
+  let fail : Result :=
+    { package := "p", moduleName := "M", test := "u", status := .fail { message := "boom" },
+      description? := some "Checks `x` and **y**." }
+  assertContains "u: boom</summary>\n\nChecks `x` and **y**.\n\n" (markdownReport #[fail])
 
 /-- A property test. -/
 @[test]
