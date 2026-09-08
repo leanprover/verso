@@ -37,6 +37,10 @@ def named : Test := do
 @[test]
 def emptyBody : Test := pure ()
 
+/-- An `unsafe` test is discovered and run like any other. -/
+@[test]
+unsafe def unsafeTest : Bool := true
+
 /-- A test that expects a failure. -/
 @[test]
 def expectsFailure : Test :=
@@ -538,6 +542,24 @@ def verbosityLevels : Test := do
   assertEq false Verbosity.verbose.showsAllDocstrings
   assertEq true Verbosity.superVerbose.showsAllDocstrings
 
+/-- The workspaces in which the self-tests run Verso's driver as a dependency's. -/
+private def fixturesDir : System.FilePath := "src/errata-tests/fixtures"
+
+/--
+Runs Lake in a fixture workspace after deleting its manifest and packages directories.
+
+The fixture requires Verso by path and shares its clones of dependencies. If Verso were updated,
+then these could get out of date, leading to spurious rebuilds. Deleting them ensures that it always
+uses the copies in Verso.
+-/
+private def lakeInFixture (fixture : System.FilePath) (args : Array String) :
+    IO IO.Process.Output := do
+  let manifest := fixture / "lake-manifest.json"
+  if ← manifest.pathExists then IO.FS.removeFile manifest
+  let packages := fixture / ".lake" / "packages"
+  if ← packages.isDir then IO.FS.removeDirAll packages
+  IO.Process.output { cmd := "lake", args, cwd := fixture }
+
 /--
 The driver tells users how it should be invoked, and works that out from the workspace it runs in.
 
@@ -550,17 +572,30 @@ The driver's help should show the expected command.
 -/
 @[test]
 def driverHelpNamesInvocation : Test := do
-  let fixtures : System.FilePath := "src/errata-tests/fixtures"
-  let cases : List (String × System.FilePath × String) := [
-    ("verso", ".", "lake run Errata.run"),
-    ("configured", fixtures / "driver-configured", "lake test"),
-    ("shadowed", fixtures / "driver-shadowed", "lake run verso/Errata.run")]
-  for (name, dir, run) in cases do
+  let cases : List (String × Option System.FilePath × String) := [
+    ("verso", none, "lake run Errata.run"),
+    ("configured", some (fixturesDir / "driver-configured"), "lake test"),
+    ("shadowed", some (fixturesDir / "driver-shadowed"), "lake run verso/Errata.run")]
+  for (name, fixture?, run) in cases do
     result name do
-      let out ← IO.Process.output
-        { cmd := "lake", args := #["run", "verso/Errata.run", "--help"], cwd := dir }
+      let args := #["run", "verso/Errata.run", "--help"]
+      let out ← match fixture? with
+        | some fixture => lakeInFixture fixture args
+        | none => IO.Process.output { cmd := "lake", args }
       assertExitCode 0 out
       assertContains s!"\n  {run} " out.stdout
+
+/--
+The driver runs `unsafe` tests. The fixture's `App` library has only safe tests, and its `AppUnsafe`
+library has an unsafe one.
+-/
+@[test]
+def driverRunsUnsafeTests : Test := do
+  for (lib, passed) in [("App", 1), ("AppUnsafe", 2)] do
+    result lib do
+      let out ← lakeInFixture (fixturesDir / "driver-configured") #["test", "--", lib]
+      assertExitCode 0 out
+      assertContains s!"{passed} passed, 0 failed, 0 errors" out.stdout
 
 /-- The runner's help names the command that its options follow. -/
 @[test]

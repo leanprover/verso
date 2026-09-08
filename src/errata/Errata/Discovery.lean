@@ -96,7 +96,7 @@ meta def testNameBelow (moduleName declName : Name) : String :=
 named modules and every imported module below them, and expands to the array of {name}`TestEntry`
 values that run them. A module that lies below more than one of the named modules contributes its
 tests once. Each module must be imported, with {lit}`import all` for module-system modules, so its
-tests are reachable.
+tests are reachable. Unsafe tests are wrapped in {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
 -/
 syntax (name := getAllTests) "getAllTests%" str ident* : term
 
@@ -138,8 +138,9 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
         let docStx ← match test.docstring? with
           | some doc => `(some $(quote doc))
           | none => `((none : Option String))
+        let ref ← `(@$(mkCIdent test.name))
+        let value ← if (← getConstInfo test.name).isUnsafe then `(unsafe $ref) else pure ref
         entries := entries.push <| ←
           `(Errata.TestEntry.of $(quote package) $(quote moduleStr) $(quote testName)
-              $(← exprToSyntax (toExpr location)) (@$(mkCIdent test.name))
-              (docstring? := $docStx))
+              $(← exprToSyntax (toExpr location)) $value (docstring? := $docStx))
   elabTerm (← `(#[$entries,*])) expectedType?

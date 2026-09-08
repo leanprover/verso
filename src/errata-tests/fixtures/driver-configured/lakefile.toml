@@ -1,7 +1,18 @@
 # A package that uses Verso's Errata driver as its test driver.
 name = "app"
 testDriver = "verso/Errata.run"
+# Verso's clones of the git dependencies serve this workspace too, so that the modules built from
+# the shared Verso checkout see the same dependency paths from both.
+packagesDir = "../../../../.lake/packages"
 
 [[require]]
 name = "verso"
 path = "../../../.."
+
+# Tests that are all safe.
+[[lean_lib]]
+name = "App"
+
+# Tests among which one is `unsafe`.
+[[lean_lib]]
+name = "AppUnsafe"
