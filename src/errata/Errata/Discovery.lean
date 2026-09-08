@@ -57,7 +57,7 @@ meta initialize testExt : SimplePersistentEnvExtension TestDecl (Array TestDecl)
   registerSimplePersistentEnvExtension {
     name := `Errata.test
     addEntryFn := Array.push
-    addImportedFn := fun es => es.foldl Array.append #[]
+    addImportedFn := fun _ => #[]
   }
 
 /--
