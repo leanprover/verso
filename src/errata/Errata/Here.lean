@@ -24,9 +24,7 @@ syntax (name := hereStx) "here%" : term
 meta def elabHere : TermElab := fun _stx _expectedType? => do
   let ref ← getRef
   let fileMap ← getFileMap
-  let startPos := fileMap.toPosition (ref.getPos?.getD 0)
-  let endPos := fileMap.toPosition (ref.getTailPos?.getD (ref.getPos?.getD 0))
-  let file ← getFileName
-  elabTerm (← `(Errata.Location.mk $(quote file)
-      (Lean.Position.mk $(quote startPos.line) $(quote startPos.column))
-      (Lean.Position.mk $(quote endPos.line) $(quote endPos.column)))) none
+  let startPos := ref.getPos?.getD 0
+  let endPos := ref.getTailPos?.getD startPos
+  return mkApp3 (mkConst ``Errata.Location.mk) (toExpr (← getFileName))
+    (toExpr (fileMap.toPosition startPos)) (toExpr (fileMap.toPosition endPos))
