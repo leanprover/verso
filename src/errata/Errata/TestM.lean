@@ -99,27 +99,17 @@ def skip (reason : String) : TestM Unit := do
   ctx.log.modify (·.push (ctx.mkResult (.skip reason)))
 
 /--
-The number of bytes in the {lit}`UTF-8` sequence a lead byte introduces, or {name}`none` for a
-continuation or invalid byte.
--/
-private def utf8SeqLength (b : UInt8) : Option Nat :=
-  if b &&& 0x80 == 0 then some 1
-  else if b &&& 0xE0 == 0xC0 then some 2
-  else if b &&& 0xF0 == 0xE0 then some 3
-  else if b &&& 0xF8 == 0xF0 then some 4
-  else none
-
-/--
 Splits bytes into a prefix ready to decode and a tail that is the start of an unfinished
 {lit}`UTF-8` code point. Bytes that cannot be completed by any continuation go in the prefix, where
 decoding reports them as invalid.
 -/
 private def splitUtf8Tail (bytes : ByteArray) : ByteArray × ByteArray := Id.run do
+  -- A continuation byte sends the search one byte further back for its lead byte.
   for back in [1 : 4] do
     if back > bytes.size then break
     let i := bytes.size - back
-    if let some len := utf8SeqLength bytes[i]! then
-      if i + len > bytes.size then
+    if h : bytes[i]!.IsUTF8FirstByte then
+      if i + bytes[i]!.utf8ByteSize h > bytes.size then
         return (bytes.extract 0 i, bytes.extract i bytes.size)
       else
         break

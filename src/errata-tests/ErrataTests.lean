@@ -297,6 +297,19 @@ def captureJoinsSplitWrites : Test := do
     out.write (bytes.extract 1 bytes.size)
   assertEq "é" captured.stdout
 
+/--
+A write may end after a continuation byte of a wider code point. Its lead byte should stay behind
+with it.
+-/
+@[test]
+def captureJoinsSplitWideWrites : Test := do
+  let bytes := "a😀".toUTF8
+  let captured ← captureOutput do
+    let out ← IO.getStdout
+    out.write (bytes.extract 0 4)
+    out.write (bytes.extract 4 bytes.size)
+  assertEq "a😀" captured.stdout
+
 /-- Bytes whose code point is never completed are an error, not silently dropped. -/
 @[test]
 def captureRejectsDanglingBytes : Test := do
