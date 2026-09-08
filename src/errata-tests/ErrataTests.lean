@@ -597,6 +597,27 @@ def driverRunsUnsafeTests : Test := do
       assertExitCode 0 out
       assertContains s!"{passed} passed, 0 failed, 0 errors" out.stdout
 
+/--
+A module below a library's root that isn't imported transitively by any root causes a warning
+because its tests are never discovered. The `--wfail` flag makes that report into an error. The
+fixture's `AppStray` library has one such module.
+-/
+@[test]
+def driverReportsUnreachableModules : Test := do
+  let fixture := fixturesDir / "driver-configured"
+  let notice := "modules are not reachable from their library's roots"
+  result "A warning is emitted" do
+    let out ← lakeInFixture fixture #["test", "--", "AppStray"]
+    assertExitCode 0 out
+    assertContains s!"warning: these {notice}" out.stderr
+    assertContains "AppStray: AppStray.Orphan" out.stderr
+    assertContains "1 passed, 0 failed, 0 errors" out.stdout
+  result "The --wfail flag turns the warning into an error" do
+    let out ← lakeInFixture fixture #["test", "--", "AppStray", "--test-options", "--wfail"]
+    assertExitCode 1 out
+    assertContains s!"error: these {notice}" out.stderr
+    assertNotContains "passed" out.stdout
+
 /-- The runner's help names the command that its options follow. -/
 @[test]
 def runnerHelpNamesInvocation : Test := do

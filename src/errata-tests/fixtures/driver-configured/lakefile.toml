@@ -16,3 +16,7 @@ name = "App"
 # Tests among which one is `unsafe`.
 [[lean_lib]]
 name = "AppUnsafe"
+
+# A root module with a test, beside a module that nothing reaches.
+[[lean_lib]]
+name = "AppStray"
