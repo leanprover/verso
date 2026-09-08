@@ -73,10 +73,15 @@ def flag (name : String) : TestM Bool :=
     | none => false
 
 /-- Builds a result for the current scope with the given status and duration. -/
-def Context.mkResult (ctx : Context) (status : Status) (durationMs : Nat := 0) : Result := {
-  package := ctx.package, moduleName := ctx.moduleName, test := ctx.test,
-  resultPath := ctx.resultPath, status, durationMs, description? := ctx.description?
-}
+private def Context.mkResult (ctx : Context) (status : Status) (durationMs : Nat := 0) : Result where
+  package := ctx.package
+  moduleName := ctx.moduleName
+  test := ctx.test
+  resultPath := ctx.resultPath
+  status
+  durationMs
+  description? := ctx.description?
+
 
 /--
 The result a captured run contributes beyond any nested results it recorded.
