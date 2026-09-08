@@ -82,7 +82,6 @@ def Context.mkResult (ctx : Context) (status : Status) (durationMs : Nat := 0) :
   durationMs
   description? := ctx.description?
 
-
 /--
 The result a captured run contributes beyond any nested results it recorded.
 
