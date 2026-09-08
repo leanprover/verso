@@ -12,21 +12,18 @@ const STATUS_COLORS = {
     passed: "#2e7d32",
     failed: "#c62828",
     error: "#e65100",
-    skipped: "#6b6b6b",
 };
 
 const STATUS_SYMBOLS = {
     passed: "✓",
     failed: "✗",
     error: "⚠",
-    skipped: "○",
 };
 
 const STATUS_LABELS = {
     passed: "Passed",
     failed: "FAILED",
     error: "ERROR",
-    skipped: "Skipped",
 };
 
 const preStyle = {

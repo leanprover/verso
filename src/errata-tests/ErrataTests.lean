@@ -1170,12 +1170,6 @@ def runOneFails : Test := do
   assertBEq "failed" o.status
   assertBEq (some "boom") o.message?
 
-/-- `runValue` reports a skipped value as skipped. -/
-@[test]
-def runOneSkips : Test := do
-  let o ← runValue default (TestResult.skip "later")
-  assertBEq "skipped" o.status
-
 /-- A failing run surfaces its captured output in the outcome. -/
 @[test]
 def runOneCapturesOutput : Test := do

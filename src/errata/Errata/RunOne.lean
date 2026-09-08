@@ -32,14 +32,14 @@ def OutputChunk.ofOutput : Output → OutputChunk
 
 /--
 The outcome of running a single test, in a form the InfoView widget renders. The status is one of
-{lit}`"passed"`, {lit}`"failed"`, {lit}`"error"`, or {lit}`"skipped"`.
+{lit}`"passed"`, {lit}`"failed"`, or {lit}`"error"`.
 -/
 structure RunOutcome where
-  /-- The overall verdict: {lit}`"passed"`, {lit}`"failed"`, {lit}`"error"`, or {lit}`"skipped"`. -/
+  /-- The overall verdict: {lit}`"passed"`, {lit}`"failed"`, or {lit}`"error"`. -/
   status : String
   /-- How long the run took, in milliseconds. -/
   durationMs : Nat
-  /-- The failure or skip message, when the test did not pass. -/
+  /-- The failure or error message, when the test did not pass. -/
   message? : Option String := none
   /-- Supporting detail for a failure, such as a diff or counterexample. -/
   detail? : Option String := none
@@ -54,14 +54,12 @@ private def statusName : Status → String
   | .pass => "passed"
   | .fail _ => "failed"
   | .error _ => "error"
-  | .skip _ => "skipped"
 
 /-- The message a status carries, when it did not pass. -/
 private def statusMessage : Status → Option String
   | .pass => none
   | .fail f => some f.message
   | .error m => some m
-  | .skip r => some r
 
 /-- Appends one output fragment, merging it into the previous chunk when it is from the same stream. -/
 private def pushFragment (chunks : Array OutputChunk) (o : Output) : Array OutputChunk :=
@@ -74,15 +72,14 @@ private def pushFragment (chunks : Array OutputChunk) (o : Output) : Array Outpu
 
 /--
 Condenses the results of one test run into a single outcome. The verdict is the most severe status
-present (error over failed over skipped over passed), the message and detail come from the first
+present (error over failed over passed), the message and detail come from the first
 result with that status, and the output is every result's captured fragments in order, each tagged by
 its stream.
 -/
 def summarizeResults (results : Array Result) : RunOutcome := Id.run do
   let rank : Status → Nat
-    | .error _ => 3
-    | .fail _ => 2
-    | .skip _ => 1
+    | .error _ => 2
+    | .fail _ => 1
     | .pass => 0
   let worst := results.foldl (fun acc r => if rank r.status > rank acc then r.status else acc) .pass
   let duration := results.foldl (fun acc r => acc + r.durationMs) 0
