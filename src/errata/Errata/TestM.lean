@@ -73,7 +73,7 @@ def flag (name : String) : TestM Bool :=
     | none => false
 
 /-- Builds a result for the current scope with the given status and duration. -/
-private def Context.mkResult (ctx : Context) (status : Status) (durationMs : Nat := 0) : Result where
+def Context.mkResult (ctx : Context) (status : Status) (durationMs : Nat := 0) : Result where
   package := ctx.package
   moduleName := ctx.moduleName
   test := ctx.test
