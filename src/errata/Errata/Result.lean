@@ -56,7 +56,7 @@ structure Location where
   startPos : Lean.Position
   /-- The end of the span. -/
   endPos : Lean.Position
-deriving Repr, Inhabited, BEq, DecidableEq
+deriving Repr, Inhabited, BEq, DecidableEq, Lean.ToExpr
 
 /-- A test failure, carrying the information needed to explain it. -/
 structure TestFailure where

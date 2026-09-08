@@ -5,7 +5,7 @@ Author: David Thrane Christiansen
 -/
 module
 
-public import Errata.Result
+public meta import Errata.Result
 public meta import Lean
 
 open Lean Elab Term
@@ -26,5 +26,9 @@ meta def elabHere : TermElab := fun _stx _expectedType? => do
   let fileMap ← getFileMap
   let startPos := ref.getPos?.getD 0
   let endPos := ref.getTailPos?.getD startPos
-  return mkApp3 (mkConst ``Errata.Location.mk) (toExpr (← getFileName))
-    (toExpr (fileMap.toPosition startPos)) (toExpr (fileMap.toPosition endPos))
+  let loc : Errata.Location := {
+    file := ← getFileName,
+    startPos := fileMap.toPosition startPos,
+    endPos := fileMap.toPosition endPos
+  }
+  return toExpr loc

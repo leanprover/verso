@@ -129,16 +129,17 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
         let userName := privateToUserName test.name
         let testName := testNameBelow moduleName userName
         let range ← findDeclarationRanges? test.name
-        let pos := (range.map (·.range.pos)).getD ⟨0, 0⟩
-        let endPos := (range.map (·.range.endPos)).getD ⟨0, 0⟩
+        let location : Location := {
+          file := test.file
+          startPos := (range.map (·.range.pos)).getD ⟨0, 0⟩
+          endPos := (range.map (·.range.endPos)).getD ⟨0, 0⟩
+        }
         -- The docstring captured when the attribute was applied, so the report and widget can show it.
         let docStx ← match test.docstring? with
           | some doc => `(some $(quote doc))
           | none => `((none : Option String))
         entries := entries.push <| ←
           `(Errata.TestEntry.of $(quote package) $(quote moduleStr) $(quote testName)
-              (Errata.Location.mk $(quote test.file)
-                (Lean.Position.mk $(quote pos.line) $(quote pos.column))
-                (Lean.Position.mk $(quote endPos.line) $(quote endPos.column)))
-              (@$(mkCIdent test.name)) (docstring? := $docStx))
+              $(← exprToSyntax (toExpr location)) (@$(mkCIdent test.name))
+              (docstring? := $docStx))
   elabTerm (← `(#[$entries,*])) expectedType?
