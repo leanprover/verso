@@ -178,33 +178,58 @@ private def byModule (results : Array Result) : Array (String × Array Result) :
     groups := groups.alter s fun cur => some ((cur.getD #[]).push r)
   return order.map fun s => (s, groups.getD s #[])
 
-/-- Renders the results as JUnit XML, grouping by the module path. -/
-def junitReport (results : Array Result) : String := Id.run do
-  let mut out := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n"
-  -- Every case in a group shares a package and a module, since the group is keyed by both.
-  for (_, cases) in byModule results do
+/-- Renders attributes, with their values escaped, for inclusion in an opening tag. -/
+private def xmlAttrs (attrs : List (String × String)) : String :=
+  String.join <| attrs.map fun (name, value) => s!" {name}=\"{xmlEscape value}\""
+
+/-- An element whose content is text, on one line at the given indentation. -/
+private def xmlText (indent tag : String) (attrs : List (String × String)) (text : String := "") :
+    String :=
+  s!"{indent}<{tag}{xmlAttrs attrs}>{xmlEscape text}</{tag}>"
+
+/--
+An element whose content is other elements, each already rendered on its own line at a deeper
+indentation. An element with no content opens and closes on one line.
+-/
+private def xmlElements (indent tag : String) (attrs : List (String × String))
+    (children : Array String) : String :=
+  if children.isEmpty then s!"{indent}<{tag}{xmlAttrs attrs}></{tag}>"
+  else s!"{indent}<{tag}{xmlAttrs attrs}>\n{"\n".intercalate children.toList}\n{indent}</{tag}>"
+
+/--
+A JUnit test case: the verdict element for a failure or error, then the captured output of each
+stream that has any.
+-/
+private def junitCase (indent suite : String) (r : Result) : String :=
+  let inner := indent ++ "  "
+  let verdict : Array String :=
+    match r.status with
+    | .pass => #[]
+    | .fail f =>
+      let loc := match f.location? with | some l => locationText l ++ ": " | none => ""
+      #[xmlText inner "failure" [("message", loc ++ f.message)] (f.detail?.getD "")]
+    | .error m => #[xmlText inner "error" [("message", m)]]
+  let stream (tag text : String) : Array String :=
+    if text.isEmpty then #[] else #[xmlText inner tag [] text]
+  let time := toString (Float.ofNat r.durationMs / 1000.0)
+  xmlElements indent "testcase" [("name", caseOf r), ("classname", suite), ("time", time)]
+    (verdict ++ stream "system-out" r.output.stdout ++ stream "system-err" r.output.stderr)
+
+/--
+Renders the results as JUnit XML, grouping by the module path. A test case carries its captured
+output in the {lit}`system-out` and {lit}`system-err` elements.
+-/
+def junitReport (results : Array Result) : String :=
+  let suites := byModule results |>.map fun (_, cases) =>
+    -- Every case in a group shares a package and a module, since the group is keyed by both.
     let pkg := (cases[0]?.map (·.package)).getD ""
     let suite := (cases[0]?.map (·.moduleName)).getD ""
-    let failures := countWhere cases (fun s => s matches .fail _)
-    let errors := countWhere cases (fun s => s matches .error _)
-    out := out ++ s!"  <testsuite name=\"{xmlEscape suite}\" package=\"{xmlEscape pkg}\" \
-      tests=\"{cases.size}\" failures=\"{failures}\" errors=\"{errors}\">\n"
-    for r in cases do
-      let time := toString (Float.ofNat r.durationMs / 1000.0)
-      let opening := s!"    <testcase name=\"{xmlEscape (caseOf r)}\" \
-        classname=\"{xmlEscape suite}\" time=\"{time}\">"
-      match r.status with
-      | .pass =>
-        out := out ++ opening ++ "</testcase>\n"
-      | .fail f =>
-        let loc := match f.location? with | some l => locationText l ++ ": " | none => ""
-        out := out ++ opening ++ s!"\n      <failure message=\"{xmlEscape (loc ++ f.message)}\">\
-          {xmlEscape (f.detail?.getD "")}</failure>\n    </testcase>\n"
-      | .error m =>
-        out := out ++ opening ++ s!"\n      <error message=\"{xmlEscape m}\"></error>\n    </testcase>\n"
-    out := out ++ "  </testsuite>\n"
-  out := out ++ "</testsuites>\n"
-  return out
+    xmlElements "  " "testsuite"
+      [("name", suite), ("package", pkg), ("tests", toString cases.size),
+        ("failures", toString (countWhere cases (· matches .fail _))),
+        ("errors", toString (countWhere cases (· matches .error _)))]
+      (cases.map (junitCase "    " suite))
+  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ++ xmlElements "" "testsuites" [] suites ++ "\n"
 
 private def statusFields : Status → List (String × Json)
   | .pass => [("status", Json.str "pass")]

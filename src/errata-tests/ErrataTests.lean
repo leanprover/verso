@@ -689,6 +689,24 @@ def junitReplacesForbiddenChars : Test := do
   assertTrue (!xml.contains (Char.ofNat 0xFFFF) && !xml.contains (Char.ofNat 0xFFFE))
   assertTrue (!xml.contains (Char.ofNat 0x1))
 
+/-- The JUnit report carries a failing test's captured output, one element per stream. -/
+@[test]
+def junitCarriesOutput : Test := do
+  let output : OutputLog := { log := #[.stdout "out 1\n", .stderr "err <1>\n", .stdout "out 2\n"] }
+  let r : Result := { package := "p", moduleName := "M", test := "t",
+                      status := .fail { message := "boom" }, output }
+  let xml := junitReport #[r]
+  assertContains "<system-out>out 1\nout 2\n</system-out>" xml
+  assertContains "<system-err>err &lt;1&gt;\n</system-err>" xml
+
+/-- The JUnit report omits the output elements for a test that produced no output. -/
+@[test]
+def junitOmitsEmptyOutput : Test := do
+  let r : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
+  let xml := junitReport #[r]
+  assertNotContains "system-out" xml
+  assertNotContains "system-err" xml
+
 /-- A test's results are truncated after the cap at quiet verbosity, with a summary, but not at verbose. -/
 @[test]
 def reportTruncates : Test := do
