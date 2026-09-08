@@ -55,11 +55,12 @@ structure Context where
   /-- The option names read during the run, shared across all tests, for reporting unused options. -/
   usedOptions : IO.Ref (HashSet String)
   /--
-  Receives each captured output fragment as it is written, in order. A live runner sets it to
-  stream output as the test produces it, and it is {lean}`none` when no runner is listening.
+  Receives each captured output fragment as it is written, in order. A runner that streams a test's
+  output as the test produces it, such as one serving an editor widget, needs this. The batch runner
+  leaves it {lean}`none`.
 
-  It runs with the streams that were in place before the test's output was redirected, so it may
-  print in case of internal errors.
+  It runs with the streams that were in place before the test's output was redirected, so it can
+  reach the runner's own streams from inside the capture.
   -/
   writeOutput : Option (Output → IO Unit) := none
   /--
