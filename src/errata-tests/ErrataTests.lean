@@ -665,7 +665,7 @@ def reportSilent : Test := do
   let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail { message := "boom" } }
   let out ← captureOutput do discard <| humanReport .silent #[pass, fail]
   assertContains "FAIL  p/M  u: boom" out.stdout
-  assertContains "1 passed, 1 failed, 0 errors, 0 skipped" out.stdout
+  assertContains "1 passed, 1 failed, 0 errors" out.stdout
   assertEq 1 (out.stdout.splitOn "ok    ").length
 
 /-- At verbose verbosity the report shows passes too. -/

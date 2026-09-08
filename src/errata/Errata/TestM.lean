@@ -93,11 +93,6 @@ def Context.resultOfOutcome (ctx : Context)
   | .ok (.error f) => some { ctx.mkResult (.fail f) durationMs with output }
   | .ok (.ok ()) => if hasNested then none else some { ctx.mkResult .pass durationMs with output }
 
-/-- Records a skipped result for the current scope. -/
-def skip (reason : String) : TestM Unit := do
-  let ctx ← read
-  ctx.log.modify (·.push (ctx.mkResult (.skip reason)))
-
 /--
 Splits bytes into a prefix ready to decode and a tail that is the start of an unfinished
 {lit}`UTF-8` code point. Bytes that cannot be completed by any continuation go in the prefix, where

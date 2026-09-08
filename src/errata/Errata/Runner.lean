@@ -167,7 +167,7 @@ where cmd := `[Cli|
     "Runs the discovered Errata tests."
 
     FLAGS:
-      v, verbose;              "Also report passes and skips, truncating each test's results."
+      v, verbose;              "Also report passes, truncating each test's results."
       vv, "verbose-all";       "Report every result, without truncation."
       vvv, "verbose-docs";     "Report every result and every test's docstring."
       "update-golden";         "Rewrite golden expected files instead of comparing."

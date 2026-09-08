@@ -26,8 +26,8 @@ private def locationText (l : Location) : String :=
 
 /--
 Prints one result: its status line, its docstring when shown, and for a failure its detail and
-captured output. A failure or error always shows its docstring; a pass or skip shows it only at a
-verbosity that shows all docstrings.
+captured output. A failure or error always shows its docstring; a pass shows it only at a verbosity
+that shows all docstrings.
 -/
 private def printResult (verbosity : Verbosity) (r : Result) : IO Unit := do
   let name := s!"{r.moduleTarget}  {r.testName}"
@@ -36,7 +36,6 @@ private def printResult (verbosity : Verbosity) (r : Result) : IO Unit := do
       if let some d := r.description? then IO.println (indentLines d)
   match r.status with
   | .pass => IO.println s!"ok    {name} ({r.durationMs}ms)"; printDoc
-  | .skip reason => IO.println s!"skip  {name}: {reason}"; printDoc
   | .fail f =>
     IO.println s!"FAIL  {name}: {f.message}"
     printDoc
@@ -49,32 +48,16 @@ private def printResult (verbosity : Verbosity) (r : Result) : IO Unit := do
     unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
 
 /--
-A running tally of results suppressed by truncation. Only passes and skips are ever suppressed;
-failures and errors always print.
+Prints the truncation summary for a test whose results were capped, given the number of passes that
+were suppressed. Only passes are ever suppressed; failures and errors always print.
 -/
-private structure Suppressed where
-  passed : Nat := 0
-  skipped : Nat := 0
-
-/-- Counts one more suppressed result. -/
-private def Suppressed.add (s : Suppressed) : Status → Suppressed
-  | .skip _ => { s with skipped := s.skipped + 1 }
-  | _ => { s with passed := s.passed + 1 }
-
-/-- The number of suppressed results. -/
-private def Suppressed.total (s : Suppressed) : Nat :=
-  s.passed + s.skipped
-
-/-- Prints the truncation summary for a test whose results were capped, if any were suppressed. -/
-private def printSuppressed (s : Suppressed) : IO Unit := do
-  if s.total > 0 then
-    let parts := (if s.passed > 0 then #[s!"{s.passed} more passed"] else #[])
-      ++ (if s.skipped > 0 then #[s!"{s.skipped} more skipped"] else #[])
-    IO.println s!"    (... and {", ".intercalate parts.toList})"
+private def printSuppressed (suppressed : Nat) : IO Unit := do
+  if suppressed > 0 then
+    IO.println s!"    (... and {suppressed} more passed)"
 
 /--
 Prints a human-readable report and returns the number of failures. Failures and errors are printed at
-every verbosity. {name}`Verbosity.quiet` adds passes and skips, truncating each test's after a cap and
+every verbosity. {name}`Verbosity.quiet` adds passes, truncating each test's after a cap and
 summarizing the remainder; {name}`Verbosity.verbose` shows them all; and
 {name}`Verbosity.superVerbose` also shows every test's docstring.
 -/
@@ -83,36 +66,34 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
   let mut passed := 0
   let mut failed := 0
   let mut errors := 0
-  let mut skipped := 0
   let mut curKey : Option (String × String) := none
   let mut shown := 0
-  let mut more : Suppressed := {}
+  let mut more := 0
   for r in results do
     match r.status with
     | .pass => passed := passed + 1
     | .fail _ => failed := failed + 1
     | .error _ => errors := errors + 1
-    | .skip _ => skipped := skipped + 1
     -- Results of one test are contiguous; truncation is per test (its data-driven sub-results).
     let key := (r.moduleTarget, r.test)
     if curKey != some key then
       printSuppressed more
       curKey := some key
       shown := 0
-      more := {}
+      more := 0
     match r.status with
     | .fail _ | .error _ =>
       printResult verbosity r
       shown := shown + 1
-    | .pass | .skip _ =>
+    | .pass =>
       if verbosity.showsPasses then
         if verbosity.truncates && shown ≥ cap then
-          more := more.add r.status
+          more := more + 1
         else
           printResult verbosity r
           shown := shown + 1
   printSuppressed more
-  IO.println s!"{passed} passed, {failed} failed, {errors} errors, {skipped} skipped"
+  IO.println s!"{passed} passed, {failed} failed, {errors} errors"
   return failed + errors
 
 /--
@@ -206,9 +187,8 @@ def junitReport (results : Array Result) : String := Id.run do
     let suite := (cases[0]?.map (·.moduleName)).getD ""
     let failures := countWhere cases (fun s => s matches .fail _)
     let errors := countWhere cases (fun s => s matches .error _)
-    let skipped := countWhere cases (fun s => s matches .skip _)
     out := out ++ s!"  <testsuite name=\"{xmlEscape suite}\" package=\"{xmlEscape pkg}\" \
-      tests=\"{cases.size}\" failures=\"{failures}\" errors=\"{errors}\" skipped=\"{skipped}\">\n"
+      tests=\"{cases.size}\" failures=\"{failures}\" errors=\"{errors}\">\n"
     for r in cases do
       let time := toString (Float.ofNat r.durationMs / 1000.0)
       let opening := s!"    <testcase name=\"{xmlEscape (caseOf r)}\" \
@@ -222,8 +202,6 @@ def junitReport (results : Array Result) : String := Id.run do
           {xmlEscape (f.detail?.getD "")}</failure>\n    </testcase>\n"
       | .error m =>
         out := out ++ opening ++ s!"\n      <error message=\"{xmlEscape m}\"></error>\n    </testcase>\n"
-      | .skip reason =>
-        out := out ++ opening ++ s!"\n      <skipped message=\"{xmlEscape reason}\"></skipped>\n    </testcase>\n"
     out := out ++ "  </testsuite>\n"
   out := out ++ "</testsuites>\n"
   return out
@@ -235,7 +213,6 @@ private def statusFields : Status → List (String × Json)
       (match f.detail? with | some d => [("detail", Json.str d)] | none => []) ++
       (match f.location? with | some l => [("location", ToJson.toJson l)] | none => [])
   | .error m => [("status", Json.str "error"), ("message", Json.str m)]
-  | .skip reason => [("status", Json.str "skip"), ("reason", Json.str reason)]
 
 instance : ToJson Result where
   toJson r := private
@@ -258,7 +235,6 @@ instance : FromJson Status where
     match ← j.getObjValAs? String "status" with
     | "pass" => return .pass
     | "error" => return .error (← j.getObjValAs? String "message")
-    | "skip" => return .skip (← j.getObjValAs? String "reason")
     | "fail" => return .fail {
         message := ← j.getObjValAs? String "message",
         detail? := ← optField j "detail",
@@ -300,11 +276,10 @@ def markdownReport (results : Array Result) : String := Id.run do
   let passed := countWhere results (· matches .pass)
   let failed := countWhere results (· matches .fail _)
   let errors := countWhere results (· matches .error _)
-  let skipped := countWhere results (· matches .skip _)
   let icon := if failed + errors == 0 then "✅" else "❌"
   let mut out := s!"## {icon} Errata test results\n\n"
   out := out ++
-    s!"**{passed}** passed · **{failed}** failed · **{errors}** errors · **{skipped}** skipped\n\n"
+    s!"**{passed}** passed · **{failed}** failed · **{errors}** errors\n\n"
   for r in results do
     let render (mark message : String) (detail? : Option String) : String := Id.run do
       let mut s := s!"<details open><summary>{mark} <code>{xmlEscape r.moduleTarget}</code> \
@@ -321,8 +296,8 @@ def markdownReport (results : Array Result) : String := Id.run do
     | .error m => out := out ++ render "💥" m none
     | _ => pure ()
   out := out ++ "<details><summary>Summary by module</summary>\n\n"
-  out := out ++ "| Module | ✅ | ❌ | 💥 | ⏭️ |\n| :-- | --: | --: | --: | --: |\n"
+  out := out ++ "| Module | ✅ | ❌ | 💥 |\n| :-- | --: | --: | --: |\n"
   for (m, cs) in byModule results do
     out := out ++ s!"| {m} | {countWhere cs (· matches .pass)} | {countWhere cs (· matches .fail _)} \
-      | {countWhere cs (· matches .error _)} | {countWhere cs (· matches .skip _)} |\n"
+      | {countWhere cs (· matches .error _)} |\n"
   return out ++ "\n</details>\n"

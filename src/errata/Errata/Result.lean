@@ -18,7 +18,7 @@ namespace Errata
 inductive Verbosity where
   /-- Print only failures and errors. -/
   | silent
-  /-- Also print passes and skips, truncating each test's results after a cap. -/
+  /-- Also print passes, truncating each test's results after a cap. -/
   | quiet
   /-- Print every result. -/
   | verbose
@@ -26,13 +26,13 @@ inductive Verbosity where
   | superVerbose
 deriving Repr, Inhabited, DecidableEq, BEq
 
-/-- Whether passes and skips are printed at this verbosity. -/
+/-- Whether passes are printed at this verbosity. -/
 def Verbosity.showsPasses : Verbosity → Bool
   | .silent => false
   | .quiet | .verbose | .superVerbose => true
 
 /--
-Whether a test that produces many passing or skipped results has only the first few of them printed,
+Whether a test that produces many passing results has only the first few of them printed,
 with a count of the rest. Failures and errors are always printed in full, so truncation isn't
 relevant at {name}`silent` verbosity.
 -/
@@ -74,8 +74,6 @@ inductive TestResult where
   | pass
   /-- The test failed, with details. -/
   | fail (failure : TestFailure)
-  /-- The test was skipped, with a reason. -/
-  | skip (reason : String)
 deriving Repr, Inhabited
 
 /-- The recorded outcome of a test or a named result. -/
@@ -86,13 +84,11 @@ inductive Status where
   | fail (failure : TestFailure)
   /-- An error escaped the check, so it could not produce a verdict. -/
   | error (message : String)
-  /-- The check was skipped. -/
-  | skip (reason : String)
 deriving Repr, Inhabited, DecidableEq
 
 /-- Whether a status counts as success for the exit code. -/
 def Status.isSuccess : Status → Bool
-  | .pass | .skip _ => true
+  | .pass => true
   | .fail _ | .error _ => false
 
 /-- A fragment of captured output, tagged by the stream it was written to. -/

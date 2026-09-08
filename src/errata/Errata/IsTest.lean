@@ -19,7 +19,6 @@ namespace Errata
 def TestResult.toTest : TestResult → TestM Unit
   | .pass => pure ()
   | .fail f => throw f
-  | .skip reason => Errata.skip reason
 
 /-- Types that can serve as the body of a test. -/
 class IsTest (α : Type) where
