@@ -661,15 +661,19 @@ def reportVerbose : Test := do
   let out ← captureOutput do discard <| humanReport .verbose #[pass]
   assertContains "ok    p/M  t" out.stdout
 
-/-- Characters XML 1.0 forbids are dropped from the JUnit report rather than emitted. -/
+/--
+Characters that XML 1.0 forbids are replaced with the canonical replacement character in the JUnit
+report.
+-/
 @[test]
-def junitDropsForbiddenChars : Test := do
+def junitReplacesForbiddenChars : Test := do
   let bad := (Char.ofNat 0xFFFF).toString ++ (Char.ofNat 0xFFFE).toString ++ (Char.ofNat 0x1).toString
   let r : Result := { package := "p", moduleName := "M", test := "t",
-                      status := .fail { message := s!"bad{bad}char" } }
+                      status := .fail { message := s!"bad{bad}char\tkept" } }
   let xml := junitReport #[r]
-  assertContains "badchar" xml
+  assertContains "bad\uFFFD\uFFFD\uFFFDchar\tkept" xml
   assertTrue (!xml.contains (Char.ofNat 0xFFFF) && !xml.contains (Char.ofNat 0xFFFE))
+  assertTrue (!xml.contains (Char.ofNat 0x1))
 
 /-- A test's results are truncated after the cap at quiet verbosity, with a summary, but not at verbose. -/
 @[test]

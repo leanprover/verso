@@ -116,21 +116,28 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
   return failed + errors
 
 /--
-Drops the characters XML 1.0 forbids even when escaped: those below {lit}`U+0020` other than tab,
-newline, and carriage return, and the noncharacters {lit}`U+FFFE` and {lit}`U+FFFF`.
+Replaces the forbidden characters in XML 1.0 with {lit}`U+FFFD`, the canonical replacement
+character, so the report shows where a character was lost. These characters are forbidden even when
+escaped.
+
+The forbidden characters are:
+ * those below {lit}`U+0020` other than tab, newline, and carriage return
+ * the noncharacters {lit}`U+FFFE` and {lit}`U+FFFF`.
 -/
-private def dropXmlForbidden (s : String) : String :=
-  s.foldl (init := "") fun acc c =>
-    if c == '\uFFFE' || c == '\uFFFF' then acc
-    else if c == '\t' || c == '\n' || c == '\r' || Nat.ble 0x20 c.toNat then acc.push c
-    else acc
+private def replaceXmlForbidden (s : String) : String :=
+  s.map fun
+    | c@'\t' | c@'\n' | c@'\r' => c
+    | '\uFFFE' | '\uFFFF' => replacement
+    | c => if c.toNat < 0x20 then replacement else c
+where
+  replacement := '\uFFFD'
 
 /--
-Escapes text for XML and drops characters XML 1.0 forbids even when escaped, so a captured ANSI escape
-or NUL byte in a message or output fragment cannot make the report malformed.
+Escapes text for XML and replaces the characters that are forbidden in XML 1.0, so a captured ANSI
+escape or {lit}`NUL` byte in a message or output fragment cannot make the report malformed.
 -/
 private def xmlEscape (s : String) : String :=
-  dropXmlForbidden <|
+  replaceXmlForbidden <|
     s.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;" |>.replace "\"" "&quot;"
 
 instance : ToJson Location where
