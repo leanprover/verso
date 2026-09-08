@@ -694,25 +694,23 @@ private def lakeInFixture (fixture : System.FilePath) (args : Array String) :
 /--
 The driver tells users how it should be invoked, and works that out from the workspace it runs in.
 
-The fixture workspaces under `fixtures` require Verso (and thus Errata) by path. `driver-configured`
-names Verso's driver as its test driver, so the command is `lake test`. `driver-shadowed` has an
-`Errata.run` script of its own that a bare name would run, so Verso's must be named as
-`verso/Errata.run`.
+The fixture workspaces under `fixtures` require Verso (and thus Errata) by path. `driver-bare`
+neither names a test driver nor defines a script, so the command is a bare `lake run Errata.run`.
+`driver-configured` names Verso's driver as its test driver, so the command is `lake test`.
+`driver-shadowed` has an `Errata.run` script of its own that a bare name would run, so Verso's must
+be named as `verso/Errata.run`.
 
 The driver's help should show the expected command.
 -/
 @[test]
 def driverHelpNamesInvocation : Test := do
-  let cases : List (String × Option System.FilePath × String) := [
-    ("verso", none, "lake run Errata.run"),
-    ("configured", some (fixturesDir / "driver-configured"), "lake test"),
-    ("shadowed", some (fixturesDir / "driver-shadowed"), "lake run verso/Errata.run")]
-  for (name, fixture?, run) in cases do
+  let cases : List (String × System.FilePath × String) := [
+    ("bare", fixturesDir / "driver-bare", "lake run Errata.run"),
+    ("configured", fixturesDir / "driver-configured", "lake test"),
+    ("shadowed", fixturesDir / "driver-shadowed", "lake run verso/Errata.run")]
+  for (name, fixture, run) in cases do
     result name do
-      let args := #["run", "verso/Errata.run", "--help"]
-      let out ← match fixture? with
-        | some fixture => lakeInFixture fixture args
-        | none => IO.Process.output { cmd := "lake", args }
+      let out ← lakeInFixture fixture #["run", "verso/Errata.run", "--help"]
       assertExitCode 0 out
       assertContains s!"\n  {run} " out.stdout
 
