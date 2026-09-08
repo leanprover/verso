@@ -177,7 +177,7 @@ lean_lib ErrataDiscovered where
   needs := #[errataSelection]
 
 -- The generated, discovered test runner. Its source is written by the Errata test driver.
-lean_exe «errata-runner» where
+lean_exe «errata-runner-internal» where
   root := `ErrataRunnerMain
   srcDir := errataRunnerDir
   supportInterpreter := true
@@ -223,24 +223,63 @@ private def discoveredSource (packageName : String) (mods : Array Lean.Name) : S
     public def allTests : Array Errata.TestEntry := getAllTests% \"{packageName}\" {modList}\n"
 
 /--
-Generate the non-module main: import the bridge module and the non-module test modules (which a
-`module` cannot import), then run their combined tests.
+The flag that marks the generated runner as started by the Errata driver (that is, the `Errata.run`
+script in this file). The driver passes it as the runner's first argument, and the generated main
+checks for it. This allows it to provide guidance when users invoke internal details of Errata by
+accident.
 -/
-private def mainSource (packageName : String) (mods : Array Lean.Name) (discovered : Lean.Name) :
-    String :=
+def errataDriverFlag : String := "--invoked-by-errata-driver"
+
+/--
+Generates the non-module main. It imports the bridge module and the non-module test modules (which a
+module cannot import), then runs their combined tests. `run` and `runner` are the commands that the
+runner tells users to type if they invoke it by hand: the command that runs every test, and the command that waits for runner options.
+-/
+private def mainSource (packageName : String) (mods : Array Lean.Name) (discovered : Lean.Name)
+    (run runner : String) : String :=
   let imports := "\n".intercalate
     ("import Errata" :: s!"import {discovered}" :: mods.toList.map (s!"import {·}"))
   let modList := " ".intercalate (mods.toList.map (·.toString))
   s!"{imports}\n\n\
     def main (args : List String) : IO UInt32 :=\n  \
-    Errata.runMain (allTests ++ getAllTests% \"{packageName}\" {modList}) args\n"
+    Errata.driverMain {errataDriverFlag.quote}\n    \
+    \{ run := {run.quote}, runner := {runner.quote} }\n    \
+    (allTests ++ getAllTests% \"{packageName}\" {modList}) args\n"
+
+/--
+How the Errata driver (the `Errata.run` script in this file) should be invoked: the command that
+runs every test, and the command that arguments follow.
+
+When the root package's test driver is the driver, the invocation command is `lake test`, with `lake
+test --` to pass arguments. Otherwise, it is `lake run Errata.run` or `lake run <pkg>/Errata.run`,
+depending on whether the script name is shadowed.
+
+`self` is the package that defines the script.
+-/
+private def driverInvocation (ws : Workspace) (self : Package) : LakeT IO (String × String) := do
+  let scriptName := `Errata.run
+  let some found := self.scripts.find? scriptName
+    | throw <| .userError s!"{self.prettyName} has no script named {scriptName}"
+  let isTestDriver ← do
+    if ws.root.testDriver.isEmpty then pure false
+    else
+      try
+        let (pkg, driver) ← ws.root.resolveDriver "test" ws.root.testDriver
+        pure (pkg.prettyName == self.prettyName && driver.toName == scriptName)
+      catch _ => pure false
+  if isTestDriver then return ("lake test", "lake test --")
+  let spec :=
+    if (ws.findScript? scriptName).map (·.name) == some found.name then scriptName.toString
+    else found.name
+  return (s!"lake run {spec}", s!"lake run {spec}")
 
 /--
 Splits driver arguments at the `--test-options` marker into library names and runner passthrough
 arguments. Library names precede the marker and may not look like options; everything after the
 marker goes to the runner.
 -/
-private def splitArgs (args : List String) : Except String (List String × List String) :=
+private def splitArgs (withArgs : String) (args : List String) :
+    Except String (List String × List String) :=
   let (names, rest) :=
     match args.span (· != "--test-options") with
     | (names, _ :: after) => (names, after)
@@ -249,25 +288,46 @@ private def splitArgs (args : List String) : Except String (List String × List 
   | some opt =>
     .error s!"unexpected option '{opt}': arguments before the `--test-options` marker name the \
       libraries to test. Put runner options after the marker, \
-      e.g. `lake run Errata.run --test-options {opt}`."
+      e.g. `{withArgs} --test-options {opt}`."
   | none => .ok (names, rest)
 
-/-- Usage information for `lake run Errata.run`. -/
-private def usage : String := include_str "src/errata/Errata/usage.txt"
+/--
+Usage information for the driver, in terms of the commands that invoke it.
+-/
+private def usage (run withArgs : String) : String :=
+  let forms := #[
+    (run, "run every test in the package"),
+    (s!"{withArgs} LIBRARY...", "run the tests in the given libraries"),
+    (s!"{withArgs} LIBRARY... --test-options OPTION...", "pass runner options after the marker")]
+  let width := forms.foldl (fun w (form, _) => max w form.length) 0
+  let formLines := forms.map fun (form, what) =>
+    s!"  {form.pushn ' ' (width + 2 - form.length)}{what}"
+  s!"Errata test runner\n\n\
+    Usage:\n{"\n".intercalate formLines.toList}\n\n\
+    Tokens before `--test-options` name libraries. A library is a bare `Library` in this package\n\
+    or a `package/Library` reaching into a dependency. Everything after the marker goes to the\n\
+    test runner.\n\n\
+    The runner documents its own options, including how to pass options to the tests \
+    themselves:\n  {withArgs} --test-options --help\n"
 
+-- The script's name is the one `driverInvocation` looks up.
 script run (args) do
   let ws ← getWorkspace
+  let some self := ws.findPackageByKey? __name__
+    | IO.eprintln "error: the package that defines the Errata driver is not in the workspace"
+      return 1
+  let (run, withArgs) ← driverInvocation ws self
   -- Answer the driver's own `--help` before discovering or building anything. A `--help` after the
   -- marker asks for the runner's options, so it goes to the runner along with the other arguments.
   if (args.takeWhile (· != "--test-options")).any (fun a => a == "--help" || a == "-h") then
-    IO.println usage
+    IO.println (usage run withArgs)
     return 0
   let (libNames, runnerArgs) ←
-    match splitArgs args with
+    match splitArgs withArgs args with
     | .ok result => pure result
     | .error msg =>
       IO.eprintln s!"error: {msg}"
-      IO.eprintln usage
+      IO.eprintln (usage run withArgs)
       return 1
   -- `--wfail` is the runner's warnings-as-errors flag; the driver's own warnings honor it too.
   let wfail := runnerArgs.contains "--wfail"
@@ -352,13 +412,16 @@ script run (args) do
   for (name, src) in
       [("selection", selection ++ "\n"),
        ("ErrataDiscovered.lean", discoveredSource ws.root.prettyName moduleMods),
-       ("ErrataRunnerMain.lean", mainSource ws.root.prettyName nonModuleMods `ErrataDiscovered)] do
+       ("ErrataRunnerMain.lean",
+        mainSource ws.root.prettyName nonModuleMods `ErrataDiscovered
+          run s!"{withArgs} --test-options")] do
     let file := dir / name
     let changed ← if ← file.pathExists then pure ((← IO.FS.readFile file) != src) else pure true
     if changed then IO.FS.writeFile file src
   -- Build and run the discovered runner.
-  let exePath ← runBuild «errata-runner».fetch
-  let child ← IO.Process.spawn { cmd := exePath.toString, args := runnerArgs.toArray }
+  let exePath ← runBuild «errata-runner-internal».fetch
+  let child ← IO.Process.spawn
+    { cmd := exePath.toString, args := #[errataDriverFlag] ++ runnerArgs.toArray }
   child.wait
 
 end Errata

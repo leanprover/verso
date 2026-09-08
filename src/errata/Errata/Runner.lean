@@ -92,11 +92,77 @@ structure Options where
   /-- Project-specific options, as a multi-map so repeated options accumulate. -/
   options : OptionMap := {}
 
+/--
+The name of the driver script.
+
+This must match its definition in `lakefile.lean`.
+-/
+def driverScript : String := "Errata.run"
+
+/--
+How the Errata driver is invoked.
+
+This configuration is discovered from the workspace and used to inform users about how it should be
+invoked.
+-/
+structure DriverConfig where
+  /-- The workspace's root package. -/
+  rootPackage : String
+  /-- The root package's test driver setting, when it has one. -/
+  testDriver : Option String
+  /-- The package that defines the driver script. -/
+  driverPackage : String
+  /-- The package whose script a bare {lit}`lake run Errata.run` reaches, when there is one. -/
+  bareScriptPackage : Option String
+
+/--
+How the Errata driver should be invoked. The driver script determines this from the Lake workspace's
+configuration and incorporates it in the generated runner so it can guide users to the correct
+invocation.
+-/
+structure Invocation where
+  /-- The command that runs every test, such as {lit}`lake test`. -/
+  run : String
+  /--
+  The command that the runner's own options follow, such as
+  {lit}`lake test -- --test-options`.
+  -/
+  runner : String
+deriving BEq, Repr
+
+/--
+Works out which command a user should type to run the tests.
+
+The Errata driver is a Lake script named {lit}`Errata.run`. There are two ways that it might be
+invoked:
+ * Via {lit}`lake test`, when {lit}`Errata.run` is the test driver.
+ * Explicitly via {lit}`lake run`, when it is not the test driver.
+
+A script name written as {lit}`package/Errata.run` means the script in that specific package, and a
+bare {lit}`Errata.run` is looked up without a package. The Lake parts of Errata determine the
+simplest invocation that works in the current workspace, adding the package if some other package
+also has a script named {lit}`Errata.run` that would be chosen instead.
+-/
+def Invocation.ofConfig (cfg : DriverConfig) : Invocation :=
+  let qualified := s!"{cfg.driverPackage}/{driverScript}"
+  let driver := cfg.testDriver.map fun d =>
+    if d.contains '/' then d else s!"{cfg.rootPackage}/{d}"
+  if driver == some qualified then { run := "lake test", runner := "lake test -- --test-options" }
+  else
+    let spec := if cfg.bareScriptPackage == some cfg.driverPackage then driverScript else qualified
+    { run := s!"lake run {spec}", runner := s!"lake run {spec} --test-options" }
+
 open Cli in
-/-- The runner's command-line interface. The handler receives the parsed arguments. -/
-def runnerCmd (handler : Cli.Parsed → IO UInt32) : Cli.Cmd :=
-  `[Cli|
-    "errata-runner" VIA handler;
+/--
+The runner's command-line interface. The handler receives the parsed arguments. {name}`command` is
+the command that the runner's options follow, shown in the usage header.
+-/
+def runnerCmd (command : String) (handler : Cli.Parsed → IO UInt32) : Cli.Cmd :=
+  match cmd with
+  | .init «meta» run subCmds extension? =>
+    .init { «meta» with name := command } run subCmds extension?
+where cmd := `[Cli|
+    "errata" VIA handler;
     "Runs the discovered Errata tests."
 
     FLAGS:
@@ -178,13 +244,17 @@ Parses the runner's command line into settings: the declared flags, then any opt
 themselves after a {lit}`--` separator.
 -/
 def parseOptions (args : List String) : Except String Options :=
-  match (runnerCmd fun _ => pure 0).parse args with
+  match (runnerCmd "" fun _ => pure 0).parse args with
   | .error e => .error e.kind.msg
   | .ok (_, parsed) => optionsOfParsed parsed
 
-/-- The entry point the generated runner calls: parse arguments, run the tests, and report. -/
-def runMain (entries : Array TestEntry) (args : List String) : IO UInt32 := do
-  let cmd := runnerCmd fun parsed => do
+/--
+Parses the arguments, runs the tests, prints the results to the console, and writes any requested
+report files.
+-/
+def runMain (invocation : Invocation) (entries : Array TestEntry) (args : List String) :
+    IO UInt32 := do
+  let cmd := runnerCmd invocation.runner fun parsed => do
     let opts ←
       match optionsOfParsed parsed with
       | .ok opts => pure opts
@@ -217,3 +287,32 @@ def runMain (entries : Array TestEntry) (args : List String) : IO UInt32 := do
     if opts.wfail && !unused.isEmpty then return 1
     return 0
   cmd.validate args
+
+/--
+Checks that the generated runner was started by the Errata driver, which passes {name}`driverFlag`
+as the first argument. On success, the result is the remaining arguments. Otherwise, it is a message
+that explains how to run the tests, and how to run the program directly anyway.
+-/
+def checkInvocation (driverFlag : String) (invocation : Invocation) (args : List String) :
+    Except String (List String) :=
+  match args with
+  | flag :: rest =>
+    if flag == driverFlag then .ok rest else .error notDriver
+  | [] => .error notDriver
+where
+  notDriver :=
+    s!"This program is generated and run by the Errata test driver, and is not meant to be run by \
+      hand. To run the tests:\n  {invocation.run}\n\n\
+      To run this program directly anyway, pass {driverFlag} as its first argument."
+
+/--
+The generated runner's entry point: checks that the Errata driver started the process by passing
+{name}`driverFlag` first, then hands the remaining arguments to {name}`runMain`.
+-/
+def driverMain (driverFlag : String) (invocation : Invocation) (entries : Array TestEntry)
+    (args : List String) : IO UInt32 := do
+  match checkInvocation driverFlag invocation args with
+  | .ok args => runMain invocation entries args
+  | .error msg =>
+    IO.eprintln msg
+    return 1

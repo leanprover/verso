@@ -147,6 +147,24 @@ jobs:
               run: |
                   inkscape --version
 
+            # Errata's self-tests run its driver inside these fixture workspaces, which require
+            # Verso by path. Their manifests are not in git, so their dependency clones follow
+            # Verso's own manifest and toolchain.
+            - name: Cache Errata test fixtures
+              uses: actions/cache@v6
+              with:
+                  path: |
+                      src/errata-tests/fixtures/driver-configured/.lake
+                      src/errata-tests/fixtures/driver-shadowed/.lake
+                  key:
+                      errata-fixtures-${{ runner.os }}-${{ hashFiles('lean-toolchain') }}-${{
+                      hashFiles('lake-manifest.json') }}-${{ steps.shortSHA.outputs.short_sha }}
+                  # An older clone set for the same toolchain is a usable starting point: Lake
+                  # checks out the revisions it needs.
+                  restore-keys: |
+                      errata-fixtures-${{ runner.os }}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-
+                      errata-fixtures-${{ runner.os }}-${{ hashFiles('lean-toolchain') }}-
+
             - name: Run tests
               run: |
                   lake test -- --verbose --check-tex

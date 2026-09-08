@@ -235,7 +235,20 @@ def captureRejectsDanglingBytes : Test := do
   assertEq 1 results.size
   assertTrue (results[0]!.status matches .error _)
 
-/-- Under --wfail, an option no test read fails the run instead of only warning. -/
+/-- The invocation that these tests hand to the runner. -/
+def testInvocation : Invocation := { run := "lake test", runner := "lake test -- --test-options" }
+
+/--
+The flag that these tests use to mark a runner as started by the driver.
+
+This is deliberately not the canonical one defined in the Lake config, so that we test that the generated code works with _whatever_ is passed and that the value is not hard-coded twice.
+-/
+def testDriverFlag : String := "--from-driver"
+
+/--
+Under --wfail, an option that no test reads causes the run to fail instead of only issuing a
+warning.
+-/
 @[test]
 def wfailPromotesUnusedOptions : Test := do
   let entry := TestEntry.of "p" "M" "t"
@@ -243,8 +256,8 @@ def wfailPromotesUnusedOptions : Test := do
   let lax ← IO.mkRef (0 : UInt32)
   let wfail ← IO.mkRef (0 : UInt32)
   discard <| captureOutput do
-    lax.set (← runMain #[entry] ["--", "--bogus=1"])
-    wfail.set (← runMain #[entry] ["--wfail", "--", "--bogus=1"])
+    lax.set (← runMain testInvocation #[entry] ["--", "--bogus=1"])
+    wfail.set (← runMain testInvocation #[entry] ["--wfail", "--", "--bogus=1"])
   assertEq 0 (← lax.get)
   assertEq 1 (← wfail.get)
 
@@ -442,6 +455,78 @@ def verbosityLevels : Test := do
   assertEq true Verbosity.superVerbose.showsAllDocstrings
 
 /--
+The driver tells users how it should be invoked, and works that out from the workspace it runs in.
+
+The fixture workspaces under `fixtures` require Verso (and thus Errata) by path. `driver-configured`
+names Verso's driver as its test driver, so the command is `lake test`. `driver-shadowed` has an
+`Errata.run` script of its own that a bare name would run, so Verso's must be named as
+`verso/Errata.run`.
+
+The driver's help should show the expected command.
+-/
+@[test]
+def driverHelpNamesInvocation : Test := do
+  let fixtures : System.FilePath := "src/errata-tests/fixtures"
+  let cases : List (String × System.FilePath × String) := [
+    ("verso", ".", "lake run Errata.run"),
+    ("configured", fixtures / "driver-configured", "lake test"),
+    ("shadowed", fixtures / "driver-shadowed", "lake run verso/Errata.run")]
+  for (name, dir, run) in cases do
+    result name do
+      let out ← IO.Process.output
+        { cmd := "lake", args := #["run", "verso/Errata.run", "--help"], cwd := dir }
+      assertExitCode 0 out
+      assertContains s!"\n  {run} " out.stdout
+
+/-- The runner's help names the command that its options follow. -/
+@[test]
+def runnerHelpNamesInvocation : Test := do
+  let out ← captureOutput do
+    discard <| runMain testInvocation #[] ["--help"]
+  assertContains s!"{testInvocation.runner} [FLAGS]" out.all
+
+/--
+The generated runner's entry point runs the tests when the driver's flag leads, and otherwise
+explains how to run the tests and fails.
+-/
+@[test]
+def driverMainChecksFlag : Test := do
+  let entry := TestEntry.of "p" "M" "t"
+    { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ } (pure () : Test)
+  let withFlag ← IO.mkRef (0 : UInt32)
+  let withoutFlag ← IO.mkRef (0 : UInt32)
+  let out ← captureOutput do
+    withFlag.set (← driverMain testDriverFlag testInvocation #[entry] [testDriverFlag])
+    withoutFlag.set (← driverMain testDriverFlag testInvocation #[entry] [])
+  result "flag leads" do
+    assertEq 0 (← withFlag.get)
+  result "flag missing" do
+    assertEq 1 (← withoutFlag.get)
+    assertContains testInvocation.run out.all
+    assertContains testDriverFlag out.all
+
+/--
+The generated runner starts only when the driver's flag is its first argument, and the flag is
+removed before the runner's own options are parsed.
+-/
+@[test]
+def driverInvocation : Test := do
+  result "flag is removed" do
+    assertEq (some ["-v", "--", "--x=1"])
+      (checkInvocation testDriverFlag testInvocation [testDriverFlag, "-v", "--", "--x=1"]).toOption
+  result "no arguments" do
+    assertTrue (checkInvocation testDriverFlag testInvocation [] matches .error _)
+  result "missing flag" do
+    assertTrue (checkInvocation testDriverFlag testInvocation ["-v"] matches .error _)
+  result "flag must come first" do
+    assertTrue
+      (checkInvocation testDriverFlag testInvocation ["-v", testDriverFlag] matches .error _)
+  result "message says how to run the tests" do
+    let .error msg := checkInvocation testDriverFlag testInvocation [] | fail "expected an error"
+    assertTrue ((msg.splitOn testInvocation.run).length > 1) "message should name the command"
+    assertTrue ((msg.splitOn testDriverFlag).length > 1) "message should name the flag"
+
+/--
 The runner's command line: the `-v` forms select the verbosity, declared flags parse, and options
 for the tests go after `--`.
 -/
@@ -485,7 +570,7 @@ def runnerArgParsing : Test := do
 def emptyRunFails : Test := do
   let code ← IO.mkRef (0 : UInt32)
   let out ← captureOutput do
-    code.set (← runMain #[] [])
+    code.set (← runMain testInvocation #[] [])
   assertContains "no tests were discovered" out.all
   assertEq 1 (← code.get).toNat
 

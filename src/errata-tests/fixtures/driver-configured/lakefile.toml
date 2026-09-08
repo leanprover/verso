@@ -1,0 +1,7 @@
+# A package that uses Verso's Errata driver as its test driver.
+name = "app"
+testDriver = "verso/Errata.run"
+
+[[require]]
+name = "verso"
+path = "../../../.."
