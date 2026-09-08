@@ -9,6 +9,7 @@ public import Errata.TestM
 public import Errata.IsTest
 public import Errata.Report
 public import Cli
+import all Errata.FS
 
 public section
 

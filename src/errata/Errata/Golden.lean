@@ -7,6 +7,7 @@ module
 
 public import Errata.TestM
 import Lean.Util.Diff
+import all Errata.FS
 
 public section
 

@@ -11,6 +11,7 @@ module
 
 public import Errata
 public meta import Errata
+import all Errata.FS
 import all ErrataTests.Fixture
 import all ErrataTests.Fixture.Sub
 import all ErrataTests.Docstrings

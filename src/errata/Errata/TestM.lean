@@ -98,16 +98,6 @@ def skip (reason : String) : TestM Unit := do
   let ctx ← read
   ctx.log.modify (·.push (ctx.mkResult (.skip reason)))
 
-/-- Writes a file, creating all parent directories if necessary. -/
-def writeFile (path : System.FilePath) (contents : String) : IO Unit := do
-  if let some parent := path.parent then IO.FS.createDirAll parent
-  IO.FS.writeFile path contents
-
-/-- Writes a binary file, creating all parent directories if necessary. -/
-def writeBinFile (path : System.FilePath) (contents : ByteArray) : IO Unit := do
-  if let some parent := path.parent then IO.FS.createDirAll parent
-  IO.FS.writeBinFile path contents
-
 /--
 The number of bytes in the {lit}`UTF-8` sequence a lead byte introduces, or {name}`none` for a
 continuation or invalid byte.
