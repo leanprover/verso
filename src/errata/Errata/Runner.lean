@@ -88,7 +88,7 @@ structure Options where
   jsonPath : Option String := none
   /-- Writes a Markdown report to this path. -/
   markdownPath : Option String := none
-  /-- Fails the run if warnings are logged, as Lake's `--wfail` does for builds. -/
+  /-- Fails the run if warnings are logged. -/
   wfail : Bool := false
   /-- Project-specific options, as a multi-map so repeated options accumulate. -/
   options : OptionMap := {}
