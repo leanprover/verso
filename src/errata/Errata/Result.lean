@@ -31,15 +31,20 @@ def Verbosity.showsPasses : Verbosity → Bool
   | .silent => false
   | .quiet | .verbose | .superVerbose => true
 
-/-- Whether each test's results are truncated after a cap at this verbosity. -/
+/--
+Whether a test that produces many passing or skipped results has only the first few of them printed,
+with a count of the rest. Failures and errors are always printed in full, so truncation isn't
+relevant at {name}`silent` verbosity.
+-/
 def Verbosity.truncates : Verbosity → Bool
+  | .silent => false
   | .quiet => true
-  | .silent | .verbose | .superVerbose => false
+  | .verbose | .superVerbose => false
 
 /-- Whether every result's docstring is shown, not only those of failures and errors. -/
 def Verbosity.showsAllDocstrings : Verbosity → Bool
-  | .superVerbose => true
   | .silent | .quiet | .verbose => false
+  | .superVerbose => true
 
 /--
 A source span, used in failure messages and editor integration.
