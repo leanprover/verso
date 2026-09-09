@@ -20,8 +20,11 @@ def assertTrue (cond : Bool) (message : String := "assertion failed")
     (detail? : Option String := none) (loc : Location := by exact here%) : TestM Unit :=
   unless cond do failAt loc message (detail? := detail?)
 
-/-- Asserts that the actual value equals the expected value, reporting both when they differ. -/
-def assertEq {α} [BEq α] [Repr α] (expected actual : α)
+/--
+Asserts that the actual value is equal to the expected value according to {name}`BEq`, reporting
+both when they differ.
+-/
+def assertBEq {α} [BEq α] [Repr α] (expected actual : α)
     (loc : Location := by exact here%) : TestM Unit :=
   unless actual == expected do
     failAt loc "values are not equal" (detail? := some s!"expected: {repr expected}\nactual:   {repr actual}")

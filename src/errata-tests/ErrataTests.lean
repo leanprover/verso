@@ -25,12 +25,12 @@ def onePlusOne : Bool := 1 + 1 == 2
 /-- An assertion-based test. -/
 @[test]
 def equality : Test := do
-  assertEq 4 (2 + 2)
+  assertBEq 4 (2 + 2)
 
 /-- A test with named results. -/
 @[test]
 def named : Test := do
-  result "first" (assertEq 1 1)
+  result "first" (assertBEq 1 1)
   result "second" (assertContains "b" "abc")
 
 /-- A test that completes without any check is a bare success. -/
@@ -44,13 +44,13 @@ unsafe def unsafeTest : Bool := true
 /-- A test that expects a failure. -/
 @[test]
 def expectsFailure : Test :=
-  expectFail (assertEq 1 2)
+  expectFail (assertBEq 1 2)
 
 /-- A data-driven family expressed as a plain loop. -/
 @[test]
 def squares : Test := do
   for (n, sq) in [(1, 1), (2, 4), (3, 9)] do
-    result s!"square {n}" (assertEq sq (n * n))
+    result s!"square {n}" (assertBEq sq (n * n))
 
 /-- A subprocess test. -/
 @[test]
@@ -87,12 +87,12 @@ tests once.
 @[test]
 def discoveryNamesModules : Test := do
   result "exact" do
-    assertEq 1 (getAllTests% "verso" ErrataTests.Fixture).size
+    assertBEq 1 (getAllTests% "verso" ErrataTests.Fixture).size
   result "below" do
-    assertEq 2 (getAllTests% "verso" ErrataTests.Fixture.*).size
+    assertBEq 2 (getAllTests% "verso" ErrataTests.Fixture.*).size
   result "deduplicated" do
     -- `ErrataTests.Fixture.Sub` lies below the first name and is the second, so it is found once.
-    assertEq 2 (getAllTests% "verso" ErrataTests.Fixture.* ErrataTests.Fixture.Sub).size
+    assertBEq 2 (getAllTests% "verso" ErrataTests.Fixture.* ErrataTests.Fixture.Sub).size
 
 /-- The docstring of a test in the docstring fixture module, when it has one. -/
 private def fixtureDocstring (test : String) : Option String :=
@@ -130,14 +130,14 @@ def docstringReachesResults : Test := do
   let cfg ← mkContext
   let results ← runEntry cfg <|
     TestEntry.of "p" "M" "documented" { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ }
-      (result "check" (assertEq 1 2) : Test) (docstring? := some "What it checks.")
+      (result "check" (assertBEq 1 2) : Test) (docstring? := some "What it checks.")
   result "the test's own result has it" do
     assertTrue (results.any fun r =>
       r.resultPath.isEmpty && r.description? == some "What it checks.")
   result "a named result has none" do
     assertTrue (results.any fun r => r.resultPath == #["check"] && r.description?.isNone)
   result "the Markdown report shows it once" do
-    assertEq 2 ((markdownReport { results, seed := 0 }).splitOn "What it checks.").length
+    assertBEq 2 ((markdownReport { results, seed := 0 }).splitOn "What it checks.").length
 
 /--
 The human-readable report shows a failure's docstring, indented below its status line, and shows a
@@ -224,7 +224,7 @@ private def resultsOf (act : Test) : TestM (Array Result) := do
 def goldenDirReportsMissingOutput : Test := do
   let results ← IO.FS.withTempDir fun dir =>
     resultsOf (goldenDir (dir / "expected") (dir / "never-created"))
-  assertEq 1 results.size
+  assertBEq 1 results.size
   assertTrue (results[0]!.status matches .fail _)
 
 /-- A produced directory with no files in it can be recorded and then compared. -/
@@ -237,7 +237,7 @@ def goldenDirHandlesEmptyOutput : Test := do
     resultsOf do
       withReader ({ · with updateGolden := true }) (goldenDir expected actual)
       goldenDir expected actual
-  assertEq 1 results.size
+  assertBEq 1 results.size
   assertTrue results[0]!.status.isSuccess
 
 /-- Updating absorbs a path that changed shape between file and directory, in both directions. -/
@@ -259,7 +259,7 @@ def goldenDirUpdatesAcrossShapeChanges : Test := do
       IO.FS.writeFile (actual / "d") "a file once more\n"
       withReader ({ · with updateGolden := true }) (goldenDir expected actual)
       goldenDir expected actual
-  assertEq 1 results.size
+  assertBEq 1 results.size
   assertTrue results[0]!.status.isSuccess
 
 /-- A file where a directory was expected is a golden failure, not a raw error. -/
@@ -269,7 +269,7 @@ def goldenDirRejectsNonDirectory : Test := do
     let actual := dir / "actual"
     IO.FS.writeFile actual "not a directory\n"
     resultsOf (goldenDir (dir / "expected") actual)
-  assertEq 1 results.size
+  assertBEq 1 results.size
   assertTrue (results[0]!.status matches .fail _)
 
 /-- A directory standing where the golden tree has a file is a missing file, not a pass. -/
@@ -281,7 +281,7 @@ def goldenDirRejectsDirectoryForFile : Test := do
     writeFile (expected / "d") "contents\n"
     IO.FS.createDirAll (actual / "d")
     resultsOf (goldenDir expected actual)
-  assertEq 1 results.size
+  assertBEq 1 results.size
   assertTrue (results[0]!.status matches .fail _)
 
 /-- A file standing where the golden tree has a directory is a golden failure, not a raw error. -/
@@ -293,14 +293,14 @@ def goldenDirRejectsFileForDirectory : Test := do
     writeFile (expected / "d" / "inner") "contents\n"
     writeFile (actual / "d") "not a directory\n"
     resultsOf (goldenDir expected actual)
-  assertEq 1 results.size
+  assertBEq 1 results.size
   assertTrue (results[0]!.status matches .fail _)
 
 /-- Output written before a failure reaches the enclosing result, where it explains the failure. -/
 @[test]
 def captureOutputKeepsOutputOnFailure : Test := do
   let results ← resultsOf (discard <| captureOutput (do IO.println "diagnostic"; fail "boom"))
-  assertEq 1 results.size
+  assertBEq 1 results.size
   let r := results[0]!
   assertTrue (r.status matches .fail _)
   assertContains "diagnostic" r.output.all
@@ -311,7 +311,7 @@ def captureOutputDivertsOnSuccess : Test := do
   let results ← resultsOf do
     let captured ← captureOutput (IO.println "quiet")
     assertContains "quiet" captured.all
-  assertEq 1 results.size
+  assertBEq 1 results.size
   assertTrue results[0]!.status.isSuccess
   assertTrue results[0]!.output.isEmpty
 
@@ -323,7 +323,7 @@ def captureJoinsSplitWrites : Test := do
     let out ← IO.getStdout
     out.write (bytes.extract 0 1)
     out.write (bytes.extract 1 bytes.size)
-  assertEq "é" captured.stdout
+  assertBEq "é" captured.stdout
 
 /--
 A write may end after a continuation byte of a wider code point. Its lead byte should stay behind
@@ -336,7 +336,7 @@ def captureJoinsSplitWideWrites : Test := do
     let out ← IO.getStdout
     out.write (bytes.extract 0 4)
     out.write (bytes.extract 4 bytes.size)
-  assertEq "a😀" captured.stdout
+  assertBEq "a😀" captured.stdout
 
 /-- Bytes whose code point is never completed are an error, not silently dropped. -/
 @[test]
@@ -344,7 +344,7 @@ def captureRejectsDanglingBytes : Test := do
   let results ← resultsOf do
     let out ← IO.getStdout
     out.write ("é".toUTF8.extract 0 1)
-  assertEq 1 results.size
+  assertBEq 1 results.size
   assertTrue (results[0]!.status matches .error _)
 
 /-- The invocation that these tests hand to the runner. -/
@@ -370,8 +370,8 @@ def wfailPromotesUnusedOptions : Test := do
   discard <| captureOutput do
     lax.set (← runMain testInvocation #[entry] ["--", "--bogus=1"])
     wfail.set (← runMain testInvocation #[entry] ["--wfail", "--", "--bogus=1"])
-  assertEq 0 (← lax.get)
-  assertEq 1 (← wfail.get)
+  assertBEq 0 (← lax.get)
+  assertBEq 1 (← wfail.get)
 
 /--
 Runs the runner with every report written to a temporary directory, returning the exit code and the
@@ -401,7 +401,7 @@ def unusedOptionsReachReports : Test := do
     assertNotContains "Test run" xml
   result "as a warning" do
     let (code, xml, _, md) ← runReporting #[entry] ["--", "--bogus=1"]
-    assertEq 0 code.toNat
+    assertBEq 0 code.toNat
     assertContains "<testsuite name=\"Test run\"" xml
     assertNotContains "<error" xml
     assertContains "never read: bogus" xml
@@ -409,7 +409,7 @@ def unusedOptionsReachReports : Test := do
     assertContains "never read: bogus" md
   result "as an error under --wfail" do
     let (code, xml, _, md) ← runReporting #[entry] ["--wfail", "--", "--bogus=1"]
-    assertEq 1 code.toNat
+    assertBEq 1 code.toNat
     assertContains "<error message=" xml
     assertContains "never read: bogus" xml
     assertContains "## ❌" md
@@ -420,7 +420,7 @@ def seedReachesReports : Test := do
   let entry := TestEntry.of "p" "M" "t" default (pure () : Test)
   let (_, _, json, md) ← runReporting #[entry] ["--seed", "7"]
   let .ok j := Lean.Json.parse json | fail "the JSON report does not parse"
-  assertEq (some 7) (j.getObjValAs? Nat "seed").toOption
+  assertBEq (some 7) (j.getObjValAs? Nat "seed").toOption
   assertContains "seed **7**" md
 
 /-- A value from a wide range that is never shrunk, so that a counterexample reflects the seed. -/
@@ -460,7 +460,7 @@ def propertySeedReplays : Test := do
     assertContains s!"--seed {seed}" detail
   result "the seed replays the counterexample" do
     let (_, again) ← seededResults (some seed) wide
-    assertEq (some (counterexample detail)) ((failDetail? again[0]!).map counterexample)
+    assertBEq (some (counterexample detail)) ((failDetail? again[0]!).map counterexample)
   result "another seed gives another counterexample" do
     let (_, other) ← seededResults (some (seed + 1)) wide
     assertTrue (((failDetail? other[0]!).map counterexample) != some (counterexample detail))
@@ -470,9 +470,9 @@ def propertySeedReplays : Test := do
 @[test]
 def assertTrueAttachesDetail : Test := do
   let results ← resultsOf (assertTrue false "boom" (detail? := some "why"))
-  assertEq 1 results.size
+  assertBEq 1 results.size
   match results[0]!.status with
-  | .fail f => assertEq (some "why") f.detail?
+  | .fail f => assertBEq (some "why") f.detail?
   | s => fail s!"expected a failure, got {repr s}"
 
 /-- An expected IO error passes, and the predicate picks which errors are acceptable. -/
@@ -497,7 +497,7 @@ def captureOrdersMixedWrites : Test := do
     out.write "é".toUTF8
     IO.print "x"
     out.write "û".toUTF8
-  assertEq "éxû" captured.stdout
+  assertBEq "éxû" captured.stdout
 
 /-- Text printed while a raw code point is unfinished is malformed output, not reordered output. -/
 @[test]
@@ -506,7 +506,7 @@ def capturePrintDuringPartialWriteRejected : Test := do
     let out ← IO.getStdout
     out.write ("é".toUTF8.extract 0 1)
     IO.print "x"
-  assertEq 1 results.size
+  assertBEq 1 results.size
   assertTrue (results[0]!.status matches .error _)
 
 /-- Dangling bytes at the end of a failing test do not displace the test's own failure. -/
@@ -516,9 +516,9 @@ def danglingBytesKeepFailure : Test := do
     let out ← IO.getStdout
     out.write ("é".toUTF8.extract 0 1)
     fail "the real failure"
-  assertEq 1 results.size
+  assertBEq 1 results.size
   match results[0]!.status with
-  | .fail f => assertEq "the real failure" f.message
+  | .fail f => assertBEq "the real failure" f.message
   | s => fail s!"expected the assertion failure, got {repr s}"
 
 /-- A raw write with no valid decoding is rejected at the write itself. -/
@@ -527,7 +527,7 @@ def captureRejectsInvalidBytes : Test := do
   let results ← resultsOf do
     let out ← IO.getStdout
     out.write (ByteArray.mk #[0xFF])
-  assertEq 1 results.size
+  assertBEq 1 results.size
   assertTrue (results[0]!.status matches .error _)
 
 /--
@@ -548,7 +548,7 @@ def writeOutputDoesNotRecurse : Test := do
   discard <| runEntry ctx <|
     TestEntry.of "p" "M" "prints" { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ }
       (IO.println "live" : Test)
-  assertEq 1 (← depth.get)
+  assertBEq 1 (← depth.get)
 
 /--
 A fragment printed inside a nested result reaches the live output destination exactly once. The
@@ -568,7 +568,7 @@ def writeOutputDeliversNestedFragmentsOnce : Test := do
   discard <| runEntry ctx <|
     TestEntry.of "p" "M" "nested" { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ }
       (result "inner" (IO.println "hi") : Test)
-  assertEq #["hi\n"] (← received.get)
+  assertBEq #["hi\n"] (← received.get)
 
 /--
 A live output destination that fails does not fail the test that happened to be printing. It is
@@ -592,15 +592,15 @@ def writeOutputFailureIsContained : Test := do
   result "the printing tests are not blamed" do
     assertTrue ((← statuses.get).all (·.isSuccess))
   result "the destination is left alone after it fails" do
-    assertEq 1 (← calls.get)
+    assertBEq 1 (← calls.get)
   result "the failure is reported" do
     assertContains "live output destination failed" out.all
 
 /-- A failure that a nested `result` recorded still satisfies `expectFail`. -/
 @[test]
 def expectFailSeesNestedResult : Test := do
-  let results ← resultsOf (expectFail (result "inner" (assertEq 1 2)))
-  assertEq 1 results.size
+  let results ← resultsOf (expectFail (result "inner" (assertBEq 1 2)))
+  assertBEq 1 results.size
   assertTrue results[0]!.status.isSuccess
 
 /-- An error inside `expectFail` is not an expected failure, even when a nested `result` records it. -/
@@ -619,7 +619,7 @@ result above it and the test itself, since an error below a result makes it an e
 def expectFailRejectsDeeplyNestedError : Test := do
   let results ← resultsOf <| expectFail <|
     result "a" <| result "b" <| show IO Unit from throw (.userError "broken setup")
-  assertEq 3 results.size
+  assertBEq 3 results.size
   for path in [#[], #["a"], #["a", "b"]] do
     assertTrue (results.any fun r => r.resultPath == path && r.status matches .error _)
       s!"the result at {path} is an error"
@@ -628,15 +628,15 @@ def expectFailRejectsDeeplyNestedError : Test := do
 @[test]
 def expectFailKeepsErrorBesideFailure : Test := do
   let results ← resultsOf <| expectFail do
-    result "a" <| assertEq 1 2
+    result "a" <| assertBEq 1 2
     result "b" <| show IO Unit from throw (.userError "broken setup")
   assertTrue (results.any (·.status matches .error _))
 
 /-- A nested failure satisfies `expectFail` whether or not the action goes on to throw. -/
 @[test]
 def expectFailAgreesAcrossPaths : Test := do
-  let thrown ← resultsOf (expectFail (do result "a" (assertEq 1 2); assertEq 3 4))
-  let recorded ← resultsOf (expectFail (do result "a" (assertEq 1 2); result "b" (assertEq 3 4)))
+  let thrown ← resultsOf (expectFail (do result "a" (assertBEq 1 2); assertBEq 3 4))
+  let recorded ← resultsOf (expectFail (do result "a" (assertBEq 1 2); result "b" (assertBEq 3 4)))
   result "action throws afterwards" (assertTrue (thrown.all (·.status.isSuccess)))
   result "action records only" (assertTrue (recorded.all (·.status.isSuccess)))
 
@@ -644,8 +644,8 @@ def expectFailAgreesAcrossPaths : Test := do
 @[test]
 def expectFailKeepsPassingResults : Test := do
   let results ← resultsOf <| expectFail do
-    result "ok" (assertEq 1 1)
-    result "a" (assertEq 1 2)
+    result "ok" (assertBEq 1 1)
+    result "a" (assertBEq 1 2)
   assertTrue (results.any (fun r => r.status.isSuccess && r.testName.endsWith "ok"))
 
 -- `here%` reports its own position, so the expected column below is the indentation of the line it
@@ -656,22 +656,22 @@ def indentedHere : Location :=
 /-- Source positions follow Lean's convention: lines count from one and columns from zero. -/
 @[test]
 def positionConvention : Test := do
-  assertEq 2 indentedHere.startPos.column
-  assertEq 5 (indentedHere.endPos.column - indentedHere.startPos.column)
+  assertBEq 2 indentedHere.startPos.column
+  assertBEq 5 (indentedHere.endPos.column - indentedHere.startPos.column)
 
 /-- The `Verbosity` predicates behave as the report relies on. -/
 @[test]
 def verbosityLevels : Test := do
-  assertEq false Verbosity.silent.showsPasses
-  assertEq true Verbosity.quiet.showsPasses
-  assertEq true Verbosity.verbose.showsPasses
-  assertEq true Verbosity.superVerbose.showsPasses
-  assertEq false Verbosity.silent.truncates
-  assertEq true Verbosity.quiet.truncates
-  assertEq false Verbosity.verbose.truncates
-  assertEq false Verbosity.superVerbose.truncates
-  assertEq false Verbosity.verbose.showsAllDocstrings
-  assertEq true Verbosity.superVerbose.showsAllDocstrings
+  assertBEq false Verbosity.silent.showsPasses
+  assertBEq true Verbosity.quiet.showsPasses
+  assertBEq true Verbosity.verbose.showsPasses
+  assertBEq true Verbosity.superVerbose.showsPasses
+  assertBEq false Verbosity.silent.truncates
+  assertBEq true Verbosity.quiet.truncates
+  assertBEq false Verbosity.verbose.truncates
+  assertBEq false Verbosity.superVerbose.truncates
+  assertBEq false Verbosity.verbose.showsAllDocstrings
+  assertBEq true Verbosity.superVerbose.showsAllDocstrings
 
 /-- The workspaces in which the self-tests run Verso's driver as a dependency's. -/
 private def fixturesDir : System.FilePath := "src/errata-tests/fixtures"
@@ -763,7 +763,7 @@ private def panicking : Test := do
   let xs : Array Nat := #[]
   -- An index that the compiler cannot fold away.
   let i ← IO.rand 0 0
-  assertEq 0 xs[i]!
+  assertBEq 0 xs[i]!
 
 /--
 A panic prints a message and continues with a default value, so a test that panics can produce a
@@ -774,14 +774,14 @@ unless the context ignores panics.
 def panicIsAnError : Test := do
   result "reported as an error" do
     let results ← resultsOf panicking
-    assertEq 1 results.size
+    assertBEq 1 results.size
     match results[0]!.status with
     | .error m => assertContains "index out of bounds" m
     | s => fail s!"expected an error, got {repr s}"
   result "ignored on request" do
     let cfg ← mkContext (ignorePanics := true)
     let results ← runEntry cfg (TestEntry.of "p" "M" "t" default panicking)
-    assertEq 1 results.size
+    assertBEq 1 results.size
     assertTrue results[0]!.status.isSuccess "the panic leaves the pass alone"
 
 /--
@@ -847,7 +847,7 @@ def mixedDiscoveryRunsEachTestOnce : Test := do
   assertExitCode 0 out
   assertContains "ok    app/AppMixed  parentTest" out.stdout
   assertContains "ok    app/AppMixed.Child  childTest" out.stdout
-  assertEq 2 (out.stdout.splitOn "childTest").length
+  assertBEq 2 (out.stdout.splitOn "childTest").length
   assertContains "2 passed, 0 failed, 0 errors" out.stdout
 
 /--
@@ -885,14 +885,14 @@ of them did not pass.
 def testKeepsOwnOutputAndTime : Test := do
   let results ← resultsOf setupThenFailingCheck
   let some own := results.find? (·.resultPath.isEmpty) | fail "the test's own result is missing"
-  assertEq "setup\n" own.output.stdout
+  assertBEq "setup\n" own.output.stdout
   let .fail f := own.status
     | fail s!"expected the test to fail with its named result, got {repr own.status}"
-  assertEq "a named result did not pass" f.message
+  assertBEq "a named result did not pass" f.message
   let some check := results.find? (·.resultPath == #["check"]) | fail "the named result is missing"
   assertTrue (30 ≤ check.durationMs) "the named result's time includes its sleep"
   assertTrue (own.durationMs < check.durationMs) "the test's own time leaves out its named result's"
-  assertEq (some own) results[0]?
+  assertBEq (some own) results[0]?
 
 /--
 The human-readable report shows a test's own failure, with the test's output, above the named
@@ -909,7 +909,7 @@ def reportShowsTestOutputAboveFailedNamedResult : Test := do
   -- The named result follows the test's own result.
   assertContains "\n  FAIL  check: " ((out.stdout.splitOn own)[1]?.getD "")
   assertContains "0 passed, 2 failed, 0 errors" out.stdout
-  assertEq 2 (← failures.get)
+  assertBEq 2 (← failures.get)
 
 /-- Named results print indented under their test by their own names, siblings included. -/
 @[test]
@@ -932,8 +932,8 @@ duration leaves it out.
 def expectFailKeepsDroppedTimeOutOfOwnDuration : Test := do
   let results ← resultsOf <| expectFail <| result "slow" do
     IO.sleep 50
-    assertEq 1 2
-  assertEq 1 results.size
+    assertBEq 1 2
+  assertBEq 1 results.size
   let own := results[0]!.durationMs
   assertTrue (own < 50) s!"the test's own duration, {own}ms, includes the dropped named result's"
 
@@ -944,7 +944,7 @@ def junitIncludesTestOutputOnFailedNamedResult : Test := do
   let xml := junitReport { results, seed := 0 }
   assertContains "tests=\"2\" failures=\"2\"" xml
   assertContains "<system-out>setup" xml
-  assertEq 1 ((xml.splitOn "<system-out>").length - 1)
+  assertBEq 1 ((xml.splitOn "<system-out>").length - 1)
 
 /-- The runner's help names the command that its options follow. -/
 @[test]
@@ -967,9 +967,9 @@ def driverMainChecksFlag : Test := do
     withFlag.set (← driverMain testDriverFlag testInvocation #[entry] [testDriverFlag])
     withoutFlag.set (← driverMain testDriverFlag testInvocation #[entry] [])
   result "flag leads" do
-    assertEq 0 (← withFlag.get)
+    assertBEq 0 (← withFlag.get)
   result "flag missing" do
-    assertEq 1 (← withoutFlag.get)
+    assertBEq 1 (← withoutFlag.get)
     assertContains testInvocation.run out.all
     assertContains testDriverFlag out.all
 
@@ -980,7 +980,7 @@ removed before the runner's own options are parsed.
 @[test]
 def driverInvocation : Test := do
   result "flag is removed" do
-    assertEq (some ["-v", "--", "--x=1"])
+    assertBEq (some ["-v", "--", "--x=1"])
       (checkInvocation testDriverFlag testInvocation [testDriverFlag, "-v", "--", "--x=1"]).toOption
   result "no arguments" do
     assertTrue (checkInvocation testDriverFlag testInvocation [] matches .error _)
@@ -1001,31 +1001,31 @@ for the tests go after `--`.
 @[test]
 def runnerArgParsing : Test := do
   result "default verbosity" do
-    assertEq (some Verbosity.silent) ((parseOptions []).toOption.map (·.verbosity))
+    assertBEq (some Verbosity.silent) ((parseOptions []).toOption.map (·.verbosity))
   result "-v" do
-    assertEq (some Verbosity.quiet) ((parseOptions ["-v"]).toOption.map (·.verbosity))
+    assertBEq (some Verbosity.quiet) ((parseOptions ["-v"]).toOption.map (·.verbosity))
   result "--verbose" do
-    assertEq (some Verbosity.quiet) ((parseOptions ["--verbose"]).toOption.map (·.verbosity))
+    assertBEq (some Verbosity.quiet) ((parseOptions ["--verbose"]).toOption.map (·.verbosity))
   result "-vv" do
-    assertEq (some Verbosity.verbose) ((parseOptions ["-vv"]).toOption.map (·.verbosity))
+    assertBEq (some Verbosity.verbose) ((parseOptions ["-vv"]).toOption.map (·.verbosity))
   result "-vvv" do
-    assertEq (some Verbosity.superVerbose) ((parseOptions ["-vvv"]).toOption.map (·.verbosity))
+    assertBEq (some Verbosity.superVerbose) ((parseOptions ["-vvv"]).toOption.map (·.verbosity))
   result "update-golden" do
-    assertEq (some true) ((parseOptions ["--update-golden"]).toOption.map (·.updateGolden))
+    assertBEq (some true) ((parseOptions ["--update-golden"]).toOption.map (·.updateGolden))
   result "seed" do
-    assertEq (some (some 42)) ((parseOptions ["--seed", "42"]).toOption.map (·.seed))
+    assertBEq (some (some 42)) ((parseOptions ["--seed", "42"]).toOption.map (·.seed))
   result "non-numeric seed rejected" do
     assertTrue ((parseOptions ["--seed", "x"]) matches .error _)
   result "junit path" do
-    assertEq (some (some "r.xml")) ((parseOptions ["--junit", "r.xml"]).toOption.map (·.junitPath))
+    assertBEq (some (some "r.xml")) ((parseOptions ["--junit", "r.xml"]).toOption.map (·.junitPath))
   result "missing junit path rejected" do
     assertTrue ((parseOptions ["--junit"]) matches .error _)
   result "test options after --" do
     let opts := (parseOptions ["--", "--golden", "on", "--flag=v=1", "--golden", "two"]).toOption
-    assertEq (some #["on", "two"]) (opts.map (·.options.getD "golden" #[]))
-    assertEq (some #["v=1"]) (opts.map (·.options.getD "flag" #[]))
+    assertBEq (some #["on", "two"]) (opts.map (·.options.getD "golden" #[]))
+    assertBEq (some #["v=1"]) (opts.map (·.options.getD "flag" #[]))
   result "valueless test option" do
-    assertEq (some #[""]) ((parseOptions ["--", "--fast"]).toOption.map (·.options.getD "fast" #[]))
+    assertBEq (some #[""]) ((parseOptions ["--", "--fast"]).toOption.map (·.options.getD "fast" #[]))
   result "unknown flag rejected" do
     assertTrue ((parseOptions ["--golden", "on"]) matches .error _)
   result "misplaced library name diagnosed" do
@@ -1040,7 +1040,7 @@ def emptyRunFails : Test := do
   let out ← captureOutput do
     code.set (← runMain testInvocation #[] [])
   assertContains "no tests were discovered" out.all
-  assertEq 1 (← code.get).toNat
+  assertBEq 1 (← code.get).toNat
 
 /--
 Every report records a run that discovered nothing as a failed run: JUnit has a "Test run" suite
@@ -1049,15 +1049,15 @@ with an error case, the JSON object lists the issue, and the Markdown headline i
 @[test]
 def emptyRunReachesReports : Test := do
   let (code, xml, json, md) ← runReporting #[] []
-  assertEq 1 code.toNat
+  assertBEq 1 code.toNat
   result "JUnit" do
     assertContains "<testsuite name=\"Test run\"" xml
     assertContains "<error message=\"no tests were discovered\"" xml
   result "JSON" do
     let .ok j := Lean.Json.parse json | fail "the JSON report does not parse"
     let .ok issues := j.getObjValAs? (Array Lean.Json) "issues" | fail "no issues field"
-    assertEq 1 issues.size
-    assertEq (some "error") (issues[0]!.getObjValAs? String "level").toOption
+    assertBEq 1 issues.size
+    assertBEq (some "error") (issues[0]!.getObjValAs? String "level").toOption
     assertContains "no tests were discovered" ((issues[0]!.getObjValAs? String "message").toOption.getD "")
   result "Markdown" do
     assertContains "## ❌" md
@@ -1071,7 +1071,7 @@ def reportSilent : Test := do
   let out ← captureOutput do discard <| humanReport .silent #[pass, fail]
   assertContains "FAIL  p/M  u: boom" out.stdout
   assertContains "1 passed, 1 failed, 0 errors" out.stdout
-  assertEq 1 (out.stdout.splitOn "ok    ").length
+  assertBEq 1 (out.stdout.splitOn "ok    ").length
 
 /-- At verbose verbosity the report shows passes too. -/
 @[test]
@@ -1118,12 +1118,12 @@ def reportTruncates : Test := do
   let many := (Array.range 60).map fun i =>
     ({ package := "p", moduleName := "M", test := "many", resultPath := #[s!"case {i}"], status := .pass } : Result)
   let quiet ← captureOutput do discard <| humanReport .quiet many
-  assertEq 51 (quiet.stdout.splitOn "ok    ").length
+  assertBEq 51 (quiet.stdout.splitOn "ok    ").length
   -- The summary lines up with the named results' rows, which are one level deep.
   assertContains "\n      (... and 10 more passed)" quiet.stdout
   let verbose ← captureOutput do discard <| humanReport .verbose many
-  assertEq 61 (verbose.stdout.splitOn "ok    ").length
-  assertEq 1 (verbose.stdout.splitOn "(... and").length
+  assertBEq 61 (verbose.stdout.splitOn "ok    ").length
+  assertBEq 1 (verbose.stdout.splitOn "(... and").length
 
 /--
 Truncation never suppresses a failure or error: past the cap they print in full and only the passes
@@ -1145,7 +1145,7 @@ def reportFailureCount : Test := do
   let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
   let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail { message := "x" } }
   let err : Result := { package := "p", moduleName := "M", test := "v", status := .error "oops" }
-  assertEq 2 (← humanReport .silent #[pass, fail, err])
+  assertBEq 2 (← humanReport .silent #[pass, fail, err])
 
 /-- `markdownReport` gives a tally, an open collapsible per failure, and a per-module table. -/
 @[test]
@@ -1165,7 +1165,7 @@ def alternativeFailure : Test := expectFail failure
 
 /-- `<|>` recovers from an assertion failure by running the alternative. -/
 @[test]
-def alternativeOrElse : Test := failure <|> assertEq 1 1
+def alternativeOrElse : Test := failure <|> assertBEq 1 1
 
 -- Two guards whose first source line is identical must get distinct generated names.
 #test_guard 1 + 1 == 2

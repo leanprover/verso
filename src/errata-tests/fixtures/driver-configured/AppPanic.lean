@@ -14,4 +14,4 @@ def panicsThenPasses : Test := do
   let xs : Array Nat := #[]
   -- An index that the compiler cannot fold away.
   let i ← IO.rand 0 0
-  assertEq 0 xs[i]!
+  assertBEq 0 xs[i]!
