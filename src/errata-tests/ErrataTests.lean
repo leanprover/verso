@@ -75,6 +75,10 @@ error: Module `NoSuchModule` is not imported, so its tests cannot be reached. Im
 #test_msgs in
 example : Array TestEntry := getAllTests% "verso" NoSuchModule
 
+/-- error: `onePlusOne` is already marked as a test -/
+#test_msgs in
+attribute [test] onePlusOne
+
 /--
 An exact module name leads to only its own tests being found. A name with a trailing `.*` also
 contributes the tests of every module below it, and a module named more than once contributes its

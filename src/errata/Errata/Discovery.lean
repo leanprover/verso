@@ -74,6 +74,8 @@ The docstring is read here, while it is still in the live environment, since a d
 not load the imported docstrings.
 -/
 meta def recordTest (decl : Name) : AttrM Unit := do
+  if (testExt.getState (← getEnv)).any (·.name == decl) then
+    throwError m!"`{privateToUserName decl}` is already marked as a test"
   let action ← (testAction decl).run'
   let run := mkPrivateName (← getEnv) (← mkFreshUserName (privateToUserName decl ++ `run))
   let type := mkApp (mkConst ``TestM) (mkConst ``Unit)
