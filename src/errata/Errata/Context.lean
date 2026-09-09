@@ -68,6 +68,10 @@ structure Context where
   -/
   outputFailed : IO.Ref Bool
   /--
+  The time spent so far in the named results directly inside the current scope, in milliseconds.
+  -/
+  insideMs : IO.Ref Nat
+  /--
   The streams from before the outermost capture, under which the output destination runs. The
   outermost capture records them, and a capture nested inside it reuses them, so a
   {name (full := Errata.Context.writeOutput)}`writeOutput` handler that prints reaches the runner's

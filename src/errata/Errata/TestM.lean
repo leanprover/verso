@@ -85,18 +85,17 @@ def Context.mkResult (ctx : Context) (status : Status) (durationMs : Nat := 0) :
 /--
 Builds the result for a test or named result that has just finished running.
 
-{name}`outcome` is the result of its own code: an error, a failed assertion, or completion. Results
-from inner named results are not tracked in {name}`outcome`. {name}`output` is its output, also
-excluding output from nested named results. {name}`durationMs` is how long the whole run took,
-**including** inner named results, and {name}`recorded` is the inner named results.
+{name}`outcome` is how its own code ended: an error, a failed assertion, or completion.
+{name}`output` is what its own code printed. {name}`durationMs` is how long the whole run took, and
+{name}`insideMs` is how much of that was spent in the named results it ran, {name}`recorded`.
 
 The status is the worst of the code's own outcome and the statuses of the named results directly
-below it, where an error is worse than a failure, which is worse than a pass. The duration is the
-time not spent in the inner named results, so every result reports only its own time.
+below it: an error outranks a failure, which outranks a pass. The duration does not include that of
+inner named results.
 -/
 def Context.resultOfOutcome (ctx : Context)
-    (outcome : Except IO.Error (Except TestFailure Unit)) (output : OutputLog) (durationMs : Nat)
-    (recorded : Array Result) : Result :=
+    (outcome : Except IO.Error (Except TestFailure Unit)) (output : OutputLog)
+    (durationMs insideMs : Nat) (recorded : Array Result) : Result :=
   let below := recorded.filter (·.resultPath.size == ctx.resultPath.size + 1)
   let errors := below.countP (·.status matches .error _)
   let failures := below.countP (·.status matches .fail _)
@@ -111,8 +110,7 @@ def Context.resultOfOutcome (ctx : Context)
       else if failures > 0 then
         .fail { message := count failures "did not pass", location? := some ctx.location }
       else .pass
-  let inside := recorded.foldl (· + ·.durationMs) 0
-  { ctx.mkResult status (durationMs - inside) with output }
+  { ctx.mkResult status (durationMs - insideMs) with output }
 
 /--
 Splits bytes into a prefix ready to decode and a tail that is the start of an unfinished
@@ -255,8 +253,10 @@ failure if it failed an assertion or one of its own named results did not pass, 
 otherwise. Its output and its duration are its own, leaving out what happened inside its named
 results.
 -/
-def result (name : String) (act : TestM Unit) : TestM Unit :=
-  withReader (fun c => { c with resultPath := c.resultPath.push name }) do
+def result (name : String) (act : TestM Unit) : TestM Unit := do
+  let outer ← read
+  let insideMs ← IO.mkRef 0
+  let dur ← withReader (fun c => { c with resultPath := c.resultPath.push name, insideMs }) do
     let ctx ← read
     let before := (← ctx.log.get).size
     let start ← IO.monoMsNow
@@ -265,8 +265,11 @@ def result (name : String) (act : TestM Unit) : TestM Unit :=
     let dur := stop - start
     let logged ← ctx.log.get
     let recorded := logged.extract before logged.size
-    let own := ctx.resultOfOutcome outcome output dur recorded
+    let own := ctx.resultOfOutcome outcome output dur (← insideMs.get) recorded
     ctx.log.set (logged.extract 0 before ++ #[own] ++ recorded)
+    pure dur
+  -- The enclosing scope's own time leaves out this block's whole duration.
+  outer.insideMs.modify (· + dur)
 
 /--
 Expects the action to fail an assertion. The current scope passes if it does and fails if it

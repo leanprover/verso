@@ -46,16 +46,18 @@ def TestEntry.of {α} [IsTest α] (package moduleName test : String) (location :
 /-- Runs a single test entry, collecting all of its results. -/
 def runEntry (cfg : Context) (entry : TestEntry) : IO (Array Result) := do
   let log ← IO.mkRef (#[] : Array Result)
+  let insideMs ← IO.mkRef 0
   let ctx := { cfg with
     package := entry.package, moduleName := entry.moduleName, test := entry.test,
-    resultPath := #[], location := entry.location, log, description? := entry.docstring?
+    resultPath := #[], location := entry.location, log, insideMs,
+    description? := entry.docstring?
   }
   let start ← IO.monoMsNow
   let (outcome, output) ← runCapturing ctx entry.run
   let stop ← IO.monoMsNow
   let dur := stop - start
   let logged ← log.get
-  return #[ctx.resultOfOutcome outcome output dur logged] ++ logged
+  return #[ctx.resultOfOutcome outcome output dur (← insideMs.get) logged] ++ logged
 
 /-- Runs all the test entries and collects their results. -/
 def run (cfg : Context) (entries : Array TestEntry) : IO (Array Result) := do
@@ -70,7 +72,8 @@ def mkContext (updateGolden : Bool := false)
   let log ← IO.mkRef (#[] : Array Result)
   let usedOptions ← IO.mkRef ({} : Std.HashSet String)
   let outputFailed ← IO.mkRef false
-  return { updateGolden, options, seed, log, usedOptions, outputFailed }
+  let insideMs ← IO.mkRef 0
+  return { updateGolden, options, seed, log, usedOptions, outputFailed, insideMs }
 
 /-- The settings parsed from the runner's command line. -/
 structure Options where

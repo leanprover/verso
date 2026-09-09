@@ -692,6 +692,19 @@ def reportIndentsNamedResultsUnderTheirParent : Test := do
   assertContains "\n  ok    c (" out.stdout
   assertContains "\n    ok    d (" out.stdout
 
+/--
+The time of a named result that `expectFail` drops is still the named result's own, so the test's
+duration leaves it out.
+-/
+@[test]
+def expectFailKeepsDroppedTimeOutOfOwnDuration : Test := do
+  let results ← resultsOf <| expectFail <| result "slow" do
+    IO.sleep 50
+    assertEq 1 2
+  assertEq 1 results.size
+  let own := results[0]!.durationMs
+  assertTrue (own < 50) s!"the test's own duration, {own}ms, includes the dropped named result's"
+
 @[test]
 def junitCarriesTestOutputOnFailedNamedResult : Test := do
   let results ← resultsOf setupThenFailingCheck
