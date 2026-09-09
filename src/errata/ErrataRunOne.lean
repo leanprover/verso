@@ -40,10 +40,22 @@ private def emitLine (out : IO.FS.Stream) (key : String) (value : Json) : IO Uni
   out.putStr ((Json.mkObj [(key, value)]).compress ++ "\n")
   out.flush
 
-/-- Imports {lean}`targetModule`, runs the test named by {lean}`declName`, and streams its result. -/
+/--
+Imports the module, runs the test named by the declaration, and streams its result. The seed for
+property tests is the third argument, or is drawn when there is none.
+-/
 unsafe def runImpl (args : List String) : IO UInt32 := do
-  let [modStr, declStr] := args
-    | IO.eprintln "usage: errata-run-one <module> <decl-json>"; return 2
+  let usage : IO UInt32 := do
+    IO.eprintln "usage: errata-run-one <module> <decl-json> [seed]"
+    return 2
+  let (modStr, declStr, seed?) ←
+    match args with
+    | [modStr, declStr] => pure (modStr, declStr, none)
+    | [modStr, declStr, seedStr] =>
+      match seedStr.toNat? with
+      | some seed => pure (modStr, declStr, some seed)
+      | none => return ← usage
+    | _ => return ← usage
   let targetModule := modStr.toName
   let declName ←
     match Json.parse declStr with
@@ -66,7 +78,7 @@ unsafe def runImpl (args : List String) : IO UInt32 := do
   let sink := fun (o : Errata.Output) => do
     let chunk := { Errata.OutputChunk.ofOutput o with time := ← nowMs }
     emitLine out "chunk" (toJson chunk)
-  let outcome ← Errata.runValue default act (sink := sink)
+  let outcome ← Errata.runAction default act (seed? := seed?) (sink := sink)
   emitLine out "outcome" (toJson { outcome with description? := doc? })
   return 0
 

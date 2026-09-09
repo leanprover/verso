@@ -108,7 +108,7 @@ function outputBlock(chunks, execStartTime, hovered, setHovered) {
 /**
  * @typedef {{stream: string, text: string, time?: number}} Chunk
  * @typedef {{status: string, durationMs: number, message?: string, detail?: string,
- *            output?: Chunk[], description?: string}} Outcome
+ *            output?: Chunk[], description?: string, seed?: number}} Outcome
  * @typedef {{phase: string, chunks: Chunk[], startTime: number, buildMs: number,
  *            execStartTime: number}} RunFields
  *
@@ -237,6 +237,10 @@ export default function (props) {
     const [outputOpen, setOutputOpen] = React.useState(true);
     // Whether the cursor is over the output area, revealing the floating copy button.
     const [overOutput, setOverOutput] = React.useState(false);
+    // The seed for property tests as typed, or blank to have one drawn.
+    const [seed, setSeed] = React.useState("");
+    // Whether the run settings (the seed field) are shown, behind the gear button.
+    const [settingsOpen, setSettingsOpen] = React.useState(false);
 
     // Bumped on each run start, cancel, and unmount so a superseded await loop ignores late replies.
     const gen = React.useRef(0);
@@ -296,6 +300,8 @@ export default function (props) {
             phaseRef.current = "";
             dispatch({ type: "reset", outcome: resultCache.get(cacheKey) || null });
             setHovered(null);
+            setSeed("");
+            setSettingsOpen(false);
             loop(myGen);
             let cancelledCheck = false;
             let cleanTimer = null;
@@ -321,17 +327,24 @@ export default function (props) {
     );
 
     function run() {
+        const seedText = seed.trim();
+        if (seedText !== "" && !/^\d+$/.test(seedText)) {
+            dispatch({ type: "fail", error: "the seed must be a natural number" });
+            return;
+        }
         const myGen = gen.current + 1;
         gen.current = myGen;
         sinceRef.current = 0;
         phaseRef.current = "building";
         dispatch({ type: "start", now: Date.now() });
         setElapsed(0);
-        rs.call("Errata.Widget.startTest", {
+        const request = {
             decl: props.decl,
             module: props.module,
             version: version,
-        }).then(
+        };
+        if (seedText !== "") request.seed = Number(seedText);
+        rs.call("Errata.Widget.startTest", request).then(
             function () {
                 if (gen.current === myGen) loop(myGen);
             },
@@ -349,6 +362,7 @@ export default function (props) {
     }
 
     const name = props.name || "test";
+    const seedSet = seed.trim() !== "";
 
     const header = e(
         "div",
@@ -377,6 +391,63 @@ export default function (props) {
         !clean && !running
             ? e("span", { style: { opacity: 0.6, fontSize: "11px" } }, "unsaved — save to run")
             : null,
+        // The run settings sit at the right edge: the seed field when shown, then the gear that
+        // shows it. The gear stays at full strength while a seed is set, so a hidden seed is not a
+        // surprise.
+        e(
+            "span",
+            { style: { marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px" } },
+            settingsOpen
+                ? e("input", {
+                      type: "text",
+                      inputMode: "numeric",
+                      value: seed,
+                      placeholder: "seed",
+                      disabled: running,
+                      title: "Seed for property tests; blank draws one",
+                      "aria-label": "Seed for property tests",
+                      onChange: function (ev) {
+                          setSeed(ev.target.value);
+                      },
+                      // Fits its value or placeholder; `size` stands in where `field-sizing` is
+                      // unsupported.
+                      size: Math.max(seed.length, 4) + 1,
+                      style: {
+                          fieldSizing: "content",
+                          minWidth: "5ch",
+                          fontFamily: monoFont,
+                          fontSize: "11px",
+                      },
+                  })
+                : null,
+            e(
+                "button",
+                {
+                    onClick: function () {
+                        setSettingsOpen(!settingsOpen);
+                    },
+                    title: settingsOpen
+                        ? "Hide run settings"
+                        : seedSet
+                          ? "Run settings (seed " + seed.trim() + ")"
+                          : "Run settings",
+                    "aria-label": "Run settings",
+                    "aria-expanded": settingsOpen,
+                    style: {
+                        display: "flex",
+                        alignItems: "center",
+                        padding: "2px",
+                        lineHeight: 0,
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "var(--vscode-textLink-foreground, #0078d4)",
+                        opacity: settingsOpen || seedSet ? 1 : 0.75,
+                    },
+                },
+                e("span", { className: "codicon codicon-settings-gear", "aria-hidden": true }),
+            ),
+        ),
     );
 
     const outcome = st.tag === "done" ? st.outcome : null;
@@ -525,10 +596,21 @@ export default function (props) {
         primary = e("span", { style: { opacity: 0.7 } }, "cancelled");
     }
 
+    // Dimmed badges after the status: text, and for the seed, a click that fills the seed field.
     const badges = [];
-    if (timings && timings.startTime) badges.push("Start " + formatClock(timings.startTime));
-    if (timings && timings.buildMs) badges.push("Build " + formatDuration(timings.buildMs));
-    if (outcome) badges.push("Run " + formatDuration(outcome.durationMs));
+    if (timings && timings.startTime) badges.push({ text: "Start " + formatClock(timings.startTime) });
+    if (timings && timings.buildMs) badges.push({ text: "Build " + formatDuration(timings.buildMs) });
+    if (outcome) badges.push({ text: "Run " + formatDuration(outcome.durationMs) });
+    if (outcome && typeof outcome.seed === "number") {
+        badges.push({
+            text: "Seed " + outcome.seed,
+            title: "Use this seed for the next run",
+            onClick: function () {
+                setSeed(String(outcome.seed));
+                setSettingsOpen(true);
+            },
+        });
+    }
 
     const infoRow =
         primary || badges.length
@@ -546,8 +628,18 @@ export default function (props) {
                   ...badges.map(function (b, i) {
                       return e(
                           "span",
-                          { key: i, style: { opacity: 0.55, fontSize: "11px" } },
-                          "· " + b,
+                          {
+                              key: i,
+                              title: b.title,
+                              onClick: b.onClick,
+                              style: {
+                                  opacity: 0.55,
+                                  fontSize: "11px",
+                                  cursor: b.onClick ? "pointer" : undefined,
+                                  textDecoration: b.onClick ? "underline dotted" : undefined,
+                              },
+                          },
+                          "· " + b.text,
                       );
                   }),
               )
