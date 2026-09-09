@@ -245,13 +245,12 @@ def captureOutput (act : TestM Unit) : TestM OutputLog := do
 Runs {name}`act` as a named result of the current test.
 
 The name is added to the current result path, so nested named results have dotted names. A failure
-in {name}`act` is recorded and does not stop the test, so the named results that follow still run.
+in {name}`act` is recorded, and the named results that follow still run.
 
 The run produces one result for {name}`act` itself, followed by the results of any named results
-inside it. Its status follows {name}`Context.resultOfOutcome`: an error if {name}`act` raised one, a
-failure if it failed an assertion or one of its own named results did not pass, and a pass
-otherwise. Its output and its duration are its own, leaving out what happened inside its named
-results.
+inside it. Its status is an error if {name}`act` raised one, a failure if it failed an assertion or
+one of its own named results did not pass, and a pass otherwise. Its output and its duration cover
+only its own code; what happened inside its named results is reported there.
 -/
 def result (name : String) (act : TestM Unit) : TestM Unit := do
   let outer ← read
