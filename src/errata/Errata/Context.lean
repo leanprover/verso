@@ -53,7 +53,10 @@ structure Context where
   source range; the assertion language refines it to each call site.
   -/
   location : Location := default
-  /-- The results collected so far during the current test. -/
+  /--
+  The results recorded so far in the current scope. A named result records into a log of its own
+  and appends its results to the enclosing scope's log when it finishes.
+  -/
   log : IO.Ref (Array Result)
   /-- The option names read during the run, shared across all tests, for reporting unused options. -/
   usedOptions : IO.Ref (HashSet String)

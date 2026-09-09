@@ -255,20 +255,20 @@ results.
 -/
 def result (name : String) (act : TestM Unit) : TestM Unit := do
   let outer ← read
+  -- The block records into a log and a time counter of its own. The docstring belongs to the outer test's
+  -- declaration, so a named result's scope has no docstring.
+  let log ← IO.mkRef (#[] : Array Result)
   let insideMs ← IO.mkRef 0
-  -- The docstring belongs to the test's declaration, so a named result's scope has none.
   let dur ← withReader (fun c =>
-      { c with resultPath := c.resultPath.push name, insideMs, description? := none }) do
+      { c with resultPath := c.resultPath.push name, log, insideMs, description? := none }) do
     let ctx ← read
-    let before := (← ctx.log.get).size
     let start ← IO.monoMsNow
     let (outcome, output) ← runCapturing ctx act
     let stop ← IO.monoMsNow
     let dur := stop - start
-    let logged ← ctx.log.get
-    let recorded := logged.extract before logged.size
+    let recorded ← log.get
     let own := ctx.resultOfOutcome outcome output dur (← insideMs.get) recorded
-    ctx.log.set (logged.extract 0 before ++ #[own] ++ recorded)
+    outer.log.modify (·.push own ++ recorded)
     pure dur
   -- The enclosing scope's own time leaves out this block's whole duration.
   outer.insideMs.modify (· + dur)
