@@ -256,7 +256,9 @@ results.
 def result (name : String) (act : TestM Unit) : TestM Unit := do
   let outer ← read
   let insideMs ← IO.mkRef 0
-  let dur ← withReader (fun c => { c with resultPath := c.resultPath.push name, insideMs }) do
+  -- The docstring belongs to the test's declaration, so a named result's scope has none.
+  let dur ← withReader (fun c =>
+      { c with resultPath := c.resultPath.push name, insideMs, description? := none }) do
     let ctx ← read
     let before := (← ctx.log.get).size
     let start ← IO.monoMsNow

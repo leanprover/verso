@@ -118,8 +118,14 @@ def docstringReachesResults : Test := do
   let cfg ← mkContext
   let results ← runEntry cfg <|
     TestEntry.of "p" "M" "documented" { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ }
-      (pure () : Test) (docstring? := some "What it checks.")
-  assertTrue (results.all (·.description? == some "What it checks."))
+      (result "check" (assertEq 1 2) : Test) (docstring? := some "What it checks.")
+  result "the test's own result carries it" do
+    assertTrue (results.any fun r =>
+      r.resultPath.isEmpty && r.description? == some "What it checks.")
+  result "a named result carries none" do
+    assertTrue (results.any fun r => r.resultPath == #["check"] && r.description?.isNone)
+  result "the Markdown report shows it once" do
+    assertEq 2 ((markdownReport results).splitOn "What it checks.").length
 
 /--
 The human-readable report shows a failure's docstring, indented below its status line, and shows a

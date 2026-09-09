@@ -40,7 +40,7 @@ private def printResult (verbosity : Verbosity) (r : Result) (parentShown : Bool
     | some last => if parentShown then last else s!"{r.moduleTarget}  {r.testName}"
     | none => s!"{r.moduleTarget}  {r.testName}"
   let printDoc : IO Unit := do
-    if r.resultPath.isEmpty && (verbosity.showsAllDocstrings || !r.status.isSuccess) then
+    if verbosity.showsAllDocstrings || !r.status.isSuccess then
       if let some d := r.description? then IO.println (indentLines d detail)
   let printOutput : IO Unit := do
     unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}" detail)
