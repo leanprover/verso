@@ -73,6 +73,8 @@ meta structure StartRequest where
   module : String
   /-- A hash of the test's source, recorded with the run so an edit can invalidate it. -/
   version : String
+  /-- The seed for property tests, or {lean}`none` to have one drawn. -/
+  seed? : Option Nat := none
 deriving Lean.FromJson, Lean.ToJson
 
 /-- A request for output past a known position, naming the test by its encoded declaration. -/
@@ -167,8 +169,10 @@ private meta def buildFailure (detail : String) : Errata.RunOutcome := {
 /--
 Builds the test's module from the saved source, then runs the test, streaming its output into the
 run state. Building first means a Run reflects the latest saved version of the test.
+{name}`seed?` is the seed for property tests, or {lean}`none` to have the runner draw one.
 -/
-private meta def buildAndRun (module declJson : String) (state : RunState) : IO Unit := do
+private meta def buildAndRun (module declJson : String) (seed? : Option Nat) (state : RunState) :
+    IO Unit := do
   -- `lake query` builds the runner exe and the test's module (so the run reflects the saved source)
   -- and prints the exe's absolute path on stdout; progress and errors go to stderr.
   let build ← IO.Process.spawn {
@@ -195,7 +199,7 @@ private meta def buildAndRun (module declJson : String) (state : RunState) : IO 
   -- import would fail.
   let run ← IO.Process.spawn {
     stdin := .null, stdout := .piped, stderr := .inherit
-    cmd := runnerPath, args := #[module, declJson]
+    cmd := runnerPath, args := #[module, declJson] ++ (seed?.map (#[toString ·])).getD #[]
   }
   state.kill.set run.kill
   state.buildMs.set ((← nowMs) - state.startTime)
@@ -234,7 +238,7 @@ meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
     kill := ← IO.mkRef (pure ())
   }
   runRegistry.modify (·.insert declName state)
-  let _ ← IO.asTask (buildAndRun req.module req.decl.compress state)
+  let _ ← IO.asTask (buildAndRun req.module req.decl.compress req.seed? state)
   return RequestTask.pure ()
 
 open Server in

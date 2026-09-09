@@ -48,6 +48,11 @@ structure RunOutcome where
   output : Array OutputChunk := #[]
   /-- The test's docstring, rendered as Markdown, when it has one. -/
   description? : Option String := none
+  /--
+  The seed for property tests that the run used, so a failure can be run again with it. Absent when
+  the test did not run at all.
+  -/
+  seed? : Option Nat := none
 deriving Lean.FromJson, Lean.ToJson, Repr, Inhabited
 
 /-- The status name a single result contributes. -/
@@ -76,9 +81,9 @@ Condenses the results of one test run into a single outcome. The verdict is the 
 present (error over failed over passed). The message and detail come from the innermost result
 with that status, since a test's own result reports a named result's failure only in summary while
 the named result reports the assertion itself. The output is every result's captured fragments in
-order, each tagged by its stream.
+order, each tagged by its stream. {name}`seed` is the seed for property tests that the run used.
 -/
-def summarizeResults (results : Array Result) : RunOutcome := Id.run do
+def summarizeResults (seed : Nat) (results : Array Result) : RunOutcome := Id.run do
   let rank : Status → Nat
     | .error _ => 2
     | .fail _ => 1
@@ -99,23 +104,29 @@ def summarizeResults (results : Array Result) : RunOutcome := Id.run do
     message? := statusMessage worst
     detail? := match worst with | .fail f => f.detail? | _ => none
     output
+    seed? := some seed
   }
 
 /--
-Runs one testable value to completion and condenses its results into a {name}`RunOutcome`. Captured
+Runs one test action to completion and condenses its results into a {name}`RunOutcome`. Captured
 output is kept on a passing result too, since the widget shows it on demand rather than only on
-failure.
+failure. Without a seed for property tests, one is drawn.
 -/
-def runValue {α} [IsTest α] (location : Location) (value : α)
+def runAction (location : Location) (act : TestM Unit) (seed? : Option Nat := none)
     (sink : Output → IO Unit := fun _ => pure ()) : IO RunOutcome := do
-  let cfg := { ← mkContext with location, writeOutput := sink }
+  let cfg := { ← mkContext (seed := seed?) with location, writeOutput := sink }
   let start ← IO.monoMsNow
-  let (outcome, output) ← runCapturing cfg (IsTest.toTest value)
+  let (outcome, output) ← runCapturing cfg act
   let dur := (← IO.monoMsNow) - start
   let logged ← cfg.log.get
   -- The test's own result leads the results it recorded, as the batch runner orders them.
   let own := cfg.resultOfOutcome outcome output dur (← cfg.insideMs.get) logged
-  return summarizeResults (#[own] ++ logged)
+  return summarizeResults cfg.seed (#[own] ++ logged)
+
+/-- Runs one testable value as {name}`runAction` does. -/
+def runValue {α} [IsTest α] (location : Location) (value : α) (seed? : Option Nat := none)
+    (sink : Output → IO Unit := fun _ => pure ()) : IO RunOutcome :=
+  runAction location (IsTest.toTest value) seed? sink
 
 /-- Runs one testable value with a default failure location, for callers without a source range. -/
 def runValueDefault {α} [IsTest α] (value : α) : IO RunOutcome := runValue default value
