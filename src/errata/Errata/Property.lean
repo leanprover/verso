@@ -24,12 +24,11 @@ open scoped Plausible.Decorations in
 def property (p : Prop) (cfg : Configuration := {}) (loc : Location := by exact here%)
     (p' : Decorations.DecorationsOf p := by mk_decorations) [Testable p'] : TestM Unit := do
   let ctx ← read
-  let cfg := { cfg with
-    quiet := true,
-    randomSeed := ctx.seed.orElse (fun _ => cfg.randomSeed)
-  }
+  let seed := cfg.randomSeed.getD ctx.seed
+  let cfg := { cfg with quiet := true, randomSeed := some seed }
   match ← Testable.checkIO p' (cfg := cfg) with
   | .success _ => pure ()
   | .gaveUp n => failAt loc s!"property gave up after discarding {n} cases"
   | .failure _ counterExample _ =>
-    failAt loc "property falsified" (detail? := some ("\n".intercalate counterExample))
+    failAt loc "property falsified"
+      (detail? := some s!"{"\n".intercalate counterExample}\n\nReproduce with --seed {seed}.")

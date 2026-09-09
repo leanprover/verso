@@ -215,12 +215,17 @@ instance : FromJson RunReport.Issue where
     | "warning" => return { isError := false, message }
     | other => .error s!"unknown issue level: {other}"
 
-/-- Everything a report renders: the results, and the issues with the run as a whole. -/
+/--
+Everything a report renders: the results, the issues with the run as a whole, and the seed for the
+run's property tests.
+-/
 structure RunReport where
   /-- The results of every test and named result. -/
   results : Array Result
   /-- The issues with the run as a whole. -/
   issues : Array RunReport.Issue := #[]
+  /-- The seed for the run's property tests. -/
+  seed : Nat
 deriving Repr, Inhabited
 
 /-- Whether an issue fails the run. -/
@@ -380,11 +385,11 @@ instance : FromJson Result where
     }
 
 /--
-Renders the report as a JSON object: the results as an array of objects under {lit}`results`, and
-the run's issues under {lit}`issues`.
+Renders the report as a JSON object: the results as an array of objects under {lit}`results`, the
+run's issues under {lit}`issues`, and the seed for its property tests under {lit}`seed`.
 -/
 def jsonReport (report : RunReport) : String :=
-  (json%{ "results": $report.results, "issues": $report.issues }).pretty
+  (json%{ "results": $report.results, "issues": $report.issues, "seed": $report.seed }).pretty
 
 /-- The length of the longest run of consecutive backticks in {name}`s`. -/
 private def longestBacktickRun (s : String) : Nat :=
@@ -409,7 +414,7 @@ def markdownReport (report : RunReport) : String := Id.run do
   let icon := if failed + errors == 0 && !report.failsRun then "✅" else "❌"
   let mut out := s!"## {icon} Errata test results\n\n"
   out := out ++
-    s!"**{passed}** passed · **{failed}** failed · **{errors}** errors\n\n"
+    s!"**{passed}** passed · **{failed}** failed · **{errors}** errors · seed **{report.seed}**\n\n"
   for issue in report.issues do
     let mark := if issue.isError then "💥" else "⚠️"
     out := out ++ s!"<details open><summary>{mark} {runSuite} {issue.level}: \

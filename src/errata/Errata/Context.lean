@@ -33,8 +33,8 @@ structure Context where
   updateGolden : Bool := false
   /-- Project-specific options, as a multi-map so repeated options accumulate. -/
   options : OptionMap := {}
-  /-- The seed used for property tests, or {lean}`none` to draw a fresh one. -/
-  seed : Option Nat := none
+  /-- The seed for property tests. -/
+  seed : Nat
   /-- Whether a panic message in a check's captured stderr leaves its status as it is. -/
   ignorePanics : Bool := false
   /-- The package that defines the running test. -/

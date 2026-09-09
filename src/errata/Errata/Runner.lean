@@ -66,10 +66,17 @@ def run (cfg : Context) (entries : Array TestEntry) : IO (Array Result) := do
     all := all ++ (← runEntry cfg entry)
   return all
 
-/-- A base context with the given settings and a fresh, empty log. -/
+/--
+A base context with the given settings and a fresh, empty log. Without a seed for property tests,
+one is generated using the default Lean RNG.
+-/
 def mkContext (updateGolden : Bool := false)
     (options : OptionMap := {}) (seed : Option Nat := none) (ignorePanics : Bool := false) :
     IO Context := do
+  let seed ←
+    match seed with
+    | some seed => pure seed
+    | none => IO.rand 0 (2 ^ 32 - 1)
   let log ← IO.mkRef (#[] : Array Result)
   let usedOptions ← IO.mkRef ({} : Std.HashSet String)
   let outputFailed ← IO.mkRef false
@@ -288,7 +295,7 @@ def runMain (invocation : Invocation) (entries : Array TestEntry) (args : List S
         isError := false, message := s!"option(s) provided but never read: {", ".intercalate unused}"
       }
     if opts.wfail then issues := issues.map ({ · with isError := true })
-    let report : RunReport := { results, issues }
+    let report : RunReport := { results, issues, seed := cfg.seed }
     let writeReport (path? : Option String) (render : RunReport → String) : IO Unit := do
       if let some path := path? then
         writeFile path (render report)

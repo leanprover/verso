@@ -133,7 +133,7 @@ def docstringReachesResults : Test := do
   result "a named result has none" do
     assertTrue (results.any fun r => r.resultPath == #["check"] && r.description?.isNone)
   result "the Markdown report shows it once" do
-    assertEq 2 ((markdownReport { results }).splitOn "What it checks.").length
+    assertEq 2 ((markdownReport { results, seed := 0 }).splitOn "What it checks.").length
 
 /--
 The human-readable report shows a failure's docstring, indented below its status line, and shows a
@@ -163,7 +163,8 @@ def markdownReportShowsDocstring : Test := do
   let fail : Result :=
     { package := "p", moduleName := "M", test := "u", status := .fail { message := "boom" },
       description? := some "Checks `x` and **y**." }
-  assertContains "u: boom</summary>\n\nChecks `x` and **y**.\n\n" (markdownReport { results := #[fail] })
+  assertContains "u: boom</summary>\n\nChecks `x` and **y**.\n\n"
+    (markdownReport { results := #[fail], seed := 0 })
 
 /-- A property test. -/
 @[test]
@@ -408,6 +409,58 @@ def unusedOptionsReachReports : Test := do
     assertContains "<error message=" xml
     assertContains "never read: bogus" xml
     assertContains "## ❌" md
+
+/-- The seed for the run's property tests reaches the JSON and Markdown reports. -/
+@[test]
+def seedReachesReports : Test := do
+  let entry := TestEntry.of "p" "M" "t" default (pure () : Test)
+  let (_, _, json, md) ← runReporting #[entry] ["--seed", "7"]
+  let .ok j := Lean.Json.parse json | fail "the JSON report does not parse"
+  assertEq (some 7) (j.getObjValAs? Nat "seed").toOption
+  assertContains "seed **7**" md
+
+/-- A value from a wide range that is never shrunk, so that a counterexample reflects the seed. -/
+private structure Wide where
+  n : Nat
+deriving Repr
+
+instance : Plausible.Shrinkable Wide where
+  shrink _ := []
+
+instance : Plausible.Arbitrary Wide where
+  arbitrary := return ⟨← Plausible.Gen.choose Nat 0 (2 ^ 40) (by grind)⟩
+
+/-- The detail of a result's failure, when it failed. -/
+private def failDetail? (r : Result) : Option String :=
+  match r.status with
+  | .fail f => f.detail?
+  | _ => none
+
+/-- Runs a test with the given seed, or a fresh one, returning the seed used and the results. -/
+private def seededResults (seed? : Option Nat) (act : Test) : TestM (Nat × Array Result) := do
+  let cfg ← mkContext (seed := seed?)
+  return (cfg.seed, ← runEntry cfg (TestEntry.of "p" "M" "t" default act))
+
+/--
+A failed property's detail names the seed that produced its counterexample, and running again with
+that seed produces the same counterexample. Another seed produces another counterexample.
+-/
+@[test]
+def propertySeedReplays : Test := do
+  let wide : Test := property (∀ x : Wide, x.n ≠ x.n)
+  let (seed, first) ← seededResults none wide
+  let some detail := failDetail? first[0]! | fail "expected the property to fail"
+  -- The counterexample is the detail's first paragraph.
+  let counterexample (detail : String) : String := (detail.splitOn "\n\n").headD detail
+  result "the detail names the seed" do
+    assertContains s!"--seed {seed}" detail
+  result "the seed replays the counterexample" do
+    let (_, again) ← seededResults (some seed) wide
+    assertEq (some (counterexample detail)) ((failDetail? again[0]!).map counterexample)
+  result "another seed gives another counterexample" do
+    let (_, other) ← seededResults (some (seed + 1)) wide
+    assertTrue (((failDetail? other[0]!).map counterexample) != some (counterexample detail))
+      "the counterexample did not change with the seed"
 
 /-- The detail given to a true-assertion is attached to its failure. -/
 @[test]
@@ -865,7 +918,7 @@ def expectFailKeepsDroppedTimeOutOfOwnDuration : Test := do
 @[test]
 def junitIncludesTestOutputOnFailedNamedResult : Test := do
   let results ← resultsOf setupThenFailingCheck
-  let xml := junitReport { results }
+  let xml := junitReport { results, seed := 0 }
   assertContains "tests=\"2\" failures=\"2\"" xml
   assertContains "<system-out>setup" xml
   assertEq 1 ((xml.splitOn "<system-out>").length - 1)
@@ -1013,7 +1066,7 @@ def junitReplacesForbiddenChars : Test := do
   let bad := (Char.ofNat 0xFFFF).toString ++ (Char.ofNat 0xFFFE).toString ++ (Char.ofNat 0x1).toString
   let r : Result := { package := "p", moduleName := "M", test := "t",
                       status := .fail { message := s!"bad{bad}char\tkept" } }
-  let xml := junitReport { results := #[r] }
+  let xml := junitReport { results := #[r], seed := 0 }
   assertContains "bad\uFFFD\uFFFD\uFFFDchar\tkept" xml
   assertTrue (!xml.contains (Char.ofNat 0xFFFF) && !xml.contains (Char.ofNat 0xFFFE))
   assertTrue (!xml.contains (Char.ofNat 0x1))
@@ -1024,7 +1077,7 @@ def junitIncludesOutput : Test := do
   let output : OutputLog := { log := #[.stdout "out 1\n", .stderr "err <1>\n", .stdout "out 2\n"] }
   let r : Result := { package := "p", moduleName := "M", test := "t",
                       status := .fail { message := "boom" }, output }
-  let xml := junitReport { results := #[r] }
+  let xml := junitReport { results := #[r], seed := 0 }
   assertContains "<system-out>out 1\nout 2\n</system-out>" xml
   assertContains "<system-err>err &lt;1&gt;\n</system-err>" xml
 
@@ -1032,7 +1085,7 @@ def junitIncludesOutput : Test := do
 @[test]
 def junitOmitsEmptyOutput : Test := do
   let r : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
-  let xml := junitReport { results := #[r] }
+  let xml := junitReport { results := #[r], seed := 0 }
   assertNotContains "system-out" xml
   assertNotContains "system-err" xml
 
@@ -1077,7 +1130,7 @@ def reportMarkdown : Test := do
   let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
   let f : TestFailure := { message := "boom", detail? := some "expected 1\nactual 2" }
   let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail f }
-  let md := markdownReport { results := #[pass, fail] }
+  let md := markdownReport { results := #[pass, fail], seed := 0 }
   assertContains "**1** passed · **1** failed" md
   assertContains "<details open><summary>❌ <code>p/M</code> u: boom</summary>" md
   assertContains "expected 1\nactual 2" md
