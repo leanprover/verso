@@ -694,6 +694,17 @@ def driverReportsPanics : Test := do
     assertContains "Error: index out of bounds" out.stderr
     assertNotContains "passed" out.stdout
 
+/--
+The compile-time commands register their verdicts as tests, so a module that imports only
+`Errata.CompileTime` builds and its tests are discovered. The fixture's `AppCompileTime` library has
+one `#test_guard` and one `#test_msgs`.
+-/
+@[test]
+def compileTimeImportSuffices : Test := do
+  let out ← lakeInFixture (fixturesDir / "driver-configured") #["test", "--", "AppCompileTime"]
+  assertExitCode 0 out
+  assertContains "2 passed, 0 failed, 0 errors" out.stdout
+
 /-- A test that prints, then records a named result that sleeps and fails. -/
 private def setupThenFailingCheck : Test := do
   IO.println "setup"

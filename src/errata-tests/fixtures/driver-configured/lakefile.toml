@@ -24,3 +24,7 @@ name = "AppStray"
 # A test that panics and passes anyway, beside one that does not panic.
 [[lean_lib]]
 name = "AppPanic"
+
+# Compile-time tests in a module that imports only the compile-time commands.
+[[lean_lib]]
+name = "AppCompileTime"

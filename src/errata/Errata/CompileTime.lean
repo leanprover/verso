@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 module
 
 public import Errata.Result
+public import Errata.Discovery
 public meta import Errata.CompileTime.Helpers
 public import Lean.Elab.Command
 public import Lean.Elab.GuardMsgs
