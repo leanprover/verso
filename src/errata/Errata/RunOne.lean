@@ -72,16 +72,24 @@ private def pushFragment (chunks : Array OutputChunk) (o : Output) : Array Outpu
 
 /--
 Condenses the results of one test run into a single outcome. The verdict is the most severe status
-present (error over failed over passed), the message and detail come from the first
-result with that status, and the output is every result's captured fragments in order, each tagged by
-its stream.
+present (error over failed over passed). The message and detail come from the innermost result
+with that status, since a test's own result reports a named result's failure only in summary while
+the named result reports the assertion itself. The output is every result's captured fragments in
+order, each tagged by its stream.
 -/
 def summarizeResults (results : Array Result) : RunOutcome := Id.run do
   let rank : Status → Nat
     | .error _ => 2
     | .fail _ => 1
     | .pass => 0
-  let worst := results.foldl (fun acc r => if rank r.status > rank acc then r.status else acc) .pass
+  let worstRank := results.foldl (fun acc r => max acc (rank r.status)) 0
+  -- Among the results with the worst status, the innermost one has the concrete message.
+  let innermost := results.foldl (init := none) fun (best : Option Result) r =>
+    if rank r.status != worstRank then best
+    else match best with
+      | some b => if r.resultPath.size > b.resultPath.size then some r else best
+      | none => some r
+  let worst := (innermost.map (·.status)).getD .pass
   let duration := results.foldl (fun acc r => acc + r.durationMs) 0
   let output := results.foldl (fun acc r => r.output.log.foldl pushFragment acc) #[]
   return {
@@ -102,19 +110,15 @@ def runValue {α} [IsTest α] (location : Location) (value : α)
   let log ← IO.mkRef (#[] : Array Result)
   let usedOptions ← IO.mkRef ∅
   let outputFailed ← IO.mkRef false
-  let cfg : Context := { log, usedOptions, outputFailed, location, writeOutput := sink }
+  let insideMs ← IO.mkRef 0
+  let cfg : Context := { log, usedOptions, outputFailed, insideMs, location, writeOutput := sink }
   let start ← IO.monoMsNow
   let (outcome, output) ← runCapturing cfg (IsTest.toTest value)
   let dur := (← IO.monoMsNow) - start
   let logged ← log.get
-  let results :=
-    match cfg.resultOfOutcome outcome output dur (!logged.isEmpty) with
-    | some r => logged.push r
-    | none =>
-      -- A passing test with named results: the results stand for it, but keep the test's own
-      -- top-level output (written outside any result block) so the widget still shows it.
-      if output.log.isEmpty then logged else logged.push { cfg.mkResult .pass with output }
-  return summarizeResults results
+  -- The test's own result leads the results it recorded, as the batch runner orders them.
+  let own := cfg.resultOfOutcome outcome output dur (← insideMs.get) logged
+  return summarizeResults (#[own] ++ logged)
 
 /-- Runs one testable value with a default failure location, for callers without a source range. -/
 def runValueDefault {α} [IsTest α] (value : α) : IO RunOutcome := runValue default value
