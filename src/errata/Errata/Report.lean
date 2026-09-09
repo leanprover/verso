@@ -28,17 +28,19 @@ private def locationText (l : Location) : String :=
 Prints one result: its status line, its docstring when shown, and for a failure or error its detail
 and captured output.
 
-Named results within tests are shown indented beneath them.
+A named result whose parent's line was printed, {name}`parentShown`, is shown indented beneath it
+and named by its last component alone. Otherwise a result is named in full, with its module and its
+dotted test name.
 -/
-private def printResult (verbosity : Verbosity) (r : Result) : IO Unit := do
-  let depth := r.resultPath.size
+private def printResult (verbosity : Verbosity) (r : Result) (parentShown : Bool) : IO Unit := do
+  let depth := if parentShown then r.resultPath.size else 0
   let lead := "".pushn ' ' (2 * depth)
   let detail := lead ++ "    "
   let name := match r.resultPath.back? with
+    | some last => if parentShown then last else s!"{r.moduleTarget}  {r.testName}"
     | none => s!"{r.moduleTarget}  {r.testName}"
-    | some last => last
   let printDoc : IO Unit := do
-    if depth == 0 && (verbosity.showsAllDocstrings || !r.status.isSuccess) then
+    if r.resultPath.isEmpty && (verbosity.showsAllDocstrings || !r.status.isSuccess) then
       if let some d := r.description? then IO.println (indentLines d detail)
   let printOutput : IO Unit := do
     unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}" detail)
@@ -79,6 +81,8 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
   let mut curKey : Option (String × String) := none
   let mut shown := 0
   let mut more := 0
+  -- The printed results that enclose the current position, outermost first.
+  let mut context : Array (Array String) := #[]
   for r in results do
     match r.status with
     | .pass => passed := passed + 1
@@ -91,16 +95,25 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
       curKey := some key
       shown := 0
       more := 0
+      context := #[]
+    -- Pop the printed results that are not parents of the current item.
+    context := context.popWhile fun top =>
+      !(top.size < r.resultPath.size && top.isPrefixOf r.resultPath)
+    let parentShown :=
+      if let some top := context.back? then top.size + 1 == r.resultPath.size else false
+    let print : IO Unit := printResult verbosity r parentShown
     match r.status with
     | .fail _ | .error _ =>
-      printResult verbosity r
+      print
+      context := context.push r.resultPath
       shown := shown + 1
     | .pass =>
       if verbosity.showsPasses then
         if verbosity.truncates && shown ≥ cap then
           more := more + 1
         else
-          printResult verbosity r
+          print
+          context := context.push r.resultPath
           shown := shown + 1
   printSuppressed more
   IO.println s!"{passed} passed, {failed} failed, {errors} errors"

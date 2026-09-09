@@ -673,7 +673,18 @@ def reportShowsTestOutputAboveFailedNamedResult : Test := do
   assertContains "0 passed, 2 failed, 0 errors" out.stdout
   assertEq 2 (← failures.get)
 
-/-- The JUnit report has a case for the test and for its named result, each with its own output. -/
+/-- Named results print indented under their test by their own names, siblings included. -/
+@[test]
+def reportIndentsNamedResultsUnderTheirParent : Test := do
+  let results ← resultsOf do
+    result "b" (pure ())
+    result "c" (result "d" (pure ()))
+  let out ← captureOutput do discard <| humanReport .verbose results
+  assertTrue (out.stdout.startsWith "ok    p/M  inner (") "the test's own line comes first"
+  assertContains "\n  ok    b (" out.stdout
+  assertContains "\n  ok    c (" out.stdout
+  assertContains "\n    ok    d (" out.stdout
+
 @[test]
 def junitCarriesTestOutputOnFailedNamedResult : Test := do
   let results ← resultsOf setupThenFailingCheck
@@ -849,7 +860,8 @@ def reportTruncationShowsFailures : Test := do
     let status : Status := if i == 55 then .fail { message := "boom" } else .pass
     ({ package := "p", moduleName := "M", test := "many", resultPath := #[s!"case {i}"], status } : Result)
   let quiet ← captureOutput do discard <| humanReport .quiet many
-  assertContains "\n  FAIL  case 55: boom" quiet.stdout
+  -- The named results have no parent line, so the failure is named in full.
+  assertContains "\nFAIL  p/M  many.case 55: boom" quiet.stdout
   assertContains "(... and 9 more passed)" quiet.stdout
 
 /-- `humanReport` returns the number of failures and errors. -/
