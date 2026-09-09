@@ -865,7 +865,8 @@ def reportTruncates : Test := do
     ({ package := "p", moduleName := "M", test := "many", resultPath := #[s!"case {i}"], status := .pass } : Result)
   let quiet ← captureOutput do discard <| humanReport .quiet many
   assertEq 51 (quiet.stdout.splitOn "ok    ").length
-  assertContains "(... and 10 more passed)" quiet.stdout
+  -- The summary lines up with the named results' rows, which are one level deep.
+  assertContains "\n      (... and 10 more passed)" quiet.stdout
   let verbose ← captureOutput do discard <| humanReport .verbose many
   assertEq 61 (verbose.stdout.splitOn "ok    ").length
   assertEq 1 (verbose.stdout.splitOn "(... and").length

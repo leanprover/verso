@@ -61,17 +61,19 @@ private def printResult (verbosity : Verbosity) (r : Result) (parentShown : Bool
 
 /--
 Prints the truncation summary for a test whose results were capped, given the number of passes that
-were suppressed. Only passes are ever suppressed; failures and errors always print.
+were suppressed and the nesting depth of the last of them, so the summary lines up with its rows.
+Only passing test results are ever suppressed; failures and errors are always printed.
 -/
-private def printSuppressed (suppressed : Nat) : IO Unit := do
+private def printSuppressed (suppressed depth : Nat) : IO Unit := do
   if suppressed > 0 then
-    IO.println s!"    (... and {suppressed} more passed)"
+    IO.println s!"{"".pushn ' ' (2 * depth + 4)}(... and {suppressed} more passed)"
 
 /--
-Prints a human-readable report and returns the number of failures. Failures and errors are printed at
-every verbosity. {name}`Verbosity.quiet` adds passes, truncating each test's after a cap and
-summarizing the remainder; {name}`Verbosity.verbose` shows them all; and
-{name}`Verbosity.superVerbose` also shows every test's docstring.
+Prints a human-readable report and returns the number of failures. Failures and errors are printed
+at every verbosity. {name}`Verbosity.quiet` adds passing tests, printing at most a fixed number of
+lines per test, the test's own and its named results' at every depth, and summarizing the remainder.
+{name}`Verbosity.verbose` shows all resutls. {name}`Verbosity.superVerbose` also shows every test's
+docstring.
 -/
 def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
   let cap := 50
@@ -81,6 +83,7 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
   let mut curKey : Option (String × String) := none
   let mut shown := 0
   let mut more := 0
+  let mut moreDepth := 0
   -- The printed results that enclose the current position, outermost first.
   let mut context : Array (Array String) := #[]
   for r in results do
@@ -91,7 +94,7 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
     -- Results of one test are contiguous; truncation is per test (its data-driven sub-results).
     let key := (r.moduleTarget, r.test)
     if curKey != some key then
-      printSuppressed more
+      printSuppressed more moreDepth
       curKey := some key
       shown := 0
       more := 0
@@ -111,11 +114,12 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
       if verbosity.showsPasses then
         if verbosity.truncates && shown ≥ cap then
           more := more + 1
+          moreDepth := r.resultPath.size
         else
           print
           context := context.push r.resultPath
           shown := shown + 1
-  printSuppressed more
+  printSuppressed more moreDepth
   IO.println s!"{passed} passed, {failed} failed, {errors} errors"
   return failed + errors
 
