@@ -7,8 +7,10 @@ module
 
 public import Errata.IsTest
 public import Errata.Runner
+public import Errata.TestRegistry
 public import Lean
 public meta import Lean
+public meta import Errata.TestRegistry
 
 open Lean Meta Elab Term
 
@@ -36,36 +38,6 @@ meta def testAction (decl : Name) : MetaM Expr := do
     return mkApp3 (mkConst ``IsTest.toTest) info.type (← instantiateMVars inst) (mkConst decl)
   | _ =>
     throwError m!"`@[test]` requires an `Errata.IsTest` instance for the test's type{indentExpr info.type}"
-
-/--
-A recorded test: its declaration name, the definition that runs it, and the source file that
-defines it. The file is captured when the attribute is applied; the declaration's line and column
-are recovered later, once the declaration ranges are available.
--/
-structure TestDecl where
-  /-- The test declaration's name. -/
-  name : Name
-  /-- The private definition beside the test whose value is the action that runs it. -/
-  run : Name
-  /-- Whether the action is unsafe, as it is when the test is. -/
-  isUnsafe : Bool
-  /-- The source file that defines the test. -/
-  file : String
-  /-- The test's docstring, rendered as Markdown, captured when the attribute is applied. -/
-  docstring? : Option String := none
-deriving Inhabited
-
-/--
-The tests recorded by {lit}`@[test]`, per module. The attribute is an elaboration-time feature:
-tests are recorded as modules are elaborated, and {lit}`getAllTests%` reads them back at elaboration
-time to build the runnable test array.
--/
-meta initialize testExt : SimplePersistentEnvExtension TestDecl (Array TestDecl) ←
-  registerSimplePersistentEnvExtension {
-    name := `Errata.test
-    addEntryFn := Array.push
-    addImportedFn := fun _ => #[]
-  }
 
 /--
 Records a declaration as a test. The action that runs it is compiled into a private definition
