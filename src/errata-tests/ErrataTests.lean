@@ -119,10 +119,10 @@ def docstringReachesResults : Test := do
   let results ← runEntry cfg <|
     TestEntry.of "p" "M" "documented" { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ }
       (result "check" (assertEq 1 2) : Test) (docstring? := some "What it checks.")
-  result "the test's own result carries it" do
+  result "the test's own result has it" do
     assertTrue (results.any fun r =>
       r.resultPath.isEmpty && r.description? == some "What it checks.")
-  result "a named result carries none" do
+  result "a named result has none" do
     assertTrue (results.any fun r => r.resultPath == #["check"] && r.description?.isNone)
   result "the Markdown report shows it once" do
     assertEq 2 ((markdownReport results).splitOn "What it checks.").length
@@ -651,9 +651,9 @@ private def setupThenFailingCheck : Test := do
     assertContains "hello" "goodbye"
 
 /--
-A test that records named results contributes a result of its own, after them. It carries the
-output written outside the named results, the time spent outside them, and it fails when one of
-them did not pass.
+A test that records named results contributes a result of its own, before them. Its report includes
+the output written outside the named results and the time spent outside them, and it fails when one
+of them did not pass.
 -/
 @[test]
 def testKeepsOwnOutputAndTime : Test := do
@@ -711,8 +711,9 @@ def expectFailKeepsDroppedTimeOutOfOwnDuration : Test := do
   let own := results[0]!.durationMs
   assertTrue (own < 50) s!"the test's own duration, {own}ms, includes the dropped named result's"
 
+/-- The JUnit report has a case for the test and for its named result, each with its own output. -/
 @[test]
-def junitCarriesTestOutputOnFailedNamedResult : Test := do
+def junitIncludesTestOutputOnFailedNamedResult : Test := do
   let results ← resultsOf setupThenFailingCheck
   let xml := junitReport results
   assertContains "tests=\"2\" failures=\"2\"" xml
@@ -846,9 +847,9 @@ def junitReplacesForbiddenChars : Test := do
   assertTrue (!xml.contains (Char.ofNat 0xFFFF) && !xml.contains (Char.ofNat 0xFFFE))
   assertTrue (!xml.contains (Char.ofNat 0x1))
 
-/-- The JUnit report carries a failing test's captured output, one element per stream. -/
+/-- The JUnit report includes a failing test's captured output, one element per stream. -/
 @[test]
-def junitCarriesOutput : Test := do
+def junitIncludesOutput : Test := do
   let output : OutputLog := { log := #[.stdout "out 1\n", .stderr "err <1>\n", .stdout "out 2\n"] }
   let r : Result := { package := "p", moduleName := "M", test := "t",
                       status := .fail { message := "boom" }, output }

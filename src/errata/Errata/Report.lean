@@ -243,8 +243,9 @@ private def junitCase (indent suite : String) (r : Result) : String :=
     (verdict ++ stream "system-out" r.output.stdout ++ stream "system-err" r.output.stderr)
 
 /--
-Renders the results as JUnit XML, grouping by the module path. A test case carries its captured
-output in the {lit}`system-out` and {lit}`system-err` elements.
+Renders the results as JUnit XML, grouping by the module path. Each result becomes one
+{lit}`testcase` element, whose {lit}`system-out` and {lit}`system-err` elements contain the
+result's captured output.
 -/
 def junitReport (results : Array Result) : String :=
   let suites := byModule results |>.map fun (_, cases) =>
