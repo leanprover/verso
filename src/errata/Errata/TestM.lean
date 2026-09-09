@@ -90,24 +90,26 @@ from inner named results are not tracked in {name}`outcome`. {name}`output` is i
 excluding output from nested named results. {name}`durationMs` is how long the whole run took,
 **including** inner named results, and {name}`recorded` is the inner named results.
 
-The status is an error or a failure when the code raised or failed an assertion. When the code
-completed, the status is a pass if every named result directly below it passed, and a failure
-otherwise. The duration is the time not spent in the inner named results, so every result reports
-only its own time.
+The status is the worst of the code's own outcome and the statuses of the named results directly
+below it, where an error is worse than a failure, which is worse than a pass. The duration is the
+time not spent in the inner named results, so every result reports only its own time.
 -/
 def Context.resultOfOutcome (ctx : Context)
     (outcome : Except IO.Error (Except TestFailure Unit)) (output : OutputLog) (durationMs : Nat)
     (recorded : Array Result) : Result :=
+  let below := recorded.filter (·.resultPath.size == ctx.resultPath.size + 1)
+  let errors := below.countP (·.status matches .error _)
+  let failures := below.countP (·.status matches .fail _)
+  let count (n : Nat) (what : String) : String :=
+    if n == 1 then s!"a named result {what}" else s!"{n} named results {what}"
   let status : Status :=
     match outcome with
     | .error e => .error (toString e)
-    | .ok (.error f) => .fail f
+    | .ok (.error f) => if errors > 0 then .error (count errors "raised an error") else .fail f
     | .ok (.ok ()) =>
-      let failedBelow := recorded.filter fun r =>
-        r.resultPath.size == ctx.resultPath.size + 1 && !r.status.isSuccess
-      if failedBelow.isEmpty then .pass
-      else if failedBelow.size == 1 then .fail { message := "a named result did not pass" }
-      else .fail { message := s!"{failedBelow.size} named results did not pass" }
+      if errors > 0 then .error (count errors "raised an error")
+      else if failures > 0 then .fail { message := count failures "did not pass" }
+      else .pass
   let inside := recorded.foldl (· + ·.durationMs) 0
   { ctx.mkResult status (durationMs - inside) with output }
 
@@ -279,12 +281,10 @@ def expectFail (act : TestM Unit) (loc : Location := by exact here%) : TestM Uni
       pure false
     catch _ =>
       pure true
-  -- A nested `result` records a failure rather than propagating it, so the results the action
-  -- recorded are inspected too. Their failures are the expected failure and are dropped.
-  -- Everything else is retained because a recorded error is a broken setup rather than a failure.
   let logged ← ctx.log.get
   let added := logged.extract before logged.size
   let failedInside := added.any (·.status matches .fail _)
+  let erroredInside := added.any (·.status matches .error _)
   ctx.log.set (logged.extract 0 before ++ added.filter (fun r => !(r.status matches .fail _)))
-  unless threw || failedInside do
+  unless threw || failedInside || erroredInside do
     failAt loc "expected the action to fail, but it passed"

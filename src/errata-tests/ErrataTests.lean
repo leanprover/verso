@@ -493,6 +493,20 @@ def expectFailRejectsNestedError : Test := do
     expectFail (result "inner" (show IO Unit from throw (.userError "broken setup")))
   assertTrue (results.any (!·.status.isSuccess))
 
+/--
+An error two named results deep inside `expectFail` is recorded as an error, and so are the named
+result above it and the test itself, since an error below a result makes it an error too.
+`expectFail` keeps all three.
+-/
+@[test]
+def expectFailRejectsDeeplyNestedError : Test := do
+  let results ← resultsOf <| expectFail <|
+    result "a" <| result "b" <| show IO Unit from throw (.userError "broken setup")
+  assertEq 3 results.size
+  for path in [#[], #["a"], #["a", "b"]] do
+    assertTrue (results.any fun r => r.resultPath == path && r.status matches .error _)
+      s!"the result at {path} is an error"
+
 /-- An error inside `expectFail` stands even when a sibling result recorded a failure. -/
 @[test]
 def expectFailKeepsErrorBesideFailure : Test := do
