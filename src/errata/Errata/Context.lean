@@ -69,7 +69,8 @@ structure Context where
   outputFailed : IO.Ref Bool
   /--
   The streams from before the outermost capture, under which the output destination runs. The
-  outermost capture records them, and a capture nested inside it reuses them, so a {lit}`writeOutput`
-  handler that prints reaches the runner's own streams from any nesting depth.
+  outermost capture records them, and a capture nested inside it reuses them, so a
+  {name (full := Errata.Context.writeOutput)}`writeOutput` handler that prints reaches the runner's
+  own streams from any nesting depth.
   -/
   realStreams? : Option RealStreams := none

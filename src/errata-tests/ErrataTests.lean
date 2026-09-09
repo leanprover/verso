@@ -618,6 +618,56 @@ def driverReportsUnreachableModules : Test := do
     assertContains s!"error: these {notice}" out.stderr
     assertNotContains "passed" out.stdout
 
+/-- A test that prints, then records a named result that sleeps and fails. -/
+private def setupThenFailingCheck : Test := do
+  IO.println "setup"
+  result "check" do
+    IO.sleep 30
+    assertContains "hello" "goodbye"
+
+/--
+A test that records named results contributes a result of its own, after them. It carries the
+output written outside the named results, the time spent outside them, and it fails when one of
+them did not pass.
+-/
+@[test]
+def testKeepsOwnOutputAndTime : Test := do
+  let results ← resultsOf setupThenFailingCheck
+  let some own := results.find? (·.resultPath.isEmpty) | fail "the test's own result is missing"
+  assertEq "setup\n" own.output.stdout
+  let .fail f := own.status
+    | fail s!"expected the test to fail with its named result, got {repr own.status}"
+  assertEq "a named result did not pass" f.message
+  let some check := results.find? (·.resultPath == #["check"]) | fail "the named result is missing"
+  assertTrue (30 ≤ check.durationMs) "the named result's time includes its sleep"
+  assertTrue (own.durationMs < check.durationMs) "the test's own time leaves out its named result's"
+  assertEq (some own) results[0]?
+
+/--
+The human-readable report shows a test's own failure, with the test's output, above the named
+result that made it fail, and counts both.
+-/
+@[test]
+def reportShowsTestOutputAboveFailedNamedResult : Test := do
+  let results ← resultsOf setupThenFailingCheck
+  let failures ← IO.mkRef 0
+  let out ← captureOutput do failures.set (← humanReport .silent results)
+  let own := "FAIL  p/M  inner: a named result did not pass\n    output:\n    setup\n"
+  assertContains own out.stdout
+  -- The named result follows the test's own result.
+  assertContains "\n  FAIL  check: " ((out.stdout.splitOn own)[1]?.getD "")
+  assertContains "0 passed, 2 failed, 0 errors" out.stdout
+  assertEq 2 (← failures.get)
+
+/-- The JUnit report has a case for the test and for its named result, each with its own output. -/
+@[test]
+def junitCarriesTestOutputOnFailedNamedResult : Test := do
+  let results ← resultsOf setupThenFailingCheck
+  let xml := junitReport results
+  assertContains "tests=\"2\" failures=\"2\"" xml
+  assertContains "<system-out>setup" xml
+  assertEq 1 ((xml.splitOn "<system-out>").length - 1)
+
 /-- The runner's help names the command that its options follow. -/
 @[test]
 def runnerHelpNamesInvocation : Test := do
@@ -785,7 +835,7 @@ def reportTruncationShowsFailures : Test := do
     let status : Status := if i == 55 then .fail { message := "boom" } else .pass
     ({ package := "p", moduleName := "M", test := "many", resultPath := #[s!"case {i}"], status } : Result)
   let quiet ← captureOutput do discard <| humanReport .quiet many
-  assertContains "FAIL  p/M  many.case 55: boom" quiet.stdout
+  assertContains "\n  FAIL  case 55: boom" quiet.stdout
   assertContains "(... and 9 more passed)" quiet.stdout
 
 /-- `humanReport` returns the number of failures and errors. -/

@@ -55,9 +55,7 @@ def runEntry (cfg : Context) (entry : TestEntry) : IO (Array Result) := do
   let stop ← IO.monoMsNow
   let dur := stop - start
   let logged ← log.get
-  return match ctx.resultOfOutcome outcome output dur (!logged.isEmpty) with
-    | some r => logged.push r
-    | none => logged
+  return #[ctx.resultOfOutcome outcome output dur logged] ++ logged
 
 /-- Runs all the test entries and collects their results. -/
 def run (cfg : Context) (entries : Array TestEntry) : IO (Array Result) := do

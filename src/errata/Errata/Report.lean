@@ -17,35 +17,45 @@ set_option doc.verso true
 
 namespace Errata
 
-private def indentLines (text : String) : String :=
-  "\n".intercalate ((text.splitOn "\n").map (fun l => "    " ++ l))
+private def indentLines (text : String) (indent : String := "    ") : String :=
+  "\n".intercalate ((text.splitOn "\n").map (fun l => indent ++ l))
 
 /-- A source location rendered as the clickable `file:line:col` of the span's start. -/
 private def locationText (l : Location) : String :=
   s!"{l.file}:{l.startPos.line}:{l.startPos.column}"
 
 /--
-Prints one result: its status line, its docstring when shown, and for a failure its detail and
-captured output. A failure or error always shows its docstring; a pass shows it only at a verbosity
-that shows all docstrings.
+Prints one result: its status line, its docstring when shown, and for a failure or error its detail
+and captured output.
+
+Named results within tests are shown indented beneath them.
 -/
 private def printResult (verbosity : Verbosity) (r : Result) : IO Unit := do
-  let name := s!"{r.moduleTarget}  {r.testName}"
+  let depth := r.resultPath.size
+  let lead := "".pushn ' ' (2 * depth)
+  let detail := lead ++ "    "
+  let name := match r.resultPath.back? with
+    | none => s!"{r.moduleTarget}  {r.testName}"
+    | some last => last
   let printDoc : IO Unit := do
-    if verbosity.showsAllDocstrings || !r.status.isSuccess then
-      if let some d := r.description? then IO.println (indentLines d)
+    if depth == 0 && (verbosity.showsAllDocstrings || !r.status.isSuccess) then
+      if let some d := r.description? then IO.println (indentLines d detail)
+  let printOutput : IO Unit := do
+    unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}" detail)
   match r.status with
-  | .pass => IO.println s!"ok    {name} ({r.durationMs}ms)"; printDoc
+  | .pass =>
+    IO.println s!"{lead}ok    {name} ({r.durationMs}ms)"
+    printDoc
   | .fail f =>
-    IO.println s!"FAIL  {name}: {f.message}"
+    IO.println s!"{lead}FAIL  {name}: {f.message}"
     printDoc
-    if let some l := f.location? then IO.println (indentLines (locationText l))
-    if let some d := f.detail? then IO.println (indentLines d)
-    unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
+    if let some l := f.location? then IO.println (indentLines (locationText l) detail)
+    if let some d := f.detail? then IO.println (indentLines d detail)
+    printOutput
   | .error m =>
-    IO.println s!"ERROR {name}: {m}"
+    IO.println s!"{lead}ERROR {name}: {m}"
     printDoc
-    unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
+    printOutput
 
 /--
 Prints the truncation summary for a test whose results were capped, given the number of passes that

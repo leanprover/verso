@@ -48,7 +48,7 @@ def fail (message : String) (detail? : Option String := none)
   failAt loc message detail?
 
 /--
-{lit}`failure` fails the test at the context's location, and {lit}`<|>` recovers from an assertion
+{name}`failure` fails the test at the context's location, and {lit}`<|>` recovers from an assertion
 failure by running the alternative. An escaping {name}`IO.Error` still propagates, so {lit}`<|>` does
 not mask a broken setup.
 -/
@@ -83,19 +83,33 @@ def Context.mkResult (ctx : Context) (status : Status) (durationMs : Nat := 0) :
   description? := ctx.description?
 
 /--
-The result a captured run contributes beyond any nested results it recorded.
+Builds the result for a test or named result that has just finished running.
 
-A raised error or a failed assertion becomes one error or failed result carrying the captured output.
-A clean run becomes one passing result with the output when it recorded no nested results; when it did
-record some, those results stand for it and it adds nothing of its own.
+{name}`outcome` is the result of its own code: an error, a failed assertion, or completion. Results
+from inner named results are not tracked in {name}`outcome`. {name}`output` is its output, also
+excluding output from nested named results. {name}`durationMs` is how long the whole run took,
+**including** inner named results, and {name}`recorded` is the inner named results.
+
+The status is an error or a failure when the code raised or failed an assertion. When the code
+completed, the status is a pass if every named result directly below it passed, and a failure
+otherwise. The duration is the time not spent in the inner named results, so every result reports
+only its own time.
 -/
 def Context.resultOfOutcome (ctx : Context)
     (outcome : Except IO.Error (Except TestFailure Unit)) (output : OutputLog) (durationMs : Nat)
-    (hasNested : Bool) : Option Result :=
-  match outcome with
-  | .error e => some { ctx.mkResult (.error (toString e)) durationMs with output }
-  | .ok (.error f) => some { ctx.mkResult (.fail f) durationMs with output }
-  | .ok (.ok ()) => if hasNested then none else some { ctx.mkResult .pass durationMs with output }
+    (recorded : Array Result) : Result :=
+  let status : Status :=
+    match outcome with
+    | .error e => .error (toString e)
+    | .ok (.error f) => .fail f
+    | .ok (.ok ()) =>
+      let failedBelow := recorded.filter fun r =>
+        r.resultPath.size == ctx.resultPath.size + 1 && !r.status.isSuccess
+      if failedBelow.isEmpty then .pass
+      else if failedBelow.size == 1 then .fail { message := "a named result did not pass" }
+      else .fail { message := s!"{failedBelow.size} named results did not pass" }
+  let inside := recorded.foldl (· + ·.durationMs) 0
+  { ctx.mkResult status (durationMs - inside) with output }
 
 /--
 Splits bytes into a prefix ready to decode and a tail that is the start of an unfinished
@@ -227,11 +241,16 @@ def captureOutput (act : TestM Unit) : TestM OutputLog := do
   return { log := ← log.get }
 
 /--
-Runs a named result within the current test.
+Runs {name}`act` as a named result of the current test.
 
-Its path extends the current path, and its failure is isolated from sibling results. If the action
-records no nested results and completes, it contributes one passing result; if it throws, it
-contributes one failed result or one that raised an error.
+The name is added to the current result path, so nested named results have dotted names. A failure
+in {name}`act` is recorded and does not stop the test, so the named results that follow still run.
+
+The run produces one result for {name}`act` itself, followed by the results of any named results
+inside it. Its status follows {name}`Context.resultOfOutcome`: an error if {name}`act` raised one, a
+failure if it failed an assertion or one of its own named results did not pass, and a pass
+otherwise. Its output and its duration are its own, leaving out what happened inside its named
+results.
 -/
 def result (name : String) (act : TestM Unit) : TestM Unit :=
   withReader (fun c => { c with resultPath := c.resultPath.push name }) do
@@ -241,9 +260,10 @@ def result (name : String) (act : TestM Unit) : TestM Unit :=
     let (outcome, output) ← runCapturing ctx act
     let stop ← IO.monoMsNow
     let dur := stop - start
-    let after := (← ctx.log.get).size
-    if let some r := ctx.resultOfOutcome outcome output dur (after != before) then
-      ctx.log.modify (·.push r)
+    let logged ← ctx.log.get
+    let recorded := logged.extract before logged.size
+    let own := ctx.resultOfOutcome outcome output dur recorded
+    ctx.log.set (logged.extract 0 before ++ #[own] ++ recorded)
 
 /--
 Expects the action to fail an assertion. The current scope passes if it does and fails if it

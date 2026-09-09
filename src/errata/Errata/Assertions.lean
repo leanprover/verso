@@ -47,7 +47,7 @@ def assertNotContains (unexpected actual : String) (message : String := "unexpec
 /--
 Asserts that an action throws an {name}`IO.Error`. The predicate picks the subset of acceptable
 errors: the assertion fails when the action succeeds, and when it throws an error the predicate
-rejects. The name says {lit}`IO` because the expectation is about a thrown {name}`IO.Error`, as
+rejects. The name says {name}`IO` because the expectation is about a thrown {name}`IO.Error`, as
 opposed to failure in some other error monad.
 -/
 def assertThrowsIO {α} (act : IO α) (acceptable : IO.Error → Bool := fun _ => true)

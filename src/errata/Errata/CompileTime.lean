@@ -31,7 +31,7 @@ namespace Errata
 Checks that the command below produces the messages given in the preceding doc comment.
 
 This is a version of `#guard_msgs` that is specialized for use in Errata. If the messages
-don't match, it is not a compile-time error unless the option {lit}`errata.failOnError` is
+don't match, it is not a compile-time error unless the option {name}`errata.failOnError` is
 {name}`true`. This allows failing compile-time tests to appear in the test output together
 with failing run-time tests.
 -/
@@ -86,7 +86,7 @@ meta def elabTestMsgs : Command.CommandElab
 Checks that a Boolean expression evaluates to {lean}`true`, registering the verdict as a test.
 
 This is a version of `#guard` that is specialized for use in Errata. If the condition does not
-hold, it is not a compile-time error unless the option {lit}`errata.failOnError` is
+hold, it is not a compile-time error unless the option {name}`errata.failOnError` is
 {name}`true`. This allows failing compile-time tests to appear in the test output together
 with failing run-time tests.
 
