@@ -189,11 +189,16 @@ def goldenFileCreatesDirectories : Test :=
       goldenFile goldenPath "contents\n"
       assertFileExists goldenPath
 
-/-- Runs one action as a test in a fresh context, returning the results it recorded. -/
+/--
+Runs one action as a test in a fresh context, returning the results it recorded. The test is given
+a recognizable package, module, and source location, so a report that shows them is checked against
+them.
+-/
 private def resultsOf (act : Test) : TestM (Array Result) := do
   let cfg ← mkContext
   runEntry cfg <|
-    TestEntry.of "p" "M" "inner" { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ } act
+    TestEntry.of "somePkg" "SomeFile" "inner"
+      { file := "SomeFile.lean", startPos := ⟨42, 23⟩, endPos := ⟨42, 30⟩ } act
 
 /-- A missing produced directory is a golden failure at the call site, not a bare error. -/
 @[test]
@@ -666,7 +671,8 @@ def reportShowsTestOutputAboveFailedNamedResult : Test := do
   let results ← resultsOf setupThenFailingCheck
   let failures ← IO.mkRef 0
   let out ← captureOutput do failures.set (← humanReport .silent results)
-  let own := "FAIL  p/M  inner: a named result did not pass\n    output:\n    setup\n"
+  let own := "FAIL  somePkg/SomeFile  inner: a named result did not pass\n" ++
+    "    SomeFile.lean:42:23\n    output:\n    setup\n"
   assertContains own out.stdout
   -- The named result follows the test's own result.
   assertContains "\n  FAIL  check: " ((out.stdout.splitOn own)[1]?.getD "")
@@ -680,7 +686,8 @@ def reportIndentsNamedResultsUnderTheirParent : Test := do
     result "b" (pure ())
     result "c" (result "d" (pure ()))
   let out ← captureOutput do discard <| humanReport .verbose results
-  assertTrue (out.stdout.startsWith "ok    p/M  inner (") "the test's own line comes first"
+  assertTrue (out.stdout.startsWith "ok    somePkg/SomeFile  inner (")
+    "the test's own line comes first"
   assertContains "\n  ok    b (" out.stdout
   assertContains "\n  ok    c (" out.stdout
   assertContains "\n    ok    d (" out.stdout

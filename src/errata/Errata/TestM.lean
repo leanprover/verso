@@ -108,7 +108,8 @@ def Context.resultOfOutcome (ctx : Context)
     | .ok (.error f) => if errors > 0 then .error (count errors "raised an error") else .fail f
     | .ok (.ok ()) =>
       if errors > 0 then .error (count errors "raised an error")
-      else if failures > 0 then .fail { message := count failures "did not pass" }
+      else if failures > 0 then
+        .fail { message := count failures "did not pass", location? := some ctx.location }
       else .pass
   let inside := recorded.foldl (· + ·.durationMs) 0
   { ctx.mkResult status (durationMs - inside) with output }
