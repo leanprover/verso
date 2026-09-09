@@ -1179,11 +1179,15 @@ def runOneCapturesOutput : Test := do
   assertBEq "stdout" o.output[0]!.stream
   assertContains "trace line" o.output[0]!.text
 
-/-- An outcome takes the most severe verdict among several named results. -/
+/--
+An outcome takes the most severe verdict among a test and its named results, with the message of
+the innermost result that has it, which is where the assertion failed.
+-/
 @[test]
 def runOneAggregates : Test := do
   let o ← runValue default (do result "a" (pure ()); result "b" (failHere "bad") : Test)
   assertBEq "failed" o.status
+  assertBEq (some "bad") o.message?
 
 /-- A passing run still surfaces its captured output. -/
 @[test]
