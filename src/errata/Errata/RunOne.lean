@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 module
 
 public import Errata.IsTest
+public import Errata.Runner
 public import Lean.Data.Json
 
 public section
@@ -107,17 +108,13 @@ failure.
 -/
 def runValue {α} [IsTest α] (location : Location) (value : α)
     (sink : Output → IO Unit := fun _ => pure ()) : IO RunOutcome := do
-  let log ← IO.mkRef (#[] : Array Result)
-  let usedOptions ← IO.mkRef ∅
-  let outputFailed ← IO.mkRef false
-  let insideMs ← IO.mkRef 0
-  let cfg : Context := { log, usedOptions, outputFailed, insideMs, location, writeOutput := sink }
+  let cfg := { ← mkContext with location, writeOutput := sink }
   let start ← IO.monoMsNow
   let (outcome, output) ← runCapturing cfg (IsTest.toTest value)
   let dur := (← IO.monoMsNow) - start
-  let logged ← log.get
+  let logged ← cfg.log.get
   -- The test's own result leads the results it recorded, as the batch runner orders them.
-  let own := cfg.resultOfOutcome outcome output dur (← insideMs.get) logged
+  let own := cfg.resultOfOutcome outcome output dur (← cfg.insideMs.get) logged
   return summarizeResults (#[own] ++ logged)
 
 /-- Runs one testable value with a default failure location, for callers without a source range. -/

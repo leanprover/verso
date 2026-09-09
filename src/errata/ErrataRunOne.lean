@@ -16,32 +16,24 @@ def nowMs : IO Nat :=
   return (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.toInt.toNat
 
 /--
-Evaluates the test named by {lean}`declName` in the current environment to a runnable action.
+Evaluates the test named by {lean}`declName`, defined in {lean}`module`, to a runnable action.
 
-The action is reached through {name}`Errata.IsTest.toTest` so any testable type works, and through
+The action is the definition that {lit}`@[test]` compiled beside the test, reached through
 {lit}`import all` of its module so a module-private test is still reachable.
 -/
-unsafe def evalTestM (declName : Name) : CoreM (Errata.TestM Unit × Option String) :=
+unsafe def evalTestM (module declName : Name) : CoreM (Errata.TestM Unit × Option String) :=
   MetaM.run' do
     let env ← getEnv
+    let some idx := env.getModuleIdx? module
+      | throwError "module `{module}` is not imported"
     -- The widget passes the declaration's real name, but a module-private test is mangled, so fall
     -- back to matching the user-facing name when the exact name is absent.
-    let realName ←
-      if env.contains declName then pure declName
-      else match env.constants.fold (init := none) (fun acc n _ =>
-          acc <|> (if privateToUserName n == declName then some n else none)) with
-        | some n => pure n
-        | none => throwError "unknown test `{declName}`"
-    let decl := mkConst realName
-    let declType ← inferType decl
-    let inst ←
-      match ← trySynthInstance (mkApp (mkConst ``Errata.IsTest) declType) with
-      | .some inst => pure inst
-      | _ => throwError "`{declName}` is not a test"
-    let act := mkApp3 (mkConst ``Errata.IsTest.toTest) declType inst decl
+    let some test := (Errata.testExt.getModuleEntries env idx).find? fun t =>
+        t.name == declName || privateToUserName t.name == declName
+      | throwError "`{declName}` is not a test in `{module}`"
     let ty := mkApp (mkConst ``Errata.TestM) (mkConst ``Unit)
-    let test ← evalExpr (Errata.TestM Unit) ty act (safety := .unsafe)
-    return (test, ← findDocString? env realName)
+    let act ← evalExpr (Errata.TestM Unit) ty (mkConst test.run) (safety := .unsafe)
+    return (act, ← findDocString? env test.name)
 
 /-- Writes one JSON protocol line to the runner's real stdout and flushes it for prompt streaming. -/
 private def emitLine (out : IO.FS.Stream) (key : String) (value : Json) : IO Unit := do
@@ -67,7 +59,7 @@ unsafe def runImpl (args : List String) : IO UInt32 := do
   let env ← importModules
     #[{ module := targetModule, importAll := true }, { module := `Errata }] {} (loadExts := true)
   let coreCtx : Core.Context := { fileName := "<errata-run-one>", fileMap := default }
-  let ((act, doc?), _) ← (evalTestM declName).toIO coreCtx { env }
+  let ((act, doc?), _) ← (evalTestM targetModule declName).toIO coreCtx { env }
   -- Mark when the test body starts, so the widget shows output offsets within the test itself,
   -- excluding the build and module-import time before this point.
   emitLine out "exec" (toJson (← nowMs))
