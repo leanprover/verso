@@ -75,12 +75,20 @@ error: Module `NoSuchModule` is not imported, so its tests cannot be reached. Im
 #test_msgs in
 example : Array TestEntry := getAllTests% "verso" NoSuchModule
 
-/-- A module below several named roots contributes its tests once. -/
+/--
+An exact module name leads to only its own tests being found. A name with a trailing `.*` also
+contributes the tests of every module below it, and a module named more than once contributes its
+tests once.
+-/
 @[test]
-def discoveryDeduplicates : Test := do
-  -- `ErrataTests.Fixture.Sub` lies below both roots, so exactly the two fixture tests are found.
-  let entries := (getAllTests% "verso" ErrataTests.Fixture ErrataTests.Fixture.Sub)
-  assertEq 2 entries.size
+def discoveryNamesModules : Test := do
+  result "exact" do
+    assertEq 1 (getAllTests% "verso" ErrataTests.Fixture).size
+  result "below" do
+    assertEq 2 (getAllTests% "verso" ErrataTests.Fixture.*).size
+  result "deduplicated" do
+    -- `ErrataTests.Fixture.Sub` lies below the first name and is the second, so it is found once.
+    assertEq 2 (getAllTests% "verso" ErrataTests.Fixture.* ErrataTests.Fixture.Sub).size
 
 /-- The docstring of a test in the docstring fixture module, when it has one. -/
 private def fixtureDocstring (test : String) : Option String :=
@@ -703,6 +711,36 @@ one `#test_guard` and one `#test_msgs`.
 def compileTimeImportSuffices : Test := do
   let out ← lakeInFixture (fixturesDir / "driver-configured") #["test", "--", "AppCompileTime"]
   assertExitCode 0 out
+  assertContains "2 passed, 0 failed, 0 errors" out.stdout
+
+/--
+A test in a dependency's library is reported under the dependency's package. The fixture requires
+the `dep` package, whose `DepLib` library has one test.
+-/
+@[test]
+def dependencyTestsKeepTheirPackage : Test := do
+  let fixture := fixturesDir / "driver-configured"
+  IO.FS.withTempDir fun dir => do
+    let junit := dir / "report.xml"
+    let out ← lakeInFixture fixture
+      #["test", "--", "dep/DepLib", "--test-options", "-v", "--junit", junit.toString]
+    assertExitCode 0 out
+    assertContains "ok    dep/DepLib  depTest" out.stdout
+    assertContains "package=\"dep\"" (← IO.FS.readFile junit)
+
+/--
+A legacy root that imports a module-system child, each with a test, has each test discovered once:
+the child's through the bridge and the root's through the main. The fixture's `AppMixed` library
+has that shape, and the child's test is private to its module.
+-/
+@[test]
+def mixedDiscoveryRunsEachTestOnce : Test := do
+  let out ← lakeInFixture (fixturesDir / "driver-configured")
+    #["test", "--", "AppMixed", "--test-options", "-v"]
+  assertExitCode 0 out
+  assertContains "ok    app/AppMixed  parentTest" out.stdout
+  assertContains "ok    app/AppMixed.Child  childTest" out.stdout
+  assertEq 2 (out.stdout.splitOn "childTest").length
   assertContains "2 passed, 0 failed, 0 errors" out.stdout
 
 /-- A test that prints, then records a named result that sleeps and fails. -/

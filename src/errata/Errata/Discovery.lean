@@ -92,34 +92,47 @@ meta def testNameBelow (moduleName declName : Name) : String :=
   ".".intercalate (below.map (·.toString))
 
 /--
-{lit}`getAllTests% "package" Mod.A Mod.B ...` reads the tests recorded by {lit}`@[test]` in the
-named modules and every imported module below them, and expands to the array of {name}`TestEntry`
-values that run them. A module that lies below more than one of the named modules contributes its
-tests once. Each module must be imported, with {lit}`import all` for module-system modules, so its
-tests are reachable. Unsafe tests are wrapped in {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
+A module to read tests from: the module itself, or, with a trailing {lit}`.*`, the module and every
+imported module below it.
 -/
-syntax (name := getAllTests) "getAllTests%" str ident* : term
+syntax testModules := ident ("." "*")?
+
+/--
+{lit}`getAllTests% "package" Mod.A Mod.B.* ...` reads the tests recorded by {lit}`@[test]` in the
+named modules, and expands to the array of {name}`TestEntry` values that run them. A name with a
+trailing {lit}`.*` also names every imported module below it. Even if a module is named more than
+once, its tests are not duplicated. Each module must be imported, with {lit}`import all` for
+module-system modules, so its tests are reachable. Unsafe tests are wrapped in
+{kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
+-/
+syntax (name := getAllTests) "getAllTests%" str testModules* : term
 
 /-- Expands {lit}`getAllTests%` by reading the recorded tests of the named modules. -/
 @[term_elab getAllTests]
 meta def elabGetAllTests : TermElab := fun stx expectedType? => do
-  let `(getAllTests% $pkg:str $mods:ident*) := stx
+  let `(getAllTests% $pkg:str $specs:testModules*) := stx
     | throwUnsupportedSyntax
   let package := pkg.getString
   let env ← getEnv
   let moduleNames := env.allImportedModuleNames
   let mut entries : Array Term := #[]
-  -- One root's name may extend another's, putting a module below both; each module's tests are
-  -- gathered once.
+  -- A module may be named twice, or be selected by a name that ends in `.*`. Nonetheless, its tests
+  -- are gathered only once.
   let mut seen : NameSet := {}
-  for modStx in mods do
+  for spec in specs do
+    let (modStx, below) ← match spec with
+      | `(testModules| $m:ident.*) => pure (m, true)
+      | `(testModules| $m:ident) => pure (m, false)
+      | _ => throwUnsupportedSyntax
     let rootName := modStx.getId
-    unless (env.getModuleIdx? rootName).isSome do
-      throwErrorAt modStx "Module `{rootName}` is not imported, so its tests cannot be \
+    let some rootIdx := env.getModuleIdx? rootName
+      | throwErrorAt modStx "Module `{rootName}` is not imported, so its tests cannot be \
           reached. Import it, using `import all {rootName}` if it belongs to the module system."
-    for h : idx in [0 : moduleNames.size] do
-      let moduleName := moduleNames[idx]
-      unless rootName.isPrefixOf moduleName do continue
+    let mut chosen : Array (Name × ModuleIdx) := #[(rootName, rootIdx)]
+    if below then
+      for h : idx in [0 : moduleNames.size] do
+        if rootName.isPrefixOf moduleNames[idx] then chosen := chosen.push (moduleNames[idx], idx)
+    for (moduleName, idx) in chosen do
       if seen.contains moduleName then continue
       seen := seen.insert moduleName
       let moduleStr := moduleName.toString

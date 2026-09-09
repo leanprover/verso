@@ -9,4 +9,4 @@ public import Errata
 import all ErrataTests
 
 /-- Errata's own tests, gathered so that a driver outside the module system can run them. -/
-public def errataTests : Array Errata.TestEntry := getAllTests% "verso" ErrataTests
+public def errataTests : Array Errata.TestEntry := getAllTests% "verso" ErrataTests.*

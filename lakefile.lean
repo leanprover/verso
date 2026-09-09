@@ -267,15 +267,39 @@ private def unreachableModules (lib : Lake.LeanLib) (known : Lean.NameSet) :
       | e => throw e
   found.get
 
+/-- Test modules grouped by the package that owns them, in first-seen order. -/
+private abbrev PackageModules := Array (String × Array Lean.Name)
+
+/-- The modules of every group, in order. -/
+private def PackageModules.all (groups : PackageModules) : Array Lean.Name :=
+  groups.flatMap (·.2)
+
+/-- Groups modules by the package that owns them, keeping first-seen package order. -/
+private def byPackage (packageOf : Lean.NameMap String) (mods : Array Lean.Name) :
+    PackageModules := Id.run do
+  let mut groups : PackageModules := #[]
+  for m in mods do
+    let pkg := (packageOf.find? m).getD ""
+    match groups.findIdx? (·.1 == pkg) with
+    | some i => groups := groups.modify i fun (p, ms) => (p, ms.push m)
+    | none => groups := groups.push (pkg, #[m])
+  return groups
+
+/-- The term that gathers the tests of the given modules, each labeled with its package. -/
+private def gatherTests (groups : PackageModules) : String :=
+  if groups.isEmpty then "(#[] : Array Errata.TestEntry)"
+  else " ++ ".intercalate <| groups.toList.map fun (pkg, mods) =>
+    s!"getAllTests% {pkg.quote} {" ".intercalate (mods.toList.map (·.toString))}"
+
 /--
 Generate the bridge module: `import all` the module-system test modules so their private tests
 are reachable, gathering them into `allTests` through `getAllTests%`.
 -/
-private def discoveredSource (packageName : String) (mods : Array Lean.Name) : String :=
-  let imports := "\n".intercalate ("public import Errata" :: mods.toList.map (s!"import all {·}"))
-  let modList := " ".intercalate (mods.toList.map (·.toString))
+private def discoveredSource (groups : PackageModules) : String :=
+  let imports :=
+    "\n".intercalate ("public import Errata" :: groups.all.toList.map (s!"import all {·}"))
   s!"module\n\n{imports}\n\n\
-    public def allTests : Array Errata.TestEntry := getAllTests% \"{packageName}\" {modList}\n"
+    public def allTests : Array Errata.TestEntry := {gatherTests groups}\n"
 
 /--
 The flag that marks the generated runner as started by the Errata driver (that is, the `Errata.run`
@@ -295,17 +319,16 @@ A hash of the bridge module is added because it's not part of the usual trace.
 `run` and `runner` are the commands that the runner tells users to type if they invoke it by hand:
 the command that runs every test, and the command that waits for runner options.
 -/
-private def mainSource (packageName : String) (mods moduleMods : Array Lean.Name)
+private def mainSource (groups moduleGroups : PackageModules)
     (discovered : Lean.Name) (bridgeHash : Lake.Hash) (run runner : String) : String :=
   let imports := "\n".intercalate <|
     "import Errata" :: s!"import {discovered} -- source hash {bridgeHash}"
-      :: (mods ++ moduleMods).toList.map (s!"import {·}")
-  let modList := " ".intercalate (mods.toList.map (·.toString))
+      :: (groups.all ++ moduleGroups.all).toList.map (s!"import {·}")
   s!"{imports}\n\n\
     def main (args : List String) : IO UInt32 :=\n  \
     Errata.driverMain {errataDriverFlag.quote}\n    \
     \{ run := {run.quote}, runner := {runner.quote} }\n    \
-    (allTests ++ getAllTests% \"{packageName}\" {modList}) args\n"
+    (allTests ++ {gatherTests groups}) args\n"
 
 /--
 How the Errata driver (the `Errata.run` script in this file) should be invoked: the command that
@@ -470,11 +493,18 @@ script run (args) do
   -- Lake's own traces rebuild what depends on them.
   let dir := ws.root.dir / errataRunnerDir
   let discovered := errataDiscoveredModule ws.root
-  let discoveredSrc := discoveredSource ws.root.prettyName moduleMods
+  -- Each test is labeled with the package that owns its module.
+  let mut packageOf : Lean.NameMap String := {}
+  for (lib, mods) in libMods do
+    for m in mods do
+      packageOf := packageOf.insert m lib.pkg.prettyName
+  let moduleGroups := byPackage packageOf moduleMods
+  let nonModuleGroups := byPackage packageOf nonModuleMods
+  let discoveredSrc := discoveredSource moduleGroups
   for (modName, src) in
       [(discovered, discoveredSrc),
        (errataMainModule ws.root,
-        mainSource ws.root.prettyName nonModuleMods moduleMods discovered
+        mainSource nonModuleGroups moduleGroups discovered
           (Lake.Hash.ofText discoveredSrc) run s!"{withArgs} --test-options")] do
     let file := Lean.modToFilePath dir modName "lean"
     if let some parent := file.parent then IO.FS.createDirAll parent
