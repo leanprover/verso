@@ -72,7 +72,7 @@ private def printSuppressed (suppressed depth : Nat) : IO Unit := do
 Prints a human-readable report and returns the number of failures. Failures and errors are printed
 at every verbosity. {name}`Verbosity.quiet` adds passing tests, printing at most a fixed number of
 lines per test, the test's own and its named results' at every depth, and summarizing the remainder.
-{name}`Verbosity.verbose` shows all resutls. {name}`Verbosity.superVerbose` also shows every test's
+{name}`Verbosity.verbose` shows all results. {name}`Verbosity.superVerbose` also shows every test's
 docstring.
 -/
 def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
