@@ -846,6 +846,25 @@ def mixedDiscoveryRunsEachTestOnce : Test := do
   assertEq 2 (out.stdout.splitOn "childTest").length
   assertContains "2 passed, 0 failed, 0 errors" out.stdout
 
+/--
+The `IsTest` instance that runs a test is the one in force where the test is declared. The
+fixture's `AppLocalInstance` library has a test whose type has only a local instance, and its
+`AppShadow` library has a failing boolean test beside a module whose high-priority instance would
+pass it.
+-/
+@[test]
+def instanceIsFixedAtDeclaration : Test := do
+  let fixture := fixturesDir / "driver-configured"
+  result "a local instance runs the test" do
+    let out ← lakeInFixture fixture #["test", "--", "AppLocalInstance"]
+    assertExitCode 0 out
+    assertContains "1 passed, 0 failed, 0 errors" out.stdout
+  result "an instance elsewhere does not change the verdict" do
+    let out ← lakeInFixture fixture #["test", "--", "AppShadow"]
+    assertExitCode 1 out
+    assertContains "FAIL  app/AppShadow.Failing  failsAsWritten" out.stdout
+    assertContains "1 passed, 1 failed, 0 errors" out.stdout
+
 /-- A test that prints, then records a named result that sleeps and fails. -/
 private def setupThenFailingCheck : Test := do
   IO.println "setup"

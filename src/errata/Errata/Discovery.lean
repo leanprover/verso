@@ -20,28 +20,35 @@ set_option doc.verso true
 namespace Errata
 
 /--
-Verifies that a tagged declaration can be run as a test: it is not {lit}`meta`, and it has an
-{name}`IsTest` instance.
+Builds the action that runs a declaration as a test, using the {name}`IsTest` instance for its type
+that is visible at the declaration. The declaration must not be {lit}`meta` or universe polymorphic.
 -/
-meta def checkIsTest (decl : Name) : MetaM Unit := do
+meta def testAction (decl : Name) : MetaM Expr := do
   let env ← getEnv
   if isMarkedMeta env decl then
     throwError m!"A test must not be `meta`"
   let info ← getConstInfo decl
+  unless info.levelParams.isEmpty do
+    throwError m!"A test must not be universe polymorphic"
   let goal := mkApp (mkConst ``IsTest) info.type
   match ← trySynthInstance goal with
-  | .some _ => pure ()
+  | .some inst =>
+    return mkApp3 (mkConst ``IsTest.toTest) info.type (← instantiateMVars inst) (mkConst decl)
   | _ =>
     throwError m!"`@[test]` requires an `Errata.IsTest` instance for the test's type{indentExpr info.type}"
 
 /--
-A recorded test: its declaration name and the source file that defines it. The file is captured
-when the attribute is applied; the declaration's line and column are recovered later, once the
-declaration ranges are available.
+A recorded test: its declaration name, the definition that runs it, and the source file that
+defines it. The file is captured when the attribute is applied; the declaration's line and column
+are recovered later, once the declaration ranges are available.
 -/
 structure TestDecl where
   /-- The test declaration's name. -/
   name : Name
+  /-- The private definition beside the test whose value is the action that runs it. -/
+  run : Name
+  /-- Whether the action is unsafe, as it is when the test is. -/
+  isUnsafe : Bool
   /-- The source file that defines the test. -/
   file : String
   /-- The test's docstring, rendered as Markdown, captured when the attribute is applied. -/
@@ -61,14 +68,21 @@ meta initialize testExt : SimplePersistentEnvExtension TestDecl (Array TestDecl)
   }
 
 /--
-Records a declaration as a test, capturing the source file that defines it and its docstring.
+Records a declaration as a test. The action that runs it is compiled into a private definition
+beside it, so the {name}`IsTest` instance in force here is the one that runs it wherever it is run.
 The docstring is read here, while it is still in the live environment, since a downstream build does
 not load the imported docstrings.
 -/
 meta def recordTest (decl : Name) : AttrM Unit := do
-  (checkIsTest decl).run'
+  let action ← (testAction decl).run'
+  let run := mkPrivateName (← getEnv) (← mkFreshUserName (privateToUserName decl ++ `run))
+  let type := mkApp (mkConst ``TestM) (mkConst ``Unit)
+  let val ← mkDefinitionValInferringUnsafe run [] type action .opaque
+  addAndCompile (.defnDecl val)
   let docstring? ← findDocString? (← getEnv) decl
-  modifyEnv (testExt.addEntry · { name := decl, file := ← getFileName, docstring? })
+  modifyEnv (testExt.addEntry · {
+    name := decl, run, isUnsafe := val.safety == .unsafe, file := ← getFileName, docstring?
+  })
 
 /-- Marks a definition as a test, discovered and run by the Errata test runner. -/
 meta initialize
@@ -151,9 +165,10 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
         let docStx ← match test.docstring? with
           | some doc => `(some $(quote doc))
           | none => `((none : Option String))
-        let ref ← `(@$(mkCIdent test.name))
-        let value ← if (← getConstInfo test.name).isUnsafe then `(unsafe $ref) else pure ref
+        let ref ← `(@$(mkCIdent test.run))
+        let run ← if test.isUnsafe then `(unsafe $ref) else pure ref
         entries := entries.push <| ←
-          `(Errata.TestEntry.of $(quote package) $(quote moduleStr) $(quote testName)
-              $(← exprToSyntax (toExpr location)) $value (docstring? := $docStx))
+          `({ package := $(quote package), moduleName := $(quote moduleStr),
+              test := $(quote testName), location := $(← exprToSyntax (toExpr location)),
+              docstring? := $docStx, run := $run : Errata.TestEntry })
   elabTerm (← `(#[$entries,*])) expectedType?

@@ -37,3 +37,11 @@ name = "AppCompileTime"
 # A legacy root that imports a module-system child, each with a test.
 [[lean_lib]]
 name = "AppMixed"
+
+# A test whose type has an `IsTest` instance only in its own module.
+[[lean_lib]]
+name = "AppLocalInstance"
+
+# A failing boolean test beside a module whose high-priority `IsTest Bool` instance passes anything.
+[[lean_lib]]
+name = "AppShadow"
