@@ -258,10 +258,11 @@ def parseOptions (args : List String) : Except String Options :=
 
 /--
 Parses the arguments, runs the tests, prints the results to the console, and writes any requested
-report files.
+report files. {name}`driverWarnings` are the driver's own warnings about the run, reported alongside
+the runner's.
 -/
-def runMain (invocation : Invocation) (entries : Array TestEntry) (args : List String) :
-    IO UInt32 := do
+def runMain (invocation : Invocation) (entries : Array TestEntry) (args : List String)
+    (driverWarnings : Array String := #[]) : IO UInt32 := do
   let cmd := runnerCmd invocation.runner fun parsed => do
     let opts ←
       match optionsOfParsed parsed with
@@ -273,29 +274,52 @@ def runMain (invocation : Invocation) (entries : Array TestEntry) (args : List S
       (options := opts.options) (seed := opts.seed)
       (ignorePanics := opts.ignorePanics)
     let results ← run cfg entries
-    let writeReport (path? : Option String) (render : Array Result → String) : IO Unit := do
+    -- The issues with the run as a whole: a test tool with no tests is a broken setup, and an
+    -- option that no test read is a typo or a removed flag. Under `--wfail`, every warning fails
+    -- the run.
+    let mut issues : Array RunReport.Issue :=
+      driverWarnings.map ({ isError := false, message := · })
+    if entries.isEmpty then
+      issues := issues.push { isError := true, message := "no tests were discovered" }
+    let used ← cfg.usedOptions.get
+    let unused := opts.options.toList.filterMap fun (k, _) => if used.contains k then none else some k
+    unless unused.isEmpty do
+      issues := issues.push {
+        isError := false, message := s!"option(s) provided but never read: {", ".intercalate unused}"
+      }
+    if opts.wfail then issues := issues.map ({ · with isError := true })
+    let report : RunReport := { results, issues }
+    let writeReport (path? : Option String) (render : RunReport → String) : IO Unit := do
       if let some path := path? then
-        writeFile path (render results)
+        writeFile path (render report)
     writeReport opts.junitPath junitReport
     writeReport opts.jsonPath jsonReport
     writeReport opts.markdownPath markdownReport
     let failures ← humanReport opts.verbosity results
-    if entries.isEmpty then
-      IO.eprintln "error: no tests were discovered"
-      return 1
-    -- Warn about options that were supplied but never read by any test (typos, removed flags).
-    -- Under `--wfail`, the warning is an error and fails the run.
-    let used ← cfg.usedOptions.get
-    let unused := opts.options.toList.filterMap fun (k, _) => if used.contains k then none else some k
-    unless unused.isEmpty do
-      let level := if opts.wfail then "error" else "warning"
-      IO.eprintln s!"{level}: option(s) provided but never read: {", ".intercalate unused}"
+    for issue in issues do
+      IO.eprintln s!"{issue.level}: {issue.message}"
     -- A process exit status keeps only its low 8 bits, so report a failing run as 1 rather than the
     -- count, which a multiple of 256 would otherwise wrap to 0.
-    if failures != 0 then return 1
-    if opts.wfail && !unused.isEmpty then return 1
+    if failures != 0 || report.failsRun then return 1
     return 0
   cmd.validate args
+
+/--
+The argument with which the driver hands the runner a warning of its own, followed by the warning's
+text. It may be repeated, and it must precede the runner's other arguments.
+
+This must match its definition in `lakefile.lean`.
+-/
+def driverWarningFlag : String := "--driver-warning"
+
+/-- Splits the driver's warnings, which lead the arguments, from the arguments for the runner. -/
+def driverWarnings : List String → Array String × List String
+  | flag :: text :: rest =>
+    if flag == driverWarningFlag then
+      let (warnings, rest) := driverWarnings rest
+      (#[text] ++ warnings, rest)
+    else (#[], flag :: text :: rest)
+  | args => (#[], args)
 
 /--
 Checks that the generated runner was started by the Errata driver, which passes {name}`driverFlag`
@@ -316,12 +340,15 @@ where
 
 /--
 The generated runner's entry point: checks that the Errata driver started the process by passing
-{name}`driverFlag` first, then hands the remaining arguments to {name}`runMain`.
+{name}`driverFlag` first, then hands the driver's warnings and the remaining arguments to
+{name}`runMain`.
 -/
 def driverMain (driverFlag : String) (invocation : Invocation) (entries : Array TestEntry)
     (args : List String) : IO UInt32 := do
   match checkInvocation driverFlag invocation args with
-  | .ok args => runMain invocation entries args
+  | .ok args =>
+    let (warnings, args) := driverWarnings args
+    runMain invocation entries args warnings
   | .error msg =>
     IO.eprintln msg
     return 1

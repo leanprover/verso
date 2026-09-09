@@ -184,6 +184,58 @@ instance : ToJson OutputLog where
 instance : FromJson OutputLog where
   fromJson? j := return { log := ← FromJson.fromJson? j }
 
+/-- An issue with the run as a whole, raised by the driver or the runner rather than by a test. -/
+structure RunReport.Issue where
+  /-- Whether the issue fails the run. -/
+  isError : Bool
+  /-- The message. -/
+  message : String
+deriving Repr, Inhabited, DecidableEq
+
+namespace RunReport.Issue
+
+/-- The first line of an issue's message. -/
+def headline (issue : Issue) : String :=
+  (issue.message.splitOn "\n").headD issue.message
+
+/-- The level an issue is reported at: {lit}`error` or {lit}`warning`. -/
+def level (issue : Issue) : String :=
+  if issue.isError then "error" else "warning"
+
+end RunReport.Issue
+
+instance : ToJson RunReport.Issue where
+  toJson issue := json%{ "level": $issue.level, "message": $issue.message }
+
+instance : FromJson RunReport.Issue where
+  fromJson? j := do
+    let message ← j.getObjValAs? String "message"
+    match ← j.getObjValAs? String "level" with
+    | "error" => return { isError := true, message }
+    | "warning" => return { isError := false, message }
+    | other => .error s!"unknown issue level: {other}"
+
+/-- Everything a report renders: the results, and the issues with the run as a whole. -/
+structure RunReport where
+  /-- The results of every test and named result. -/
+  results : Array Result
+  /-- The issues with the run as a whole. -/
+  issues : Array RunReport.Issue := #[]
+deriving Repr, Inhabited
+
+/-- Whether an issue fails the run. -/
+def RunReport.failsRun (report : RunReport) : Bool :=
+  report.issues.any (·.isError)
+
+/--
+The suite under which the run's own issues are reported in formats that don't have any other slot
+for them.
+-/
+def runSuite : String := "Test run"
+
+/-- The note that accompanies a warning, telling how to make it fail the run. -/
+private def wfailNote : String := "Run with --wfail to make warnings fail the run."
+
 /-- The suite a result belongs to: its package-qualified module. -/
 private def suiteOf (r : Result) : String :=
   r.moduleTarget
@@ -243,12 +295,30 @@ private def junitCase (indent suite : String) (r : Result) : String :=
     (verdict ++ stream "system-out" r.output.stdout ++ stream "system-err" r.output.stderr)
 
 /--
-Renders the results as JUnit XML, grouping by the module path. Each result becomes one
-{lit}`testcase` element, whose {lit}`system-out` and {lit}`system-err` elements contain the
-result's captured output.
+A JUnit test case for an issue: an {lit}`error` element for one that fails the run, and for a
+warning, the message and the way to make it fail the run in {lit}`system-err`.
 -/
-def junitReport (results : Array Result) : String :=
-  let suites := byModule results |>.map fun (_, cases) =>
+private def junitIssue (indent : String) (issue : RunReport.Issue) : String :=
+  let inner := indent ++ "  "
+  let content :=
+    if issue.isError then #[xmlText inner "error" [("message", issue.headline)] issue.message]
+    else #[xmlText inner "system-err" [] s!"{issue.message}\n{wfailNote}"]
+  xmlElements indent "testcase" [("name", issue.headline), ("classname", runSuite)] content
+
+/--
+Renders the report as JUnit XML. The run's issues, when there are any, come first as the
+{name}`runSuite` suite with one case each. The results follow, grouped by module: each result
+becomes one {lit}`testcase` element, whose {lit}`system-out` and {lit}`system-err` elements contain
+the result's captured output.
+-/
+def junitReport (report : RunReport) : String :=
+  let run :=
+    if report.issues.isEmpty then #[]
+    else #[xmlElements "  " "testsuite"
+      [("name", runSuite), ("tests", toString report.issues.size), ("failures", "0"),
+        ("errors", toString (report.issues.countP (·.isError)))]
+      (report.issues.map (junitIssue "    "))]
+  let suites := byModule report.results |>.map fun (_, cases) =>
     -- Every case in a group shares a package and a module, since the group is keyed by both.
     let pkg := (cases[0]?.map (·.package)).getD ""
     let suite := (cases[0]?.map (·.moduleName)).getD ""
@@ -257,7 +327,8 @@ def junitReport (results : Array Result) : String :=
         ("failures", toString (countWhere cases (· matches .fail _))),
         ("errors", toString (countWhere cases (· matches .error _)))]
       (cases.map (junitCase "    " suite))
-  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ++ xmlElements "" "testsuites" [] suites ++ "\n"
+  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ++
+    xmlElements "" "testsuites" [] (run ++ suites) ++ "\n"
 
 private def statusFields : Status → List (String × Json)
   | .pass => [("status", Json.str "pass")]
@@ -308,8 +379,12 @@ instance : FromJson Result where
       description? := ← optField j "description"
     }
 
-/-- Renders the results as a JSON array of objects. -/
-def jsonReport (results : Array Result) : String := (ToJson.toJson results).pretty
+/--
+Renders the report as a JSON object: the results as an array of objects under {lit}`results`, and
+the run's issues under {lit}`issues`.
+-/
+def jsonReport (report : RunReport) : String :=
+  (json%{ "results": $report.results, "issues": $report.issues }).pretty
 
 /-- The length of the longest run of consecutive backticks in {name}`s`. -/
 private def longestBacktickRun (s : String) : Nat :=
@@ -322,17 +397,25 @@ private def fencedBlock (body : String) : String :=
   s!"{fence}\n{body}\n{fence}"
 
 /--
-Renders the results as Markdown for a CI job summary: a headline tally, each failure and error in an
-open collapsible block with its location and detail, and a per-module table in a closed one.
+Renders the report as Markdown for a CI job summary: a headline tally, each of the run's issues
+and each failure and error in an open collapsible block, the latter with its location and detail,
+and a per-module table in a closed one.
 -/
-def markdownReport (results : Array Result) : String := Id.run do
+def markdownReport (report : RunReport) : String := Id.run do
+  let results := report.results
   let passed := countWhere results (· matches .pass)
   let failed := countWhere results (· matches .fail _)
   let errors := countWhere results (· matches .error _)
-  let icon := if failed + errors == 0 then "✅" else "❌"
+  let icon := if failed + errors == 0 && !report.failsRun then "✅" else "❌"
   let mut out := s!"## {icon} Errata test results\n\n"
   out := out ++
     s!"**{passed}** passed · **{failed}** failed · **{errors}** errors\n\n"
+  for issue in report.issues do
+    let mark := if issue.isError then "💥" else "⚠️"
+    out := out ++ s!"<details open><summary>{mark} {runSuite} {issue.level}: \
+      {xmlEscape issue.headline}</summary>\n\n{fencedBlock issue.message}\n\n"
+    unless issue.isError do out := out ++ s!"{wfailNote}\n\n"
+    out := out ++ "</details>\n\n"
   for r in results do
     let render (mark message : String) (detail? : Option String) : String := Id.run do
       let mut s := s!"<details open><summary>{mark} <code>{xmlEscape r.moduleTarget}</code> \

@@ -133,7 +133,7 @@ def docstringReachesResults : Test := do
   result "a named result has none" do
     assertTrue (results.any fun r => r.resultPath == #["check"] && r.description?.isNone)
   result "the Markdown report shows it once" do
-    assertEq 2 ((markdownReport results).splitOn "What it checks.").length
+    assertEq 2 ((markdownReport { results }).splitOn "What it checks.").length
 
 /--
 The human-readable report shows a failure's docstring, indented below its status line, and shows a
@@ -163,7 +163,7 @@ def markdownReportShowsDocstring : Test := do
   let fail : Result :=
     { package := "p", moduleName := "M", test := "u", status := .fail { message := "boom" },
       description? := some "Checks `x` and **y**." }
-  assertContains "u: boom</summary>\n\nChecks `x` and **y**.\n\n" (markdownReport #[fail])
+  assertContains "u: boom</summary>\n\nChecks `x` and **y**.\n\n" (markdownReport { results := #[fail] })
 
 /-- A property test. -/
 @[test]
@@ -367,6 +367,47 @@ def wfailPromotesUnusedOptions : Test := do
     wfail.set (← runMain testInvocation #[entry] ["--wfail", "--", "--bogus=1"])
   assertEq 0 (← lax.get)
   assertEq 1 (← wfail.get)
+
+/--
+Runs the runner with every report written to a temporary directory, returning the exit code and the
+JUnit, JSON, and Markdown reports.
+-/
+private def runReporting (entries : Array TestEntry) (args : List String) :
+    TestM (UInt32 × String × String × String) :=
+  IO.FS.withTempDir fun dir => do
+    let xml := dir / "report.xml"
+    let json := dir / "report.json"
+    let md := dir / "report.md"
+    let code ← IO.mkRef (0 : UInt32)
+    discard <| captureOutput do
+      code.set (← runMain testInvocation entries
+        (["--junit", xml.toString, "--json", json.toString, "--markdown", md.toString] ++ args))
+    return (← code.get, ← IO.FS.readFile xml, ← IO.FS.readFile json, ← IO.FS.readFile md)
+
+/--
+An option that no test reads is a warning in every report, with the way to make it fail the run.
+Under `--wfail` it is an error. A run with nothing to report has no "Test run" suite.
+-/
+@[test]
+def unusedOptionsReachReports : Test := do
+  let entry := TestEntry.of "p" "M" "t" default (pure () : Test)
+  result "absent without issues" do
+    let (_, xml, _, _) ← runReporting #[entry] []
+    assertNotContains "Test run" xml
+  result "as a warning" do
+    let (code, xml, _, md) ← runReporting #[entry] ["--", "--bogus=1"]
+    assertEq 0 code.toNat
+    assertContains "<testsuite name=\"Test run\"" xml
+    assertNotContains "<error" xml
+    assertContains "never read: bogus" xml
+    assertContains "--wfail" xml
+    assertContains "never read: bogus" md
+  result "as an error under --wfail" do
+    let (code, xml, _, md) ← runReporting #[entry] ["--wfail", "--", "--bogus=1"]
+    assertEq 1 code.toNat
+    assertContains "<error message=" xml
+    assertContains "never read: bogus" xml
+    assertContains "## ❌" md
 
 /-- The detail given to a true-assertion is attached to its failure. -/
 @[test]
@@ -632,24 +673,33 @@ def driverRunsUnsafeTests : Test := do
 
 /--
 A module below a library's root that isn't imported transitively by any root causes a warning
-because its tests are never discovered. The `--wfail` flag makes that report into an error. The
-fixture's `AppStray` library has one such module.
+because its tests are never discovered. The `--wfail` flag makes that report into an error. Either
+way the tests run, and the reports record the warning or error. The fixture's `AppStray` library
+has one such module.
 -/
 @[test]
 def driverReportsUnreachableModules : Test := do
   let fixture := fixturesDir / "driver-configured"
   let notice := "modules are not reachable from their library's roots"
-  result "A warning is emitted" do
-    let out ← lakeInFixture fixture #["test", "--", "AppStray"]
-    assertExitCode 0 out
-    assertContains s!"warning: these {notice}" out.stderr
-    assertContains "AppStray: AppStray.Orphan" out.stderr
-    assertContains "1 passed, 0 failed, 0 errors" out.stdout
-  result "The --wfail flag turns the warning into an error" do
-    let out ← lakeInFixture fixture #["test", "--", "AppStray", "--test-options", "--wfail"]
-    assertExitCode 1 out
-    assertContains s!"error: these {notice}" out.stderr
-    assertNotContains "passed" out.stdout
+  IO.FS.withTempDir fun dir => do
+    let junit := dir / "report.xml"
+    let args := #["test", "--", "AppStray", "--test-options", "--junit", junit.toString]
+    result "A warning is emitted" do
+      let out ← lakeInFixture fixture args
+      assertExitCode 0 out
+      assertContains s!"warning: these {notice}" out.stderr
+      assertContains "AppStray: AppStray.Orphan" out.stderr
+      assertContains "1 passed, 0 failed, 0 errors" out.stdout
+      let xml ← IO.FS.readFile junit
+      assertContains "<testsuite name=\"Test run\"" xml
+      assertContains "AppStray.Orphan" xml
+      assertNotContains "<error" xml
+    result "The --wfail flag turns the warning into an error" do
+      let out ← lakeInFixture fixture (args.push "--wfail")
+      assertExitCode 1 out
+      assertContains s!"error: these {notice}" out.stderr
+      assertContains "1 passed, 0 failed, 0 errors" out.stdout
+      assertContains "<error message=" (← IO.FS.readFile junit)
 
 /-- A test that indexes past the end of an array, and so panics and continues with a default. -/
 private def panicking : Test := do
@@ -815,7 +865,7 @@ def expectFailKeepsDroppedTimeOutOfOwnDuration : Test := do
 @[test]
 def junitIncludesTestOutputOnFailedNamedResult : Test := do
   let results ← resultsOf setupThenFailingCheck
-  let xml := junitReport results
+  let xml := junitReport { results }
   assertContains "tests=\"2\" failures=\"2\"" xml
   assertContains "<system-out>setup" xml
   assertEq 1 ((xml.splitOn "<system-out>").length - 1)
@@ -916,6 +966,27 @@ def emptyRunFails : Test := do
   assertContains "no tests were discovered" out.all
   assertEq 1 (← code.get).toNat
 
+/--
+Every report records a run that discovered nothing as a failed run: JUnit has a "Test run" suite
+with an error case, the JSON object lists the issue, and the Markdown headline is red.
+-/
+@[test]
+def emptyRunReachesReports : Test := do
+  let (code, xml, json, md) ← runReporting #[] []
+  assertEq 1 code.toNat
+  result "JUnit" do
+    assertContains "<testsuite name=\"Test run\"" xml
+    assertContains "<error message=\"no tests were discovered\"" xml
+  result "JSON" do
+    let .ok j := Lean.Json.parse json | fail "the JSON report does not parse"
+    let .ok issues := j.getObjValAs? (Array Lean.Json) "issues" | fail "no issues field"
+    assertEq 1 issues.size
+    assertEq (some "error") (issues[0]!.getObjValAs? String "level").toOption
+    assertContains "no tests were discovered" ((issues[0]!.getObjValAs? String "message").toOption.getD "")
+  result "Markdown" do
+    assertContains "## ❌" md
+    assertContains "no tests were discovered" md
+
 /-- At silent verbosity the report hides passes but shows failures and the summary line. -/
 @[test]
 def reportSilent : Test := do
@@ -942,7 +1013,7 @@ def junitReplacesForbiddenChars : Test := do
   let bad := (Char.ofNat 0xFFFF).toString ++ (Char.ofNat 0xFFFE).toString ++ (Char.ofNat 0x1).toString
   let r : Result := { package := "p", moduleName := "M", test := "t",
                       status := .fail { message := s!"bad{bad}char\tkept" } }
-  let xml := junitReport #[r]
+  let xml := junitReport { results := #[r] }
   assertContains "bad\uFFFD\uFFFD\uFFFDchar\tkept" xml
   assertTrue (!xml.contains (Char.ofNat 0xFFFF) && !xml.contains (Char.ofNat 0xFFFE))
   assertTrue (!xml.contains (Char.ofNat 0x1))
@@ -953,7 +1024,7 @@ def junitIncludesOutput : Test := do
   let output : OutputLog := { log := #[.stdout "out 1\n", .stderr "err <1>\n", .stdout "out 2\n"] }
   let r : Result := { package := "p", moduleName := "M", test := "t",
                       status := .fail { message := "boom" }, output }
-  let xml := junitReport #[r]
+  let xml := junitReport { results := #[r] }
   assertContains "<system-out>out 1\nout 2\n</system-out>" xml
   assertContains "<system-err>err &lt;1&gt;\n</system-err>" xml
 
@@ -961,7 +1032,7 @@ def junitIncludesOutput : Test := do
 @[test]
 def junitOmitsEmptyOutput : Test := do
   let r : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
-  let xml := junitReport #[r]
+  let xml := junitReport { results := #[r] }
   assertNotContains "system-out" xml
   assertNotContains "system-err" xml
 
@@ -1006,7 +1077,7 @@ def reportMarkdown : Test := do
   let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
   let f : TestFailure := { message := "boom", detail? := some "expected 1\nactual 2" }
   let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail f }
-  let md := markdownReport #[pass, fail]
+  let md := markdownReport { results := #[pass, fail] }
   assertContains "**1** passed · **1** failed" md
   assertContains "<details open><summary>❌ <code>p/M</code> u: boom</summary>" md
   assertContains "expected 1\nactual 2" md

@@ -413,8 +413,6 @@ script run (args) do
       IO.eprintln s!"error: {msg}"
       IO.eprintln (usage run withArgs)
       return 1
-  -- `--wfail` is the runner's warnings-as-errors flag; the driver's own warnings honor it too.
-  let wfail := runnerArgs.contains "--wfail"
   -- `--exit-on-panic` means that the runner should be invoked with LEAN_ABORT_ON_PANIC set.
   let exitOnPanic := runnerArgs.contains "--exit-on-panic"
   -- Search the named libraries, or every library in the package by default. A name may be a bare
@@ -471,8 +469,8 @@ script run (args) do
   -- A module that sits under a library's roots without being reachable from them is never built, so
   -- any tests it defines are silently left out. A library is checked when it was named on the
   -- command line, since naming it declares that its tests are expected, or when its built modules
-  -- carry tests. That is a configuration slip rather than a test failure, so report it and run
-  -- anyway.
+  -- carry tests. That is a configuration slip rather than a test failure, so it is a warning that
+  -- the runner reports alongside the results, and the run goes ahead.
   let testMods := moduleMods ++ nonModuleMods
   let mut unreachable : Array (Lake.LeanLib × Array Lean.Name) := #[]
   for (lib, mods) in libMods do
@@ -480,15 +478,13 @@ script run (args) do
       let known := mods.foldl (init := Lean.NameSet.empty) (·.insert ·)
       let missed ← unreachableModules lib known
       unless missed.isEmpty do unreachable := unreachable.push (lib, missed)
+  let mut driverWarnings : Array String := #[]
   unless unreachable.isEmpty do
-    let level := if wfail then "error" else "warning"
-    IO.eprintln s!"{level}: these modules are not reachable from their library's roots, so any \
-      tests they define are not discovered. Import them from a root, or widen the library's \
-      `globs` (e.g. `globs := #[Glob.andSubmodules `Root]`):"
-    for (lib, mods) in unreachable do
-      for mod in mods do
-        IO.eprintln s!"  {lib.name}: {mod}"
-    if wfail then return 1
+    let lines := unreachable.flatMap fun (lib, mods) => mods.map fun mod => s!"  {lib.name}: {mod}"
+    driverWarnings := driverWarnings.push <|
+      s!"these modules are not reachable from their library's roots, so any tests they define are \
+        not discovered. Import them from a root, or widen the library's `globs` \
+        (e.g. `globs := #[Glob.andSubmodules `Root]`):\n{"\n".intercalate lines.toList}"
   -- Write the generated sources below the root package. A changed selection changes the sources, so
   -- Lake's own traces rebuild what depends on them.
   let dir := ws.root.dir / errataRunnerDir
@@ -512,8 +508,11 @@ script run (args) do
     if changed then IO.FS.writeFile file src
   -- Build and run the root package's runner.
   let exePath ← runBuild (ws.root.facet `errataRunner).fetch
+  -- Each of the driver's warnings follows `--driver-warning`, which must match
+  -- `Errata.driverWarningFlag`; the runner reports them alongside its own.
+  let warningArgs := driverWarnings.flatMap (#["--driver-warning", ·])
   let child ← IO.Process.spawn {
-    cmd := exePath.toString, args := #[errataDriverFlag] ++ runnerArgs.toArray
+    cmd := exePath.toString, args := #[errataDriverFlag] ++ warningArgs ++ runnerArgs.toArray
     env := if exitOnPanic then #[("LEAN_ABORT_ON_PANIC", some "1")] else #[]
   }
   child.wait
