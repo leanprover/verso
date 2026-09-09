@@ -74,7 +74,8 @@ Legacy role: {leanInline post2}`Nat.succ 1`.
 :::::::
 
 -- Hidden blog Lean blocks elaborate with their show/keep/error flags.
-#doc (Post) "Hidden Lean Block Flags" =>
+#docs (Post) hiddenLeanBlockFlags "Hidden Lean Block Flags" :=
+:::::::
 ```leanInit post
 ```
 
@@ -93,18 +94,25 @@ example : base = 40 := rfl
 ```lean post +error
 #check scratch
 ```
+:::::::
+
+#test_guard hiddenLeanBlockFlags.toPart.content.size > 0
 
 -- The canonical inline Lean role works without warnings.
 #docs (Post) inlineLeanRoleNames "Inline Lean Role Names" :=
+:::::::
 ```leanInit post
 ```
 
 Canonical role: {lean post}`Nat.succ 1`.
+:::::::
 
 #test_guard inlineLeanRoleNames.toPart.content.size > 0
 #test_guard inlineLeanRoleNamesDeprecated.toPart.content.size > 0
 
 -- The inline Lean role elaborates terms in the saved example environment.
+#docs (Post) roleSeesEnvironment "Role Sees Environment" :=
+:::::::
 ```leanInit env
 ```
 
@@ -113,3 +121,6 @@ def x := 1
 ```
 
 Role is aware of the environment: {lean env}`x`
+:::::::
+
+#test_guard roleSeesEnvironment.toPart.content.size > 0

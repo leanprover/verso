@@ -216,9 +216,9 @@ info: Verso.Doc.Part.mk
           none
           #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "More text:"],
             Verso.Doc.Block.dl
-              #[{ term := #[Verso.Doc.Inline.text " A list"],
+              #[{ term := #[Verso.Doc.Inline.text "A list"],
                   desc := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "a list"]] },
-                { term := #[Verso.Doc.Inline.text " With stuff"],
+                { term := #[Verso.Doc.Inline.text "With stuff"],
                   desc := #[Verso.Doc.Block.ul
                               #[{ contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "and nested"]] }]] }]]
           #[]]]

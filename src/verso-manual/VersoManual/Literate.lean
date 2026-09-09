@@ -85,7 +85,6 @@ instance : LoadLiterate Manual where
   docstringPart lvl title contents := .other (Block.literateDocstringPart lvl) (#[.para title] ++ contents)
 
 
-open Lean.Doc.Syntax
 open Verso.Doc Elab Concrete
 open Lean.Elab Command Term
 open PartElabM
@@ -155,10 +154,11 @@ meta instance : FromArgs IncludeLiterateConfig m where
     IncludeLiterateConfig.mk <$> .positional' `path  <*> .named' `level true <*> .positional' `name <*> .positional' `title
 
 
-@[part_command Lean.Doc.Syntax.command]
+@[part_command Lean.Doc.Parser.Block.command]
 meta def includeLiterateSection : PartCommand
-  | `(block|command{includeLiterate $args* }) => do
-    let {path, level, modName, title} ← parseThe IncludeLiterateConfig (← parseArgs args)
+  | .command v => do
+    unless v.name.getId == `includeLiterate do Lean.Elab.throwUnsupportedSyntax
+    let {path, level, modName, title} ← parseThe IncludeLiterateConfig (← parseArgs v.args)
     let ref ← getRef
     if let some lvl := level then
       let name ← getModuleWithDocs path modName title none

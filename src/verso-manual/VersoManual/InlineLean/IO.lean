@@ -28,6 +28,7 @@ public section
 open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets
 open SubVerso.Highlighting Highlighted
 open Lean Elab
+open Lean.Doc (VersoCodeBlock)
 
 open Lean.Elab.Tactic.GuardMsgs
 
@@ -97,7 +98,7 @@ end
 @[code_block]
 meta def exampleFile : CodeBlockExpanderOf ExampleFileConfig
   | config, str => do
-    let s := str.getString
+    let s := str.getVersoCodeBlock
     if config.show then
       IOExample.exampleFileSyntax config.type s
     else
@@ -300,7 +301,7 @@ meta def startExample [Monad m] [MonadEnv m] [MonadError m] [MonadQuotation m] [
     modifyEnv fun env =>
       ioExampleCtx.setState env (some {leanCodeName})
 
-meta def saveLeanCode (src : StrLit) : DocElabM Ident := do
+meta def saveLeanCode (src : VersoCodeBlock) : DocElabM Ident := do
   match ioExampleCtx.getState (← getEnv) with
   | none => throwError "Can't set Lean code - not in an IO example"
   | some st =>
@@ -311,19 +312,19 @@ meta def saveLeanCode (src : StrLit) : DocElabM Ident := do
     else throwError "Code already specified"
 
 
-meta def saveInputFile [Monad m] [MonadEnv m] [MonadError m] (name : System.FilePath) (contents : StrLit) : m Unit := do
+meta def saveInputFile [Monad m] [MonadEnv m] [MonadError m] (name : System.FilePath) (contents : VersoCodeBlock) : m Unit := do
   match ioExampleCtx.getState (← getEnv) with
   | none => throwError "Can't save file - not in an IO example"
   | some st =>
     modifyEnv fun env => ioExampleCtx.setState env (some {st with inputFiles := st.inputFiles.push (name, contents)})
 
-meta def saveOutputFile [Monad m] [MonadEnv m] [MonadError m] (name : System.FilePath) (contents : StrLit) : m Unit := do
+meta def saveOutputFile [Monad m] [MonadEnv m] [MonadError m] (name : System.FilePath) (contents : VersoCodeBlock) : m Unit := do
   match ioExampleCtx.getState (← getEnv) with
   | none => throwError "Can't save file - not in an IO example"
   | some st =>
     modifyEnv fun env => ioExampleCtx.setState env (some {st with outputFiles := st.outputFiles.push (name, contents)})
 
-meta def saveStdin [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m Unit := do
+meta def saveStdin [Monad m] [MonadEnv m] [MonadError m] (contents : VersoCodeBlock) : m Unit := do
   match ioExampleCtx.getState (← getEnv) with
   | none => throwError "Can't save stdin - not in an IO example"
   | some st =>
@@ -331,7 +332,7 @@ meta def saveStdin [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m
     | none => modifyEnv fun env => ioExampleCtx.setState env (some {st with stdin := some contents})
     | some _ => throwError "stdin already specified"
 
-meta def saveStdout [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m Unit := do
+meta def saveStdout [Monad m] [MonadEnv m] [MonadError m] (contents : VersoCodeBlock) : m Unit := do
   match ioExampleCtx.getState (← getEnv) with
   | none => throwError "Can't save stdout - not in an IO example"
   | some st =>
@@ -339,7 +340,7 @@ meta def saveStdout [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : 
     | none => modifyEnv fun env => ioExampleCtx.setState env (some {st with stdout := some contents})
     | some _ => throwError "stdout already specified"
 
-meta def saveStderr [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m Unit := do
+meta def saveStderr [Monad m] [MonadEnv m] [MonadError m] (contents : VersoCodeBlock) : m Unit := do
   match ioExampleCtx.getState (← getEnv) with
   | none => throwError "Can't save stderr - not in an IO example"
   | some st =>
@@ -349,9 +350,9 @@ meta def saveStderr [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : 
 
 
 meta def check
-    (leanCode : StrLit) (leanCodeName : Name)
-    (inputFiles outputFiles : Array (System.FilePath × StrLit))
-    (stdin stdout stderr : Option StrLit) : DocElabM Highlighted :=
+    (leanCode : VersoCodeBlock) (leanCodeName : Name)
+    (inputFiles outputFiles : Array (System.FilePath × VersoCodeBlock))
+    (stdin stdout stderr : Option VersoCodeBlock) : DocElabM Highlighted :=
   IO.FS.withTempDir fun dirname => do
     let toolchain : String ← IO.FS.readFile "lean-toolchain"
     let leanCodeName : String :=
@@ -370,7 +371,7 @@ meta def check
     -- Avoid contention during parallel builds
     let leanFileName : System.FilePath := (leanCodeName : System.FilePath).addExtension "lean"
     IO.FS.writeFile (dirname / "lean-toolchain") toolchain
-    IO.FS.writeFile (dirname / leanFileName) leanCode.getString
+    IO.FS.writeFile (dirname / leanFileName) leanCode.getVersoCodeBlock
     IO.FS.writeFile (dirname / "lakefile.toml")
       s!"name = \"example\"
   defaultTargets = [\"{leanCodeName}\"]
@@ -379,7 +380,7 @@ meta def check
   name = \"{leanCodeName}\"
   "
     for (f, i) in inputFiles do
-      IO.FS.writeFile (dirname / f) i.getString
+      IO.FS.writeFile (dirname / f) i.getVersoCodeBlock
 
     let out ← IO.Process.output {cmd := "lake", args := #["clean"], cwd := some dirname}
     if out.exitCode != 0 then
@@ -394,7 +395,7 @@ meta def check
         m!"Stderr:\n{out.stderr}\n\nStdout:\n{out.stdout}\n\n"
     let proc ← IO.Process.spawn {cmd := "lake", args := #["--quiet", "exe", leanCodeName], cwd := some dirname, stdin := .piped, stdout := .piped, stderr := .piped}
     let (stdinH, proc) ← proc.takeStdin
-    stdinH.putStr (stdin.map (·.getString) |>.getD "")
+    stdinH.putStr (stdin.map (·.getVersoCodeBlock) |>.getD "")
     stdinH.flush
     let stdoutTask ← IO.asTask proc.stdout.readToEnd Task.Priority.dedicated
     let stderrOut ← proc.stderr.readToEnd
@@ -407,23 +408,23 @@ meta def check
       Lean.logError s!"Running 'lake --quiet exe {leanCodeName}' failed with exit code {exitCode}."
 
     let stdoutOut ← IO.ofExcept stdoutTask.get
-    let expectedStdout := stdout.map (·.getString) |>.getD ""
+    let expectedStdout := stdout.map (·.getVersoCodeBlock) |>.getD ""
     if stdoutOut.trimAscii != expectedStdout.trimAscii then
       if let some stdoutLit := stdout then
         Verso.Doc.Suggestion.saveSuggestion stdoutLit (shorten stdoutOut) stdoutOut
       logErrorAt (loc stdout) s!"Mismatched stdout. Expected:\n{expectedStdout}\nGot:\n{stdoutOut}"
 
-    let expectedStderr := stderr.map (·.getString) |>.getD ""
+    let expectedStderr := stderr.map (·.getVersoCodeBlock) |>.getD ""
     if stderrOut.trimAscii != expectedStderr.trimAscii then
       if let some stderrLit := stderr then
         Verso.Doc.Suggestion.saveSuggestion stderrLit (shorten stderrOut) stderrOut
-      logErrorAt (loc stderr) s!"Mismatched stderr. Expected:\n{stderr.map (·.getString) |>.getD ""}\nGot:{stderrOut}\n"
+      logErrorAt (loc stderr) s!"Mismatched stderr. Expected:\n{stderr.map (·.getVersoCodeBlock) |>.getD ""}\nGot:{stderrOut}\n"
 
     for (f, o) in outputFiles do
       let f' := dirname / f
       if ← f'.pathExists then
         let contents ← IO.FS.readFile f'
-        if contents.trimAscii != o.getString.trimAscii then
+        if contents.trimAscii != o.getVersoCodeBlock.trimAscii then
           Verso.Doc.Suggestion.saveSuggestion o (shorten contents) contents
           logErrorAt (loc (some o)) s!"Output file {f} mismatch. Got:\n{contents}"
       else Lean.logError s!"Output file {f} not found"
@@ -491,7 +492,7 @@ meta def inputFile : CodeBlockExpanderOf FileConfig
     -- The quote step here is to prevent the editor from showing document AST internals when the
     -- cursor is on the code block
     if opts.show then
-      exampleFileSyntax (.input opts.name) str.getString
+      exampleFileSyntax (.input opts.name) str.getVersoCodeBlock
     else
       ``(Block.concat #[])
 
@@ -503,7 +504,7 @@ meta def outputFile : CodeBlockExpanderOf FileConfig
     -- The quote step here is to prevent the editor from showing document AST internals when the
     -- cursor is on the code block
     if opts.show then
-      exampleFileSyntax (.output opts.name) str.getString
+      exampleFileSyntax (.output opts.name) str.getVersoCodeBlock
     else
       ``(Block.concat #[])
 
@@ -515,7 +516,7 @@ meta def stdin : CodeBlockExpanderOf Config
     -- The quote step here is to prevent the editor from showing document AST internals when the
     -- cursor is on the code block
     if opts.show then
-      exampleFileSyntax .stdin str.getString
+      exampleFileSyntax .stdin str.getVersoCodeBlock
     else
       ``(Block.concat #[])
 
@@ -527,7 +528,7 @@ meta def stdout : CodeBlockExpanderOf Config
     -- The quote step here is to prevent the editor from showing document AST internals when the
     -- cursor is on the code block
     if opts.show then
-      exampleFileSyntax .stdout str.getString
+      exampleFileSyntax .stdout str.getVersoCodeBlock
     else
       ``(Block.concat #[])
 
@@ -539,7 +540,7 @@ meta def stderr : CodeBlockExpanderOf Config
     -- The quote step here is to prevent the editor from showing document AST internals when the
     -- cursor is on the code block
     if opts.show then
-      exampleFileSyntax .stderr str.getString
+      exampleFileSyntax .stderr str.getVersoCodeBlock
     else
       ``(Block.concat #[])
 
@@ -552,7 +553,7 @@ meta def ioLean : CodeBlockExpanderOf Config
     if opts.show then
       let range := Syntax.getRange? str
       let range := range.map (← getFileMap).utf8RangeToLspRange
-      ``(Block.other (Block.lean $x (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
+      ``(Block.other (Block.lean $x (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getVersoCodeBlock)])
     else
       ``(Block.concat #[])
 

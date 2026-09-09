@@ -174,7 +174,7 @@ def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax := do
   -- following heuristic: any remaining unprocessed doc comments are associated with the unique
   -- highest definition site that they share a closest ancestor with.
   let stx ← replaceStackM stx fun stk stx => do
-    if stx.isOfKind ``docComment && stx[1].isAtom || stx[1].isOfKind ``versoCommentBody then
+    if stx.isOfKind ``docComment && stx[1].isOfKind ``commentBody || stx[1].isOfKind ``versoCommentBody then
       for (parent, i) in stk do
         let defs ← findHighestM parent fun x =>
           if x.isIdent then defSites.find? (fun y => identMatch y.2 x) |>.map (·.1) else none
@@ -197,7 +197,7 @@ where
 
   rewriteComment (x : Name) (stx : Syntax) : TermElabM Syntax := do
     let indentColumn := (← getFileMap).utf8PosToLspPos stx.getHeadInfo.getPos! |>.character
-    let info := if let .atom info _ := stx[1] then info else spanInfo stx stx
+    let info := if stx[1].isOfKind ``commentBody then spanInfo stx[1] stx[1] else spanInfo stx stx
     return .node .none `replacedDoc #[.atom info s!"▼{indentColumn}◄{x}▲"]
 
 
@@ -396,8 +396,8 @@ where
             guard (s.declarationRange.pos == declRange.pos) *> some s
           if let some doc := doc? then
             return #[.modDoc (← toModLit doc |>.run docMsgs)]
-        else if stx[1].isAtom then
-          if let some doc := MD4Lean.parse (stx[1].getAtomVal.dropSuffix "-/").copy then
+        else if stx[1].isOfKind ``commentBody then
+          if let some doc := MD4Lean.parse stx[1][0].getAtomVal then
             return #[.markdownModDoc doc]
 
     highlight' (Option.map (#[·]) res.info[0]? |>.getD #[]) stx true

@@ -19,7 +19,7 @@ open Lean.Doc.Parser
 public def attributeNameFn : ParserFn :=
   atomicFn <|
     nodeFn attributeNameKind <|
-      asStringFn <| andthenFn (satisfyFn versoAttributeNameChar) (manyFn attributeNameCharFn)
+      asTokenFn <| andthenFn (satisfyFn versoAttributeNameChar) (manyFn attributeNameCharFn)
 where
   -- A slight divergence from the spec for the sake of quasiquotation syntax:
   -- attribute names can't start with a few special characters that the spec allows but that

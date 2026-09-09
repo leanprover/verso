@@ -19,77 +19,70 @@ namespace Verso.Doc.Elab
 open Lean Elab
 open PartElabM
 open DocElabM
-open Lean.Doc.Syntax
+open Lean.Doc (ArgView ArgValView BlockView DescItemView MathMode VersoBlock)
+open Lean.Doc.Parser
 open Verso.ArgParse (SigDoc)
 
 set_option backward.privateInPublic false
 
-@[inline_expander Lean.Doc.Syntax.text]
-public meta partial def _root_.Lean.Doc.Syntax.text.expand : InlineExpander := fun x =>
-  match x with
-  | `(inline| $s:str) => do
-    -- Erase the source locations from the string literal to prevent unwanted hover info
-    ``(Inline.text $(⟨deleteInfo s.raw⟩))
-  | _ => throwUnsupportedSyntax
-  where
-    deleteInfo : Syntax → Syntax
-      | .node _ k args => .node .none k (args.map deleteInfo)
-      | .atom _ val => .atom .none val
-      | .ident _ rawVal val preres => .ident .none rawVal val preres
-      | .missing => .missing
-
-@[inline_expander Lean.Doc.Syntax.linebreak]
-public meta def _root_.linebreak.expand : InlineExpander
-  | `(inline|line! $s:str) =>
-    ``(Inline.linebreak $(quote s.getString))
+@[inline_expander Lean.Doc.Parser.Inline.text]
+public meta partial def _root_.Lean.Doc.Parser.Inline.text.expand : InlineExpander
+  -- `quote` builds the literal without source locations, preventing unwanted hover info
+  | .text v => ``(Inline.text $(quote v.getVersoText))
   | _ => throwUnsupportedSyntax
 
-@[inline_expander Lean.Doc.Syntax.emph]
-public meta def _root_.Lean.Doc.Syntax.emph.expand : InlineExpander
-  | `(inline| _[ $args* ]) => do
-    ``(Inline.emph #[$[$(← args.mapM elabInline)],*])
+@[inline_expander Lean.Doc.Parser.Inline.linebreak]
+public meta def _root_.Lean.Doc.Parser.Inline.linebreak.expand : InlineExpander
+  | .linebreak _ => ``(Inline.linebreak $(quote "\n"))
   | _ => throwUnsupportedSyntax
 
-@[inline_expander Lean.Doc.Syntax.bold]
-public meta def _root_.Lean.Doc.Syntax.bold.expand : InlineExpander
-  | `(inline| *[ $args* ]) => do
-    ``(Inline.bold #[$[$(← args.mapM elabInline)],*])
+@[inline_expander Lean.Doc.Parser.Inline.emph]
+public meta def _root_.Lean.Doc.Parser.Inline.emph.expand : InlineExpander
+  | .emph v => do
+    ``(Inline.emph #[$[$(← v.content.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
-meta def parseArgVal (val : TSyntax `arg_val) : DocElabM ArgVal := do
-  match val with
-  | `(arg_val|$s:str) => pure <| .str s
-  | `(arg_val|$x:ident) => pure <| .name x
-  | `(arg_val|$n:num) => pure <| .num n
-  | other => throwErrorAt other "Can't decode argument value '{repr other}'"
+@[inline_expander Lean.Doc.Parser.Inline.bold]
+public meta def _root_.Lean.Doc.Parser.Inline.bold.expand : InlineExpander
+  | .bold v => do
+    ``(Inline.bold #[$[$(← v.content.mapM elabInline)],*])
+  | _ => throwUnsupportedSyntax
 
-public meta def parseArgs (argStx : TSyntaxArray `doc_arg) : DocElabM (Array Arg) := do
+meta def parseArgVal (val : TSyntax ``Lean.Doc.Parser.argVal) : DocElabM ArgVal := do
+  match ArgValView.of val with
+  | some (.str s _) => pure <| .str s
+  | some (.name x) => pure <| .name x
+  | some (.num n _) => pure <| .num n
+  | none => throwErrorAt val "Can't decode argument value '{repr val}'"
+
+public meta def parseArgs (argStx : TSyntaxArray ``Lean.Doc.Parser.arg) :
+    DocElabM (Array Arg) := do
   let mut argVals := #[]
   for arg in argStx do
-    match arg with
-    | `(doc_arg|$v:arg_val) =>
+    match ArgView.of arg with
+    | some (.anon (val := v) ..) =>
       argVals := argVals.push (.anon (← parseArgVal v))
-    | `(doc_arg|$x:ident := $v) => do
+    | some (.named (parens := none) (name := x) (val := v) ..) => do
+      -- A named argument without parentheses is the deprecated spelling.
       let src := (← getFileMap).source
       if let some ⟨s, e⟩ := x.raw.getRange? (canonicalOnly := true) then
         if let some ⟨s', e'⟩ := v.raw.getRange? (canonicalOnly := true) then
           let hint ← MessageData.hint m!"Replace with the updated syntax:" #[s!"({s.extract src e} := {s'.extract src e'})"] (ref? := some arg)
           logWarningAt arg m!"Deprecated named argument syntax for `{x}`{hint}"
       argVals := argVals.push (.named arg x (← parseArgVal v))
-    | `(doc_arg|($x:ident := $v)) =>
+    | some (.named (parens := some _) (name := x) (val := v) ..) =>
       argVals := argVals.push (.named arg x (← parseArgVal v))
-    | `(doc_arg|+$x) =>
-      argVals := argVals.push (.flag arg x true)
-    | `(doc_arg|-$x) =>
-      argVals := argVals.push (.flag arg x false)
-    | other => throwErrorAt other "Can't decode argument '{repr other}'"
+    | some (.flag (name := x) (isOn := isOn) ..) =>
+      argVals := argVals.push (.flag arg x isOn)
+    | none => throwErrorAt arg "Can't decode argument '{repr arg}'"
   pure argVals
 
 open Lean.Parser.Term in
+open Lean.Doc in
 meta def appFallback
     (stx : Syntax)
     (name : Ident) (resolvedName : Name)
-    (argVals : Array Arg) (subjectArr : Option (Array (TSyntax `inline)))
+    (argVals : Array Arg) (subjectArr : Option (Array VersoInline))
     : DocElabM Term := do
   let f := mkIdentFrom name resolvedName
   let valStx : ArgVal → DocElabM Term := fun
@@ -142,82 +135,77 @@ private meta def extensionResult {α : Type}
       return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
 
 open Lean.Parser.Term in
-@[inline_expander Lean.Doc.Syntax.role]
-public meta def _root_.Lean.Doc.Syntax.role.expand : InlineExpander
-  | inline@`(inline| role{$name $args*} [$subjects*]) => do
-      withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
+@[inline_expander Lean.Doc.Parser.Inline.role]
+public meta def _root_.Lean.Doc.Parser.Inline.role.expand : InlineExpander
+  | .role v => do
+      let (name, args, subjects) := (v.name, v.args, v.content)
+      withRef v.stx <| withFreshMacroScope <| withIncRecDepth <| do
         let (resolvedName, exp) ← registeredExtensionExpanders
           "role" "@[role]" registeredRoleNames roleExpandersFor isRoleExpanderTargetType name
         let argVals ← parseArgs args
         extensionResult .inline "Role" name resolvedName exp fun e => e argVals subjects
   | _ => throwUnsupportedSyntax
 
-@[inline_expander Lean.Doc.Syntax.link]
-public meta def _root_.Lean.Doc.Syntax.link.expand : InlineExpander
-  | `(inline| link[ $txt* ] $dest:link_target) => do
+@[inline_expander Lean.Doc.Parser.Inline.link]
+public meta def _root_.Lean.Doc.Parser.Inline.link.expand : InlineExpander
+  | .link v => do
     let url : TSyntax `term ←
-      match dest with
-      | `(link_target| ( $url )) =>
-        pure (↑ url)
-      | `(link_target| [ $ref ]) => do
-        -- Round-trip through quote to get rid of source locations, preventing unwanted IDE info
-        addLinkRef ref
-      | _ => throwErrorAt dest "Couldn't parse link destination"
-    ``(Inline.link #[$[$(← txt.mapM elabInline)],*] $url)
+      match v.target with
+      | .url (url := u) .. => pure (quote u.getVersoLinkUrl)
+      | .ref (name := name) .. => addLinkRef name
+    ``(Inline.link #[$[$(← v.content.mapM elabInline)],*] $url)
   | _ => throwUnsupportedSyntax
 
-@[inline_expander Lean.Doc.Syntax.footnote]
-public meta def _root_.Lean.Doc.Syntax.link.footnote : InlineExpander
-  | `(inline| footnote( $name:str )) => do
-    ``(Inline.footnote $(quote name.getString) $(← addFootnoteRef name))
+@[inline_expander Lean.Doc.Parser.Inline.footnote]
+public meta def _root_.Lean.Doc.Parser.Inline.footnote.expand : InlineExpander
+  | .footnote v => do
+    ``(Inline.footnote $(quote v.getName) $(← addFootnoteRef v.name))
   | _ => throwUnsupportedSyntax
 
 
-@[inline_expander Lean.Doc.Syntax.image]
-public meta def _root_.Lean.Doc.Syntax.image.expand : InlineExpander
-  | `(inline| image( $alt:str ) $dest:link_target) => do
-    let altText := alt.getString
+@[inline_expander Lean.Doc.Parser.Inline.image]
+public meta def _root_.Lean.Doc.Parser.Inline.image.expand : InlineExpander
+  | .image v => do
     let url : TSyntax `term ←
-      match dest with
-      | `(link_target| ( $url )) =>
-        pure (↑ url)
-      | `(link_target| [ $ref ]) => do
-        -- Round-trip through quote to get rid of source locations, preventing unwanted IDE info
-        addLinkRef ref
-      | _ => throwErrorAt dest "Couldn't parse link destination"
-    ``(Inline.image $(quote altText) $url)
+      match v.target with
+      | .url (url := u) .. => pure (quote u.getVersoLinkUrl)
+      | .ref (name := name) .. => addLinkRef name
+    ``(Inline.image $(quote v.getAlt) $url)
   | _ => throwUnsupportedSyntax
 
 
-@[inline_expander Lean.Doc.Syntax.code]
-public meta def _root_.Lean.Doc.Syntax.code.expand : InlineExpander
-  |  `(inline| code( $s )) =>
-    ``(Inline.code $(quote s.getString))
+@[inline_expander Lean.Doc.Parser.Inline.code]
+public meta def _root_.Lean.Doc.Parser.Inline.code.expand : InlineExpander
+  | .code v => ``(Inline.code $(quote v.getVersoCode))
   | _ => throwUnsupportedSyntax
 
 
-@[inline_expander Lean.Doc.Syntax.inline_math]
-public meta def _root_.Lean.Doc.Syntax.inline_math.expand : InlineExpander
-  |  `(inline| \math code( $s )) =>
-    ``(Inline.math MathMode.inline $(quote s.getString))
+/-- Both math markers share a view, which records which of them was written. -/
+private meta def mathExpand : InlineExpander
+  | .math v =>
+    match v.mode with
+    | .inline => ``(Inline.math MathMode.inline $(quote v.getVersoCode))
+    | .display => ``(Inline.math MathMode.display $(quote v.getVersoCode))
   | _ => throwUnsupportedSyntax
 
-@[inline_expander Lean.Doc.Syntax.display_math]
-public meta def _root_.Lean.Doc.Syntax.display_math.expand : InlineExpander
-  |  `(inline| \displaymath code( $s )) =>
-    ``(Inline.math MathMode.display $(quote s.getString))
-  | _ => throwUnsupportedSyntax
+@[inline_expander Lean.Doc.Parser.Inline.inline_math]
+public meta def _root_.Lean.Doc.Parser.Inline.inline_math.expand : InlineExpander := mathExpand
+
+@[inline_expander Lean.Doc.Parser.Inline.display_math]
+public meta def _root_.Lean.Doc.Parser.Inline.display_math.expand : InlineExpander := mathExpand
 
 
-public meta def partCommand (cmd : TSyntax `block) : PartElabM Unit :=
+public meta def partCommand (cmd : VersoBlock) : PartElabM Unit :=
   withTraceNode `Elab.Verso.part (fun _ => pure m!"Part modification {cmd}") <|
   withRef cmd <| withFreshMacroScope <| do
   match cmd.raw with
   | stx@(.node _ kind _) =>
+    let some view := BlockView.of ⟨stx⟩
+      | fallback
     let exp ← partCommandsFor kind
     for e in exp do
       try
-        withFreshMacroScope <| e stx
+        withFreshMacroScope <| e view
         return
       catch
         | ex@(.internal id) =>
@@ -242,16 +230,15 @@ where
       elabBlock cmd
     addBlock blk (blockInternalDocReconstructionPlaceholder := hygenicName)
 
-@[part_command Lean.Doc.Syntax.footnote_ref]
-public meta partial def _root_.Lean.Doc.Syntax.footnote_ref.command : PartCommand
-  | `(block| [^ $name:str ]: $contents* ) =>
-    addFootnoteDef name =<< contents.mapM (withRefsAllowed .onlyIfDefined <| elabInline ·)
+@[part_command Lean.Doc.Parser.Block.footnote_ref]
+public meta partial def _root_.Lean.Doc.Parser.Block.footnote_ref.command : PartCommand
+  | .footnoteRef v =>
+    addFootnoteDef v.name =<< v.content.mapM (withRefsAllowed .onlyIfDefined <| elabInline ·)
   | _ => throwUnsupportedSyntax
 
-@[part_command Lean.Doc.Syntax.link_ref]
-public meta partial def _root_.Lean.Doc.Syntax.link_ref.command : PartCommand
-  | `(block| [ $name:str ]: $url:str ) =>
-    addLinkDef name url.getString
+@[part_command Lean.Doc.Parser.Block.link_ref]
+public meta partial def _root_.Lean.Doc.Parser.Block.link_ref.command : PartCommand
+  | .linkRef v => addLinkDef v.name v.getUrl
   | _ => throwUnsupportedSyntax
 
 partial def PartElabM.State.close (endPos : String.Pos.Raw) (state : PartElabM.State) : Option PartElabM.State :=
@@ -267,21 +254,22 @@ partial def PartElabM.State.closeAll (endPos : String.Pos.Raw) (state : PartElab
 
 
 
-@[part_command Lean.Doc.Syntax.header]
-public meta partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
-  | stx@`(block|header($headerLevel){$inlines*}) => do
-    let titleBits ← liftDocElabM <| inlines.mapM elabInline
-    let titleString := headerStxToString (← getEnv) stx
+@[part_command Lean.Doc.Parser.Block.header]
+public meta partial def _root_.Lean.Doc.Parser.Block.header.command : PartCommand
+  | .header v => do
+    let stx := v.stx
+    let titleBits ← liftDocElabM <| v.content.mapM elabInline
+    let titleString := inlinesToString (← getEnv) (v.content.map (·.raw))
     let ambientLevel ← currentLevel
-    let headerLevel := headerLevel.getNat + 1
+    let headerLevel := v.level + 1
     if headerLevel > ambientLevel + 1 then throwErrorAt stx "Wrong header nesting - got {"".pushn '#' headerLevel} but expected at most {"#".pushn '#' ambientLevel}"
     -- New subheader?
     if headerLevel == ambientLevel + 1 then
       -- Prelude is done!
       pure ()
     else
-      if let none := stx.getPos? then dbg_trace "No start position for {stx}"
-      PartElabM.closePartsUntil headerLevel stx.getPos!
+      if let none := stx.raw.getPos? then dbg_trace "No start position for {stx}"
+      PartElabM.closePartsUntil headerLevel stx.raw.getPos!
 
     -- Start a new subpart
     push {
@@ -295,21 +283,24 @@ public meta partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
 
   | _ => throwUnsupportedSyntax
 
-@[part_command Lean.Doc.Syntax.metadata_block]
-public meta def _root_.Lean.Doc.Syntax.metadata_block.command : PartCommand
-  | `(block| %%%%$tk $fieldOrAbbrev*  %%%) => do
+@[part_command Lean.Doc.Parser.Block.metadata_block]
+public meta def _root_.Lean.Doc.Parser.Block.metadata_block.command : PartCommand
+  | .metadata v => do
     let ctxt := (← getThe PartElabM.State).partContext
     if ctxt.blocks.size > 0 || ctxt.priorParts.size > 0 then
-      throwErrorAt tk "Metadata blocks must precede both content and subsections"
+      throwErrorAt v.opener "Metadata blocks must precede both content and subsections"
     if ctxt.metadata.isSome then
-      throwErrorAt tk "Metadata already provided for this section"
-    let stx ← `(term| { $fieldOrAbbrev* })
+      throwErrorAt v.opener "Metadata already provided for this section"
+    let fields := v.fields
+    let stx : Term := ⟨(← `(Lean.Parser.Term.structInst| { $[$fields],* })).raw⟩
     modifyThe PartElabM.State fun st => {st with partContext.metadata := some stx}
   | _ => throwUnsupportedSyntax
 
-@[part_command Lean.Doc.Syntax.command]
+@[part_command Lean.Doc.Parser.Block.command]
 public meta def includeSection : PartCommand
-  | `(block|command{include $args* }) => do
+  | .command v => do
+    unless v.name.getId == `include do Lean.Elab.throwUnsupportedSyntax
+    let args := v.args
     if h : args.size = 0 then throwError "Expected an argument"
     else if h : args.size > 2 then throwErrorAt args[2] "Expected one or two arguments"
     else
@@ -333,10 +324,10 @@ public meta def includeSection : PartCommand
 where
  resolved id := mkIdentFrom id <$> realizeGlobalConstNoOverloadWithInfo (mkIdentFrom id (docName id.getId))
 
-@[block_expander Lean.Doc.Syntax.command]
-public meta def _root_.Lean.Doc.Syntax.command.expand : BlockExpander := fun block =>
-  match block with
-  | `(block|command{$name $args*}) => do
+@[block_expander Lean.Doc.Parser.Block.command]
+public meta def _root_.Lean.Doc.Parser.Block.command.expand : BlockExpander
+  | .command v => do
+    let (block, name, args) := (v.stx, v.name, v.args)
     withTraceNode `Elab.Verso.block (fun _ => pure m!"Block role {name}") <|
     withRef block <| withFreshMacroScope <| withIncRecDepth <| do
       let resolvedName ← resolveKnownExtensionName "block command" registeredBlockCommandNames name
@@ -347,115 +338,107 @@ public meta def _root_.Lean.Doc.Syntax.command.expand : BlockExpander := fun blo
       extensionResult .block "Command" name resolvedName exp fun e => e argVals
   | _ => throwUnsupportedSyntax
 
-@[block_expander Lean.Doc.Syntax.para]
-public meta partial def _root_.Lean.Doc.Syntax.para.expand : BlockExpander
-  | `(block| para[ $args:inline* ]) => do
+@[block_expander Lean.Doc.Parser.Block.para]
+public meta partial def _root_.Lean.Doc.Parser.Block.para.expand : BlockExpander
+  | .para v => do
     let genre := (← readThe DocElabContext).genreSyntax
-    ``(Block.para (genre := $(⟨genre⟩)) #[$[$(← args.mapM elabInline)],*])
+    ``(Block.para (genre := $(⟨genre⟩)) #[$[$(← v.content.mapM elabInline)],*])
   | _ =>
     throwUnsupportedSyntax
 
 
-meta def elabLi (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
-  withRef block <|
-  match block with
-  | `(list_item|*%$dot $contents:block*) => do
+meta def elabLi (marker : Syntax) (contents : Array VersoBlock)
+    (stx : Syntax) : DocElabM (Syntax × TSyntax `term) :=
+  withRef stx <| do
     let genre := (← readThe DocElabContext).genreSyntax
     let item ← ``(ListItem.mk (α := Block $(⟨genre⟩)) #[$[$(← contents.mapM elabBlock)],*])
-    pure (dot, item)
-  | _ =>
-    throwUnsupportedSyntax
+    pure (marker, item)
 
-@[block_expander Lean.Doc.Syntax.ul]
-public meta def _root_.Lean.Doc.Syntax.ul.expand : BlockExpander
-  | `(block|ul{$itemStxs*}) => do
+@[block_expander Lean.Doc.Parser.Block.ul]
+public meta def _root_.Lean.Doc.Parser.Block.ul.expand : BlockExpander
+  | .ul v => do
     let genre := (← readThe DocElabContext).genreSyntax
     let mut bullets : Array Syntax := #[]
     let mut items : Array (TSyntax `term) := #[]
-    for i in itemStxs do
-      let (b, item) ← elabLi i
+    for i in v.items do
+      let (b, item) ← elabLi i.marker i.contents i.stx
       bullets := bullets.push b
       items := items.push item
-    let info := DocListInfo.mk bullets itemStxs
+    let info := DocListInfo.mk bullets (v.items.map (·.stx.raw))
     for b in bullets do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
     ``(Block.ul (genre := $(⟨genre⟩)) #[$items,*])
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Lean.Doc.Syntax.ol]
-public meta def _root_.Lean.Doc.Syntax.ol.expand : BlockExpander
-  | `(block|ol($start:num){$itemStxs*}) => do
+@[block_expander Lean.Doc.Parser.Block.ol]
+public meta def _root_.Lean.Doc.Parser.Block.ol.expand : BlockExpander
+  | .ol v => do
     let genre := (← readThe DocElabContext).genreSyntax
     let mut bullets : Array Syntax := #[]
     let mut items : Array (TSyntax `term) := #[]
-    for i in itemStxs do
-      let (b, item) ← elabLi i
+    for i in v.items do
+      let (b, item) ← elabLi i.marker i.contents i.stx
       bullets := bullets.push b
       items := items.push item
-    let info := DocListInfo.mk bullets itemStxs
+    let info := DocListInfo.mk bullets (v.items.map (·.stx.raw))
     for b in bullets do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
-    ``(Block.ol (genre := $(⟨genre⟩)) $start #[$items,*])
+    ``(Block.ol (genre := $(⟨genre⟩)) $(quote v.start) #[$items,*])
   | _ =>
     throwUnsupportedSyntax
 
-meta def elabDesc (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
-  withRef block <|
-  match block with
-  | `(desc_item|:%$colon $dts* => $dds*) => do
+meta def elabDesc (item : DescItemView) : DocElabM (Syntax × TSyntax `term) :=
+  withRef item.stx <| do
     let genre := (← readThe DocElabContext).genreSyntax
-    let item ← ``(DescItem.mk (α := Inline $(⟨genre⟩)) (β := Block $(⟨genre⟩))  #[$[$(← dts.mapM elabInline)],*] #[$[$(← dds.mapM elabBlock)],*])
-    pure (colon, item)
-  | _ =>
-    throwUnsupportedSyntax
+    let item' ← ``(DescItem.mk (α := Inline $(⟨genre⟩)) (β := Block $(⟨genre⟩))  #[$[$(← item.term.mapM elabInline)],*] #[$[$(← item.desc.mapM elabBlock)],*])
+    pure (item.marker, item')
 
-@[block_expander Lean.Doc.Syntax.dl]
-public meta def _root_.Lean.Doc.Syntax.dl.expand : BlockExpander
-  | `(block|dl{$itemStxs*}) => do
+@[block_expander Lean.Doc.Parser.Block.dl]
+public meta def _root_.Lean.Doc.Parser.Block.dl.expand : BlockExpander
+  | .dl v => do
     let genre := (← readThe DocElabContext).genreSyntax
     let mut colons : Array Syntax := #[]
     let mut items : Array (TSyntax `term) := #[]
-    for i in itemStxs do
+    for i in v.items do
       let (b, item) ← elabDesc i
       colons := colons.push b
       items := items.push item
-    let info := DocListInfo.mk colons itemStxs
+    let info := DocListInfo.mk colons (v.items.map (·.stx.raw))
     for b in colons do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
     ``(Block.dl (genre := $(⟨genre⟩)) #[$[$items],*])
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Lean.Doc.Syntax.blockquote]
-public meta def _root_.Lean.Doc.Syntax.blockquote.expand : BlockExpander
-  | `(block|> $innerBlocks*) => do
-    ``(Block.blockquote #[$[$(← innerBlocks.mapM elabBlock)],*])
+@[block_expander Lean.Doc.Parser.Block.blockquote]
+public meta def _root_.Lean.Doc.Parser.Block.blockquote.expand : BlockExpander
+  | .blockquote v => do
+    ``(Block.blockquote #[$[$(← v.content.mapM elabBlock)],*])
   | _ =>
     throwUnsupportedSyntax
 
 
-@[block_expander Lean.Doc.Syntax.codeblock]
-public meta def _root_.Lean.Doc.Syntax.codeblock.expand : BlockExpander
-  | `(block|``` $nameStx:ident $argsStx* | $contents:str ```) => do
-    -- TODO typed syntax here
-    let args ← parseArgs <| argsStx.map (⟨·⟩)
+@[block_expander Lean.Doc.Parser.Block.codeblock]
+public meta def _root_.Lean.Doc.Parser.Block.codeblock.expand : BlockExpander
+  | .codeblock v => do
+    let some nameStx := v.name?
+      | return ← ``(Block.code $(quote v.getVersoCodeBlock))
+    let args ← parseArgs v.args
     let (resolvedName, exp) ← registeredExtensionExpanders
       "code block" "@[code_block]" registeredCodeBlockNames codeBlockExpandersFor
       isCodeBlockExpanderTargetType nameStx
-    extensionResult .block "Code block" nameStx resolvedName exp fun e => e args contents
-  | `(block|``` | $contents:str ```) => do
-    ``(Block.code $(quote contents.getString))
+    extensionResult .block "Code block" nameStx resolvedName exp fun e => e args v.content
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Lean.Doc.Syntax.directive]
-public meta def _root_.Lean.Doc.Syntax.directive.expand : BlockExpander
-  | `(block| ::: $nameStx:ident $argsStx* { $contents:block* } ) => do
-    let args ← parseArgs argsStx
+@[block_expander Lean.Doc.Parser.Block.directive]
+public meta def _root_.Lean.Doc.Parser.Block.directive.expand : BlockExpander
+  | .directive v => do
+    let args ← parseArgs v.args
     let (resolvedName, exp) ← registeredExtensionExpanders
       "directive" "@[directive]" registeredDirectiveNames directiveExpandersFor
-      isDirectiveExpanderTargetType nameStx
-    extensionResult .block "Directive" nameStx resolvedName exp fun e => e args contents
+      isDirectiveExpanderTargetType v.name
+    extensionResult .block "Directive" v.name resolvedName exp fun e => e args v.content
   | _ =>
     throwUnsupportedSyntax

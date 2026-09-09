@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 module
 
+public import Lean.DocString.View
 public import Lean.Environment
 
 public section
@@ -12,15 +13,16 @@ public section
 namespace Verso.Genre.Manual.InlineLean.IOExample
 
 open Lean
+open Lean.Doc
 
 structure IOExampleContext where
   leanCodeName : Ident
-  code : Option StrLit := none
-  inputFiles : Array (System.FilePath × StrLit) := #[]
-  outputFiles : Array (System.FilePath × StrLit) := #[]
-  stdin : Option StrLit := none
-  stdout : Option StrLit := none
-  stderr : Option StrLit := none
+  code : Option VersoCodeBlock := none
+  inputFiles : Array (System.FilePath × VersoCodeBlock) := #[]
+  outputFiles : Array (System.FilePath × VersoCodeBlock) := #[]
+  stdin : Option VersoCodeBlock := none
+  stdout : Option VersoCodeBlock := none
+  stderr : Option VersoCodeBlock := none
 deriving Repr
 
 initialize ioExampleCtx : EnvExtension (Option IOExampleContext) ←

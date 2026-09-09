@@ -32,6 +32,7 @@ public import Lean.ToExpr
 import Lean.Message
 import Lean.Meta.Hint
 import Lean.DocString.Syntax
+import Lean.Elab.DocString.Builtin.Parsing
 
 import Std.Data.HashSet
 
@@ -42,7 +43,7 @@ open SubVerso Highlighting
 
 open Lean Meta Hint
 open Std
-open Lean.Doc.Syntax
+open Lean.Doc (RoleView VersoCodeBlock VersoInline onlyCode)
 
 namespace Verso.Code.External
 
@@ -193,12 +194,13 @@ where
       if k > n then n := k
     n.fold (fun _ _ s => s.push '`') ""
 
-meta def moduleContentBlock (args : Array Arg) (code : StrLit) : DocElabM (Array Term) := do
+meta def moduleContentBlock (args : Array Arg) (code : VersoCodeBlock) :
+    DocElabM (Array Term) := do
     let cfg@{ module := moduleName, project, anchor?, showProofStates := _, defSite := _ } ← parseThe CodeContext args
     withAnchored project moduleName anchor? fun hl => do
       logInfos hl
       let hlString := hl.toString
-      if code.getString.trimAscii.isEmpty && !hlString.trimAscii.isEmpty then
+      if code.getVersoCodeBlock.trimAscii.isEmpty && !hlString.trimAscii.isEmpty then
         let ref ← getRef
         let h ←
           if let some s ← editCodeBlock ref hlString then
@@ -238,9 +240,9 @@ public meta def anchor : CodeBlockExpander
     else
       throwError "Expected a positional argument first (the anchor name)"
 
-meta def moduleInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
+meta def moduleInline (args : Array Arg) (inls : Array VersoInline) : DocElabM (Array Term) := do
   let cfg@{module := moduleName, project, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
-  let code? ← oneCodeStr? inls
+  let code? ← onlyCode? inls
 
   withAnchored project moduleName anchor? fun hl => do
     logInfos hl
@@ -278,10 +280,10 @@ where mkHover (sig : String) (doc? : Option String) : String :=
     s!"\n\n----------\n\n{d}"
   else ""
 
-public meta def moduleNameInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
+public meta def moduleNameInline (args : Array Arg) (inls : Array VersoInline) : DocElabM (Array Term) := do
   let cfg@{module := moduleName, project, anchor?, show?, showProofStates := _, defSite := _} ← parseThe NameContext args
-  let name ← oneCodeStr inls
-  let nameStr := name.getString
+  let name ← onlyCode inls
+  let nameStr := name.getVersoCode
 
   withAnchored project moduleName anchor? fun hl => do
     if let some tok@⟨k, _txt⟩ := hl.matchingName? nameStr then
@@ -346,13 +348,14 @@ private meta def suggestTerms (hl : Highlighted) (input : String) : Array String
   lines ++ (smartSuggestions out.toArray input (threshold := (max ·.length ·.length)) (count := 15))
 
 
-public meta def moduleTermInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
+public meta def moduleTermInline (args : Array Arg) (inls : Array VersoInline) : DocElabM (Array Term) := do
   let cfg@{module := moduleName, project, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
-  let term ← oneCodeStr inls
+  let term ← onlyCode inls
+  let termStr := term.getVersoCode
 
   withAnchored project moduleName anchor? fun hl => do
-    if term.getString.trimAscii.isEmpty then
-      let suggs := suggestTerms hl term.getString
+    if termStr.trimAscii.isEmpty then
+      let suggs := suggestTerms hl termStr
       let h ← hintAt term "Use one of these" suggs
       let expectedString := ExpectString.abbreviateString (maxLength := 100) <| hl.toString
       let mut msg := m!"No expected term provided.\n"
@@ -360,14 +363,14 @@ public meta def moduleTermInline (args : Array Arg) (inls : TSyntaxArray `inline
       msg := msg ++ h
       logErrorAt term msg
       return #[← ``(sorryAx _ true)]
-    else if let some e := hl.matchingExpr? term.getString then
+    else if let some e := hl.matchingExpr? termStr then
       logInfos e
       return #[← ``(leanInline $(quote e) $(quote cfg.toCodeConfig))]
     else
-      let suggs := suggestTerms hl term.getString
+      let suggs := suggestTerms hl termStr
       let h ← hintAt term "Use one of these" suggs
       let expectedString := ExpectString.abbreviateString (maxLength := 100) <| hl.toString
-      let mut msg := m!"Not found: `{term.getString}`\n"
+      let mut msg := m!"Not found: `{termStr}`\n"
       msg := msg ++ m!"in:{indentD <| m!"\n".joinSep <| (m!"{·}") <$> expectedString.splitOn "\n"}"
       msg := msg ++ h
       logErrorAt term msg
@@ -397,11 +400,12 @@ public meta def anchorTerm : RoleExpander
     else
       throwError "Expected a positional argument first (the anchor name)"
 
-public meta def moduleTermBlock (args : Array Arg) (term : StrLit) : DocElabM (Array Term) := do
+public meta def moduleTermBlock (args : Array Arg) (term : VersoCodeBlock) :
+    DocElabM (Array Term) := do
   let cfg@{module := moduleName, project, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
 
   withAnchored project moduleName anchor? fun hl => do
-    let str := term.getString.trimAscii.copy
+    let str := term.getVersoCodeBlock.trimAscii.copy
     if str.isEmpty then
       let ref ← getRef
       let suggs := suggestTerms hl str
@@ -468,8 +472,10 @@ private meta partial def findTrace? (header : String) : MessageContents Highligh
     if msg.toString == header then pure t
     else chs.findSome? (findTrace? header)
 
-public meta def outputBlock (args : Array Arg) (str : StrLit) : DocElabM (Array Term) := do
+public meta def outputBlock (args : Array Arg) (str : VersoCodeBlock) :
+    DocElabM (Array Term) := do
   let {module := moduleName, project, anchor?, severity, expandTraces, onlyTrace, showProofStates := _, defSite := _} ← parseThe MessageContext args
+  let strText := str.getVersoCodeBlock
 
   withAnchored project moduleName anchor? fun hl => do
     let infos : Array _ := allInfo hl
@@ -484,7 +490,7 @@ public meta def outputBlock (args : Array Arg) (str : StrLit) : DocElabM (Array 
           else continue
         else pure <| msg
       candidates := candidates.push msg
-      if SubVerso.Examples.Messages.messagesMatch (msg.toString (expandTraces := expandTraces)) str.getString then
+      if SubVerso.Examples.Messages.messagesMatch (msg.toString (expandTraces := expandTraces)) strText then
         if msg.severity == .ofSeverity severity.1 then
           return #[← ``(leanOutputBlock $(quote msg) (expandTraces := $(quote expandTraces)))]
         else
@@ -502,10 +508,10 @@ public meta def outputBlock (args : Array Arg) (str : StrLit) : DocElabM (Array 
 
     err := err ++ (m!"\nor".joinSep <| candidates.toList.map fun msg => indentD (msg.toString (expandTraces := expandTraces)) ++ "\n")
 
-    if str.getString.trimAscii.isEmpty then
+    if strText.trimAscii.isEmpty then
       err := err ++ "but nothing was provided."
     else
-      err := err ++ m!"but got:{indentD str.getString.trimAscii.copy}"
+      err := err ++ m!"but got:{indentD strText.trimAscii.copy}"
     if suggs.size = 1 then
       err := err ++ (← hintAt str "Use this:\n" suggs)
     else if suggs.size > 1 then
@@ -594,14 +600,15 @@ public meta def anchorWarning : CodeBlockExpander
       throwError "Expected a positional argument first (the anchor name)"
 
 
-public meta def moduleOutInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
-  let str? ← oneCodeStr? inls
+public meta def moduleOutInline (args : Array Arg) (inls : Array VersoInline) : DocElabM (Array Term) := do
+  let str? ← onlyCode? inls
 
   let {module := moduleName, project, anchor?, expandTraces, onlyTrace, severity, showProofStates := _, defSite := _} ← parseThe MessageContext args
 
   withAnchored project moduleName anchor? fun hl => do
     let infos := allInfo hl
     if let some str := str? then
+      let strText := str.getVersoCode
       let mut candidates : Array Highlighted.Message := #[]
       for (msg, _) in infos do
         let msg ←
@@ -612,15 +619,18 @@ public meta def moduleOutInline (args : Array Arg) (inls : TSyntaxArray `inline)
           else pure <| msg
         candidates := candidates.push msg
 
-        if SubVerso.Examples.Messages.messagesMatch (msg.toString (expandTraces := expandTraces)) str.getString then
+        if SubVerso.Examples.Messages.messagesMatch (msg.toString (expandTraces := expandTraces)) strText then
           if msg.severity == .ofSeverity severity.1 then
             return #[← ``(leanOutputInline $(quote msg) true (expandTraces := $(quote expandTraces)))]
           else
             let wanted ← severityName msg.severity.toSeverity
             throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'.{← severityHint wanted severity.2}"
 
+      -- A role's content is the better place to report at than the role as a whole.
       let ref :=
-        if let `(inline|role{ $_ $_* }[ $x ]) := (← getRef) then x.raw else str
+        match RoleView.of ⟨← getRef⟩ with
+        | some v => if h : v.content.size = 1 then v.content[0].raw else str.raw
+        | none => str.raw
 
       let suggs : Array Suggestion := candidates.map fun msg => {
         suggestion := quoteCode (msg.toString (expandTraces := expandTraces)).trimAscii.copy,
@@ -632,7 +642,7 @@ public meta def moduleOutInline (args : Array Arg) (inls : TSyntaxArray `inline)
 
       let err :=
         m!"Expected one of:{indentD (m!"\n".joinSep <| candidates.toList.map (·.toString (expandTraces := expandTraces)))}" ++
-        m!"\nbut got:{indentD str.getString}\n" ++ h
+        m!"\nbut got:{indentD strText}\n" ++ h
       logErrorAt str err
     else
       let candidates := infos.filterMap fun (msg, _) =>
@@ -643,11 +653,14 @@ public meta def moduleOutInline (args : Array Arg) (inls : TSyntaxArray `inline)
           else pure <| msg
       let err := m!"Expected one of:{indentD (m!"\n".joinSep <| candidates.toList.map (·.toString (expandTraces := expandTraces)))}"
       Lean.logError m!"No expected term provided. {err}"
-      if let `(inline|role{$_ $_*} [%$tok1 $contents* ]%$tok2) := (← getRef) then
+      if let some v := RoleView.of ⟨← getRef⟩ then
         let stx :=
-          if tok1.getHeadInfo matches .original .. && tok2.getHeadInfo matches .original .. then
-            mkNullNode #[tok1, tok2]
-          else mkNullNode contents
+          match v.brackets with
+          | some (tok1, tok2) =>
+            if tok1.getHeadInfo matches .original .. && tok2.getHeadInfo matches .original .. then
+              mkNullNode #[tok1, tok2]
+            else mkNullNode (v.content.map (·.raw))
+          | none => mkNullNode (v.content.map (·.raw))
         for (msg, _) in infos do
           let str := msg.toString |>.trimAscii |>.copy
           Suggestion.saveSuggestion stx (quoteCode <| ExpectString.abbreviateString str) (quoteCode str)
@@ -692,7 +705,7 @@ public meta def moduleOutWarningRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutWarningRole") <|
     moduleOutInline (#[.anon <| .name <| mkIdent ``MessageSeverity.warning] ++ args) inls
 
-public meta def anchorOutAsRole (severity : Name) (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) :=
+public meta def anchorOutAsRole (severity : Name) (args : Array Arg) (inls : Array VersoInline) : DocElabM (Array Term) :=
   if let some (Arg.anon a) := args[0]? then
     moduleOutInline (#[.anon <| .name <| mkIdent severity, .named .missing (mkIdent `anchor) a] ++ args.drop 1) inls
   else
@@ -721,8 +734,8 @@ further semantics.
 public meta def lit : RoleExpander
   | args, inls => do
     ArgParse.done.run args
-    let kw ← oneCodeStr inls
-    return #[← ``(Inline.code $(quote kw.getString))]
+    let kw ← onlyCode inls
+    return #[← ``(Inline.code $(quote kw.getVersoCode))]
 
 
 private meta def hasSubstring (s pattern : String) : Bool :=
@@ -747,10 +760,10 @@ private meta def hasSubstring (s pattern : String) : Bool :=
 /--
 Internal detail of anchor suggestion mechanism.
 -/
-@[inline_expander Lean.Doc.Syntax.code]
+@[inline_expander Lean.Doc.Parser.Inline.code]
 public meta def suggest : InlineExpander
-  |  `(inline| code( $str )) => do
-    let str' := str.getString
+  | .code v => do
+    let str' := v.getVersoCode
 
     unless verso.examples.suggest.get (← getOptions) do
       -- Delegate to the next handler
@@ -825,5 +838,5 @@ public meta def suggest : InlineExpander
       let h ← hint m!"Try one of these:" suggestions
       logWarning <| m!"Code element could be highlighted." ++ h
 
-    return (← ``(Inline.code $(quote str.getString)))
+    return (← ``(Inline.code $(quote str')))
   | _ => Elab.throwUnsupportedSyntax

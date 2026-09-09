@@ -111,7 +111,7 @@ public def PartFrame.close (fr : PartFrame) (endPos : String.Pos.Raw) : Finished
 
 /-- References that must be local to the current blob of concrete document syntax -/
 public structure DocDef (α : Type) where
-  defSite : TSyntax `str
+  defSite : Lean.Doc.VersoRefName
   val : α
 deriving Repr
 
@@ -176,7 +176,7 @@ public def internalRefs (defs : HashMap String (DocDef α)) (refs : HashMap Stri
   let mut refInfo := #[]
   for k in keys do
     refInfo := refInfo.push {
-      defSite := defs[k]? |>.map (·.defSite),
+      defSite := defs[k]? |>.map (·.defSite.raw),
       useSites := refs[k]? |>.map (·.useSites) |>.getD #[]
     }
   refInfo

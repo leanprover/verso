@@ -14,23 +14,24 @@ namespace Verso.Doc.Elab
 open Lean Elab
 open PartElabM
 open DocElabM
-open Lean.Doc.Syntax
+open Lean.Doc (BlockView VersoBlock)
+open Lean.Doc.Parser
 open Verso.ArgParse (SigDoc)
 
 set_option backward.privateInPublic false
 
-def decorateClosing : TSyntax `block → DocElabM Unit
-  | `(block|:::%$s $_ $_* { $_* }%$e)
-  | `(block|```%$s $_ $_* | $_ ```%$e)
-  | `(block|%%%%$s $_* %%%%$e) => closes s e
+/-- Records the delimiters of a block that has both, so that each hover mentions the other. -/
+def decorateClosing : BlockView → DocElabM Unit
+  | .directive v => closes v.opener v.closer
+  | .codeblock v => closes v.openFence v.closeFence
+  | .metadata v => closes v.opener v.closer
   | _ => pure ()
 
 
 /-- Elaborates a parsed block into syntax denoting an expression of type `Block genre`. -/
-public partial def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term) :=
+public partial def elabBlock (block : VersoBlock) : DocElabM (TSyntax `term) :=
   withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
-  decorateClosing block
   match block.raw with
   | .missing =>
     ``(sorryAx (Block _) (synthetic := true))
@@ -43,10 +44,13 @@ public partial def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term)
         withRef stxNew <|
           elabBlock ⟨stxNew⟩
     | none =>
+      let some view := BlockView.of ⟨stx⟩
+        | throwUnexpected stx
+      decorateClosing view
       let exp ← blockExpandersFor kind
       for e in exp do
         try
-          let termStx ← withFreshMacroScope <| e stx
+          let termStx ← withFreshMacroScope <| e view
           return termStx
         catch
           | ex@(.internal id) =>
