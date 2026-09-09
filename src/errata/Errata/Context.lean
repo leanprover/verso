@@ -35,6 +35,8 @@ structure Context where
   options : OptionMap := {}
   /-- The seed used for property tests, or {lean}`none` to draw a fresh one. -/
   seed : Option Nat := none
+  /-- Whether a panic message in a check's captured stderr leaves its status as it is. -/
+  ignorePanics : Bool := false
   /-- The package that defines the running test. -/
   package : String := ""
   /-- The module that defines the running test, as a dotted name. -/

@@ -392,6 +392,8 @@ script run (args) do
       return 1
   -- `--wfail` is the runner's warnings-as-errors flag; the driver's own warnings honor it too.
   let wfail := runnerArgs.contains "--wfail"
+  -- `--exit-on-panic` means that the runner should be invoked with LEAN_ABORT_ON_PANIC set.
+  let exitOnPanic := runnerArgs.contains "--exit-on-panic"
   -- Search the named libraries, or every library in the package by default. A name may be a bare
   -- `Library` in this package or a `package/Library` reaching into a dependency, following Lake's
   -- target syntax.
@@ -480,8 +482,10 @@ script run (args) do
     if changed then IO.FS.writeFile file src
   -- Build and run the root package's runner.
   let exePath ← runBuild (ws.root.facet `errataRunner).fetch
-  let child ← IO.Process.spawn
-    { cmd := exePath.toString, args := #[errataDriverFlag] ++ runnerArgs.toArray }
+  let child ← IO.Process.spawn {
+    cmd := exePath.toString, args := #[errataDriverFlag] ++ runnerArgs.toArray
+    env := if exitOnPanic then #[("LEAN_ABORT_ON_PANIC", some "1")] else #[]
+  }
   child.wait
 
 end Errata

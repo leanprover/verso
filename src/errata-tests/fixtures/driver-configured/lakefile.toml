@@ -20,3 +20,7 @@ name = "AppUnsafe"
 # A root module with a test, beside a module that nothing reaches.
 [[lean_lib]]
 name = "AppStray"
+
+# A test that panics and passes anyway, beside one that does not panic.
+[[lean_lib]]
+name = "AppPanic"

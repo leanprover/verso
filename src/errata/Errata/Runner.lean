@@ -68,12 +68,13 @@ def run (cfg : Context) (entries : Array TestEntry) : IO (Array Result) := do
 
 /-- A base context with the given settings and a fresh, empty log. -/
 def mkContext (updateGolden : Bool := false)
-    (options : OptionMap := {}) (seed : Option Nat := none) : IO Context := do
+    (options : OptionMap := {}) (seed : Option Nat := none) (ignorePanics : Bool := false) :
+    IO Context := do
   let log ← IO.mkRef (#[] : Array Result)
   let usedOptions ← IO.mkRef ({} : Std.HashSet String)
   let outputFailed ← IO.mkRef false
   let insideMs ← IO.mkRef 0
-  return { updateGolden, options, seed, log, usedOptions, outputFailed, insideMs }
+  return { updateGolden, options, seed, ignorePanics, log, usedOptions, outputFailed, insideMs }
 
 /-- The settings parsed from the runner's command line. -/
 structure Options where
@@ -91,6 +92,8 @@ structure Options where
   markdownPath : Option String := none
   /-- Fails the run if warnings are logged. -/
   wfail : Bool := false
+  /-- Leaves a check's status as it is when it panics. -/
+  ignorePanics : Bool := false
   /-- Project-specific options, as a multi-map so repeated options accumulate. -/
   options : OptionMap := {}
 
@@ -177,6 +180,8 @@ where cmd := `[Cli|
       json : String;           "Write a JSON report to the given path."
       markdown : String;       "Write a Markdown report (for a CI job summary) to the given path."
       wfail;                   "Fail the run if warnings are logged."
+      "ignore-panics";         "Leave a check's status as it is when it panics."
+      "exit-on-panic";         "Exit at the first panic instead of continuing with a default value."
 
     ARGS:
       ...testOption : String;  "Options for the tests themselves; see below."
@@ -238,6 +243,7 @@ def optionsOfParsed (p : Cli.Parsed) : Except String Options := do
     jsonPath := ← pathFlag p "json",
     markdownPath := ← pathFlag p "markdown",
     wfail := p.hasFlag "wfail",
+    ignorePanics := p.hasFlag "ignore-panics",
     options := ← projectOptions (p.variableArgsAs! String).toList
   }
 
@@ -265,6 +271,7 @@ def runMain (invocation : Invocation) (entries : Array TestEntry) (args : List S
         return 1
     let cfg ← mkContext (updateGolden := opts.updateGolden)
       (options := opts.options) (seed := opts.seed)
+      (ignorePanics := opts.ignorePanics)
     let results ← run cfg entries
     let writeReport (path? : Option String) (render : Array Result → String) : IO Unit := do
       if let some path := path? then

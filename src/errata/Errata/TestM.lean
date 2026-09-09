@@ -101,11 +101,13 @@ def Context.resultOfOutcome (ctx : Context)
   let failures := below.countP (·.status matches .fail _)
   let count (n : Nat) (what : String) : String :=
     if n == 1 then s!"a named result {what}" else s!"{n} named results {what}"
+  let panic? := if ctx.ignorePanics then none else output.panic?
   let status : Status :=
-    match outcome with
-    | .error e => .error (toString e)
-    | .ok (.error f) => if errors > 0 then .error (count errors "raised an error") else .fail f
-    | .ok (.ok ()) =>
+    match panic?, outcome with
+    | some msg, _ => .error s!"panicked: {msg}"
+    | none, .error e => .error (toString e)
+    | none, .ok (.error f) => if errors > 0 then .error (count errors "raised an error") else .fail f
+    | none, .ok (.ok ()) =>
       if errors > 0 then .error (count errors "raised an error")
       else if failures > 0 then
         .fail { message := count failures "did not pass", location? := some ctx.location }

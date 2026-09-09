@@ -107,6 +107,14 @@ def Output.text : Output → String
 def capturedText (output : Array Output) : String :=
   output.foldl (fun acc o => acc ++ o.text) ""
 
+/--
+Whether a line of stderr is the message the Lean runtime prints for a panic: {lit}`PANIC at ...`
+for {lit}`panic!` and the checks built on it, or {lit}`Error: index out of bounds` for an index
+past the end of an array.
+-/
+def isPanicMessage (line : String) : Bool :=
+  line.startsWith "PANIC at " || line.startsWith "Error: index out of bounds"
+
 /-- Output captured from an action, in order and tagged by stream. -/
 structure OutputLog where
   /-- The captured fragments, in order, tagged by stream. -/
@@ -128,6 +136,13 @@ def stderr (o : OutputLog) : String :=
 
 /-- The text written to stdout and stderr, concatenated in order. -/
 def all (o : OutputLog) : String := capturedText o.log
+
+/--
+The first panic message written to stderr, if any. The runtime reports a panic by printing a message
+and continuing with a default value, so a check that panicked can still produce a passing verdict.
+-/
+def panic? (o : OutputLog) : Option String :=
+  (o.stderr.splitOn "\n").find? isPanicMessage
 
 end OutputLog
 
