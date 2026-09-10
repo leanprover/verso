@@ -75,7 +75,7 @@ const AWAIT_RETRY_MS = 200;
 const monoFont = "var(--vscode-editor-font-family, monospace)";
 
 // The editor theme's colour for secondary text: the badges, hints, and the output summary. The
-// theme keeps it legible against the panel's background, which dimming the foreground would not.
+// theme keeps it legible against the panel's background.
 const dimColor = "var(--vscode-descriptionForeground, #717171)";
 
 // The editor theme's colour for errors: a run that could not start, and a rejected seed.
@@ -270,23 +270,41 @@ const OutputSection = React.memo(function OutputSection(props) {
         };
     }, []);
 
+    // Confirms a copy in the button's label for a moment.
+    function confirmCopy() {
+        setCopied(true);
+        if (copiedTimer.current) clearTimeout(copiedTimer.current);
+        copiedTimer.current = setTimeout(function () {
+            copiedTimer.current = null;
+            setCopied(false);
+        }, 1500);
+    }
+
     function copyOutput() {
         const text = chunks
             .map(function (c) {
                 return c.text;
             })
             .join("");
-        Promise.resolve(navigator.clipboard.writeText(text)).then(
-            function () {
-                setCopied(true);
-                if (copiedTimer.current) clearTimeout(copiedTimer.current);
-                copiedTimer.current = setTimeout(function () {
-                    copiedTimer.current = null;
-                    setCopied(false);
-                }, 1500);
-            },
-            function () {},
-        );
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(confirmCopy, function () {});
+            return;
+        }
+        // A page served outside a secure context copies from a selection instead, made in a field
+        // held off the side of the view.
+        const field = document.createElement("textarea");
+        field.value = text;
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.appendChild(field);
+        field.select();
+        try {
+            if (document.execCommand("copy")) confirmCopy();
+        } catch (err) {
+            // The copy was refused, and the label stands as it is.
+        } finally {
+            document.body.removeChild(field);
+        }
     }
 
     // The copy icon (two overlapping sheets), or a check mark once the output has been copied.
@@ -548,6 +566,8 @@ function TestRun(props) {
     const [seed, setSeed] = React.useState("");
     // Whether the run settings (the seed field) are shown, behind the gear button.
     const [settingsOpen, setSettingsOpen] = React.useState(false);
+    // Why the last cancel did not reach the server, while the run it was meant to stop carries on.
+    const [cancelError, setCancelError] = React.useState(null);
     // Whether the output disclosure is expanded; open by default, collapsible to hide large output.
     const [outputOpen, setOutputOpen] = React.useState(true);
     // Whether the widget's own disclosure is expanded, alongside the InfoView's other sections.
@@ -743,6 +763,7 @@ function TestRun(props) {
         phaseRef.current = "building";
         shownStart.current = 0;
         awaitFails.current = 0;
+        setCancelError(null);
         dispatch({ type: "start", now: Date.now() });
         const request = {
             decl: props.decl,
@@ -765,10 +786,19 @@ function TestRun(props) {
         );
     }
 
+    // The run is reported as cancelled once the server has ended it, so a cancel that does not
+    // arrive leaves a running test reported as running, with the reason beside the button.
     function cancel() {
-        gen.current += 1;
-        dispatch({ type: "cancel" });
-        rsRef.current.call("Errata.Widget.cancelTest", { decl: props.decl }).catch(function () {});
+        setCancelError(null);
+        rsRef.current.call("Errata.Widget.cancelTest", { decl: props.decl }).then(
+            function () {
+                gen.current += 1;
+                dispatch({ type: "cancel" });
+            },
+            function (err) {
+                setCancelError(errorMessage(err));
+            },
+        );
     }
 
     const name = props.name || "test";
@@ -803,6 +833,13 @@ function TestRun(props) {
                   },
                   st.tag === "idle" ? "Run" : "Run again",
               ),
+        running && cancelError
+            ? e(
+                  "span",
+                  { style: { color: errorColor, fontSize: "11px" } },
+                  "could not cancel: " + cancelError,
+              )
+            : null,
         !clean && !running
             ? e("span", { style: { color: dimColor, fontSize: "11px" } }, "unsaved — save to run")
             : null,
