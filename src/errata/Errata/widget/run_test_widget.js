@@ -652,9 +652,10 @@ function TestRun(props) {
     // The gear the run settings hang from, and the seed field they hold.
     const gearRef = React.useRef(null);
     const seedRef = React.useRef(null);
-    // The file this widget belongs to, from the InfoView's position context.
-    const envPos = React.useContext(EnvPosContext);
-    const uri = envPos ? envPos.uri : null;
+    // The file this widget belongs to, from the InfoView's position context. That context is what
+    // the widget's RPC session is opened at, so it is here for as long as the widget can call the
+    // server at all.
+    const uri = React.useContext(EnvPosContext).uri;
 
     const running = st.tag === "running";
     const starting = st.tag === "running" && st.phase === "starting";
