@@ -66,6 +66,12 @@ function errorMessage(err) {
     return (err && err.message) || String(err);
 }
 
+// How often a rejected `awaitOutput` is retried before the run is reported as failed, and the delay
+// before each attempt. The InfoView replaces the RPC session as the cursor moves, which rejects the
+// call in flight, so a rejection is part of the ordinary course of a run.
+const AWAIT_RETRIES = 5;
+const AWAIT_RETRY_MS = 200;
+
 const monoFont = "var(--vscode-editor-font-family, monospace)";
 
 // The editor theme's colour for secondary text: the badges, hints, and the output summary. The
@@ -503,6 +509,26 @@ function step(st, ev) {
 export default function RunTestWidget(props) {
     const version = props.version || "";
     const declKey = JSON.stringify(props.decl);
+    const rs = useRpcSession();
+
+    // This component outlives the edits that remount the inner one, so an edit to the test is
+    // visible here as one declaration's version changing. The run of the version left behind ends
+    // with it, releasing the build it holds. The version goes with the request, so a run of the
+    // test's current source keeps going, as does the run of a test the cursor has left.
+    const shown = React.useRef({ declKey, version });
+    React.useEffect(
+        function () {
+            const prev = shown.current;
+            shown.current = { declKey, version };
+            if (prev.declKey !== declKey || prev.version === version) return;
+            rs.call("Errata.Widget.dropStaleRun", {
+                decl: props.decl,
+                version: prev.version,
+            }).catch(function () {});
+        },
+        [declKey, version],
+    );
+
     return e(TestRun, { ...props, key: declKey + "@" + version, declKey, version });
 }
 
@@ -531,9 +557,11 @@ function TestRun(props) {
 
     // The RPC session, which the InfoView replaces on every cursor move and after a server restart.
     // Calls go through the latest one, while the connection to the run is made once per mount and
-    // once per restart.
+    // once per restart. Each session gets the retry budget in full, so that a run followed across
+    // many cursor moves keeps the whole of it for the session it is on.
     const rsRef = React.useRef(rs);
     React.useEffect(function () {
+        if (rsRef.current !== rs) awaitFails.current = 0;
         rsRef.current = rs;
     });
     // Bumped on each run start, cancel, and disconnect so a superseded await loop ignores late replies.
@@ -548,6 +576,11 @@ function TestRun(props) {
     const cleanTimer = React.useRef(null);
     // Bumped on each edit and each clean check, so a check begun before an edit reports nothing.
     const cleanGen = React.useRef(0);
+    // The start time of the run being followed, so a reply about another one is recognized.
+    const shownStart = React.useRef(0);
+    // Rejected `awaitOutput` calls since the last reply, and the pending retry of the last of them.
+    const awaitFails = React.useRef(0);
+    const retryTimer = React.useRef(null);
     // The gear the run settings hang from, and the seed field they hold.
     const gearRef = React.useRef(null);
     const seedRef = React.useRef(null);
@@ -601,6 +634,21 @@ function TestRun(props) {
             .then(
                 function (res) {
                     if (gen.current !== myGen) return;
+                    awaitFails.current = 0;
+                    // A reply about another run than the one being followed, started from a second
+                    // widget instance for the same test: its output is read from the first chunk.
+                    if (
+                        res.startTime &&
+                        shownStart.current &&
+                        res.startTime !== shownStart.current
+                    ) {
+                        shownStart.current = res.startTime;
+                        sinceRef.current = 0;
+                        phaseRef.current = "";
+                        loop(myGen);
+                        return;
+                    }
+                    if (res.startTime) shownStart.current = res.startTime;
                     if (res.phase) phaseRef.current = res.phase;
                     sinceRef.current = res.nextSince || 0;
                     dispatch({ type: "server", res: res, now: Date.now() });
@@ -608,6 +656,15 @@ function TestRun(props) {
                 },
                 function (err) {
                     if (gen.current !== myGen) return;
+                    // The session that rejected the call has been replaced by the time the retry
+                    // goes out, so the run is followed on through the new one.
+                    if (awaitFails.current < AWAIT_RETRIES) {
+                        awaitFails.current += 1;
+                        retryTimer.current = setTimeout(function () {
+                            if (gen.current === myGen) loop(myGen);
+                        }, AWAIT_RETRY_MS * awaitFails.current);
+                        return;
+                    }
                     dispatch({ type: "fail", error: errorMessage(err) });
                 },
             );
@@ -622,6 +679,8 @@ function TestRun(props) {
             gen.current = myGen;
             sinceRef.current = 0;
             phaseRef.current = "";
+            shownStart.current = 0;
+            awaitFails.current = 0;
             loop(myGen);
             alive.current = true;
             checkClean();
@@ -630,6 +689,8 @@ function TestRun(props) {
                 alive.current = false;
                 if (cleanTimer.current) clearTimeout(cleanTimer.current);
                 cleanTimer.current = null;
+                if (retryTimer.current) clearTimeout(retryTimer.current);
+                retryTimer.current = null;
             };
         },
         [epoch],
@@ -680,6 +741,8 @@ function TestRun(props) {
         gen.current = myGen;
         sinceRef.current = 0;
         phaseRef.current = "building";
+        shownStart.current = 0;
+        awaitFails.current = 0;
         dispatch({ type: "start", now: Date.now() });
         const request = {
             decl: props.decl,
