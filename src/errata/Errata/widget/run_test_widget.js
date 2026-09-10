@@ -598,8 +598,10 @@ export default function (props) {
 
     // Dimmed badges after the status: text, and for the seed, a click that fills the seed field.
     const badges = [];
-    if (timings && timings.startTime) badges.push({ text: "Start " + formatClock(timings.startTime) });
-    if (timings && timings.buildMs) badges.push({ text: "Build " + formatDuration(timings.buildMs) });
+    if (timings && timings.startTime)
+        badges.push({ text: "Start " + formatClock(timings.startTime) });
+    if (timings && timings.buildMs)
+        badges.push({ text: "Build " + formatDuration(timings.buildMs) });
     if (outcome) badges.push({ text: "Run " + formatDuration(outcome.durationMs) });
     if (outcome && typeof outcome.seed === "number") {
         badges.push({
