@@ -98,6 +98,14 @@ meta structure RunRef where
   decl : Json
 deriving Lean.FromJson, Lean.ToJson
 
+/-- A request that names the run of one version of a test. -/
+meta structure VersionRef where
+  /-- The test declaration, encoded by {name}`nameToJson`. -/
+  decl : Json
+  /-- The source hash the run was recorded under. -/
+  version : String
+deriving Lean.FromJson, Lean.ToJson
+
 /-- One reply from {lit}`awaitOutput`: any output chunks past the requested position, or the outcome. -/
 meta structure AwaitResult where
   /-- The output chunks past the requested position. -/
@@ -312,6 +320,19 @@ meta def awaitOutput (req : AwaitRequest) : RequestM (RequestTask AwaitResult) :
   if chunks.size > req.since || (← state.finished.get) || (← state.phase.get) != req.phase then
     return RequestTask.pure (← replyFrom state req.since)
   RequestM.mapTaskCheap (p.resultD ()).asServerTask fun _ => liftM (replyFrom state req.since)
+
+open Server in
+/--
+Server RPC method that ends the run of a test's source as it was before an edit. The run is dropped
+when the hash it was recorded under is the one given, so a run of the test's current source keeps
+going.
+-/
+@[server_rpc_method]
+meta def dropStaleRun (req : VersionRef) : RequestM (RequestTask Unit) := do
+  let declName ← decodeDecl req.decl
+  if let some state := (← runRegistry.get).get? declName then
+    if state.version == req.version then dropRun declName
+  return RequestTask.pure ()
 
 open Server in
 /-- Server RPC method that cancels a running test by killing its process. -/
