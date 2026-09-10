@@ -49,10 +49,11 @@ structure RunOutcome where
   /-- The test's docstring, rendered as Markdown, when it has one. -/
   description? : Option String := none
   /--
-  The seed for property tests that the run used, so a failure can be run again with it. Absent when
-  the test did not run at all.
+  The seed for property tests that the run used, in decimal digits, so a failure can be run again
+  with it. A string carries every natural number exactly through JavaScript's JSON. Absent when the
+  test did not run at all.
   -/
-  seed? : Option Nat := none
+  seed? : Option String := none
 deriving Lean.FromJson, Lean.ToJson, Repr, Inhabited
 
 /-- The status name a single result contributes. -/
@@ -104,7 +105,7 @@ def summarizeResults (seed : Nat) (results : Array Result) : RunOutcome := Id.ru
     message? := statusMessage worst
     detail? := match worst with | .fail f => f.detail? | _ => none
     output
-    seed? := some seed
+    seed? := some (toString seed)
   }
 
 /--

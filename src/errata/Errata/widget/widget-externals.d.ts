@@ -20,6 +20,10 @@ declare module "react" {
     }
 }
 
+declare module "react-dom" {
+    export function createPortal(children: any, container: Element): any;
+}
+
 declare module "@leanprover/infoview" {
     export function useRpcSession(): {
         call(method: string, params: any): Promise<any>;
