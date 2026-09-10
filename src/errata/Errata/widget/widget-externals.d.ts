@@ -12,6 +12,8 @@ declare module "react" {
     ): [S, (action: A) => void];
     export function useEffect(effect: () => void | (() => void), deps?: any[]): void;
     export function useRef(initial: any): { current: any };
+    export function useContext(context: any): any;
+    export function memo<T>(component: T): T;
     export interface ToggleEvent<T = Element> {
         currentTarget: T;
         target: EventTarget;
@@ -22,4 +24,13 @@ declare module "@leanprover/infoview" {
     export function useRpcSession(): {
         call(method: string, params: any): Promise<any>;
     };
+    export const EnvPosContext: any;
+    export const EditorContext: any;
+    export function Markdown(props: { contents: string }): any;
+    export function useClientNotificationEffect(
+        method: string,
+        f: (params: any) => void,
+        deps?: any[],
+    ): void;
+    export function useEvent(ev: any, f: (value: any) => void, deps?: any[], key?: any): void;
 }
