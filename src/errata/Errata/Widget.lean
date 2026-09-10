@@ -73,8 +73,11 @@ meta structure StartRequest where
   module : String
   /-- A hash of the test's source, recorded with the run so an edit can invalidate it. -/
   version : String
-  /-- The seed for property tests, or {lean}`none` to have one drawn. -/
-  seed? : Option Nat := none
+  /--
+  The seed for property tests in decimal digits, or {lean}`none` to have one drawn. A string
+  carries every natural number exactly through JavaScript's JSON.
+  -/
+  seed? : Option String := none
 deriving Lean.FromJson, Lean.ToJson
 
 /-- A request for output past a known position, naming the test by its encoded declaration. -/
@@ -248,6 +251,10 @@ open Server in
 @[server_rpc_method]
 meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
   let declName ← decodeDecl req.decl
+  let seed? ← req.seed?.mapM fun s =>
+    match s.toNat? with
+    | some seed => pure seed
+    | none => throw (.mk .invalidParams s!"the seed must be a natural number in decimal digits: {s}")
   unless ← bufferIsClean do
     throw (.mk .invalidParams "the file has unsaved changes; save it before running the test")
   dropRun declName
@@ -258,7 +265,7 @@ meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
     kill := ← IO.mkRef (pure ())
   }
   runRegistry.modify (·.insert declName state)
-  let _ ← IO.asTask (buildAndRun req.module req.decl.compress req.seed? state)
+  let _ ← IO.asTask (buildAndRun req.module req.decl.compress seed? state)
   return RequestTask.pure ()
 
 open Server in

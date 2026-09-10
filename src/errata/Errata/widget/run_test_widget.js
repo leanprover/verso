@@ -1,5 +1,6 @@
 // @ts-check
 import * as React from "react";
+import * as ReactDOM from "react-dom";
 import {
     EditorContext,
     EnvPosContext,
@@ -71,6 +72,9 @@ const monoFont = "var(--vscode-editor-font-family, monospace)";
 // theme keeps it legible against the panel's background, which dimming the foreground would not.
 const dimColor = "var(--vscode-descriptionForeground, #717171)";
 
+// The editor theme's colour for errors: a run that could not start, and a rejected seed.
+const errorColor = "var(--vscode-errorForeground, #c62828)";
+
 // The time since `runStart`, an instant on the client's clock, ticking while mounted; shows zero
 // until the start is known.
 function Elapsed(props) {
@@ -91,6 +95,84 @@ function Elapsed(props) {
         [runStart],
     );
     return e("span", { style: { fontFamily: monoFont } }, formatDuration(elapsed));
+}
+
+// A fixed position against an element, aligned to its right edge and below it, going above it
+// where the view has no room. The 48 pixels are the room a row of controls takes.
+function placeUnder(anchor) {
+    if (!anchor) return { display: "none" };
+    const rect = anchor.getBoundingClientRect();
+    const style = {
+        position: "fixed",
+        right: Math.max(8, window.innerWidth - rect.right),
+        zIndex: 100,
+    };
+    if (rect.bottom + 48 > window.innerHeight) style.bottom = window.innerHeight - rect.top + 6;
+    else style.top = rect.bottom + 6;
+    return style;
+}
+
+// A popup anchored to an element, in the style of the InfoView's own menus. It is portalled to the
+// document body, which puts it outside the disclosure summary that holds its anchor, so the
+// controls inside it keep their own keyboard and pointer behaviour. It closes on Escape, on a
+// click outside it, and when the view moves under it. `onClose` is told whether to return focus to
+// the anchor.
+function Popup(props) {
+    const anchor = props.anchor;
+    const ref = React.useRef(null);
+    // Held in a ref, so the listeners are installed once rather than on every render around them.
+    const onCloseRef = React.useRef(props.onClose);
+    React.useEffect(function () {
+        onCloseRef.current = props.onClose;
+    });
+
+    // Placed once, against the anchor as it stood when the popup opened.
+    const [style] = React.useState(function () {
+        return placeUnder(anchor);
+    });
+
+    React.useEffect(
+        function () {
+            function onPointerDown(ev) {
+                if (ref.current && ref.current.contains(ev.target)) return;
+                // A click on the anchor is its own toggle, which closes the popup in its turn.
+                if (anchor && anchor.contains(ev.target)) return;
+                onCloseRef.current(false);
+            }
+            function onKeyDown(ev) {
+                if (ev.key !== "Escape") return;
+                ev.stopPropagation();
+                onCloseRef.current(true);
+            }
+            function onScroll(ev) {
+                if (ref.current && ref.current.contains(ev.target)) return;
+                onCloseRef.current(false);
+            }
+            function onResize() {
+                onCloseRef.current(false);
+            }
+            document.addEventListener("pointerdown", onPointerDown, true);
+            document.addEventListener("keydown", onKeyDown, true);
+            window.addEventListener("scroll", onScroll, true);
+            window.addEventListener("resize", onResize);
+            return function () {
+                document.removeEventListener("pointerdown", onPointerDown, true);
+                document.removeEventListener("keydown", onKeyDown, true);
+                window.removeEventListener("scroll", onScroll, true);
+                window.removeEventListener("resize", onResize);
+            };
+        },
+        [anchor],
+    );
+
+    return ReactDOM.createPortal(
+        e(
+            "div",
+            { ref, className: "tooltip", style },
+            e("div", { className: "tooltip-content" }, props.children),
+        ),
+        document.body,
+    );
 }
 
 // A wall-clock time of day, rounded to the nearest second, from a Unix-epoch millisecond timestamp.
@@ -466,6 +548,9 @@ function TestRun(props) {
     const cleanTimer = React.useRef(null);
     // Bumped on each edit and each clean check, so a check begun before an edit reports nothing.
     const cleanGen = React.useRef(0);
+    // The gear the run settings hang from, and the seed field they hold.
+    const gearRef = React.useRef(null);
+    const seedRef = React.useRef(null);
     // The file this widget belongs to, from the InfoView's position context.
     const envPos = React.useContext(EnvPosContext);
     const uri = envPos ? envPos.uri : null;
@@ -570,12 +655,25 @@ function TestRun(props) {
         [st],
     );
 
+    // The seed field takes focus with its value selected when the settings open, so a seed can be
+    // typed or replaced straight away.
+    React.useEffect(
+        function () {
+            if (settingsOpen && seedRef.current) seedRef.current.select();
+        },
+        [settingsOpen],
+    );
+
+    function closeSettings(refocus) {
+        setSettingsOpen(false);
+        if (refocus && gearRef.current) gearRef.current.focus();
+    }
+
     const seedText = seed.trim();
     const seedSet = seedText !== "";
-    // A blank seed has one drawn; otherwise it must be a natural number that JSON carries exactly.
-    const seedValid =
-        !seedSet || (/^\d+$/.test(seedText) && Number.isSafeInteger(Number(seedText)));
-    const seedHint = "The seed must be a natural number below 2^53";
+    // A blank seed has one drawn; otherwise it is a natural number, which travels as its digits.
+    const seedValid = !seedSet || /^\d+$/.test(seedText);
+    const seedHint = "The seed must be a natural number";
 
     function run() {
         const myGen = gen.current + 1;
@@ -588,7 +686,7 @@ function TestRun(props) {
             module: props.module,
             version: version,
         };
-        if (seedSet) request.seed = Number(seedText);
+        if (seedSet) request.seed = seedText;
         rsRef.current.call("Errata.Widget.startTest", request).then(
             function () {
                 if (gen.current !== myGen) return;
@@ -645,11 +743,20 @@ function TestRun(props) {
         !clean && !running
             ? e("span", { style: { color: dimColor, fontSize: "11px" } }, "unsaved — save to run")
             : null,
+        // The seed lives behind the gear, so a rejected one is named here as well, where the
+        // disabled button is.
+        clean && !seedValid && !running
+            ? e(
+                  "span",
+                  { style: { color: errorColor, fontSize: "11px" } },
+                  "invalid seed — see run settings",
+              )
+            : null,
     );
 
-    // The run settings float at the right of the title, where the goal sections keep theirs: the
-    // seed field when shown, then the gear that shows it. A click here is the control's own, so it
-    // leaves the disclosure as it was.
+    // The gear that shows the run settings floats at the right of the title, where the goal
+    // sections keep theirs. A click here is the control's own, so it leaves the disclosure as it
+    // was.
     const runSettings = e(
         "span",
         {
@@ -658,38 +765,12 @@ function TestRun(props) {
                 ev.preventDefault();
             },
         },
-        settingsOpen
-            ? e("input", {
-                  type: "text",
-                  inputMode: "numeric",
-                  value: seed,
-                  placeholder: "seed",
-                  disabled: running,
-                  title: seedValid ? "Seed for property tests; blank draws one" : seedHint,
-                  "aria-label": "Seed for property tests",
-                  "aria-invalid": !seedValid,
-                  onChange: function (ev) {
-                      setSeed(ev.target.value);
-                  },
-                  // Fits its value or placeholder; `size` stands in where `field-sizing` is
-                  // unsupported.
-                  size: Math.max(seed.length, 4) + 1,
-                  style: {
-                      fieldSizing: "content",
-                      minWidth: "5ch",
-                      fontFamily: monoFont,
-                      fontSize: "11px",
-                      // The title suppresses selection, which the field needs back.
-                      userSelect: "text",
-                      outline: seedValid
-                          ? undefined
-                          : "1px solid var(--vscode-inputValidation-errorBorder, #be1100)",
-                  },
-              })
-            : null,
         e("button", {
+            ref: gearRef,
             onClick: function () {
-                setSettingsOpen(!settingsOpen);
+                setSettingsOpen(function (open) {
+                    return !open;
+                });
             },
             title: settingsOpen
                 ? "Hide run settings"
@@ -698,6 +779,7 @@ function TestRun(props) {
                   : "Run settings",
             "aria-label": "Run settings",
             "aria-expanded": settingsOpen,
+            "aria-haspopup": "dialog",
             className: "link pointer dim mh2 codicon codicon-settings-gear",
             style: {
                 background: "none",
@@ -707,6 +789,56 @@ function TestRun(props) {
             },
         }),
     );
+
+    // The settings themselves, in a popup below the gear: the seed for property tests, and the
+    // reason for a rejected one.
+    const settingsPopup = settingsOpen
+        ? e(
+              Popup,
+              { anchor: gearRef.current, onClose: closeSettings },
+              e(
+                  "label",
+                  {
+                      style: {
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          whiteSpace: "nowrap",
+                          fontSize: "11px",
+                      },
+                  },
+                  "Seed",
+                  e("input", {
+                      ref: seedRef,
+                      type: "text",
+                      inputMode: "numeric",
+                      value: seed,
+                      placeholder: "random",
+                      disabled: running,
+                      title: "Seed for property tests; blank chooses one randomly",
+                      "aria-invalid": !seedValid,
+                      onChange: function (ev) {
+                          setSeed(ev.target.value);
+                      },
+                      style: {
+                          width: "12ch",
+                          fontFamily: monoFont,
+                          fontSize: "11px",
+                          outline: seedValid
+                              ? undefined
+                              : "1px solid var(--vscode-inputValidation-errorBorder, #be1100)",
+                      },
+                  }),
+              ),
+              seedValid
+                  ? null
+                  : e(
+                        "div",
+                        { style: { marginTop: "4px", fontSize: "11px", color: errorColor } },
+                        seedHint,
+                    ),
+          )
+        : null;
 
     const outcome = st.tag === "done" ? st.outcome : null;
     const timings = st.tag === "idle" ? null : st;
@@ -742,11 +874,7 @@ function TestRun(props) {
             e(Elapsed, { runStart: st.startedAt }),
         );
     } else if (st.tag === "failed") {
-        primary = e(
-            "span",
-            { style: { color: "var(--vscode-errorForeground, #c62828)" } },
-            "could not run: " + st.error,
-        );
+        primary = e("span", { style: { color: errorColor } }, "could not run: " + st.error);
     } else if (st.tag === "done") {
         primary = e(
             "span",
@@ -774,14 +902,14 @@ function TestRun(props) {
         badges.push({ text: "Build " + formatDuration(timings.buildMs) });
     // The seed is present exactly when the test itself ran, so the run's duration and seed appear
     // for a test that ran and stay hidden for a build or runner failure.
-    if (outcome && typeof outcome.seed === "number") {
+    if (outcome && typeof outcome.seed === "string") {
         const seedUsed = outcome.seed;
         badges.push({ text: "Run " + formatDuration(outcome.durationMs) });
         badges.push({
             text: "Seed " + seedUsed,
             title: "Use this seed for the next run",
             onClick: function () {
-                setSeed(String(seedUsed));
+                setSeed(seedUsed);
                 setSettingsOpen(true);
             },
         });
@@ -882,6 +1010,7 @@ function TestRun(props) {
             e("span", { style: { fontFamily: monoFont, fontSize: "12px" } }, name),
             runSettings,
         ),
+        settingsPopup,
         panelOpen ? e("div", { className: "ml1" }, header, body) : null,
     );
 }
