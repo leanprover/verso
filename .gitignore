@@ -20,3 +20,4 @@ single.json
 __pycache__
 test-projects/literate-config/lake-manifest.json
 test-projects/literate-multi-root/lake-manifest.json
+src/errata-tests/fixtures/*/lake-manifest.json

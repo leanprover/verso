@@ -1,0 +1,9 @@
+# A dependency of the configured fixture, with a library of tests of its own.
+name = "dep"
+
+[[require]]
+name = "verso"
+path = "../../../.."
+
+[[lean_lib]]
+name = "DepLib"
