@@ -103,6 +103,11 @@ meta structure AwaitResult where
   nextSince : Nat := 0
   /-- When the run started, in milliseconds since the Unix epoch. -/
   startTime : Nat := 0
+  /--
+  How long ago the run started, in milliseconds by the server's clock. The widget's elapsed counter
+  ticks from it, so the display stays right when the server's clock differs from the editor's.
+  -/
+  elapsedMs : Nat := 0
   /-- How long the build took, in milliseconds; 0 while still building. -/
   buildMs : Nat := 0
   /-- When the test body started, in epoch ms; 0 until then. Output offsets are relative to it. -/
@@ -128,42 +133,55 @@ private meta def signalRun (state : RunState) : IO Unit := do
   state.wakeup.set (← IO.Promise.new)
   p.resolve ()
 
-/-- Kills the runner of a name, if any, marks it finished, and forgets it. -/
+/-- Marks the run of a name finished, if any, kills its process, and forgets it. -/
 private meta def dropRun (declName : Name) : IO Unit := do
   if let some state := (← runRegistry.get).get? declName then
-    try (← state.kill.get) catch _ => pure ()
     state.finished.set true
+    try (← state.kill.get) catch _ => pure ()
     signalRun state
     runRegistry.modify (·.erase declName)
 
 /--
+Ends a run, with {name}`fallback` as its outcome when the runner reported none. A run that was
+cancelled earlier keeps its state.
+-/
+private meta def finishWith (state : RunState) (fallback : Errata.RunOutcome) : IO Unit := do
+  if (← state.finished.get) then return
+  if (← state.outcome.get).isNone then state.outcome.set (some fallback)
+  state.finished.set true
+  signalRun state
+
+/--
 Reads the runner's JSON protocol from its stdout: a {lit}`chunk` line per output fragment, then an
-{lit}`outcome` line. Marks the run finished at end of input, which is reached when the process exits
-or is killed, so this never holds a thread past the process's lifetime.
+{lit}`outcome` line. Returns at end of input, which is reached when the process exits or is killed.
 -/
 private meta partial def readLoop (out : IO.FS.Handle) (state : RunState) : IO Unit := do
   let line ← out.getLine
-  if line.isEmpty then
-    state.finished.set true
-    signalRun state
-  else
-    if let .ok j := Json.parse line then
-      if let .ok c := j.getObjVal? "chunk" then
-        if let .ok chunk := (fromJson? c : Except String Errata.OutputChunk) then
-          state.chunks.modify (·.push chunk)
-          signalRun state
-      else if let .ok ex := j.getObjVal? "exec" then
-        if let .ok t := (fromJson? ex : Except String Nat) then
-          state.execStartTime.set t
-          signalRun state
-      else if let .ok o := j.getObjVal? "outcome" then
-        if let .ok oc := (fromJson? o : Except String Errata.RunOutcome) then
-          state.outcome.set oc
-    readLoop out state
+  if line.isEmpty then return
+  if let .ok j := Json.parse line then
+    if let .ok c := j.getObjVal? "chunk" then
+      if let .ok chunk := (fromJson? c : Except String Errata.OutputChunk) then
+        state.chunks.modify (·.push chunk)
+        signalRun state
+    else if let .ok ex := j.getObjVal? "exec" then
+      if let .ok t := (fromJson? ex : Except String Nat) then
+        state.execStartTime.set t
+        signalRun state
+    else if let .ok o := j.getObjVal? "outcome" then
+      if let .ok oc := (fromJson? o : Except String Errata.RunOutcome) then
+        state.outcome.set oc
+  readLoop out state
 
 /-- The outcome shown when the build step fails, carrying its message and detail. -/
 private meta def buildFailure (detail : String) : Errata.RunOutcome := {
   status := "error", durationMs := 0, message? := some "lake build failed", detail? := some detail
+}
+
+/-- The outcome shown when the runner exits without reporting one: its exit code and stderr. -/
+private meta def runnerFailure (code : UInt32) (stderr : String) : Errata.RunOutcome := {
+  status := "error", durationMs := 0
+  message? := some s!"the test runner exited with code {code} before reporting an outcome"
+  detail? := if stderr.trimAscii.isEmpty then none else some stderr
 }
 
 /--
@@ -184,28 +202,30 @@ private meta def buildAndRun (module declJson : String) (seed? : Option Nat) (st
   let queryOut ← build.stdout.readToEnd
   let buildErr := (← IO.wait errTask).toOption.getD ""
   if (← build.wait) != 0 then
-    state.outcome.set (some (buildFailure buildErr))
-    state.finished.set true
-    signalRun state
+    finishWith state (buildFailure buildErr)
     return
   let some runnerPath := (queryOut.splitOn "\n").find? (!·.trimAscii.isEmpty) |>.map (·.trimAscii.copy)
-    | state.outcome.set (some (buildFailure "lake query did not report the runner's path"))
-      state.finished.set true
-      signalRun state
+    | finishWith state (buildFailure "lake query did not report the runner's path")
       return
   -- Spawn the runner directly rather than through `lake exe` so it inherits the language server's
   -- broad `LEAN_PATH`. The runner imports the arbitrary test module at runtime, which is not a
   -- dependency of the exe, so `lake exe` would narrow `LEAN_PATH` to the exe's own deps and the
   -- import would fail.
   let run ← IO.Process.spawn {
-    stdin := .null, stdout := .piped, stderr := .inherit
+    stdin := .null, stdout := .piped, stderr := .piped
     cmd := runnerPath, args := #[module, declJson] ++ (seed?.map (#[toString ·])).getD #[]
   }
   state.kill.set run.kill
   state.buildMs.set ((← nowMs) - state.startTime)
   state.phase.set "running"
   signalRun state
+  -- The runner's stderr carries anything that went wrong outside the test body, such as a failed
+  -- import; it becomes the outcome's detail when the runner reports no outcome of its own.
+  let runErrTask ← IO.asTask run.stderr.readToEnd
   readLoop run.stdout state
+  let code ← run.wait
+  let runErr := (← IO.wait runErrTask).toOption.getD ""
+  finishWith state (runnerFailure code runErr)
 
 open Server in
 /-- Whether the document's live text matches what is on disk, i.e. it has no unsaved changes. -/
@@ -242,19 +262,27 @@ meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
   return RequestTask.pure ()
 
 open Server in
-/-- Builds the reply for a waiter given the run's current state and the position it already has. -/
+/--
+Builds the reply for a waiter given the run's current state and the position it already has. The
+chunks past that position come together with the run's completion status, so a widget that
+reconnects to a finished run settles in a single reply.
+-/
 private meta def replyFrom (state : RunState) (since : Nat) : IO AwaitResult := do
+  -- The finished flag is read before the chunks: once it is set, every chunk has been recorded, so
+  -- a reply that says done carries all of them.
+  let done ← state.finished.get
+  let outcome ← state.outcome.get
   let chunks ← state.chunks.get
   let phase ← state.phase.get
   let startTime := state.startTime
+  let elapsedMs := (← nowMs) - startTime
   let buildMs ← state.buildMs.get
   let execStartTime ← state.execStartTime.get
-  if chunks.size > since then
-    let slice := chunks.extract since chunks.size
-    return { chunks := slice, nextSince := since + slice.size, phase, startTime, buildMs, execStartTime }
-  let done ← state.finished.get
-  let outcome ← state.outcome.get
-  return { nextSince := chunks.size, phase, startTime, buildMs, execStartTime, done, outcome }
+  let slice := chunks.extract since chunks.size
+  return {
+    chunks := slice, nextSince := chunks.size, phase, startTime, elapsedMs, buildMs, execStartTime,
+    done, outcome
+  }
 
 open Server in
 /--

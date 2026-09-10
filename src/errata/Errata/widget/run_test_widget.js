@@ -1,17 +1,28 @@
 // @ts-check
 import * as React from "react";
-import { useRpcSession } from "@leanprover/infoview";
+import {
+    EditorContext,
+    EnvPosContext,
+    Markdown,
+    useClientNotificationEffect,
+    useEvent,
+    useRpcSession,
+} from "@leanprover/infoview";
 
 const e = React.createElement;
 
-// Persists the last outcome per test for the lifetime of the InfoView session, so leaving and
-// returning to a test's `@[test]` marker shows its previous result rather than a blank widget.
+// The last settled outcome of each test, keyed by its declaration and tagged with the source
+// version that produced it, for the lifetime of the InfoView session. Leaving and returning to a
+// test's `@[test]` marker shows its previous result again.
 const resultCache = new Map();
 
+// The editor theme's test-result colours, with fallbacks for a page outside VS Code. They are the
+// colours of the theme's test icons, so they carry the verdict on the status glyph while the label
+// beside it keeps the editor's text colour.
 const STATUS_COLORS = {
-    passed: "#2e7d32",
-    failed: "#c62828",
-    error: "#e65100",
+    passed: "var(--vscode-testing-iconPassed, #2e7d32)",
+    failed: "var(--vscode-testing-iconFailed, #c62828)",
+    error: "var(--vscode-testing-iconErrored, #e65100)",
 };
 
 const STATUS_SYMBOLS = {
@@ -49,7 +60,38 @@ function pad(n, w) {
     return String(n).padStart(w || 2, "0");
 }
 
+// The message of a rejected RPC call.
+function errorMessage(err) {
+    return (err && err.message) || String(err);
+}
+
 const monoFont = "var(--vscode-editor-font-family, monospace)";
+
+// The editor theme's colour for secondary text: the badges, hints, and the output summary. The
+// theme keeps it legible against the panel's background, which dimming the foreground would not.
+const dimColor = "var(--vscode-descriptionForeground, #717171)";
+
+// The time since `runStart`, an instant on the client's clock, ticking while mounted; shows zero
+// until the start is known.
+function Elapsed(props) {
+    const runStart = props.runStart;
+    const [elapsed, setElapsed] = React.useState(0);
+    React.useEffect(
+        function () {
+            if (!runStart) return undefined;
+            function update() {
+                setElapsed(Math.max(0, Date.now() - runStart));
+            }
+            update();
+            const timer = setInterval(update, 100);
+            return function () {
+                clearInterval(timer);
+            };
+        },
+        [runStart],
+    );
+    return e("span", { style: { fontFamily: monoFont } }, formatDuration(elapsed));
+}
 
 // A wall-clock time of day, rounded to the nearest second, from a Unix-epoch millisecond timestamp.
 function formatClock(ms) {
@@ -70,8 +112,31 @@ function chunkLabel(c, execStartTime) {
     return off ? c.stream + " " + off : c.stream;
 }
 
-// Renders captured output: stdout and stderr interleaved in order, both in the editor's code font,
-// with stderr italicized. Hovering a chunk highlights it and reports its stream and time offset.
+// One output chunk in the editor's code font, italic for stderr, highlighted while hovered.
+// Memoized, so a hover change re-renders only the two chunks whose highlight changes.
+const ChunkSpan = React.memo(function ChunkSpan(props) {
+    const c = props.chunk;
+    return e(
+        "span",
+        {
+            title: chunkLabel(c, props.execStartTime),
+            onMouseEnter: function () {
+                props.onHover(c);
+            },
+            style: {
+                fontStyle: c.stream === "stderr" ? "italic" : undefined,
+                borderRadius: "2px",
+                backgroundColor: props.hovered
+                    ? "var(--vscode-editor-hoverHighlightBackground, rgba(120,170,255,0.3))"
+                    : undefined,
+            },
+        },
+        c.text,
+    );
+});
+
+// Renders captured output: stdout and stderr interleaved in order. Hovering a chunk highlights it
+// and reports its stream and time offset.
 function outputBlock(chunks, execStartTime, hovered, setHovered) {
     return e(
         "pre",
@@ -82,381 +147,40 @@ function outputBlock(chunks, execStartTime, hovered, setHovered) {
             },
         },
         ...chunks.map(function (c, i) {
-            return e(
-                "span",
-                {
-                    key: i,
-                    title: chunkLabel(c, execStartTime),
-                    onMouseEnter: function () {
-                        setHovered(i);
-                    },
-                    style: {
-                        fontStyle: c.stream === "stderr" ? "italic" : undefined,
-                        borderRadius: "2px",
-                        backgroundColor:
-                            hovered === i
-                                ? "var(--vscode-editor-hoverHighlightBackground, rgba(120,170,255,0.3))"
-                                : undefined,
-                    },
-                },
-                c.text,
-            );
+            return e(ChunkSpan, {
+                key: i,
+                chunk: c,
+                execStartTime,
+                hovered: hovered === c,
+                onHover: setHovered,
+            });
         }),
     );
 }
 
-/**
- * @typedef {{stream: string, text: string, time?: number}} Chunk
- * @typedef {{status: string, durationMs: number, message?: string, detail?: string,
- *            output?: Chunk[], description?: string, seed?: number}} Outcome
- * @typedef {{phase: string, chunks: Chunk[], startTime: number, buildMs: number,
- *            execStartTime: number}} RunFields
- *
- * The run's lifecycle as a single state, so that contradictory combinations (a verdict alongside
- * an error, a spinner alongside an outcome) cannot be represented:
- *
- *   idle       no run for this test, and no recorded outcome to show
- *   running    a run is in progress, streaming output
- *   done       a finished run's outcome (live or restored from the session cache)
- *   cancelled  the run was stopped before it produced an outcome
- *   failed     the run could not be carried out at all
- *
- * All timings come from the server, which records them per run: they survive the widget being
- * remounted while the run continues, and the server is on the same machine, so its clock agrees
- * with the client's.
- *
- * @typedef {{tag: "idle"}
- *   | ({tag: "running"} & RunFields)
- *   | ({tag: "done", outcome: Outcome} & RunFields)
- *   | {tag: "cancelled", chunks: Chunk[]}
- *   | {tag: "failed", error: string, chunks: Chunk[]}} RunUi
- */
-
-/** @type {RunUi} */
-const idleState = { tag: "idle" };
-
-/**
- * A finished state showing a recorded outcome, with no live chunks or timings of its own.
- * @param outcome {Outcome}
- * @returns {RunUi}
- */
-function doneState(outcome) {
-    return {
-        tag: "done",
-        outcome,
-        phase: "",
-        chunks: [],
-        startTime: 0,
-        buildMs: 0,
-        execStartTime: 0,
-    };
-}
-
-/**
- * Steps the run state by one event:
- *
- *   reset    the cursor moved onto a (possibly different) test; show its cached outcome, if any
- *   start    the user started a run; the client's clock stands in for the start time until the
- *            server reports the authoritative one
- *   server   a reply from `awaitOutput`; it may arrive in any state, since the widget reconnects
- *            to runs it did not start
- *   cancel   the user stopped the run
- *   fail     an RPC call failed, so there is no run to wait for
- *
- * @param st {RunUi}
- * @param ev {any}
- * @returns {RunUi}
- */
-function step(st, ev) {
-    switch (ev.type) {
-        case "reset":
-            return ev.outcome ? doneState(ev.outcome) : idleState;
-        case "start":
-            return {
-                tag: "running",
-                phase: "building",
-                chunks: [],
-                startTime: ev.now,
-                buildMs: 0,
-                execStartTime: 0,
-            };
-        case "server": {
-            const res = ev.res;
-            // Zero-valued fields in a reply mean "no news"; the server's values otherwise win.
-            const prev =
-                st.tag === "running"
-                    ? st
-                    : { phase: "running", chunks: [], startTime: 0, buildMs: 0, execStartTime: 0 };
-            const merged = {
-                phase: res.phase || prev.phase,
-                chunks:
-                    res.chunks && res.chunks.length ? prev.chunks.concat(res.chunks) : prev.chunks,
-                startTime: res.startTime || prev.startTime,
-                buildMs: res.buildMs || prev.buildMs,
-                execStartTime: res.execStartTime || prev.execStartTime,
-            };
-            if (!res.done) return { tag: "running", ...merged };
-            if (res.outcome) return { tag: "done", outcome: res.outcome, ...merged };
-            // Done without an outcome: nothing is running server-side. That ends a watched run
-            // (stopped from elsewhere, or its process died); in any other state it is no news.
-            return st.tag === "running" ? { tag: "cancelled", chunks: st.chunks } : st;
-        }
-        case "cancel":
-            return { tag: "cancelled", chunks: st.tag === "running" ? st.chunks : [] };
-        case "fail":
-            return {
-                tag: "failed",
-                error: ev.error,
-                chunks: st.tag === "running" ? st.chunks : [],
-            };
-        default:
-            return st;
-    }
-}
-
-export default function (props) {
-    const rs = useRpcSession();
-    // Keyed by both the test and a hash of its source, so editing the test changes the key and
-    // invalidates its cached/in-progress run.
-    const version = props.version || "";
-    const cacheKey = JSON.stringify(props.decl) + "@" + version;
-
-    const [st, dispatch] = React.useReducer(step, undefined, function () {
-        const cached = resultCache.get(cacheKey);
-        return cached ? doneState(cached) : idleState;
-    });
-    // Milliseconds since the run started, ticking while it does.
-    const [elapsed, setElapsed] = React.useState(0);
-    // The output chunk under the cursor, highlighted with its timestamp shown.
+// The collapsible output disclosure: a summary naming the hovered chunk's stream and time offset,
+// the interleaved chunks, and a copy button floating over the output, revealed on hover. Whether
+// it is open belongs to the caller, so a collapse outlasts the output being replaced.
+const OutputSection = React.memo(function OutputSection(props) {
+    const chunks = props.chunks;
+    const execStartTime = props.execStartTime;
+    // The output chunk under the cursor, highlighted with its timestamp shown. Held by identity,
+    // so it matches only a chunk of the output currently shown.
     const [hovered, setHovered] = React.useState(null);
-    // Whether the file has no unsaved changes; the test runs the saved version, so Run is gated on it.
-    const [clean, setClean] = React.useState(true);
     // Briefly true after the output is copied, to confirm the copy in the button label.
     const [copied, setCopied] = React.useState(false);
-    // Whether the output disclosure is expanded; open by default, collapsible to hide large output.
-    const [outputOpen, setOutputOpen] = React.useState(true);
     // Whether the cursor is over the output area, revealing the floating copy button.
-    const [overOutput, setOverOutput] = React.useState(false);
-    // The seed for property tests as typed, or blank to have one drawn.
-    const [seed, setSeed] = React.useState("");
-    // Whether the run settings (the seed field) are shown, behind the gear button.
-    const [settingsOpen, setSettingsOpen] = React.useState(false);
+    const [over, setOver] = React.useState(false);
+    // Whether the copy button has keyboard focus, which also reveals it.
+    const [focused, setFocused] = React.useState(false);
+    // The timer that ends the copy confirmation, so another copy restarts it in full.
+    const copiedTimer = React.useRef(null);
 
-    // Bumped on each run start, cancel, and unmount so a superseded await loop ignores late replies.
-    const gen = React.useRef(0);
-    // The number of chunks already pulled from the server, so a reconnect replays from the start.
-    const sinceRef = React.useRef(0);
-    // The last phase the widget saw; "" forces the next await to return the run's current phase at once.
-    const phaseRef = React.useRef("");
-
-    const running = st.tag === "running";
-    const runStart = running ? st.startTime : 0;
-
-    React.useEffect(
-        function () {
-            if (!running || !runStart) return undefined;
-            function update() {
-                setElapsed(Math.max(0, Date.now() - runStart));
-            }
-            update();
-            const timer = setInterval(update, 100);
-            return function () {
-                clearInterval(timer);
-            };
-        },
-        [running, runStart],
-    );
-
-    function loop(myGen) {
-        rs.call("Errata.Widget.awaitOutput", {
-            decl: props.decl,
-            since: sinceRef.current,
-            version: version,
-            phase: phaseRef.current,
-        }).then(
-            function (res) {
-                if (gen.current !== myGen) return;
-                if (res.phase) phaseRef.current = res.phase;
-                if (res.chunks && res.chunks.length) sinceRef.current = res.nextSince;
-                if (res.done && res.outcome) resultCache.set(cacheKey, res.outcome);
-                dispatch({ type: "server", res: res });
-                if (!res.done) loop(myGen);
-            },
-            function (err) {
-                if (gen.current !== myGen) return;
-                dispatch({ type: "fail", error: (err && err.message) || String(err) });
-            },
-        );
-    }
-
-    // The InfoView reuses one component instance for whichever test the cursor is on, so reset and
-    // reconnect whenever the test changes (keyed on `cacheKey`), not just on mount. Restores any cached
-    // outcome for this test and replays an in-progress run from the start.
-    React.useEffect(
-        function () {
-            const myGen = gen.current + 1;
-            gen.current = myGen;
-            sinceRef.current = 0;
-            phaseRef.current = "";
-            dispatch({ type: "reset", outcome: resultCache.get(cacheKey) || null });
-            setHovered(null);
-            setSeed("");
-            setSettingsOpen(false);
-            loop(myGen);
-            let cancelledCheck = false;
-            let cleanTimer = null;
-            function checkClean() {
-                rs.call("Errata.Widget.bufferClean", { decl: props.decl }).then(
-                    function (c) {
-                        if (cancelledCheck) return;
-                        setClean(c);
-                        // While the buffer is dirty, re-check so the button re-enables shortly after a save.
-                        if (!c) cleanTimer = setTimeout(checkClean, 1500);
-                    },
-                    function () {},
-                );
-            }
-            checkClean();
-            return function () {
-                gen.current += 1;
-                cancelledCheck = true;
-                if (cleanTimer) clearTimeout(cleanTimer);
-            };
-        },
-        [cacheKey],
-    );
-
-    function run() {
-        const seedText = seed.trim();
-        if (seedText !== "" && !/^\d+$/.test(seedText)) {
-            dispatch({ type: "fail", error: "the seed must be a natural number" });
-            return;
-        }
-        const myGen = gen.current + 1;
-        gen.current = myGen;
-        sinceRef.current = 0;
-        phaseRef.current = "building";
-        dispatch({ type: "start", now: Date.now() });
-        setElapsed(0);
-        const request = {
-            decl: props.decl,
-            module: props.module,
-            version: version,
+    React.useEffect(function () {
+        return function () {
+            if (copiedTimer.current) clearTimeout(copiedTimer.current);
         };
-        if (seedText !== "") request.seed = Number(seedText);
-        rs.call("Errata.Widget.startTest", request).then(
-            function () {
-                if (gen.current === myGen) loop(myGen);
-            },
-            function (err) {
-                if (gen.current !== myGen) return;
-                dispatch({ type: "fail", error: (err && err.message) || String(err) });
-            },
-        );
-    }
-
-    function cancel() {
-        gen.current += 1;
-        dispatch({ type: "cancel" });
-        rs.call("Errata.Widget.cancelTest", { decl: props.decl }).catch(function () {});
-    }
-
-    const name = props.name || "test";
-    const seedSet = seed.trim() !== "";
-
-    const header = e(
-        "div",
-        { style: { display: "flex", alignItems: "center", gap: "8px" } },
-        running
-            ? e("button", { onClick: cancel }, "Cancel")
-            : e(
-                  "button",
-                  {
-                      onClick: run,
-                      disabled: !clean,
-                      title: clean ? undefined : "Save the file to run the test",
-                  },
-                  st.tag === "idle" ? "Run" : "Run again",
-              ),
-        e(
-            "span",
-            {
-                style: {
-                    fontFamily: "var(--vscode-editor-font-family, monospace)",
-                    fontSize: "12px",
-                },
-            },
-            name,
-        ),
-        !clean && !running
-            ? e("span", { style: { opacity: 0.6, fontSize: "11px" } }, "unsaved — save to run")
-            : null,
-        // The run settings sit at the right edge: the seed field when shown, then the gear that
-        // shows it. The gear stays at full strength while a seed is set, so a hidden seed is not a
-        // surprise.
-        e(
-            "span",
-            { style: { marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px" } },
-            settingsOpen
-                ? e("input", {
-                      type: "text",
-                      inputMode: "numeric",
-                      value: seed,
-                      placeholder: "seed",
-                      disabled: running,
-                      title: "Seed for property tests; blank draws one",
-                      "aria-label": "Seed for property tests",
-                      onChange: function (ev) {
-                          setSeed(ev.target.value);
-                      },
-                      // Fits its value or placeholder; `size` stands in where `field-sizing` is
-                      // unsupported.
-                      size: Math.max(seed.length, 4) + 1,
-                      style: {
-                          fieldSizing: "content",
-                          minWidth: "5ch",
-                          fontFamily: monoFont,
-                          fontSize: "11px",
-                      },
-                  })
-                : null,
-            e(
-                "button",
-                {
-                    onClick: function () {
-                        setSettingsOpen(!settingsOpen);
-                    },
-                    title: settingsOpen
-                        ? "Hide run settings"
-                        : seedSet
-                          ? "Run settings (seed " + seed.trim() + ")"
-                          : "Run settings",
-                    "aria-label": "Run settings",
-                    "aria-expanded": settingsOpen,
-                    style: {
-                        display: "flex",
-                        alignItems: "center",
-                        padding: "2px",
-                        lineHeight: 0,
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "var(--vscode-textLink-foreground, #0078d4)",
-                        opacity: settingsOpen || seedSet ? 1 : 0.75,
-                    },
-                },
-                e("span", { className: "codicon codicon-settings-gear", "aria-hidden": true }),
-            ),
-        ),
-    );
-
-    const outcome = st.tag === "done" ? st.outcome : null;
-    const timings = st.tag === "running" || st.tag === "done" ? st : null;
-    const execStartTime = timings ? timings.execStartTime : 0;
-
-    // Prefer the live, server-timestamped chunks; fall back to a cached outcome's output.
-    const liveChunks = st.tag === "idle" ? [] : st.chunks;
-    const chunks = liveChunks.length ? liveChunks : outcome && outcome.output ? outcome.output : [];
+    }, []);
 
     function copyOutput() {
         const text = chunks
@@ -467,7 +191,9 @@ export default function (props) {
         Promise.resolve(navigator.clipboard.writeText(text)).then(
             function () {
                 setCopied(true);
-                setTimeout(function () {
+                if (copiedTimer.current) clearTimeout(copiedTimer.current);
+                copiedTimer.current = setTimeout(function () {
+                    copiedTimer.current = null;
                     setCopied(false);
                 }, 1500);
             },
@@ -499,11 +225,17 @@ export default function (props) {
               ],
     );
 
-    // A copy button floating over the top-right of the output, revealed on hover (or while confirming).
+    // Revealed while the pointer is over the output or the button has keyboard focus.
     const copyButton = e(
         "button",
         {
             onClick: copyOutput,
+            onFocus: function () {
+                setFocused(true);
+            },
+            onBlur: function () {
+                setFocused(false);
+            },
             title: copied ? "Copied" : "Copy output to clipboard",
             "aria-label": "Copy output to clipboard",
             style: {
@@ -515,85 +247,523 @@ export default function (props) {
                 alignItems: "center",
                 padding: "3px",
                 lineHeight: 0,
-                opacity: overOutput || copied ? 0.95 : 0,
+                opacity: over || focused || copied ? 0.95 : 0,
                 transition: "opacity 0.1s",
             },
         },
         copyIcon,
     );
 
-    const outputSection =
-        chunks.length === 0
-            ? null
-            : e(
-                  "details",
+    return e(
+        "details",
+        {
+            open: props.open,
+            onToggle: /** @param ev {React.ToggleEvent<HTMLDetailsElement>} */ function (ev) {
+                props.onOpenChange(ev.currentTarget.open);
+            },
+            style: { marginTop: "4px" },
+        },
+        e(
+            "summary",
+            { style: { color: dimColor, fontSize: "11px", cursor: "pointer" } },
+            hovered && chunks.includes(hovered)
+                ? [
+                      "Output  —  ",
+                      e("span", { key: "stream", style: { fontFamily: monoFont } }, hovered.stream),
+                      " " + chunkOffset(hovered, execStartTime),
+                  ]
+                : "Output",
+        ),
+        e(
+            "div",
+            {
+                style: { position: "relative" },
+                onMouseEnter: function () {
+                    setOver(true);
+                },
+                onMouseLeave: function () {
+                    setOver(false);
+                },
+            },
+            copyButton,
+            outputBlock(chunks, execStartTime, hovered, setHovered),
+        ),
+    );
+});
+
+/**
+ * @typedef {{stream: string, text: string, time?: number}} Chunk
+ * @typedef {{status: string, durationMs: number, message?: string, detail?: string,
+ *            output?: Chunk[], description?: string, seed?: number}} Outcome
+ * @typedef {{phase: string, chunks: Chunk[], startTime: number, startedAt: number,
+ *            buildMs: number, execStartTime: number}} RunFields
+ *
+ * The run's lifecycle as a single state, so the widget shows exactly one of a spinner, a verdict,
+ * an error, or nothing:
+ *
+ *   idle       no run for this test, and no recorded outcome to show
+ *   running    a run is in progress, streaming output; its phase is "starting" until the server
+ *              has accepted the run, then "building" and "running" as the server reports
+ *   done       a finished run's outcome (live or restored from the session cache)
+ *   cancelled  the run was stopped before it produced an outcome
+ *   failed     the run could not be carried out at all
+ *
+ * Every state past idle carries the run's output so far and its timings. The server records the
+ * timings per run, so they survive the widget being remounted while the run continues. `startTime`
+ * is the start on the server's wall clock, shown as a time of day; `startedAt` is the same instant
+ * on the client's clock, which the elapsed counter ticks from, so a server on a remote machine with
+ * a different clock still yields the right elapsed time.
+ *
+ * @typedef {{tag: "idle"}
+ *   | ({tag: "running"} & RunFields)
+ *   | ({tag: "done", outcome: Outcome} & RunFields)
+ *   | ({tag: "cancelled"} & RunFields)
+ *   | ({tag: "failed", error: string} & RunFields)} RunUi
+ */
+
+/** @type {RunUi} */
+const idleState = { tag: "idle" };
+
+/** @returns {RunFields} */
+function blankFields() {
+    return { phase: "", chunks: [], startTime: 0, startedAt: 0, buildMs: 0, execStartTime: 0 };
+}
+
+/**
+ * The run fields of a state; blank for idle.
+ * @param st {RunUi}
+ * @returns {RunFields}
+ */
+function fieldsOf(st) {
+    if (st.tag === "idle") return blankFields();
+    return {
+        phase: st.phase,
+        chunks: st.chunks,
+        startTime: st.startTime,
+        startedAt: st.startedAt,
+        buildMs: st.buildMs,
+        execStartTime: st.execStartTime,
+    };
+}
+
+/**
+ * A finished state showing a recorded outcome, with no live chunks or timings of its own.
+ * @param outcome {Outcome}
+ * @returns {RunUi}
+ */
+function doneState(outcome) {
+    return { tag: "done", outcome, ...blankFields() };
+}
+
+/**
+ * Steps the run state by one event:
+ *
+ *   start    the user started a run; the client's clock stands in for the start time until the
+ *            server reports the authoritative one
+ *   started  the server accepted the run, so it can be cancelled
+ *   server   a reply from `awaitOutput`; it may arrive in any state, since the widget reconnects
+ *            to runs it did not start
+ *   cancel   the user stopped the run
+ *   fail     an RPC call failed, so there is no run to wait for
+ *
+ * @param st {RunUi}
+ * @param ev {any}
+ * @returns {RunUi}
+ */
+function step(st, ev) {
+    switch (ev.type) {
+        case "start":
+            return { tag: "running", ...blankFields(), phase: "starting", startedAt: ev.now };
+        case "started":
+            return st.tag === "running" && st.phase === "starting"
+                ? { ...st, phase: "building" }
+                : st;
+        case "server": {
+            const res = ev.res;
+            // A reply about another run than the one shown (started from a second widget instance
+            // for the same test, say) begins from blank fields; otherwise the reply extends the run
+            // shown. Zero-valued fields in a reply mean "no news"; the server's values otherwise win.
+            const shown = fieldsOf(st);
+            const prev =
+                res.startTime && shown.startTime && res.startTime !== shown.startTime
+                    ? blankFields()
+                    : shown;
+            const merged = {
+                phase: res.phase || prev.phase,
+                chunks:
+                    res.chunks && res.chunks.length ? prev.chunks.concat(res.chunks) : prev.chunks,
+                startTime: res.startTime || prev.startTime,
+                startedAt: res.elapsedMs ? ev.now - res.elapsedMs : prev.startedAt,
+                buildMs: res.buildMs || prev.buildMs,
+                execStartTime: res.execStartTime || prev.execStartTime,
+            };
+            if (!res.done) return { tag: "running", ...merged };
+            if (res.outcome) return { tag: "done", outcome: res.outcome, ...merged };
+            // Done without an outcome: nothing is running server-side. That ends a watched run
+            // (stopped from elsewhere, or its process died); in any other state it is no news.
+            return st.tag === "running" ? { tag: "cancelled", ...merged } : st;
+        }
+        case "cancel":
+            return { tag: "cancelled", ...fieldsOf(st) };
+        case "fail":
+            // Only a run in progress can fail; a failed probe of a settled state is no news.
+            return st.tag === "running" ? { tag: "failed", error: ev.error, ...fieldsOf(st) } : st;
+        default:
+            return st;
+    }
+}
+
+/**
+ * The InfoView reuses one widget instance for whichever test the cursor is on. Keying the inner
+ * component on the test and a hash of its source remounts it whenever either changes, so every
+ * piece of per-test state starts fresh and an edited test loses its cached or in-progress run.
+ */
+export default function RunTestWidget(props) {
+    const version = props.version || "";
+    const declKey = JSON.stringify(props.decl);
+    return e(TestRun, { ...props, key: declKey + "@" + version, declKey, version });
+}
+
+function TestRun(props) {
+    const rs = useRpcSession();
+    const ec = React.useContext(EditorContext);
+    const version = props.version;
+    const declKey = props.declKey;
+
+    const [st, dispatch] = React.useReducer(step, undefined, function () {
+        const cached = resultCache.get(declKey);
+        return cached && cached.version === version ? doneState(cached.outcome) : idleState;
+    });
+    // Whether the file has no unsaved changes; the test runs the saved version, so Run is gated on it.
+    const [clean, setClean] = React.useState(true);
+    // The seed for property tests as typed, or blank to have one drawn.
+    const [seed, setSeed] = React.useState("");
+    // Whether the run settings (the seed field) are shown, behind the gear button.
+    const [settingsOpen, setSettingsOpen] = React.useState(false);
+    // Whether the output disclosure is expanded; open by default, collapsible to hide large output.
+    const [outputOpen, setOutputOpen] = React.useState(true);
+    // Whether the widget's own disclosure is expanded, alongside the InfoView's other sections.
+    const [panelOpen, setPanelOpen] = React.useState(true);
+    // Bumped when the language server restarts, so the widget connects again through its new session.
+    const [epoch, setEpoch] = React.useState(0);
+
+    // The RPC session, which the InfoView replaces on every cursor move and after a server restart.
+    // Calls go through the latest one, while the connection to the run is made once per mount and
+    // once per restart.
+    const rsRef = React.useRef(rs);
+    React.useEffect(function () {
+        rsRef.current = rs;
+    });
+    // Bumped on each run start, cancel, and disconnect so a superseded await loop ignores late replies.
+    const gen = React.useRef(0);
+    // The position past the chunks already received, from the server's last reply.
+    const sinceRef = React.useRef(0);
+    // The last phase the widget saw; "" forces the next await to return the run's current phase at once.
+    const phaseRef = React.useRef("");
+    // Whether the widget is connected, so late clean-check replies are dropped.
+    const alive = React.useRef(false);
+    // The pending re-check while the buffer is dirty, so a fresh check replaces it.
+    const cleanTimer = React.useRef(null);
+    // Bumped on each edit and each clean check, so a check begun before an edit reports nothing.
+    const cleanGen = React.useRef(0);
+    // The file this widget belongs to, from the InfoView's position context.
+    const envPos = React.useContext(EnvPosContext);
+    const uri = envPos ? envPos.uri : null;
+
+    const running = st.tag === "running";
+    const starting = st.tag === "running" && st.phase === "starting";
+
+    // Asks the server whether the buffer is saved. While it is dirty, asks again every 1.5 s so
+    // the button re-enables shortly after a save.
+    function checkClean() {
+        if (cleanTimer.current) {
+            clearTimeout(cleanTimer.current);
+            cleanTimer.current = null;
+        }
+        const myGen = cleanGen.current + 1;
+        cleanGen.current = myGen;
+        rsRef.current.call("Errata.Widget.bufferClean", { decl: props.decl }).then(
+            function (c) {
+                if (!alive.current || cleanGen.current !== myGen) return;
+                setClean(c);
+                if (!c) cleanTimer.current = setTimeout(checkClean, 1500);
+            },
+            function () {},
+        );
+    }
+
+    // An edit to this file means the buffer is dirty. The retry then finds out when it is saved.
+    useClientNotificationEffect(
+        "textDocument/didChange",
+        function (params) {
+            if (params.textDocument.uri !== uri) return;
+            cleanGen.current += 1;
+            setClean(false);
+            if (cleanTimer.current) clearTimeout(cleanTimer.current);
+            cleanTimer.current = setTimeout(checkClean, 1500);
+        },
+        [uri],
+    );
+
+    function loop(myGen) {
+        rsRef.current
+            .call("Errata.Widget.awaitOutput", {
+                decl: props.decl,
+                since: sinceRef.current,
+                version: version,
+                phase: phaseRef.current,
+            })
+            .then(
+                function (res) {
+                    if (gen.current !== myGen) return;
+                    if (res.phase) phaseRef.current = res.phase;
+                    sinceRef.current = res.nextSince || 0;
+                    dispatch({ type: "server", res: res, now: Date.now() });
+                    if (!res.done) loop(myGen);
+                },
+                function (err) {
+                    if (gen.current !== myGen) return;
+                    dispatch({ type: "fail", error: errorMessage(err) });
+                },
+            );
+    }
+
+    // Connect to any run in progress for this test, replaying its output from the start, and find
+    // out whether the buffer is saved. Runs on mount and again after a server restart, through the
+    // session the InfoView made for the new server.
+    React.useEffect(
+        function () {
+            const myGen = gen.current + 1;
+            gen.current = myGen;
+            sinceRef.current = 0;
+            phaseRef.current = "";
+            loop(myGen);
+            alive.current = true;
+            checkClean();
+            return function () {
+                gen.current += 1;
+                alive.current = false;
+                if (cleanTimer.current) clearTimeout(cleanTimer.current);
+                cleanTimer.current = null;
+            };
+        },
+        [epoch],
+    );
+
+    useEvent(
+        ec.events.serverRestarted,
+        function () {
+            setEpoch(function (n) {
+                return n + 1;
+            });
+        },
+        [],
+    );
+
+    // The cache mirrors the settled state: a verdict is recorded, and a run that starts, is
+    // cancelled, or fails clears it, so a remount shows only the latest result.
+    React.useEffect(
+        function () {
+            if (st.tag === "done") resultCache.set(declKey, { version, outcome: st.outcome });
+            else if (st.tag !== "idle") resultCache.delete(declKey);
+        },
+        [st],
+    );
+
+    const seedText = seed.trim();
+    const seedSet = seedText !== "";
+    // A blank seed has one drawn; otherwise it must be a natural number that JSON carries exactly.
+    const seedValid =
+        !seedSet || (/^\d+$/.test(seedText) && Number.isSafeInteger(Number(seedText)));
+    const seedHint = "The seed must be a natural number below 2^53";
+
+    function run() {
+        const myGen = gen.current + 1;
+        gen.current = myGen;
+        sinceRef.current = 0;
+        phaseRef.current = "building";
+        dispatch({ type: "start", now: Date.now() });
+        const request = {
+            decl: props.decl,
+            module: props.module,
+            version: version,
+        };
+        if (seedSet) request.seed = Number(seedText);
+        rsRef.current.call("Errata.Widget.startTest", request).then(
+            function () {
+                if (gen.current !== myGen) return;
+                dispatch({ type: "started" });
+                loop(myGen);
+            },
+            function (err) {
+                if (gen.current !== myGen) return;
+                dispatch({ type: "fail", error: errorMessage(err) });
+                // A start refused for unsaved changes means the clean state is stale.
+                checkClean();
+            },
+        );
+    }
+
+    function cancel() {
+        gen.current += 1;
+        dispatch({ type: "cancel" });
+        rsRef.current.call("Errata.Widget.cancelTest", { decl: props.decl }).catch(function () {});
+    }
+
+    const name = props.name || "test";
+
+    const header = e(
+        "div",
+        { style: { display: "flex", alignItems: "center", gap: "8px" } },
+        // Cancel waits for the server to accept the run, so a second click of a double-click on
+        // Run finds a disabled button.
+        running
+            ? e(
+                  "button",
                   {
-                      key: "output",
-                      open: outputOpen,
-                      onToggle: /** @param ev {React.ToggleEvent<HTMLDetailsElement>} */ function (
-                          ev,
-                      ) {
-                          setOutputOpen(ev.currentTarget.open);
-                      },
-                      style: { marginTop: "4px" },
+                      key: "cancel",
+                      onClick: cancel,
+                      disabled: starting,
+                      title: starting ? "Starting the run" : undefined,
                   },
-                  e(
-                      "summary",
-                      { style: { opacity: 0.7, fontSize: "11px", cursor: "pointer" } },
-                      hovered !== null && chunks[hovered]
-                          ? [
-                                "Output  —  ",
-                                e(
-                                    "span",
-                                    { key: "stream", style: { fontFamily: monoFont } },
-                                    chunks[hovered].stream,
-                                ),
-                                " " + chunkOffset(chunks[hovered], execStartTime),
-                            ]
-                          : "Output",
-                  ),
-                  e(
-                      "div",
-                      {
-                          style: { position: "relative" },
-                          onMouseEnter: function () {
-                              setOverOutput(true);
-                          },
-                          onMouseLeave: function () {
-                              setOverOutput(false);
-                          },
-                      },
-                      copyButton,
-                      outputBlock(chunks, execStartTime, hovered, setHovered),
-                  ),
-              );
+                  "Cancel",
+              )
+            : e(
+                  "button",
+                  {
+                      key: "run",
+                      onClick: run,
+                      disabled: !clean || !seedValid,
+                      title: !clean
+                          ? "Save the file to run the test"
+                          : !seedValid
+                            ? seedHint
+                            : undefined,
+                  },
+                  st.tag === "idle" ? "Run" : "Run again",
+              ),
+        !clean && !running
+            ? e("span", { style: { color: dimColor, fontSize: "11px" } }, "unsaved — save to run")
+            : null,
+    );
+
+    // The run settings float at the right of the title, where the goal sections keep theirs: the
+    // seed field when shown, then the gear that shows it. A click here is the control's own, so it
+    // leaves the disclosure as it was.
+    const runSettings = e(
+        "span",
+        {
+            className: "fr",
+            onClick: function (ev) {
+                ev.preventDefault();
+            },
+        },
+        settingsOpen
+            ? e("input", {
+                  type: "text",
+                  inputMode: "numeric",
+                  value: seed,
+                  placeholder: "seed",
+                  disabled: running,
+                  title: seedValid ? "Seed for property tests; blank draws one" : seedHint,
+                  "aria-label": "Seed for property tests",
+                  "aria-invalid": !seedValid,
+                  onChange: function (ev) {
+                      setSeed(ev.target.value);
+                  },
+                  // Fits its value or placeholder; `size` stands in where `field-sizing` is
+                  // unsupported.
+                  size: Math.max(seed.length, 4) + 1,
+                  style: {
+                      fieldSizing: "content",
+                      minWidth: "5ch",
+                      fontFamily: monoFont,
+                      fontSize: "11px",
+                      // The title suppresses selection, which the field needs back.
+                      userSelect: "text",
+                      outline: seedValid
+                          ? undefined
+                          : "1px solid var(--vscode-inputValidation-errorBorder, #be1100)",
+                  },
+              })
+            : null,
+        e("button", {
+            onClick: function () {
+                setSettingsOpen(!settingsOpen);
+            },
+            title: settingsOpen
+                ? "Hide run settings"
+                : seedSet
+                  ? "Run settings (seed " + seedText + ")"
+                  : "Run settings",
+            "aria-label": "Run settings",
+            "aria-expanded": settingsOpen,
+            className: "link pointer dim mh2 codicon codicon-settings-gear",
+            style: {
+                background: "none",
+                border: "none",
+                padding: 0,
+                color: "var(--vscode-textLink-foreground, #0078d4)",
+            },
+        }),
+    );
+
+    const outcome = st.tag === "done" ? st.outcome : null;
+    const timings = st.tag === "idle" ? null : st;
+    const execStartTime = timings ? timings.execStartTime : 0;
+
+    // Prefer the live, server-timestamped chunks; fall back to a cached outcome's output.
+    const liveChunks = timings ? timings.chunks : [];
+    const chunks = liveChunks.length ? liveChunks : outcome && outcome.output ? outcome.output : [];
+    // Keyed so it keeps its state when the message and detail blocks appear ahead of it.
+    const outputSection = chunks.length
+        ? e(OutputSection, {
+              key: "output",
+              chunks,
+              execStartTime,
+              open: outputOpen,
+              onOpenChange: setOutputOpen,
+          })
+        : null;
 
     // The primary status/progress element, then dimmed badges: start time, build and run durations.
     let primary = null;
     if (st.tag === "running") {
-        const label = st.phase === "building" ? "Building… " : "Running… ";
+        const label =
+            st.phase === "starting"
+                ? "Starting… "
+                : st.phase === "building"
+                  ? "Building… "
+                  : "Running… ";
         primary = e(
             "span",
-            { style: { opacity: 0.8 } },
+            { style: { color: dimColor } },
             label,
-            e("span", { style: { fontFamily: monoFont } }, formatDuration(elapsed)),
+            e(Elapsed, { runStart: st.startedAt }),
         );
     } else if (st.tag === "failed") {
         primary = e(
             "span",
-            { style: { color: STATUS_COLORS.error } },
+            { style: { color: "var(--vscode-errorForeground, #c62828)" } },
             "could not run: " + st.error,
         );
     } else if (st.tag === "done") {
         primary = e(
             "span",
-            { style: { color: STATUS_COLORS[st.outcome.status] || "inherit", fontWeight: 600 } },
-            (STATUS_SYMBOLS[st.outcome.status] || "") +
-                " " +
-                (STATUS_LABELS[st.outcome.status] || st.outcome.status),
+            { style: { fontWeight: 600 } },
+            e(
+                "span",
+                {
+                    key: "symbol",
+                    "aria-hidden": true,
+                    style: { color: STATUS_COLORS[st.outcome.status] || "inherit" },
+                },
+                STATUS_SYMBOLS[st.outcome.status] || "",
+            ),
+            " " + (STATUS_LABELS[st.outcome.status] || st.outcome.status),
         );
     } else if (st.tag === "cancelled") {
-        primary = e("span", { style: { opacity: 0.7 } }, "cancelled");
+        primary = e("span", { style: { color: dimColor } }, "cancelled");
     }
 
     // Dimmed badges after the status: text, and for the seed, a click that fills the seed field.
@@ -602,13 +772,16 @@ export default function (props) {
         badges.push({ text: "Start " + formatClock(timings.startTime) });
     if (timings && timings.buildMs)
         badges.push({ text: "Build " + formatDuration(timings.buildMs) });
-    if (outcome) badges.push({ text: "Run " + formatDuration(outcome.durationMs) });
+    // The seed is present exactly when the test itself ran, so the run's duration and seed appear
+    // for a test that ran and stay hidden for a build or runner failure.
     if (outcome && typeof outcome.seed === "number") {
+        const seedUsed = outcome.seed;
+        badges.push({ text: "Run " + formatDuration(outcome.durationMs) });
         badges.push({
-            text: "Seed " + outcome.seed,
+            text: "Seed " + seedUsed,
             title: "Use this seed for the next run",
             onClick: function () {
-                setSeed(String(outcome.seed));
+                setSeed(String(seedUsed));
                 setSettingsOpen(true);
             },
         });
@@ -627,21 +800,32 @@ export default function (props) {
                       },
                   },
                   primary,
+                  // Each badge is a dot separator and a label. A clickable label is a button,
+                  // reachable by keyboard, styled to read like the plain ones.
                   ...badges.map(function (b, i) {
                       return e(
                           "span",
-                          {
-                              key: i,
-                              title: b.title,
-                              onClick: b.onClick,
-                              style: {
-                                  opacity: 0.55,
-                                  fontSize: "11px",
-                                  cursor: b.onClick ? "pointer" : undefined,
-                                  textDecoration: b.onClick ? "underline dotted" : undefined,
-                              },
-                          },
-                          "· " + b.text,
+                          { key: i, style: { color: dimColor, fontSize: "11px" } },
+                          "· ",
+                          b.onClick
+                              ? e(
+                                    "button",
+                                    {
+                                        title: b.title,
+                                        onClick: b.onClick,
+                                        style: {
+                                            font: "inherit",
+                                            color: "inherit",
+                                            background: "none",
+                                            border: "none",
+                                            padding: 0,
+                                            cursor: "pointer",
+                                            textDecoration: "underline dotted",
+                                        },
+                                    },
+                                    b.text,
+                                )
+                              : b.text,
                       );
                   }),
               )
@@ -651,21 +835,16 @@ export default function (props) {
     if (outcome && outcome.message) extras.push(e("div", { key: "msg" }, block(outcome.message)));
     if (outcome && outcome.detail) extras.push(e("div", { key: "detail" }, block(outcome.detail)));
 
-    // The test's docstring, rendered by Lean to Markdown and shown as text alongside its result.
+    // The test's docstring, rendered from the Markdown Lean produced for it, alongside its result.
     const descriptionSection =
         outcome && outcome.description
             ? e(
                   "div",
                   {
                       key: "description",
-                      style: {
-                          marginTop: "4px",
-                          fontSize: "12px",
-                          opacity: 0.85,
-                          whiteSpace: "pre-wrap",
-                      },
+                      style: { marginTop: "4px", fontSize: "12px" },
                   },
-                  outcome.description,
+                  e(Markdown, { contents: outcome.description }),
               )
             : null;
 
@@ -681,5 +860,28 @@ export default function (props) {
               )
             : null;
 
-    return e("div", { style: { padding: "2px 0" } }, header, body);
+    // A disclosure in the InfoView's own style, so the test sits among the goal and message
+    // sections. Its content is dropped while collapsed, as those sections do, so a long-running
+    // test's output costs nothing to keep out of sight.
+    //
+    // While the buffer is dirty, the pointer arriving means Run may be next, so the saved state is
+    // checked at once.
+    return e(
+        "details",
+        {
+            open: panelOpen,
+            onToggle: /** @param ev {React.ToggleEvent<HTMLDetailsElement>} */ function (ev) {
+                setPanelOpen(ev.currentTarget.open);
+            },
+            onMouseEnter: clean ? undefined : checkClean,
+        },
+        e(
+            "summary",
+            { className: "mv2 pointer non-selectable" },
+            "Errata test: ",
+            e("span", { style: { fontFamily: monoFont, fontSize: "12px" } }, name),
+            runSettings,
+        ),
+        panelOpen ? e("div", { className: "ml1" }, header, body) : null,
+    );
 }
