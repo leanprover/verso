@@ -13,9 +13,20 @@ import {
 const e = React.createElement;
 
 // The last settled outcome of each test, keyed by its declaration and tagged with the source
-// version that produced it, for the lifetime of the InfoView session. Leaving and returning to a
-// test's `@[test]` marker shows its previous result again.
+// version that produced it. Leaving and returning to a test's `@[test]` marker shows its previous
+// result again. The most recent RESULT_CACHE_LIMIT of them are held, each with the whole of its
+// run's captured output.
 const resultCache = new Map();
+const RESULT_CACHE_LIMIT = 32;
+
+// Records a test's outcome as the most recent, dropping the oldest to stay within the limit.
+function cacheResult(declKey, entry) {
+    resultCache.delete(declKey);
+    resultCache.set(declKey, entry);
+    while (resultCache.size > RESULT_CACHE_LIMIT) {
+        resultCache.delete(resultCache.keys().next().value);
+    }
+}
 
 // The editor theme's test-result colours, with fallbacks for a page outside VS Code. They are the
 // colours of the theme's test icons, so they carry the verdict on the status glyph while the label
@@ -209,7 +220,7 @@ const ChunkSpan = React.memo(function ChunkSpan(props) {
         {
             title: chunkLabel(c, props.execStartTime),
             onMouseEnter: function () {
-                props.onHover(c);
+                props.onHover(props.index);
             },
             style: {
                 fontStyle: c.stream === "stderr" ? "italic" : undefined,
@@ -223,26 +234,53 @@ const ChunkSpan = React.memo(function ChunkSpan(props) {
     );
 });
 
+// One chunk's span, at its position in the output.
+function chunkSpan(chunks, i, execStartTime, hovered, setHovered) {
+    return e(ChunkSpan, {
+        key: i,
+        index: i,
+        chunk: chunks[i],
+        execStartTime,
+        hovered,
+        onHover: setHovered,
+    });
+}
+
 // Renders captured output: stdout and stderr interleaved in order. Hovering a chunk highlights it
 // and reports its stream and time offset.
-function outputBlock(chunks, execStartTime, hovered, setHovered) {
+//
+// The spans live in `cache` from one render to the next. A reply that brings more output leaves the
+// chunks already shown in place, so their spans stand and the reply costs a span for each chunk it
+// carries. Output that grew from something else, such as another run's, starts the spans over.
+function outputBlock(cache, chunks, execStartTime, hovered, setHovered) {
+    const c = cache.current;
+    const grew =
+        c.execStartTime === execStartTime &&
+        c.spans.length > 0 &&
+        c.spans.length <= chunks.length &&
+        chunks[c.spans.length - 1] === c.last;
+    if (!grew) {
+        c.spans = [];
+        c.execStartTime = execStartTime;
+    }
+    for (let i = c.spans.length; i < chunks.length; i++) {
+        c.spans.push(chunkSpan(chunks, i, execStartTime, false, setHovered));
+    }
+    c.last = chunks.length ? chunks[chunks.length - 1] : null;
+    // The highlight is the one thing the pointer decides, so it is the one span built again.
+    const spans = c.spans.slice();
+    if (hovered >= 0 && hovered < spans.length) {
+        spans[hovered] = chunkSpan(chunks, hovered, execStartTime, true, setHovered);
+    }
     return e(
         "pre",
         {
             style: { ...preStyle, fontFamily: monoFont },
             onMouseLeave: function () {
-                setHovered(null);
+                setHovered(-1);
             },
         },
-        ...chunks.map(function (c, i) {
-            return e(ChunkSpan, {
-                key: i,
-                chunk: c,
-                execStartTime,
-                hovered: hovered === c,
-                onHover: setHovered,
-            });
-        }),
+        spans,
     );
 }
 
@@ -252,9 +290,11 @@ function outputBlock(chunks, execStartTime, hovered, setHovered) {
 const OutputSection = React.memo(function OutputSection(props) {
     const chunks = props.chunks;
     const execStartTime = props.execStartTime;
-    // The output chunk under the cursor, highlighted with its timestamp shown. Held by identity,
-    // so it matches only a chunk of the output currently shown.
-    const [hovered, setHovered] = React.useState(null);
+    // The position of the output chunk under the cursor, highlighted with its timestamp shown, or
+    // -1. A position keeps the highlight and the summary in step at any length of output.
+    const [hovered, setHovered] = React.useState(-1);
+    // The spans of the chunks, from one render to the next.
+    const spanCache = React.useRef({ spans: [], last: null, execStartTime: 0 });
     // Briefly true after the output is copied, to confirm the copy in the button label.
     const [copied, setCopied] = React.useState(false);
     // Whether the cursor is over the output area, revealing the floating copy button.
@@ -372,11 +412,15 @@ const OutputSection = React.memo(function OutputSection(props) {
         e(
             "summary",
             { style: { color: dimColor, fontSize: "11px", cursor: "pointer" } },
-            hovered && chunks.includes(hovered)
+            hovered >= 0 && hovered < chunks.length
                 ? [
                       "Output  —  ",
-                      e("span", { key: "stream", style: { fontFamily: monoFont } }, hovered.stream),
-                      " " + chunkOffset(hovered, execStartTime),
+                      e(
+                          "span",
+                          { key: "stream", style: { fontFamily: monoFont } },
+                          chunks[hovered].stream,
+                      ),
+                      " " + chunkOffset(chunks[hovered], execStartTime),
                   ]
                 : "Output",
         ),
@@ -392,7 +436,7 @@ const OutputSection = React.memo(function OutputSection(props) {
                 },
             },
             copyButton,
-            outputBlock(chunks, execStartTime, hovered, setHovered),
+            outputBlock(spanCache, chunks, execStartTime, hovered, setHovered),
         ),
     );
 });
@@ -494,12 +538,16 @@ function step(st, ev) {
                 res.startTime && shown.startTime && res.startTime !== shown.startTime
                     ? blankFields()
                     : shown;
+            // The start on the client's clock is taken from the first reply about the run, which is
+            // the one that reports how long it had been going by then. The clock carries it from
+            // there, at the same reading for every render.
+            const synced = prev.startTime !== 0;
             const merged = {
                 phase: res.phase || prev.phase,
                 chunks:
                     res.chunks && res.chunks.length ? prev.chunks.concat(res.chunks) : prev.chunks,
                 startTime: res.startTime || prev.startTime,
-                startedAt: res.elapsedMs ? ev.now - res.elapsedMs : prev.startedAt,
+                startedAt: !synced && res.elapsedMs ? ev.now - res.elapsedMs : prev.startedAt,
                 buildMs: res.buildMs || prev.buildMs,
                 execStartTime: res.execStartTime || prev.execStartTime,
             };
@@ -730,10 +778,10 @@ function TestRun(props) {
     // cancelled, or fails clears it, so a remount shows only the latest result.
     React.useEffect(
         function () {
-            if (st.tag === "done") resultCache.set(declKey, { version, outcome: st.outcome });
+            if (st.tag === "done") cacheResult(declKey, { version, outcome: st.outcome });
             else if (st.tag !== "idle") resultCache.delete(declKey);
         },
-        [st],
+        [st.tag, st.tag === "done" ? st.outcome : null],
     );
 
     // The seed field takes focus with its value selected when the settings open, so a seed can be
