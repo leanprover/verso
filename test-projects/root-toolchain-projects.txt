@@ -1,0 +1,12 @@
+# Test projects that build against Verso's own source, via a path dependency.
+# They inherit Verso's module status, so they must use the root toolchain, and
+# `update-subverso.sh` keeps their `lean-toolchain` in step with the root one.
+#
+# Every other test project depends on SubVerso from Git and is independent of
+# the root toolchain. Several are deliberately pinned to older releases to check
+# that those keep working, so they must not be listed here.
+#
+# One project directory name per line; blank lines and `#` comments are ignored.
+
+literate-config
+literate-multi-root
