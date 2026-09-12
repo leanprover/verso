@@ -1606,20 +1606,39 @@ def permalink (id : InternalId) (st : TraverseState) (inline : Bool := true) : H
       </span>
     }}
 
+/-- A manual heading whose level, anchor, and contents are rendered together. -/
+structure Heading where
+  /-- The HTML heading level. -/
+  level : Nat
+  /-- The registered HTML anchor, or none for an unanchored heading. -/
+  id : Option Slug
+  /-- The heading contents, including any section number and permalink widget. -/
+  content : Html
+
+/-- Renders the heading element and its optional anchor. -/
+def Heading.toHtml (heading : Heading) : Html :=
+  let attrs := heading.id.map (fun id => #[("id", id.toString)]) |>.getD #[]
+  .tag s!"h{heading.level}" attrs heading.content
+
+/--
+Constructs a manual heading with its registered anchor, section number, and permalink.
+The single-page document title omits numbering and the permalink by setting
+{name}`showNumber` and {name}`showPermalink` to false.
+-/
+def partHeading (state : TraverseState) (ctxt : TraverseContext) (id : Option InternalId)
+    (level : Nat) (title : Html) (showNumber : Bool := true) (showPermalink : Bool := true) : Heading :=
+  let numberHtml := if showNumber then sectionHtml ctxt else .empty
+  let permalinkHtml := if showPermalink then id.map (permalink · state) |>.getD .empty else .empty
+  { level,
+    id := id.bind (fun id => state.externalTags[id]?) |>.map (·.htmlId),
+    content := numberHtml ++ title ++ permalinkHtml }
 
 open Verso.Output.Html in
 instance : Html.GenreHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) where
   part go «meta» txt := do
     let st ← Verso.Doc.Html.HtmlT.state
-    let attrs := meta.id.map (st.htmlId) |>.getD #[]
     let ctxt ← Verso.Doc.Html.HtmlT.context
-    let sectionNumber : Html := sectionHtml ctxt
-    let permalink? m :=
-      if let some id := m.id then permalink id st
-      else .empty
-    let mkHeader lvl content :=
-      .tag s!"h{lvl}" attrs (sectionNumber ++ content ++ permalink? «meta»)
-    go txt mkHeader
+    go txt fun level title => (partHeading st ctxt meta.id level title).toHtml
 
   block goI goB b content := do
     let some id := b.id
