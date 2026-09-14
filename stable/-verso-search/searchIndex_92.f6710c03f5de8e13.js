@@ -1,1 +1,0 @@
-window.docContents[92].resolve({"/releases/#release-v4___32___0":{"contents":"* Added a development server for previewing generated HTML locally with lake exe verso-serve (#876).\n\n\n\n","context":"Writing Documentation in Lean with Verso\u0009Release Notes","header":"Verso 4.32.0 (unreleased)","id":"/releases/#release-v4___32___0"}});

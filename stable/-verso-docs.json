@@ -40,7 +40,7 @@
  "79":
  "<code>Eq.{u_1} {α : Sort u_1} : α → α → Prop</code><span class=\"sep\"></span><code class=\"docstring\">The equality relation. It has one introduction rule, `Eq.refl`.\nWe use `a = b` as notation for `Eq a b`.\nA fundamental property of equality is that it is an equivalence relation.\n```\nvariable (α : Type) (a b c d : α)\nvariable (hab : a = b) (hcb : c = b) (hcd : c = d)\n\nexample : a = d :=\n  Eq.trans (Eq.trans hab (Eq.symm hcb)) hcd\n```\nEquality is much more than an equivalence relation, however. It has the important property that every assertion\nrespects the equivalence, in the sense that we can substitute equal expressions without changing the truth value.\nThat is, given `h1 : a = b` and `h2 : p a`, we can construct a proof for `p b` using substitution: `Eq.subst h1 h2`.\nExample:\n```\nexample (α : Type) (a b : α) (p : α → Prop)\n        (h1 : a = b) (h2 : p a) : p b :=\n  Eq.subst h1 h2\n\nexample (α : Type) (a b : α) (p : α → Prop)\n    (h1 : a = b) (h2 : p a) : p b :=\n  h1 ▸ h2\n```\nThe triangle in the second presentation is a macro built on top of `Eq.subst` and `Eq.symm`, and you can enter it by typing `\\t`.\nFor more information: [Equality](https://lean-lang.org/theorem_proving_in_lean4/quantifiers_and_equality.html#equality)\n\n\nConventions for notations in identifiers:\n\n * The recommended spelling of `=` in identifiers is `eq`.</code>",
  "78":
- "<code>ite.{u} {α : Sort u} (c : Prop) [h : Decidable c] (t e : α) : α</code><span class=\"sep\"></span><code class=\"docstring\">`if c then t else e` is notation for `ite c t e`, \"if-then-else\", which decides to\nreturn `t` or `e` depending on whether `c` is true or false. The explicit argument\n`c : Prop` does not have any actual computational content, but there is an additional\n`[Decidable c]` argument synthesized by typeclass inference which actually\ndetermines how to evaluate `c` to true or false. Write `if h : c then t else e`\ninstead for a \"dependent if-then-else\" `dite`, which allows `t`/`e` to use the fact\nthat `c` is true/false.\n</code>",
+ "<code>ite.{u} {α : Sort u} (c : Prop) [h : Decidable c] (t e : α) : α</code><span class=\"sep\"></span><code class=\"docstring\">`if c then t else e` is notation for `ite c t e`, \"if-then-else\", which decides to\nreturn `t` or `e` depending on whether `c` is true or false. The explicit argument\n`c : Prop` does not have any actual computational content, but there is an additional\n`[Decidable c]` argument synthesized by typeclass inference which actually\ndetermines how to evaluate `c` to true or false. Write `if h : c then t else e`\ninstead for a \"dependent if-then-else\" `dite`, which allows `t`/`e` to use the fact\nthat `c` is true/false.\n\n\nConventions for notations in identifiers:\n\n * The recommended spelling of `if c then t else e` in identifiers is `ite` (use `left` for `t` and `right` for `e`).</code>",
  "77":
  "<code>Bool : Type</code><span class=\"sep\"></span><code class=\"docstring\">The Boolean values, `true` and `false`.\n\nLogically speaking, this is equivalent to `Prop` (the type of propositions). The distinction is\npublic important for programming: both propositions and their proofs are erased in the code generator,\nwhile `Bool` corresponds to the Boolean type in most programming languages and carries precisely one\nbit of run-time information.\n</code>",
  "76": "<code>Bool</code>",
@@ -104,517 +104,547 @@
  "<code>Verso.Doc.TraversePart.mk {g : Doc.Genre} (inPart : Doc.Part g → g.TraverseContext → g.TraverseContext) :\n  Doc.TraversePart g</code>",
  "43":
  "<code>Verso.Doc.Genre.Inline (self : Doc.Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Additional inline-level values for documents written in the genre.\n  </code>",
+ "424":
+ "<code>Verso.Genre.Manual.PartMetadata.searchPriority (self : PartMetadata) : Fin 100</code>",
+ "423": "<code>Verso.Genre.Manual : Verso.Doc.Genre</code>",
+ "422":
+ "<code>Verso.reportWarning {m : Type → Type} [Verso.MonadBuildLog m] (text : String) (loc : Option Verso.SourceLoc := none) :\n  m Unit</code>",
+ "421":
+ "<code>Verso.reportError {m : Type → Type} [Verso.MonadBuildLog m] (text : String) (loc : Option Verso.SourceLoc := none) :\n  m Unit</code>",
+ "420": "<code>Verso.Severity.warning : Verso.Severity</code>",
  "42":
  "<code>[MonadReader g.TraverseContext m] →\n  [MonadState g.TraverseState m] → g.Inline → Array (Doc.Inline g) → m (Option (Doc.Inline g))</code><span class=\"sep\"></span><code class=\"docstring\">The traversal of genre-specific inline values. If it returns `none`, then no rewrite is performed.\n  </code>",
+ "419": "<code>Verso.Severity.error : Verso.Severity</code>",
+ "418": "<code>Verso.Severity : Type</code>",
+ "417": "<code>Verso.MonadBuildLog (m : Type → Type) : Type</code>",
+ "416": "<code>Verso.Genre.Manual.ExtraStep : Type</code>",
+ "415":
+ "<code>Verso.Genre.Manual.diagram : Elab.CodeBlockExpanderOf DiagramConfig</code><span class=\"sep\"></span><code class=\"docstring\">Renders an Illuminate diagram as a block of SVG, with an InfoView widget for interactive\npreview.\n\nThe source of the code block is elaborated and evaluated as a term of type\n`Illuminate.Diagram Illuminate.SVG`; the result is rendered to an SVG string and embedded in\nthe output. HTML output inlines the SVG; LaTeX output writes the SVG next to `main.tex` and\nincludes it via `\\includesvg{...}`.\n\n````\n```diagram (cssWidth := \"20em\") (texWidth := \"20em\")\nIlluminate.Diagram.rect 30 20\n```\n````\n\nThe available arguments are:\n\n* `cssWidth := \"&lt;length&gt;\"` — a CSS length used in HTML output.\n* `cssScale := &lt;number&gt;` — instead of `cssWidth`, a scale factor multiplied by the diagram's\n  natural viewBox width and emitted as an `em` value. Useful for keeping line widths\n  consistent across multiple diagrams. Mutually exclusive with `cssWidth`.\n* `texWidth := \"&lt;length&gt;\"` — a valid LaTeX length used in PDF output.\n* `+inline` — layout hint that omits standalone framing when the diagram is being composed\n  into a larger layout (e.g. inside the `row` directive).\n\nIf neither `cssWidth` nor `cssScale` is supplied, HTML output uses `100%`. If `texWidth` is\nomitted, LaTeX output uses `\\textwidth`.\n\n**LaTeX build requirements.** The `\\includesvg` macro needs the `svg` LaTeX package (added\nautomatically to the preamble), the `inkscape` binary, and `lualatex -shell-escape`. Without\nthose, the document compiles to HTML but the PDF build will fail when it reaches a diagram.\n</code>",
+ "414":
+ "<code>Verso.Doc.Elab.BlockCommandOf.{u_1} (α : Sort u_1) : Sort (max 1 u_1)</code>",
+ "413":
+ "<code>Verso.Genre.Manual.licenseInfo : Elab.BlockCommandOf Unit</code><span class=\"sep\"></span><code class=\"docstring\">Displays the open-source licenses of components used to build the document.\n</code>",
+ "412":
+ "<code>Array (Option String × String)</code><span class=\"sep\"></span><code class=\"docstring\">The license or notice text in plain text, divided into sections with optional headers.\n</code>",
+ "411":
+ "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">A link target used to credit the dependency's author </code>",
+ "410":
+ "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">How is the dependency used? This can give better credit.\n\nExamples:\n* \"The display of mathematical formulae is powered by KaTeX.\"\n* \"The graphs are rendered using Chart.js.\"\n</code>",
  "41":
  "<code>Array.{u} (α : Type u) : Type u</code><span class=\"sep\"></span><code class=\"docstring\">`Array α` is the type of [dynamic arrays](https://en.wikipedia.org/wiki/Dynamic_array) with elements\nfrom `α`. This type has special support in the runtime.\n\nArrays perform best when unshared. As long as there is never more than one reference to an array,\nall updates will be performed _destructively_. This results in performance comparable to mutable\narrays in imperative programming languages.\n\nAn array has a size and a capacity. The size is the number of elements present in the array, while\nthe capacity is the amount of memory currently allocated for elements. The size is accessible via\n`Array.size`, but the capacity is not observable from Lean code. `Array.emptyWithCapacity n` creates\nan array which is equal to `#[]`, but internally allocates an array of capacity `n`. When the size\nexceeds the capacity, allocation is required to grow the array.\n\nFrom the point of view of proofs, `Array α` is just a wrapper around `List α`.\n</code>",
- "402":
- "<code>Verso.Genre.Manual.PartMetadata.searchPriority (self : PartMetadata) : Fin 100</code><span class=\"sep\"></span><code class=\"docstring\">Relative priority of this section in search results, on a scale from `0`\n  to `99`. `50` is the default \\(no boost\\);\n  higher values boost the section's rank and lower values de-emphasize it. The same priority\n  influences both quick-jump and full-text matches for the section.\n\nPriorities set on ancestor parts are inherited: each ancestor's deviation from\n  `50` accumulates into a section's effective priority. For example,\n  setting `searchPriority` to `25` on a top-level “Release Notes”\n  part de-emphasizes every subsection beneath it, while an individual subsection can override by\n  setting a higher value of its own \\(which is added to, not multiplied with, the ancestor\n  contribution\\). A chain of neutral \\(`50`\\) ancestors contributes nothing.\n  </code>",
- "401":
- "<code>Verso.Genre.Manual : Verso.Doc.Genre</code><span class=\"sep\"></span><code class=\"docstring\">A genre for writing reference manuals and other book-like documents. </code>",
+ "409":
+ "<code>String</code><span class=\"sep\"></span><code class=\"docstring\">Dependency name. This is used in a header, and for alphabetical sorting. </code>",
+ "408":
+ "<code>String</code><span class=\"sep\"></span><code class=\"docstring\">SPDX license identifier </code>",
+ "407":
+ "<code>Verso.Genre.Manual.LicenseInfo.mk (identifier dependency : String) (howUsed link : Option String)\n  (text : Array (Option String × String)) : LicenseInfo</code>",
+ "406":
+ "<code>Verso.Genre.Manual.HtmlAssets.licenseInfo (self : HtmlAssets) : Std.HashSet LicenseInfo</code><span class=\"sep\"></span><code class=\"docstring\">Open-source licenses, to be collected for display in the final document. </code>",
+ "405": "<code>Verso.Genre.Manual.TechArgs : Type</code>",
+ "404":
+ "<code>Verso.Genre.Manual.tech : Elab.RoleExpanderOf TechArgs</code><span class=\"sep\"></span><code class=\"docstring\">Emits a reference to a technical term defined with `deftech.`\n\nInternally, these terms are found according to a key that is derived by stripping formatting\ninformation from the arguments in `args`, and then normalizing the resulting string by:\n\n 1. lowercasing it\n 2. replacing trailing `\"ies\"` with `\"y\"`\n 3. replacing consecutive runs of whitespace and/or hyphens with a single space\n\nCall with `(normalize := false)` to disable normalization, and `(key := some k)` to use `k` instead\nof the automatically-derived key.\n</code>",
+ "403": "<code><span class=\"literal string\">\"y\"</span> : String</code>",
+ "402": "<code><span class=\"literal string\">\"ies\"</span> : String</code>",
+ "401": "<code>Verso.Genre.Manual.DefTechArgs : Type</code>",
  "400":
- "<code>Verso.reportWarning {m : Type → Type} [Verso.MonadBuildLog m] (text : String) (loc : Option Verso.SourceLoc := none) :\n  m Unit</code><span class=\"sep\"></span><code class=\"docstring\">Reports a warning. Warnings do not affect the exit code.\n</code>",
+ "<code>Verso.Doc.Elab.RoleExpanderOf.{u_1} (α : Sort u_1) : Sort (max 1 u_1)</code>",
  "40":
  "<code>Verso.Doc.Genre.Block (self : Doc.Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Additional block-level values for documents written in the genre.\n  </code>",
  "4":
  "<code>Type</code><span class=\"sep\"></span><code class=\"docstring\">The metadata that may be associated with each `Part` \\(e.g. author, publication date,\n  cross-referencing identifier\\).\n  </code>",
  "399":
- "<code>Verso.reportError {m : Type → Type} [Verso.MonadBuildLog m] (text : String) (loc : Option Verso.SourceLoc := none) :\n  m Unit</code><span class=\"sep\"></span><code class=\"docstring\">Reports an error. Errors do not abort the build, but they cause a non-zero exit code.\n</code>",
- "398": "<code>Verso.Severity.warning : Verso.Severity</code>",
- "397": "<code>Verso.Severity.error : Verso.Severity</code>",
- "396":
- "<code>Verso.Severity : Type</code><span class=\"sep\"></span><code class=\"docstring\">The severity of a logged build message.\n</code>",
+ "<code>Verso.Genre.Manual.deftech : Elab.RoleExpanderOf DefTechArgs</code><span class=\"sep\"></span><code class=\"docstring\">Defines a technical term.\n\nInternally, these definitions are saved according to a key that is derived by stripping formatting\ninformation from the arguments in `args`, and then normalizing the resulting string by:\n\n 1. lowercasing it\n 2. replacing trailing `\"ies\"` with `\"y\"`\n 3. replacing consecutive runs of whitespace and/or hyphens with a single space\n\nCall with `(normalize := false)` to disable normalization, and `(key := some k)` to use `k` instead\nof the automatically-derived key.\n\nUses of `tech` use the same process to derive a key, and the key is matched against the `deftech` table.\n</code>",
+ "398":
+ "<code>pp.deepTerms</code><span class=\"sep\"></span><code class=\"docstring\">(pretty printer) display deeply nested terms, replacing them with `⋯` if set to false</code>",
+ "397": "<code>?m.27</code>",
+ "396": "<code>sorry → sorry</code>",
  "395":
- "<code>Verso.MonadBuildLog (m : Type → Type) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Monads that can emit build log messages.\n</code>",
+ "<code class=\"docstring\">Assuming `x` is a variable in the local context with an inductive type,\n`induction x` applies induction on `x` to the main goal,\nproducing one goal for each constructor of the inductive type,\nin which the target is replaced by a general instance of that constructor\nand an inductive hypothesis is added for each recursive argument to the constructor.\nIf the type of an element in the local context depends on `x`,\nthat element is reverted and reintroduced afterward,\nso that the inductive hypothesis incorporates that hypothesis as well.\n\nFor example, given `n : Nat` and a goal with a hypothesis `h : P n` and target `Q n`,\n`induction n` produces one goal with hypothesis `h : P 0` and target `Q 0`,\nand one goal with hypotheses `h : P (Nat.succ a)` and `ih₁ : P a → Q a` and target `Q (Nat.succ a)`.\nHere the names `a` and `ih₁` are chosen automatically and are not accessible.\nYou can use `with` to provide the variables names for each constructor.\n- `induction e`, where `e` is an expression instead of a variable,\n  generalizes `e` in the goal, and then performs induction on the resulting variable.\n- `induction e using r` allows the user to specify the principle of induction that should be used.\n  Here `r` should be a term whose result type must be of the form `C t`,\n  where `C` is a bound variable and `t` is a (possibly empty) sequence of bound variables\n- `induction e generalizing z₁ ... zₙ`, where `z₁ ... zₙ` are variables in the local context,\n  generalizes over `z₁ ... zₙ` before applying the induction but then introduces them in each goal.\n  In other words, the net effect is that each inductive hypothesis is generalized.\n- Given `x : Nat`, `induction x with | zero =&gt; tac₁ | succ x' ih =&gt; tac₂`\n  uses tactic `tac₁` for the `zero` case, and `tac₂` for the `succ` case.\n</code>",
  "394":
- "<code>Verso.Genre.Manual.ExtraStep : Type</code><span class=\"sep\"></span><code class=\"docstring\">Extra steps to be performed after building the manual.\n\n`ExtraStep` is short for `Mode → Config → TraverseState → Part Manual → BuildLogT IO Unit`.\n\nThe parameters are:\n* A mode, which is whether the HTML was generated in one or multiple files\n* The configuration, as determined from the initial value passed to `manualMain` and modified via the command line\n* The final state of the traversal pass\n* The final text, post-traversal\n</code>",
+ "<code>Verso.Genre.Manual.optionDocs : Elab.BlockCommandOf optionDocs.Args</code>",
  "393":
- "<code>Verso.Genre.Manual.diagram : Elab.CodeBlockExpanderOf DiagramConfig</code><span class=\"sep\"></span><code class=\"docstring\">Renders an Illuminate diagram as a block of SVG, with an InfoView widget for interactive\npreview.\n\nThe source of the code block is elaborated and evaluated as a term of type\n`Illuminate.Diagram Illuminate.SVG`; the result is rendered to an SVG string and embedded in\nthe output. HTML output inlines the SVG; LaTeX output writes the SVG next to `main.tex` and\nincludes it via `\\includesvg{...}`.\n\n````\n```diagram (cssWidth := \"20em\") (texWidth := \"20em\")\nIlluminate.Diagram.rect 30 20\n```\n````\n\nThe available arguments are:\n\n* `cssWidth := \"&lt;length&gt;\"` — a CSS length used in HTML output.\n* `cssScale := &lt;number&gt;` — instead of `cssWidth`, a scale factor multiplied by the diagram's\n  natural viewBox width and emitted as an `em` value. Useful for keeping line widths\n  consistent across multiple diagrams. Mutually exclusive with `cssWidth`.\n* `texWidth := \"&lt;length&gt;\"` — a valid LaTeX length used in PDF output.\n* `+inline` — layout hint that omits standalone framing when the diagram is being composed\n  into a larger layout (e.g. inside the `row` directive).\n\nIf neither `cssWidth` nor `cssScale` is supplied, HTML output uses `100%`. If `texWidth` is\nomitted, LaTeX output uses `\\textwidth`.\n\n**LaTeX build requirements.** The `\\includesvg` macro needs the `svg` LaTeX package (added\nautomatically to the preamble), the `inkscape` binary, and `lualatex -shell-escape`. Without\nthose, the document compiles to HTML but the PDF build will fail when it reaches a diagram.\n</code>",
+ "<code>Verso.Genre.Manual.tactic : Elab.DirectiveExpanderOf TacticDocsOptions</code>",
  "392":
- "<code>Verso.Doc.Elab.BlockCommandOf.{u_1} (α : Sort u_1) : Sort (max 1 u_1)</code>",
+ "<code>Verso.Genre.Manual.docstring : Elab.BlockCommandOf DocstringConfig</code>",
  "391":
- "<code>Verso.Genre.Manual.licenseInfo : Elab.BlockCommandOf Unit</code><span class=\"sep\"></span><code class=\"docstring\">Displays the open-source licenses of components used to build the document.\n</code>",
+ "<code>List.forA.{u, v, w} {m : Type u → Type v} [Applicative m] {α : Type w} («as» : List α) (f : α → m PUnit) : m PUnit</code><span class=\"sep\"></span><code class=\"docstring\">Applies the applicative action `f` to every element in the list, in order.\n\nIf `m` is also a `Monad`, then using `List.forM` can be more efficient.\n\n`List.mapA` is a variant that collects results.\n</code>",
  "390":
- "<code>Array (Option String × String)</code><span class=\"sep\"></span><code class=\"docstring\">The license or notice text in plain text, divided into sections with optional headers.\n</code>",
+ "<code>List.mapM.{u, v, w} {m : Type u → Type v} [Monad m] {α : Type w} {β : Type u} (f : α → m β) («as» : List α) : m (List β)</code><span class=\"sep\"></span><code class=\"docstring\">Applies the monadic action `f` to every element in the list, left-to-right, and returns the list of\nresults.\n\nThis implementation is tail recursive. `List.mapM'` is a non-tail-recursive variant that may be\nmore convenient to reason about. `List.forM` is the variant that discards the results and\n`List.mapA` is the variant that works with `Applicative`.\n</code>",
  "39":
  "<code>[MonadReader g.TraverseContext m] →\n  [MonadState g.TraverseState m] → g.Block → Array (Doc.Block g) → m (Option (Doc.Block g))</code><span class=\"sep\"></span><code class=\"docstring\">The traversal of genre-specific block values. If it returns `none`, then no rewrite is performed.\n  </code>",
  "389":
- "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">A link target used to credit the dependency's author </code>",
- "388":
- "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">How is the dependency used? This can give better credit.\n\nExamples:\n* \"The display of mathematical formulae is powered by KaTeX.\"\n* \"The graphs are rendered using Chart.js.\"\n</code>",
- "387":
- "<code>String</code><span class=\"sep\"></span><code class=\"docstring\">Dependency name. This is used in a header, and for alphabetical sorting. </code>",
- "386":
- "<code>String</code><span class=\"sep\"></span><code class=\"docstring\">SPDX license identifier </code>",
- "385":
- "<code>Verso.Genre.Manual.LicenseInfo.mk (identifier dependency : String) (howUsed link : Option String)\n  (text : Array (Option String × String)) : LicenseInfo</code>",
+ "<code>PUnit.{u} : Sort u</code><span class=\"sep\"></span><code class=\"docstring\">The canonical universe-polymorphic type with just one element.\n\nIt should be used in contexts that require a type to be universe polymorphic, thus disallowing\n`Unit`.\n</code>",
+ "388": "<code>α → m PUnit</code>",
+ "387": "<code>List α</code>",
+ "386": "<code>Type w</code>",
+ "385": "<code>Type u → Type v</code>",
  "384":
- "<code>Verso.Genre.Manual.HtmlAssets.licenseInfo (self : HtmlAssets) : Std.HashSet LicenseInfo</code><span class=\"sep\"></span><code class=\"docstring\">Open-source licenses, to be collected for display in the final document. </code>",
- "383": "<code>Verso.Genre.Manual.TechArgs : Type</code>",
+ "<code>List.forM.{u, v, w} {m : Type u → Type v} [Monad m] {α : Type w} («as» : List α) (f : α → m PUnit) : m PUnit</code><span class=\"sep\"></span><code class=\"docstring\">Applies the monadic action `f` to every element in the list, in order.\n\n`List.mapM` is a variant that collects results. `List.forA` is a variant that works on any\n`Applicative`.\n</code>",
+ "383":
+ "<code>Verso.Genre.Manual.TableConfig.Alignment.right : TableConfig.Alignment</code>",
  "382":
- "<code>Verso.Genre.Manual.tech : Elab.RoleExpanderOf TechArgs</code><span class=\"sep\"></span><code class=\"docstring\">Emits a reference to a technical term defined with `deftech.`\n\nInternally, these terms are found according to a key that is derived by stripping formatting\ninformation from the arguments in `args`, and then normalizing the resulting string by:\n\n 1. lowercasing it\n 2. replacing trailing `\"ies\"` with `\"y\"`\n 3. replacing consecutive runs of whitespace and/or hyphens with a single space\n\nCall with `(normalize := false)` to disable normalization, and `(key := some k)` to use `k` instead\nof the automatically-derived key.\n</code>",
- "381": "<code><span class=\"literal string\">\"y\"</span> : String</code>",
- "380": "<code><span class=\"literal string\">\"ies\"</span> : String</code>",
+ "<code>Verso.Genre.Manual.TableConfig.Alignment.center : TableConfig.Alignment</code>",
+ "381":
+ "<code>Verso.Genre.Manual.TableConfig.Alignment.left : TableConfig.Alignment</code>",
+ "380":
+ "<code>Verso.Genre.Manual.table : Elab.DirectiveExpanderOf TableConfig</code>",
  "38":
  "<code>Option.none.{u} {α : Type u} : Option α</code><span class=\"sep\"></span><code class=\"docstring\">No value. </code>",
- "379": "<code>Verso.Genre.Manual.DefTechArgs : Type</code>",
+ "379":
+ "<code>Verso.Genre.Manual.paragraph : Elab.DirectiveExpanderOf Unit</code><span class=\"sep\"></span><code class=\"docstring\">Indicates that all the block-level elements contained within the directive are a single logical\nparagraph. In HTML output, they are rendered with less space between them, and LaTeX renders them as\na single paragraph (e.g. without extraneous indentation).\n</code>",
  "378":
- "<code>Verso.Doc.Elab.RoleExpanderOf.{u_1} (α : Sort u_1) : Sort (max 1 u_1)</code>",
- "377":
- "<code>Verso.Genre.Manual.deftech : Elab.RoleExpanderOf DefTechArgs</code><span class=\"sep\"></span><code class=\"docstring\">Defines a technical term.\n\nInternally, these definitions are saved according to a key that is derived by stripping formatting\ninformation from the arguments in `args`, and then normalizing the resulting string by:\n\n 1. lowercasing it\n 2. replacing trailing `\"ies\"` with `\"y\"`\n 3. replacing consecutive runs of whitespace and/or hyphens with a single space\n\nCall with `(normalize := false)` to disable normalization, and `(key := some k)` to use `k` instead\nof the automatically-derived key.\n\nUses of `tech` use the same process to derive a key, and the key is matched against the `deftech` table.\n</code>",
+ "<code>Verso.Genre.Manual.ref : Elab.RoleExpanderOf RoleArgs</code><span class=\"sep\"></span><code class=\"docstring\">Inserts a reference to the provided tag.\n</code>",
+ "377": "<code>HtmlAssets</code>",
  "376":
- "<code>pp.deepTerms</code><span class=\"sep\"></span><code class=\"docstring\">(pretty printer) display deeply nested terms, replacing them with `⋯` if set to false</code>",
- "375": "<code>?m.27</code>",
- "374": "<code>sorry → sorry</code>",
+ "<code>Verso.Genre.Manual.HtmlAssets.combine (assets moreAssets : HtmlAssets) : HtmlAssets</code><span class=\"sep\"></span><code class=\"docstring\">Combines two sets of HTML assets.\n\nIf `moreAssets` contains named file assets whose names conflict with those in `assets`,\nthen the version in `assets` is used.\n</code>",
+ "375":
+ "<code>Std.HashSet LicenseInfo</code><span class=\"sep\"></span><code class=\"docstring\">Open-source licenses, to be collected for display in the final document. </code>",
+ "374":
+ "<code>Std.HashSet DataFile</code><span class=\"sep\"></span><code class=\"docstring\">Extra files to be placed in the Verso data directory </code>",
  "373":
- "<code class=\"docstring\">Assuming `x` is a variable in the local context with an inductive type,\n`induction x` applies induction on `x` to the main goal,\nproducing one goal for each constructor of the inductive type,\nin which the target is replaced by a general instance of that constructor\nand an inductive hypothesis is added for each recursive argument to the constructor.\nIf the type of an element in the local context depends on `x`,\nthat element is reverted and reintroduced afterward,\nso that the inductive hypothesis incorporates that hypothesis as well.\n\nFor example, given `n : Nat` and a goal with a hypothesis `h : P n` and target `Q n`,\n`induction n` produces one goal with hypothesis `h : P 0` and target `Q 0`,\nand one goal with hypotheses `h : P (Nat.succ a)` and `ih₁ : P a → Q a` and target `Q (Nat.succ a)`.\nHere the names `a` and `ih₁` are chosen automatically and are not accessible.\nYou can use `with` to provide the variables names for each constructor.\n- `induction e`, where `e` is an expression instead of a variable,\n  generalizes `e` in the goal, and then performs induction on the resulting variable.\n- `induction e using r` allows the user to specify the principle of induction that should be used.\n  Here `r` should be a term whose result type must be of the form `C t`,\n  where `C` is a bound variable and `t` is a (possibly empty) sequence of bound variables\n- `induction e generalizing z₁ ... zₙ`, where `z₁ ... zₙ` are variables in the local context,\n  generalizes over `z₁ ... zₙ` before applying the induction but then introduces them in each goal.\n  In other words, the net effect is that each inductive hypothesis is generalized.\n- Given `x : Nat`, `induction x with | zero =&gt; tac₁ | succ x' ih =&gt; tac₂`\n  uses tactic `tac₁` for the `zero` case, and `tac₂` for the `succ` case.\n</code>",
+ "<code>Std.HashSet CssFile</code><span class=\"sep\"></span><code class=\"docstring\">Extra CSS to be written to the filesystem in the Verso data directory and loaded by each `&lt;head&gt;` </code>",
  "372":
- "<code>Verso.Genre.Manual.optionDocs : Elab.BlockCommandOf optionDocs.Args</code>",
+ "<code>Std.HashSet JsFile</code><span class=\"sep\"></span><code class=\"docstring\">Extra JS to be written to the filesystem in the Verso data directory and loaded by each `&lt;head&gt;` </code>",
  "371":
- "<code>Verso.Genre.Manual.tactic : Elab.DirectiveExpanderOf TacticDocsOptions</code>",
+ "<code>Std.HashSet JS</code><span class=\"sep\"></span><code class=\"docstring\">Extra JS to be included inline into every `&lt;head&gt;` via `&lt;script&gt;` tags </code>",
  "370":
- "<code>Verso.Genre.Manual.docstring : Elab.BlockCommandOf DocstringConfig</code>",
+ "<code>Std.HashSet CSS</code><span class=\"sep\"></span><code class=\"docstring\">Extra CSS to be included inline into every `&lt;head&gt;` via `&lt;style&gt;` tags </code>",
  "37":
  "<code>[MonadReader g.TraverseContext m] → [MonadState g.TraverseState m] → Doc.Part g → m (Option g.PartMetadata)</code>",
  "369":
- "<code>List.forA.{u, v, w} {m : Type u → Type v} [Applicative m] {α : Type w} («as» : List α) (f : α → m PUnit) : m PUnit</code><span class=\"sep\"></span><code class=\"docstring\">Applies the applicative action `f` to every element in the list, in order.\n\nIf `m` is also a `Monad`, then using `List.forM` can be more efficient.\n\n`List.mapA` is a variant that collects results.\n</code>",
+ "<code>HtmlFeatures</code><span class=\"sep\"></span><code class=\"docstring\">Which bundled features should be included? </code>",
  "368":
- "<code>List.mapM.{u, v, w} {m : Type u → Type v} [Monad m] {α : Type w} {β : Type u} (f : α → m β) («as» : List α) : m (List β)</code><span class=\"sep\"></span><code class=\"docstring\">Applies the monadic action `f` to every element in the list, left-to-right, and returns the list of\nresults.\n\nThis implementation is tail recursive. `List.mapM'` is a non-tail-recursive variant that may be\nmore convenient to reason about. `List.forM` is the variant that discards the results and\n`List.mapA` is the variant that works with `Applicative`.\n</code>",
+ "<code>Verso.Genre.Manual.HtmlAssets.mk (features : HtmlFeatures) (extraCss : Std.HashSet CSS) (extraJs : Std.HashSet JS)\n  (extraJsFiles : Std.HashSet JsFile) (extraCssFiles : Std.HashSet CssFile) (extraDataFiles : Std.HashSet DataFile)\n  (licenseInfo : Std.HashSet LicenseInfo) : HtmlAssets</code>",
  "367":
- "<code>PUnit.{u} : Sort u</code><span class=\"sep\"></span><code class=\"docstring\">The canonical universe-polymorphic type with just one element.\n\nIt should be used in contexts that require a type to be universe polymorphic, thus disallowing\n`Unit`.\n</code>",
- "366": "<code>α → m PUnit</code>",
- "365": "<code>List α</code>",
- "364": "<code>Type w</code>",
- "363": "<code>Type u → Type v</code>",
+ "<code>Verso.Genre.Manual.manualMain (text : Part Manual) (extensionImpls : ExtensionImpls := by exact extension_impls%)\n  (options : List String) (config : RenderConfig := { }) (extraSteps : List ExtraStep := []) : IO UInt32</code>",
+ "366":
+ "<code>Verso.Genre.Manual.InlineToTeX (genre : Genre) (m : Type → Type) : Type</code>",
+ "365":
+ "<code>Option (InlineToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))</code><span class=\"sep\"></span><code class=\"docstring\">How to generate TeX. If `none`, generating TeX from a document that contains this inline\n  will fail.\n  </code>",
+ "364":
+ "<code>Verso.Doc.Inline (genre : Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Inline content that is part of the text flow.\n</code>",
+ "363":
+ "<code>InternalId → Lean.Json → Array (Doc.Inline Manual) → Except String (Array (String × Output.Html))</code><span class=\"sep\"></span><code class=\"docstring\">Should this inline be an entry in the page-local ToC? If so, how should it be represented?\n\nEntries should be returned as a preference-ordered array of representations. Each representation\n  consists of a string and some HTML; the string should represent the HTML's content if all\n  formatting were stripped. Items are compared for string equality, with later suggestions used in\n  case of overlap, but the HTML is what's displayed.\n\nThe empty array means that the inline should not be included.\n  </code>",
  "362":
- "<code>List.forM.{u, v, w} {m : Type u → Type v} [Monad m] {α : Type w} («as» : List α) (f : α → m PUnit) : m PUnit</code><span class=\"sep\"></span><code class=\"docstring\">Applies the monadic action `f` to every element in the list, in order.\n\n`List.mapM` is a variant that collects results. `List.forA` is a variant that works on any\n`Applicative`.\n</code>",
+ "<code>Verso.Genre.Manual.InlineToHtml (genre : Genre) (m : Type → Type) : Type</code>",
  "361":
- "<code>Verso.Genre.Manual.TableConfig.Alignment.right : TableConfig.Alignment</code>",
+ "<code>Option (InlineToHtml Manual (ReaderT Multi.AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))</code><span class=\"sep\"></span><code class=\"docstring\">How to generate HTML. If `none`, generating HTML from a document that contains this inline will fail.\n  </code>",
  "360":
- "<code>Verso.Genre.Manual.TableConfig.Alignment.center : TableConfig.Alignment</code>",
+ "<code>Verso.Genre.Manual.InlineTraversal (genre : Genre) : Type</code>",
  "36":
  "<code>[MonadReader g.TraverseContext m] →\n  [MonadState g.TraverseState m] → g.PartMetadata → Doc.Part g → m (Option (Doc.Part g))</code><span class=\"sep\"></span><code class=\"docstring\">Operations carried out after `part`, when a part has metadata. It allows genre-specific rewriting\n  of the entire part based on genre-specific metadata. This is typically used to construct a table\n  of contents or permalinks, but it can in principle arbitrarily rewrite the part. If it returns\n  `none`, then no rewrite is performed.\n  </code>",
  "359":
- "<code>Verso.Genre.Manual.TableConfig.Alignment.left : TableConfig.Alignment</code>",
+ "<code>InlineTraversal Manual</code><span class=\"sep\"></span><code class=\"docstring\">Given the contents of the `data` field of the corresponding\n  `Manual.Inline` and the contained inline elements, carry out the traversal pass.\n\nIn addition to updating the cross-reference state through the available monadic effects, a\n  traversal may additionally replace the element with another one. This can be used to e.g. emit a\n  cross-reference once the target becomes available in the state. To replace the element, return\n  `some`. To leave it as is, return `none`.\n  </code>",
  "358":
- "<code>Verso.Genre.Manual.table : Elab.DirectiveExpanderOf TableConfig</code>",
+ "<code>Verso.Genre.Manual.InlineDescr.mk (toHtmlAssets : HtmlAssets) (init : TraverseState → TraverseState)\n  (traverse : InlineTraversal Manual)\n  (toHtml : Option (InlineToHtml Manual (ReaderT Multi.AllRemotes (ReaderT ExtensionImpls (BuildLogT IO)))))\n  (localContentItem : InternalId → Lean.Json → Array (Doc.Inline Manual) → Except String (Array (String × Output.Html)))\n  (toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))) (usePackages preamble : List String) :\n  InlineDescr</code>",
  "357":
- "<code>Verso.Genre.Manual.paragraph : Elab.DirectiveExpanderOf Unit</code><span class=\"sep\"></span><code class=\"docstring\">Indicates that all the block-level elements contained within the directive are a single logical\nparagraph. In HTML output, they are rendered with less space between them, and LaTeX renders them as\na single paragraph (e.g. without extraneous indentation).\n</code>",
+ "<code>Verso.Genre.Manual.InlineDescr : Type</code><span class=\"sep\"></span><code class=\"docstring\">Implementations of all the operations needed to use an inline element. </code>",
  "356":
- "<code>Verso.Genre.Manual.ref : Elab.RoleExpanderOf RoleArgs</code><span class=\"sep\"></span><code class=\"docstring\">Inserts a reference to the provided tag.\n</code>",
- "355": "<code>HtmlAssets</code>",
+ "<code>List String</code><span class=\"sep\"></span><code class=\"docstring\">Required items in the TeX preamble </code>",
+ "355":
+ "<code>List String</code><span class=\"sep\"></span><code class=\"docstring\">Required TeX `\\usepackage` lines </code>",
  "354":
- "<code>Verso.Genre.Manual.HtmlAssets.combine (assets moreAssets : HtmlAssets) : HtmlAssets</code><span class=\"sep\"></span><code class=\"docstring\">Combines two sets of HTML assets.\n\nIf `moreAssets` contains named file assets whose names conflict with those in `assets`,\nthen the version in `assets` is used.\n</code>",
+ "<code>Verso.Genre.Manual.BlockToTeX (genre : Genre) (m : Type → Type) : Type</code>",
  "353":
- "<code>Std.HashSet LicenseInfo</code><span class=\"sep\"></span><code class=\"docstring\">Open-source licenses, to be collected for display in the final document. </code>",
+ "<code>Option (BlockToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))</code><span class=\"sep\"></span><code class=\"docstring\">How to generate TeX. If `none`, generating TeX from a document that contains this block\n  will fail.\n  </code>",
  "352":
- "<code>Std.HashSet DataFile</code><span class=\"sep\"></span><code class=\"docstring\">Extra files to be placed in the Verso data directory </code>",
+ "<code>Except.{u, v} (ε : Type u) (α : Type v) : Type (max u v)</code><span class=\"sep\"></span><code class=\"docstring\">`Except ε α` is a type which represents either an error of type `ε` or a successful result with a\nvalue of type `α`.\n\n`Except ε : Type u → Type v` is a `Monad` that represents computations that may throw exceptions:\nthe `pure` operation is `Except.ok` and the `bind` operation returns the first encountered\n`Except.error`.\n</code>",
  "351":
- "<code>Std.HashSet CssFile</code><span class=\"sep\"></span><code class=\"docstring\">Extra CSS to be written to the filesystem in the Verso data directory and loaded by each `&lt;head&gt;` </code>",
+ "<code>Verso.Doc.Block (genre : Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Block-level content in a document.\n</code>",
  "350":
- "<code>Std.HashSet JsFile</code><span class=\"sep\"></span><code class=\"docstring\">Extra JS to be written to the filesystem in the Verso data directory and loaded by each `&lt;head&gt;` </code>",
+ "<code>InternalId → Lean.Json → Array (Doc.Block Manual) → Except String (Array (String × Output.Html))</code><span class=\"sep\"></span><code class=\"docstring\">Should this block be an entry in the page-local ToC? If so, how should it be represented?\n\nEntries should be returned as a preference-ordered array of representations. Each representation\n  consists of a string and some HTML; the string should represent the HTML's content if all\n  formatting were stripped. Items are compared for string equality, with later suggestions used in\n  case of overlap, but the HTML is what's displayed. Exceptions are logged as errors during HTML\n  generation.\n\nThe empty array means that the block should not be included.\n  </code>",
  "35":
  "<code>[MonadReader g.TraverseContext m] → [MonadState g.TraverseState m] → Doc.Inline g → m Unit</code><span class=\"sep\"></span><code class=\"docstring\">The effects carried out before traversing an `Inline`.\n  </code>",
  "349":
- "<code>Std.HashSet JS</code><span class=\"sep\"></span><code class=\"docstring\">Extra JS to be included inline into every `&lt;head&gt;` via `&lt;script&gt;` tags </code>",
- "348":
- "<code>Std.HashSet CSS</code><span class=\"sep\"></span><code class=\"docstring\">Extra CSS to be included inline into every `&lt;head&gt;` via `&lt;style&gt;` tags </code>",
+ "<code>Verso.BuildLogT (m : Type → Type) : Type → Type</code><span class=\"sep\"></span><code class=\"docstring\">Equips a monad with a `Logger`, and thus a `MonadBuildLog` instance.\n</code>",
+ "348": "<code>Verso.Genre.Manual.ExtensionImpls : Type</code>",
  "347":
- "<code>HtmlFeatures</code><span class=\"sep\"></span><code class=\"docstring\">Which bundled features should be included? </code>",
+ "<code>Verso.Multi.AllRemotes : Type</code><span class=\"sep\"></span><code class=\"docstring\">All remote data that was loaded.\n</code>",
  "346":
- "<code>Verso.Genre.Manual.HtmlAssets.mk (features : HtmlFeatures) (extraCss : Std.HashSet CSS) (extraJs : Std.HashSet JS)\n  (extraJsFiles : Std.HashSet JsFile) (extraCssFiles : Std.HashSet CssFile) (extraDataFiles : Std.HashSet DataFile)\n  (licenseInfo : Std.HashSet LicenseInfo) : HtmlAssets</code>",
+ "<code>ReaderT.{u, v} (ρ : Type u) (m : Type u → Type v) (α : Type u) : Type (max u v)</code><span class=\"sep\"></span><code class=\"docstring\">Adds the ability to access a read-only value of type `ρ` to a monad. The value can be locally\noverridden by `withReader`, but it cannot be mutated.\n\nActions in the resulting monad are functions that take the local value as a parameter, returning\nordinary actions in `m`.\n</code>",
  "345":
- "<code>Verso.Genre.Manual.manualMain (text : Part Manual) (extensionImpls : ExtensionImpls := by exact extension_impls%)\n  (options : List String) (config : RenderConfig := { }) (extraSteps : List ExtraStep := []) : IO UInt32</code>",
+ "<code>Verso.Genre.Manual.BlockToHtml (genre : Genre) (m : Type → Type) : Type</code>",
  "344":
- "<code>Verso.Genre.Manual.InlineToTeX (genre : Genre) (m : Type → Type) : Type</code>",
- "343":
- "<code>Option (InlineToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))</code><span class=\"sep\"></span><code class=\"docstring\">How to generate TeX. If `none`, generating TeX from a document that contains this inline\n  will fail.\n  </code>",
+ "<code>Option (BlockToHtml Manual (ReaderT Multi.AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))</code><span class=\"sep\"></span><code class=\"docstring\">How to generate HTML. If `none`, generating HTML from a document that contains this block\n  will fail.\n  </code>",
+ "343": "<code>Verso.Genre.Manual.BlockTraversal (genre : Genre) : Type</code>",
  "342":
- "<code>Verso.Doc.Inline (genre : Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Inline content that is part of the text flow.\n</code>",
- "341":
- "<code>InternalId → Lean.Json → Array (Doc.Inline Manual) → Except String (Array (String × Output.Html))</code><span class=\"sep\"></span><code class=\"docstring\">Should this inline be an entry in the page-local ToC? If so, how should it be represented?\n\nEntries should be returned as a preference-ordered array of representations. Each representation\n  consists of a string and some HTML; the string should represent the HTML's content if all\n  formatting were stripped. Items are compared for string equality, with later suggestions used in\n  case of overlap, but the HTML is what's displayed.\n\nThe empty array means that the inline should not be included.\n  </code>",
+ "<code>BlockTraversal Manual</code><span class=\"sep\"></span><code class=\"docstring\">How the traversal phase should process this block </code>",
+ "341": "<code>Verso.Genre.Manual.TraverseState : Type</code>",
  "340":
- "<code>Verso.Genre.Manual.InlineToHtml (genre : Genre) (m : Type → Type) : Type</code>",
+ "<code>TraverseState → TraverseState</code><span class=\"sep\"></span><code class=\"docstring\">All registered initializers are called in the state prior to the first traversal. </code>",
  "34":
  "<code>Unit : Type</code><span class=\"sep\"></span><code class=\"docstring\">The canonical type with one element. This element is written `()`.\n\n`Unit` has a number of uses:\n* It can be used to model control flow that returns from a function call without providing other\n  information.\n* Monadic actions that return `Unit` have side effects without computing values.\n* In polymorphic types, it can be used to indicate that no data is to be stored in a particular\n  field.\n</code>",
  "339":
- "<code>Option (InlineToHtml Manual (ReaderT Multi.AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))</code><span class=\"sep\"></span><code class=\"docstring\">How to generate HTML. If `none`, generating HTML from a document that contains this inline will fail.\n  </code>",
- "338":
- "<code>Verso.Genre.Manual.InlineTraversal (genre : Genre) : Type</code>",
+ "<code>Verso.Genre.Manual.LicenseInfo : Type</code><span class=\"sep\"></span><code class=\"docstring\">A description of an open-source license used by a frontend component that's included in\ngenerated HTML. This is used to create an attribution page.\n</code>",
+ "338": "<code>Verso.Genre.Manual.DataFile : Type</code>",
  "337":
- "<code>InlineTraversal Manual</code><span class=\"sep\"></span><code class=\"docstring\">Given the contents of the `data` field of the corresponding\n  `Manual.Inline` and the contained inline elements, carry out the traversal pass.\n\nIn addition to updating the cross-reference state through the available monadic effects, a\n  traversal may additionally replace the element with another one. This can be used to e.g. emit a\n  cross-reference once the target becomes available in the state. To replace the element, return\n  `some`. To leave it as is, return `none`.\n  </code>",
+ "<code>Verso.Genre.Manual.CssFile : Type</code><span class=\"sep\"></span><code class=\"docstring\">An extra CSS file to be emitted and added to the page.\n</code>",
  "336":
- "<code>Verso.Genre.Manual.InlineDescr.mk (toHtmlAssets : HtmlAssets) (init : TraverseState → TraverseState)\n  (traverse : InlineTraversal Manual)\n  (toHtml : Option (InlineToHtml Manual (ReaderT Multi.AllRemotes (ReaderT ExtensionImpls (BuildLogT IO)))))\n  (localContentItem : InternalId → Lean.Json → Array (Doc.Inline Manual) → Except String (Array (String × Output.Html)))\n  (toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))) (usePackages preamble : List String) :\n  InlineDescr</code>",
+ "<code>Verso.Genre.Manual.JsFile : Type</code><span class=\"sep\"></span><code class=\"docstring\">An extra JS file to be emitted and added to the page.\n</code>",
  "335":
- "<code>Verso.Genre.Manual.InlineDescr : Type</code><span class=\"sep\"></span><code class=\"docstring\">Implementations of all the operations needed to use an inline element. </code>",
+ "<code>Verso.Genre.Manual.JS : Type</code><span class=\"sep\"></span><code class=\"docstring\">JavaScript code.\n</code>",
  "334":
- "<code>List String</code><span class=\"sep\"></span><code class=\"docstring\">Required items in the TeX preamble </code>",
+ "<code>Verso.Genre.Manual.CSS : Type</code><span class=\"sep\"></span><code class=\"docstring\">Cascading Stylesheet code.\n</code>",
  "333":
- "<code>List String</code><span class=\"sep\"></span><code class=\"docstring\">Required TeX `\\usepackage` lines </code>",
+ "<code>Std.HashSet.{u} (α : Type u) [BEq α] [Hashable α] : Type u</code><span class=\"sep\"></span><code class=\"docstring\">Hash sets.\n\nThis is a simple separate-chaining hash table. The data of the hash set consists of a cached size\nand an array of buckets, where each bucket is a linked list of keys. The number of buckets\nis always a power of two. The hash set doubles its size upon inserting an element such that the\nnumber of elements is more than 75% of the number of buckets.\n\nThe hash table is backed by an `Array`. Users should make sure that the hash set is used linearly to\navoid expensive copies.\n\nThe hash set uses `==` (provided by the `BEq` typeclass) to compare elements and `hash` (provided by\nthe `Hashable` typeclass) to hash them. To ensure that the operations behave as expected, `==`\nshould be an equivalence relation and `a == b` should imply `hash a = hash b` (see also the\n`EquivBEq` and `LawfulHashable` typeclasses). Both of these conditions are automatic if the BEq\ninstance is lawful, i.e., if `a == b` implies `a = b`.\n\nThese hash sets contain a bundled well-formedness invariant, which means that they cannot\nbe used in nested inductive types. For these use cases, `Std.Data.HashSet.Raw` and\n`Std.Data.HashSet.Raw.WF` unbundle the invariant from the hash set. When in doubt, prefer\n`HashSet` over `HashSet.Raw`.\n</code>",
  "332":
- "<code>Verso.Genre.Manual.BlockToTeX (genre : Genre) (m : Type → Type) : Type</code>",
+ "<code>Verso.Genre.Manual.HtmlFeatures : Type</code><span class=\"sep\"></span><code class=\"docstring\">A set of HTML features.\n</code>",
  "331":
- "<code>Option (BlockToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))</code><span class=\"sep\"></span><code class=\"docstring\">How to generate TeX. If `none`, generating TeX from a document that contains this block\n  will fail.\n  </code>",
+ "<code>Verso.Genre.Manual.HtmlAssets : Type</code><span class=\"sep\"></span><code class=\"docstring\">A collection of HTML assets that can be initialized in the manual configuration and enlarged by\ncustom elements during traversal.\n</code>",
  "330":
- "<code>Except.{u, v} (ε : Type u) (α : Type v) : Type (max u v)</code><span class=\"sep\"></span><code class=\"docstring\">`Except ε α` is a type which represents either an error of type `ε` or a successful result with a\nvalue of type `α`.\n\n`Except ε : Type u → Type v` is a `Monad` that represents computations that may throw exceptions:\nthe `pure` operation is `Except.ok` and the `bind` operation returns the first encountered\n`Except.error`.\n</code>",
+ "<code>Verso.Genre.Manual.BlockDescr.mk (toHtmlAssets : HtmlAssets) (init : TraverseState → TraverseState)\n  (traverse : BlockTraversal Manual)\n  (toHtml : Option (BlockToHtml Manual (ReaderT Multi.AllRemotes (ReaderT ExtensionImpls (BuildLogT IO)))))\n  (localContentItem : InternalId → Lean.Json → Array (Doc.Block Manual) → Except String (Array (String × Output.Html)))\n  (toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))) (usePackages preamble : List String) :\n  BlockDescr</code>",
  "33":
  "<code>[MonadReader g.TraverseContext m] → [MonadState g.TraverseState m] → Doc.Block g → m Unit</code><span class=\"sep\"></span><code class=\"docstring\">The effects carried out before traversing a `Block`.\n  </code>",
  "329":
- "<code>Verso.Doc.Block (genre : Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Block-level content in a document.\n</code>",
+ "<code>Verso.Genre.Manual.BlockDescr : Type</code><span class=\"sep\"></span><code class=\"docstring\">Implementations of all the operations needed to use a block.\n</code>",
  "328":
- "<code>InternalId → Lean.Json → Array (Doc.Block Manual) → Except String (Array (String × Output.Html))</code><span class=\"sep\"></span><code class=\"docstring\">Should this block be an entry in the page-local ToC? If so, how should it be represented?\n\nEntries should be returned as a preference-ordered array of representations. Each representation\n  consists of a string and some HTML; the string should represent the HTML's content if all\n  formatting were stripped. Items are compared for string equality, with later suggestions used in\n  case of overlap, but the HTML is what's displayed. Exceptions are logged as errors during HTML\n  generation.\n\nThe empty array means that the block should not be included.\n  </code>",
+ "<code>Verso.Genre.Manual.Inline.name (self : Manual.Inline) : Lean.Name</code><span class=\"sep\"></span><code class=\"docstring\">A unique name that identifies the inline. </code>",
  "327":
- "<code>Verso.BuildLogT (m : Type → Type) : Type → Type</code><span class=\"sep\"></span><code class=\"docstring\">Equips a monad with a `Logger`, and thus a `MonadBuildLog` instance.\n</code>",
- "326": "<code>Verso.Genre.Manual.ExtensionImpls : Type</code>",
+ "<code>Verso.Genre.Manual.Block.name (self : Manual.Block) : Lean.Name</code><span class=\"sep\"></span><code class=\"docstring\">A unique name that identifies the block. </code>",
+ "326":
+ "<code>Lean.Name</code><span class=\"sep\"></span><code class=\"docstring\">A unique name that identifies the inline. </code>",
  "325":
- "<code>Verso.Multi.AllRemotes : Type</code><span class=\"sep\"></span><code class=\"docstring\">All remote data that was loaded.\n</code>",
+ "<code>Verso.Genre.Manual.Inline.mk (name : Lean.Name := by exact decl_name%) (id : Option InternalId) (data : Lean.Json) :\n  Manual.Inline</code>",
  "324":
- "<code>ReaderT.{u, v} (ρ : Type u) (m : Type u → Type v) (α : Type u) : Type (max u v)</code><span class=\"sep\"></span><code class=\"docstring\">Adds the ability to access a read-only value of type `ρ` to a monad. The value can be locally\noverridden by `withReader`, but it cannot be mutated.\n\nActions in the resulting monad are functions that take the local value as a parameter, returning\nordinary actions in `m`.\n</code>",
+ "<code>Verso.NameMap (α : Type) : Type</code><span class=\"sep\"></span><code class=\"docstring\">A Verso `NameMap` maps non-empty, string-only names to some kind of value.\n</code>",
  "323":
- "<code>Verso.Genre.Manual.BlockToHtml (genre : Genre) (m : Type → Type) : Type</code>",
+ "<code>NameMap String</code><span class=\"sep\"></span><code class=\"docstring\">A registry for properties that can be used to create ad-hoc protocols for coordination between\n  block elements in extensions.\n  </code>",
  "322":
- "<code>Option (BlockToHtml Manual (ReaderT Multi.AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))</code><span class=\"sep\"></span><code class=\"docstring\">How to generate HTML. If `none`, generating HTML from a document that contains this block\n  will fail.\n  </code>",
- "321": "<code>Verso.Genre.Manual.BlockTraversal (genre : Genre) : Type</code>",
+ "<code>Lean.Json</code><span class=\"sep\"></span><code class=\"docstring\">Data saved by elaboration, potentially updated during traversal, and used to render output. This\n  is the primary means of communicating information about a block between phases.\n  </code>",
+ "321":
+ "<code>Option InternalId</code><span class=\"sep\"></span><code class=\"docstring\">A unique ID, assigned during traversal. </code>",
  "320":
- "<code>BlockTraversal Manual</code><span class=\"sep\"></span><code class=\"docstring\">How the traversal phase should process this block </code>",
+ "<code>Lean.Name</code><span class=\"sep\"></span><code class=\"docstring\">A unique name that identifies the block. </code>",
  "32":
  "<code>Verso.Doc.Genre.PartMetadata (self : Doc.Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">The metadata that may be associated with each `Part` \\(e.g. author, publication date,\n  cross-referencing identifier\\).\n  </code>",
- "319": "<code>Verso.Genre.Manual.TraverseState : Type</code>",
+ "319":
+ "<code>Verso.Genre.Manual.Block.mk (name : Lean.Name := by exact decl_name%) (id : Option InternalId) (data : Lean.Json)\n  (properties : NameMap String) : Manual.Block</code>",
  "318":
- "<code>TraverseState → TraverseState</code><span class=\"sep\"></span><code class=\"docstring\">All registered initializers are called in the state prior to the first traversal. </code>",
+ "<code>Verso.Genre.Manual.InlineLean.name : Elab.RoleExpanderOf NameConfig</code>",
  "317":
- "<code>Verso.Genre.Manual.LicenseInfo : Type</code><span class=\"sep\"></span><code class=\"docstring\">A description of an open-source license used by a frontend component that's included in\ngenerated HTML. This is used to create an attribution page.\n</code>",
- "316": "<code>Verso.Genre.Manual.DataFile : Type</code>",
- "315":
- "<code>Verso.Genre.Manual.CssFile : Type</code><span class=\"sep\"></span><code class=\"docstring\">An extra CSS file to be emitted and added to the page.\n</code>",
+ "<code>Verso.Genre.Manual.HtmlSplitMode.never : HtmlSplitMode</code><span class=\"sep\"></span><code class=\"docstring\">Do not split here nor in child parts </code>",
+ "316":
+ "<code>Verso.Genre.Manual.HtmlSplitMode.default : HtmlSplitMode</code><span class=\"sep\"></span><code class=\"docstring\">Follow the main setting </code>",
+ "315": "<code>Fin 100</code>",
  "314":
- "<code>Verso.Genre.Manual.JsFile : Type</code><span class=\"sep\"></span><code class=\"docstring\">An extra JS file to be emitted and added to the page.\n</code>",
+ "<code>Fin (n : Nat) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Natural numbers less than some upper bound.\n\nIn particular, a `Fin n` is a natural number `i` with the constraint that `i &lt; n`. It is the\ncanonical type with `n` elements.\n</code>",
  "313":
- "<code>Verso.Genre.Manual.JS : Type</code><span class=\"sep\"></span><code class=\"docstring\">JavaScript code.\n</code>",
+ "<code>Fin 100</code><span class=\"sep\"></span><code class=\"docstring\">Relative priority of this section in search results, on a scale from `0`\n  to `99`. `50` is the default \\(no boost\\);\n  higher values boost the section's rank and lower values de-emphasize it. The same priority\n  influences both quick-jump and full-text matches for the section.\n\nPriorities set on ancestor parts are inherited: each ancestor's deviation from\n  `50` accumulates into a section's effective priority. For example,\n  setting `searchPriority` to `25` on a top-level “Release Notes”\n  part de-emphasizes every subsection beneath it, while an individual subsection can override by\n  setting a higher value of its own \\(which is added to, not multiplied with, the ancestor\n  contribution\\). A chain of neutral \\(`50`\\) ancestors contributes nothing.\n  </code>",
  "312":
- "<code>Verso.Genre.Manual.CSS : Type</code><span class=\"sep\"></span><code class=\"docstring\">Cascading Stylesheet code.\n</code>",
+ "<code>Verso.Genre.Manual.HtmlSplitMode : Type</code><span class=\"sep\"></span><code class=\"docstring\">When rendering multi-page HTML, should splitting pages follow the depth setting? </code>",
  "311":
- "<code>Std.HashSet.{u} (α : Type u) [BEq α] [Hashable α] : Type u</code><span class=\"sep\"></span><code class=\"docstring\">Hash sets.\n\nThis is a simple separate-chaining hash table. The data of the hash set consists of a cached size\nand an array of buckets, where each bucket is a linked list of keys. The number of buckets\nis always a power of two. The hash set doubles its size upon inserting an element such that the\nnumber of elements is more than 75% of the number of buckets.\n\nThe hash table is backed by an `Array`. Users should make sure that the hash set is used linearly to\navoid expensive copies.\n\nThe hash set uses `==` (provided by the `BEq` typeclass) to compare elements and `hash` (provided by\nthe `Hashable` typeclass) to hash them. To ensure that the operations behave as expected, `==`\nshould be an equivalence relation and `a == b` should imply `hash a = hash b` (see also the\n`EquivBEq` and `LawfulHashable` typeclasses). Both of these conditions are automatic if the BEq\ninstance is lawful, i.e., if `a == b` implies `a = b`.\n\nThese hash sets contain a bundled well-formedness invariant, which means that they cannot\nbe used in nested inductive types. For these use cases, `Std.Data.HashSet.Raw` and\n`Std.Data.HashSet.Raw.WF` unbundle the invariant from the hash set. When in doubt, prefer\n`HashSet` over `HashSet.Raw`.\n</code>",
+ "<code>HtmlSplitMode</code><span class=\"sep\"></span><code class=\"docstring\">How should this document be split when rendering multi-page HTML output? </code>",
  "310":
- "<code>Verso.Genre.Manual.HtmlFeatures : Type</code><span class=\"sep\"></span><code class=\"docstring\">A set of HTML features.\n</code>",
+ "<code>Bool</code><span class=\"sep\"></span><code class=\"docstring\">If `true`, this part will display a list of subparts that are separate HTML pages. </code>",
  "31":
  "<code>Option.{u} (α : Type u) : Type u</code><span class=\"sep\"></span><code class=\"docstring\">Optional values, which are either `some` around a value from the underlying type or `none`.\n\n`Option` can represent nullable types or computations that might fail. In the codomain of a function\ntype, it can also represent partiality.\n</code>",
- "309":
- "<code>Verso.Genre.Manual.HtmlAssets : Type</code><span class=\"sep\"></span><code class=\"docstring\">A collection of HTML assets that can be initialized in the manual configuration and enlarged by\ncustom elements during traversal.\n</code>",
+ "309": "<code>Verso.Genre.Manual.Numbering : Type</code>",
  "308":
- "<code>Verso.Genre.Manual.BlockDescr.mk (toHtmlAssets : HtmlAssets) (init : TraverseState → TraverseState)\n  (traverse : BlockTraversal Manual)\n  (toHtml : Option (BlockToHtml Manual (ReaderT Multi.AllRemotes (ReaderT ExtensionImpls (BuildLogT IO)))))\n  (localContentItem : InternalId → Lean.Json → Array (Doc.Block Manual) → Except String (Array (String × Output.Html)))\n  (toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))) (usePackages preamble : List String) :\n  BlockDescr</code>",
+ "<code>Option Numbering</code><span class=\"sep\"></span><code class=\"docstring\">Which number has been assigned? This field is set during traversal. </code>",
  "307":
- "<code>Verso.Genre.Manual.BlockDescr : Type</code><span class=\"sep\"></span><code class=\"docstring\">Implementations of all the operations needed to use a block.\n</code>",
+ "<code>Bool</code><span class=\"sep\"></span><code class=\"docstring\">If `true`, the part is only rendered in draft mode. </code>",
  "306":
- "<code>Verso.Genre.Manual.Inline.name (self : Manual.Inline) : Lean.Name</code><span class=\"sep\"></span><code class=\"docstring\">A unique name that identifies the inline. </code>",
+ "<code>Bool</code><span class=\"sep\"></span><code class=\"docstring\">Should this section be numbered? If `false`, then it's like `\\section*` in LaTeX </code>",
  "305":
- "<code>Verso.Genre.Manual.Block.name (self : Manual.Block) : Lean.Name</code><span class=\"sep\"></span><code class=\"docstring\">A unique name that identifies the block. </code>",
+ "<code>Verso.Multi.InternalId : Type</code><span class=\"sep\"></span><code class=\"docstring\">An internal identifier assigned to a part during traversal. Users don't get to have influence\nover these IDs, so they can be used to ensure uniqueness of tags.\n\nEven though the constructor is private, there is a JSON serialization that can be used to undermine\nthe uniqueness of internal IDs. Please don't do that - your program may break unpredictably.\n</code>",
  "304":
- "<code>Lean.Name</code><span class=\"sep\"></span><code class=\"docstring\">A unique name that identifies the inline. </code>",
+ "<code>Option InternalId</code><span class=\"sep\"></span><code class=\"docstring\">The internal unique ID, which is automatically assigned during traversal. </code>",
  "303":
- "<code>Verso.Genre.Manual.Inline.mk (name : Lean.Name := by exact decl_name%) (id : Option InternalId) (data : Lean.Json) :\n  Manual.Inline</code>",
+ "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">If this part ends up as the root of a file, use this name for it </code>",
  "302":
- "<code>Verso.NameMap (α : Type) : Type</code><span class=\"sep\"></span><code class=\"docstring\">A Verso `NameMap` maps non-empty, string-only names to some kind of value.\n</code>",
+ "<code>Verso.Genre.Manual.Tag : Type</code><span class=\"sep\"></span><code class=\"docstring\">Tags are used to refer to parts through tables of contents, cross-references, and the like.\n\nDuring the traverse pass, the following steps occur:\n\n1. user-provided tags are ensured to be globally unique, and saved as xref targets\n\n2. internal tags are heuristically assigned to parts based on their section names\n\n3. internal tags are converted to unique external tags, but not provided for user-written xrefs\n       \\(needed for automatic linking, e.g. in a table of contents\\)\n\nNote that internal invariants about uniqueness of names can be violated by editing the JSON\nserialization. This may lead to unexpected results.\n</code>",
  "301":
- "<code>NameMap String</code><span class=\"sep\"></span><code class=\"docstring\">A registry for properties that can be used to create ad-hoc protocols for coordination between\n  block elements in extensions.\n  </code>",
+ "<code>Option Tag</code><span class=\"sep\"></span><code class=\"docstring\">This part's cross-referencing tag.\n\nThis field is set during traversal, which derives a unique external tag from the part's\n  canonical name.\n  </code>",
  "300":
- "<code>Lean.Json</code><span class=\"sep\"></span><code class=\"docstring\">Data saved by elaboration, potentially updated during traversal, and used to render output. This\n  is the primary means of communicating information about a block between phases.\n  </code>",
+ "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">This part's canonical name.\n\nThe canonical name is used for stable cross references. It also serves as the basis\n  for the section's HTML ID.\n  </code>",
  "30":
- "<code>MonadState.{u, v} (σ : outParam (Type u)) (m : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">State monads provide a value of a given type (the _state_) that can be retrieved or replaced.\nInstances may implement these operations by passing state values around, by using a mutable\nreference cell (e.g. `ST.Ref σ`), or in other ways.\n\nIn this class, `σ` is an `outParam`, which means that it is inferred from `m`. `MonadStateOf σ`\nprovides the same operations, but allows `σ` to influence instance synthesis.\n\nThe mutable state of a state monad is visible between multiple `do`-blocks or functions, unlike\n[local mutable state](https://lean-lang.org/doc/reference/4.33.0/find/?domain=Verso.Genre.Manual.section&name=do-notation-let-mut) in `do`-notation.\n</code>",
+ "<code>MonadState.{u, v} (σ : outParam (Type u)) (m : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">State monads provide a value of a given type (the _state_) that can be retrieved or replaced.\nInstances may implement these operations by passing state values around, by using a mutable\nreference cell (e.g. `ST.Ref σ`), or in other ways.\n\nIn this class, `σ` is an `outParam`, which means that it is inferred from `m`. `MonadStateOf σ`\nprovides the same operations, but allows `σ` to influence instance synthesis.\n\nThe mutable state of a state monad is visible between multiple `do`-blocks or functions, unlike\n[local mutable state](https://lean-lang.org/doc/reference/4.34.0/find/?domain=Verso.Genre.Manual.section&amp;name=do-notation-let-mut) in `do`-notation.\n</code>",
  "3":
  "<code>Verso.Doc.Genre.mk (PartMetadata Block Inline TraverseContext TraverseState : Type) : Doc.Genre</code>",
  "299":
- "<code>Option InternalId</code><span class=\"sep\"></span><code class=\"docstring\">A unique ID, assigned during traversal. </code>",
+ "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">The publication date </code>",
  "298":
- "<code>Lean.Name</code><span class=\"sep\"></span><code class=\"docstring\">A unique name that identifies the block. </code>",
+ "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">An extra note to show after the author list </code>",
  "297":
- "<code>Verso.Genre.Manual.Block.mk (name : Lean.Name := by exact decl_name%) (id : Option InternalId) (data : Lean.Json)\n  (properties : NameMap String) : Manual.Block</code>",
+ "<code>List String</code><span class=\"sep\"></span><code class=\"docstring\">The book's authors </code>",
  "296":
- "<code>Verso.Genre.Manual.InlineLean.name : Elab.RoleExpanderOf NameConfig</code>",
+ "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">A shorter title to be shown in breadcrumbs for search results. Should typically be at least as\n  short as `shortTitle`.\n  </code>",
  "295":
- "<code>Verso.Genre.Manual.HtmlSplitMode.never : HtmlSplitMode</code><span class=\"sep\"></span><code class=\"docstring\">Do not split here nor in child parts </code>",
+ "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">A shorter title to be shown in titlebars and tables of contents.\n  </code>",
  "294":
- "<code>Verso.Genre.Manual.HtmlSplitMode.default : HtmlSplitMode</code><span class=\"sep\"></span><code class=\"docstring\">Follow the main setting </code>",
- "293": "<code>Fin 100</code>",
+ "<code>Verso.Genre.Manual.PartMetadata.mk (shortTitle shortContextTitle : Option String) (authors : List String)\n  (authorshipNote date tag : Option String) (xrefTag : Option Tag) (file : Option String) (id : Option InternalId)\n  (number draft : Bool) (assignedNumber : Option Numbering) (htmlToc : Bool) (htmlSplit : HtmlSplitMode)\n  (searchPriority : Fin 100) : PartMetadata</code>",
+ "293":
+ "<code>Verso.Genre.Manual.PartMetadata : Type</code><span class=\"sep\"></span><code class=\"docstring\">Metadata for the manual </code>",
  "292":
- "<code>Fin (n : Nat) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Natural numbers less than some upper bound.\n\nIn particular, a `Fin n` is a natural number `i` with the constraint that `i &lt; n`. It is the\ncanonical type with `n` elements.\n</code>",
+ "<code>Verso.Genre.Blog.Template.builtinHeader : Blog.TemplateM Output.Html</code><span class=\"sep\"></span><code class=\"docstring\">Contains the contents of `&lt;head&gt;` that are needed for proper functioning of the site.\n</code>",
  "291":
- "<code>Fin 100</code><span class=\"sep\"></span><code class=\"docstring\">Relative priority of this section in search results, on a scale from `0`\n  to `99`. `50` is the default \\(no boost\\);\n  higher values boost the section's rank and lower values de-emphasize it. The same priority\n  influences both quick-jump and full-text matches for the section.\n\nPriorities set on ancestor parts are inherited: each ancestor's deviation from\n  `50` accumulates into a section's effective priority. For example,\n  setting `searchPriority` to `25` on a top-level “Release Notes”\n  part de-emphasizes every subsection beneath it, while an individual subsection can override by\n  setting a higher value of its own \\(which is added to, not multiplied with, the ancestor\n  contribution\\). A chain of neutral \\(`50`\\) ancestors contributes nothing.\n  </code>",
+ "<code>Verso.Genre.Blog.Template.param? {α : Type} [TypeName α] (key : String) : Blog.TemplateM (Option α)</code><span class=\"sep\"></span><code class=\"docstring\">Returns the value of the given template, if it exists.\nIf it exists but has the wrong type, an exception is thrown.\n</code>",
  "290":
- "<code>Verso.Genre.Manual.HtmlSplitMode : Type</code><span class=\"sep\"></span><code class=\"docstring\">When rendering multi-page HTML, should splitting pages follow the depth setting? </code>",
+ "<code>TypeName.{u} (α : Type u) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Dynamic type name information.\nTypes with an instance of `TypeName` can be stored in an `Dynamic`.\nThe type class contains the declaration name of the type,\nwhich must not have any universe parameters\nand be of type `Sort ..` (i.e., monomorphic).\n\nThe preferred way to declare instances of this type is using the derive\nhandler, which will internally use the unsafe `TypeName.mk` function.\n\nMorally, this is the same as:\n```lean\nclass TypeName (α : Type) where unsafe mk ::\n  typeName : Name\n```\n</code>",
  "29":
  "<code>MonadReader.{u, v} (ρ : outParam (Type u)) (m : Type u → Type v) : Type v</code><span class=\"sep\"></span><code class=\"docstring\">Reader monads provide the ability to implicitly thread a value through a computation. The value can\nbe read, but not written. A `MonadWithReader ρ` instance additionally allows the value to be locally\noverridden for a sub-computation.\n\nIn this class, `ρ` is an `outParam`, which means that it is inferred from `m`. `MonadReaderOf ρ`\nprovides the same operations, but allows `ρ` to influence instance synthesis.\n</code>",
  "289":
- "<code>HtmlSplitMode</code><span class=\"sep\"></span><code class=\"docstring\">How should this document be split when rendering multi-page HTML output? </code>",
+ "<code>Verso.Genre.Blog.Template.param {α : Type} [TypeName α] (key : String) : Blog.TemplateM α</code><span class=\"sep\"></span><code class=\"docstring\">Returns the value of the given template, if it exists. If it does not exist or if it exists but has\nthe wrong type, an exception is thrown.\n</code>",
  "288":
- "<code>Bool</code><span class=\"sep\"></span><code class=\"docstring\">If `true`, this part will display a list of subparts that are separate HTML pages. </code>",
- "287": "<code>Verso.Genre.Manual.Numbering : Type</code>",
+ "<code>Verso.Genre.Blog.TemplateM (α : Type) : Type</code><span class=\"sep\"></span><code class=\"docstring\">A monad that provides template instantiation via dynamically-typed parameters.\n</code>",
+ "287":
+ "<code>Array (String × String × Bool)</code><span class=\"sep\"></span><code class=\"docstring\">JS files to be referenced in `&lt;head&gt;` or at the end of `&lt;body&gt;` and added to generated code.\n</code>",
  "286":
- "<code>Option Numbering</code><span class=\"sep\"></span><code class=\"docstring\">Which number has been assigned? This field is set during traversal. </code>",
- "285":
- "<code>Bool</code><span class=\"sep\"></span><code class=\"docstring\">If `true`, the part is only rendered in draft mode. </code>",
+ "<code>Array (String × String)</code><span class=\"sep\"></span><code class=\"docstring\">CSS files to be referenced in `&lt;head&gt;` and added to generated code.\n</code>",
+ "285": "<code>Verso.Genre.Blog.Template.Override : Type</code>",
  "284":
- "<code>Bool</code><span class=\"sep\"></span><code class=\"docstring\">Should this section be numbered? If `false`, then it's like `\\section*` in LaTeX </code>",
+ "<code>Array String → Option Blog.Template.Override</code><span class=\"sep\"></span><code class=\"docstring\">Customize the rendering of a given path by replacing the\ntemplate and providing additional parameters\n</code>",
  "283":
- "<code>Verso.Multi.InternalId : Type</code><span class=\"sep\"></span><code class=\"docstring\">An internal identifier assigned to a part during traversal. Users don't get to have influence\nover these IDs, so they can be used to ensure uniqueness of tags.\n\nEven though the constructor is private, there is a JSON serialization that can be used to undermine\nthe uniqueness of internal IDs. Please don't do that - your program may break unpredictably.\n</code>",
+ "<code><span class=\"literal string\">\"category\"</span> : String</code>",
  "282":
- "<code>Option InternalId</code><span class=\"sep\"></span><code class=\"docstring\">The internal unique ID, which is automatically assigned during traversal. </code>",
+ "<code>Blog.Template</code><span class=\"sep\"></span><code class=\"docstring\">The template used to display a category at the top of a category's post list. It receives one\nparameter, `\"category\"`, which contains a `Post.Category`.\n</code>",
  "281":
- "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">If this part ends up as the root of a file, use this name for it </code>",
- "280":
- "<code>Verso.Genre.Manual.Tag : Type</code><span class=\"sep\"></span><code class=\"docstring\">Tags are used to refer to parts through tables of contents, cross-references, and the like.\n\nDuring the traverse pass, the following steps occur:\n\n1. user-provided tags are ensured to be globally unique, and saved as xref targets\n\n2. internal tags are heuristically assigned to parts based on their section names\n\n3. internal tags are converted to unique external tags, but not provided for user-written xrefs\n       \\(needed for automatic linking, e.g. in a table of contents\\)\n\nNote that internal invariants about uniqueness of names can be violated by editing the JSON\nserialization. This may lead to unexpected results.\n</code>",
+ "<code><span class=\"literal string\">\"summary\"</span> : String</code>",
+ "280": "<code><span class=\"literal string\">\"post\"</span> : String</code>",
  "28":
  "<code>[MonadReader g.TraverseContext m] → [MonadState g.TraverseState m] → Doc.Part g → m (Option g.PartMetadata)</code><span class=\"sep\"></span><code class=\"docstring\">The effects carried out before traversing a `Part`.\n  </code>",
  "279":
- "<code>Option Tag</code><span class=\"sep\"></span><code class=\"docstring\">The main tag for the part, used for cross-references. </code>",
+ "<code>Blog.Template</code><span class=\"sep\"></span><code class=\"docstring\">The template used to summarize a blog post in a post archive. It receives the parameters `\"post\"`,\nwhich contains the post, and `\"summary\"`, which contains the HTML summary to display.\n</code>",
  "278":
- "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">The publication date </code>",
+ "<code><span class=\"literal string\">\"Post.PartMetadata\"</span> : String</code>",
  "277":
- "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">An extra note to show after the author list </code>",
+ "<code><span class=\"literal string\">\"metadata\"</span> : String</code>",
  "276":
- "<code>List String</code><span class=\"sep\"></span><code class=\"docstring\">The book's authors </code>",
- "275":
- "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">A shorter title to be shown in breadcrumbs for search results. Should typically be at least as\n  short as `shortTitle`.\n  </code>",
- "274":
- "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">A shorter title to be shown in titlebars and tables of contents.\n  </code>",
+ "<code>Blog.Template</code><span class=\"sep\"></span><code class=\"docstring\">Blog posts are rendered using `pageTemplate`, with the result being passed in the `\"content\"`\nparameter to `primaryTemplate`. This template should use the `\"title\"` and `\"content\"` parameters\nto construct the contents of the post. Additionally, the `\"metadata\"` template of type\n`\"Post.PartMetadata\"` may be present; if so, it can be used to render the author, date, and\ncategories of the post.\n</code>",
+ "275": "<code><span class=\"literal string\">\"title\"</span> : String</code>",
+ "274": "<code>Blog.Template</code>",
  "273":
- "<code>Verso.Genre.Manual.PartMetadata.mk (shortTitle shortContextTitle : Option String) (authors : List String)\n  (authorshipNote date : Option String) (tag : Option Tag) (file : Option String) (id : Option InternalId)\n  (number draft : Bool) (assignedNumber : Option Numbering) (htmlToc : Bool) (htmlSplit : HtmlSplitMode)\n  (searchPriority : Fin 100) : PartMetadata</code>",
+ "<code>Blog.Template</code><span class=\"sep\"></span><code class=\"docstring\">Pages are rendered using `pageTemplate`, with the result being passed in the `\"content\"` parameter\nto `primaryTemplate`. This template should use the `\"title\"` and `\"content\"` parameters to\nconstruct the contents of the page.\n</code>",
  "272":
- "<code>Verso.Genre.Manual.PartMetadata : Type</code><span class=\"sep\"></span><code class=\"docstring\">Metadata for the manual </code>",
+ "<code><span class=\"literal string\">\"content\"</span> : String</code>",
  "271":
- "<code>Verso.Genre.Blog.Template.builtinHeader : Blog.TemplateM Output.Html</code><span class=\"sep\"></span><code class=\"docstring\">Contains the contents of `&lt;head&gt;` that are needed for proper functioning of the site.\n</code>",
+ "<code>Verso.Genre.Blog.Post.Categories : Type</code><span class=\"sep\"></span><code class=\"docstring\">Wrapper around `Array Category` that allows a `TypeName` instance and provides link targets </code>",
  "270":
- "<code>Verso.Genre.Blog.Template.param? {α : Type} [TypeName α] (key : String) : Blog.TemplateM (Option α)</code><span class=\"sep\"></span><code class=\"docstring\">Returns the value of the given template, if it exists.\nIf it exists but has the wrong type, an exception is thrown.\n</code>",
+ "<code><span class=\"literal string\">\"categories\"</span> : String</code>",
  "27":
  "<code>Verso.Doc.Traverse.mk {g : Doc.Genre} {m : outParam (Type → Type)}\n  (part : [MonadReader g.TraverseContext m] → [MonadState g.TraverseState m] → Doc.Part g → m (Option g.PartMetadata))\n  (block : [MonadReader g.TraverseContext m] → [MonadState g.TraverseState m] → Doc.Block g → m Unit)\n  (inline : [MonadReader g.TraverseContext m] → [MonadState g.TraverseState m] → Doc.Inline g → m Unit)\n  (genrePart :\n    [MonadReader g.TraverseContext m] →\n      [MonadState g.TraverseState m] → g.PartMetadata → Doc.Part g → m (Option (Doc.Part g)))\n  (genreBlock :\n    [MonadReader g.TraverseContext m] →\n      [MonadState g.TraverseState m] → g.Block → Array (Doc.Block g) → m (Option (Doc.Block g)))\n  (genreInline :\n    [MonadReader g.TraverseContext m] →\n      [MonadState g.TraverseState m] → g.Inline → Array (Doc.Inline g) → m (Option (Doc.Inline g))) :\n  Doc.Traverse g m</code>",
- "269":
- "<code>TypeName.{u} (α : Type u) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Dynamic type name information.\nTypes with an instance of `TypeName` can be stored in an `Dynamic`.\nThe type class contains the declaration name of the type,\nwhich must not have any universe parameters\nand be of type `Sort ..` (i.e., monomorphic).\n\nThe preferred way to declare instances of this type is using the derive\nhandler, which will internally use the unsafe `TypeName.mk` function.\n\nMorally, this is the same as:\n```lean\nclass TypeName (α : Type) where unsafe mk ::\n  typeName : Name\n```\n</code>",
+ "269": "<code><span class=\"literal string\">\"posts\"</span> : String</code>",
  "268":
- "<code>Verso.Genre.Blog.Template.param {α : Type} [TypeName α] (key : String) : Blog.TemplateM α</code><span class=\"sep\"></span><code class=\"docstring\">Returns the value of the given template, if it exists. If it does not exist or if it exists but has\nthe wrong type, an exception is thrown.\n</code>",
+ "<code>Verso.Genre.Blog.Template : Type</code><span class=\"sep\"></span><code class=\"docstring\">A procedure for producing HTML from parameters. An abbreviation for `TemplateM Html`\n</code>",
  "267":
- "<code>Verso.Genre.Blog.TemplateM (α : Type) : Type</code><span class=\"sep\"></span><code class=\"docstring\">A monad that provides template instantiation via dynamically-typed parameters.\n</code>",
+ "<code>Blog.Template</code><span class=\"sep\"></span><code class=\"docstring\">The template used to render every page. It should construct an HTML value for the entire page,\nincluding the `&lt;html&gt;` element.\n\nIn the `&lt;head&gt;` element, it should invoke `builtinHeader` to ensure that the required dependencies\nare present and that Verso-specific initialization is performed.\n\nIn the body, it should check whether the parameter `\"posts\"` of type `Html` is present. If so, the\npage being rendered is a blog index, so it should place the parameter's value as a list of posts.\nIf `\"categories\"` of type `Post.Categories` is present, it should render the contents as a\ncategory list.\n\nThe parameter `\"content\"` of type `Html` contains the content of the page. It should be placed\naccordingly in the result.\n</code>",
  "266":
- "<code>Array (String × String × Bool)</code><span class=\"sep\"></span><code class=\"docstring\">JS files to be referenced in `&lt;head&gt;` or at the end of `&lt;body&gt;` and added to generated code.\n</code>",
+ "<code>Verso.Genre.Blog.Theme.mk\n  (primaryTemplate pageTemplate postTemplate archiveEntryTemplate categoryTemplate : Blog.Template)\n  (adHocTemplates : Array String → Option Blog.Template.Override) (cssFiles : Array (String × String))\n  (jsFiles : Array (String × String × Bool)) : Blog.Theme</code>",
  "265":
- "<code>Array (String × String)</code><span class=\"sep\"></span><code class=\"docstring\">CSS files to be referenced in `&lt;head&gt;` and added to generated code.\n</code>",
- "264": "<code>Verso.Genre.Blog.Template.Override : Type</code>",
+ "<code>System.FilePath : Type</code><span class=\"sep\"></span><code class=\"docstring\">A path on the file system.\n\nPaths consist of a sequence of directories followed by the name of a file or directory. They are\ndelimited by a platform-dependent separator character (see `System.FilePath.pathSeparator`).\n</code>",
+ "264": "<code>System.FilePath</code>",
  "263":
- "<code>Array String → Option Blog.Template.Override</code><span class=\"sep\"></span><code class=\"docstring\">Customize the rendering of a given path by replacing the\ntemplate and providing additional parameters\n</code>",
+ "<code>Verso.Genre.Blog.Dir.static (name : String) (files : System.FilePath) : Blog.Dir</code><span class=\"sep\"></span><code class=\"docstring\">The directory's root contains static files, copied from `files` when the site is generated </code>",
  "262":
- "<code><span class=\"literal string\">\"category\"</span> : String</code>",
+ "<code>Verso.Genre.Blog.Dir.blog (name : String) (id : Lean.Name) (text : Part Page) (contents : Array Blog.BlogPost) :\n  Blog.Dir</code><span class=\"sep\"></span><code class=\"docstring\">The directory's root is a blog </code>",
  "261":
- "<code>Blog.Template</code><span class=\"sep\"></span><code class=\"docstring\">The template used to display a category at the top of a category's post list. It receives one\nparameter, `\"category\"`, which contains a `Post.Category`.\n</code>",
- "260":
- "<code><span class=\"literal string\">\"summary\"</span> : String</code>",
+ "<code>Verso.Genre.Blog.Dir.page (name : String) (id : Lean.Name) (text : Part Page) (contents : Array Blog.Dir) : Blog.Dir</code><span class=\"sep\"></span><code class=\"docstring\">The directory's root is the provided page </code>",
+ "260": "<code>Verso.Genre.Blog.BlogPost : Type</code>",
  "26":
  "<code>Verso.Genre.Manual.Inline : Type</code><span class=\"sep\"></span><code class=\"docstring\">A custom inline. The `name` field should correspond to an entry in the\nblock descriptions table.\n</code>",
- "259": "<code><span class=\"literal string\">\"post\"</span> : String</code>",
+ "259": "<code>Array Blog.BlogPost</code>",
  "258":
- "<code>Blog.Template</code><span class=\"sep\"></span><code class=\"docstring\">The template used to summarize a blog post in a post archive. It receives the parameters `\"post\"`,\nwhich contains the post, and `\"summary\"`, which contains the HTML summary to display.\n</code>",
+ "<code>Verso.Genre.Blog.Site.blog (id : Lean.Name) (text : Part Page) (contents : Array Blog.BlogPost) : Blog.Site</code><span class=\"sep\"></span><code class=\"docstring\">The root of the site is a blog with its associated posts </code>",
  "257":
- "<code><span class=\"literal string\">\"Post.PartMetadata\"</span> : String</code>",
- "256":
- "<code><span class=\"literal string\">\"metadata\"</span> : String</code>",
+ "<code>Verso.Genre.Blog.Dir : Type</code><span class=\"sep\"></span><code class=\"docstring\">A directory within the layout of a site.\n</code>",
+ "256": "<code>Array Blog.Dir</code>",
  "255":
- "<code>Blog.Template</code><span class=\"sep\"></span><code class=\"docstring\">Blog posts are rendered using `pageTemplate`, with the result being passed in the `\"content\"`\nparameter to `primaryTemplate`. This template should use the `\"title\"` and `\"content\"` parameters\nto construct the contents of the post. Additionally, the `\"metadata\"` template of type\n`\"Post.PartMetadata\"` may be present; if so, it can be used to render the author, date, and\ncategories of the post.\n</code>",
- "254": "<code><span class=\"literal string\">\"title\"</span> : String</code>",
- "253": "<code>Blog.Template</code>",
+ "<code>Verso.Doc.Part (genre : Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">A logical division of a document.\n</code>",
+ "254": "<code>Part Page</code>",
+ "253":
+ "<code>Verso.Genre.Blog.Site.page (id : Lean.Name) (text : Part Page) (contents : Array Blog.Dir) : Blog.Site</code><span class=\"sep\"></span><code class=\"docstring\">The root of the site is a page </code>",
  "252":
- "<code>Blog.Template</code><span class=\"sep\"></span><code class=\"docstring\">Pages are rendered using `pageTemplate`, with the result being passed in the `\"content\"` parameter\nto `primaryTemplate`. This template should use the `\"title\"` and `\"content\"` parameters to\nconstruct the contents of the page.\n</code>",
+ "<code>UInt32 : Type</code><span class=\"sep\"></span><code class=\"docstring\">Unsigned 32-bit integers.\n\nThis type has special support in the compiler so it can be represented by an unboxed 32-bit value\nrather than wrapping a `BitVec 32`.\n</code>",
  "251":
- "<code><span class=\"literal string\">\"content\"</span> : String</code>",
+ "<code>IO : Type → Type</code><span class=\"sep\"></span><code class=\"docstring\">A monad that supports arbitrary side effects and throwing exceptions of type `IO.Error`.\n</code>",
  "250":
- "<code>Verso.Genre.Blog.Post.Categories : Type</code><span class=\"sep\"></span><code class=\"docstring\">Wrapper around `Array Category` that allows a `TypeName` instance and provides link targets </code>",
+ "<code>Verso.Output.Html.doctype : String</code><span class=\"sep\"></span><code class=\"docstring\">The default `DOCTYPE` for HTML5. </code>",
  "25":
  "<code>Verso.Genre.Manual.Block : Type</code><span class=\"sep\"></span><code class=\"docstring\">A custom block. The `name` field should correspond to an entry in the block descriptions table.\n</code>",
- "249":
- "<code><span class=\"literal string\">\"categories\"</span> : String</code>",
- "248": "<code><span class=\"literal string\">\"posts\"</span> : String</code>",
- "247":
- "<code>Verso.Genre.Blog.Template : Type</code><span class=\"sep\"></span><code class=\"docstring\">A procedure for producing HTML from parameters. An abbreviation for `TemplateM Html`\n</code>",
- "246":
- "<code>Blog.Template</code><span class=\"sep\"></span><code class=\"docstring\">The template used to render every page. It should construct an HTML value for the entire page,\nincluding the `&lt;html&gt;` element.\n\nIn the `&lt;head&gt;` element, it should invoke `builtinHeader` to ensure that the required dependencies\nare present and that Verso-specific initialization is performed.\n\nIn the body, it should check whether the parameter `\"posts\"` of type `Html` is present. If so, the\npage being rendered is a blog index, so it should place the parameter's value as a list of posts.\nIf `\"categories\"` of type `Post.Categories` is present, it should render the contents as a\ncategory list.\n\nThe parameter `\"content\"` of type `Html` contains the content of the page. It should be placed\naccordingly in the result.\n</code>",
+ "249": "<code>optParam String Output.Html.doctype</code>",
+ "248": "<code>Verso.Genre.Blog.Components : Type</code>",
+ "247": "<code>autoParam Blog.Components Blog.blogMain._auto_1</code>",
+ "246": "<code>List String</code>",
  "245":
- "<code>Verso.Genre.Blog.Theme.mk\n  (primaryTemplate pageTemplate postTemplate archiveEntryTemplate categoryTemplate : Blog.Template)\n  (adHocTemplates : Array String → Option Blog.Template.Override) (cssFiles : Array (String × String))\n  (jsFiles : Array (String × String × Bool)) : Blog.Theme</code>",
- "244":
- "<code>System.FilePath : Type</code><span class=\"sep\"></span><code class=\"docstring\">A path on the file system.\n\nPaths consist of a sequence of directories followed by the name of a file or directory. They are\ndelimited by a platform-dependent separator character (see `System.FilePath.pathSeparator`).\n</code>",
- "243": "<code>System.FilePath</code>",
- "242":
- "<code>Verso.Genre.Blog.Dir.static (name : String) (files : System.FilePath) : Blog.Dir</code><span class=\"sep\"></span><code class=\"docstring\">The directory's root contains static files, copied from `files` when the site is generated </code>",
+ "<code>Verso.Code.LinkTargets.mk {Ctxt : Type} (var : Lean.FVarId → Option Ctxt → Array Code.CodeLink)\n  (sort : Lean.Level → Option Ctxt → Array Code.CodeLink)\n  (const option keyword definition moduleName : Lean.Name → Option Ctxt → Array Code.CodeLink) : Code.LinkTargets Ctxt</code>",
+ "244": "<code>Verso.Genre.Blog.TraverseContext : Type</code>",
+ "243":
+ "<code>Verso.Code.LinkTargets (Ctxt : Type) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Instructions for computing link targets for various code elements.\n\nEach kind of link may have multiple destinations. The first is the default link, while the remainder\nare considered alternates.\n</code>",
+ "242": "<code>optParam (Code.LinkTargets Blog.TraverseContext) { }</code>",
  "241":
- "<code>Verso.Genre.Blog.Dir.blog (name : String) (id : Lean.Name) (text : Part Page) (contents : Array Blog.BlogPost) :\n  Blog.Dir</code><span class=\"sep\"></span><code class=\"docstring\">The directory's root is a blog </code>",
- "240":
- "<code>Verso.Genre.Blog.Dir.page (name : String) (id : Lean.Name) (text : Part Page) (contents : Array Blog.Dir) : Blog.Dir</code><span class=\"sep\"></span><code class=\"docstring\">The directory's root is the provided page </code>",
+ "<code>Verso.Genre.Blog.Site : Type</code><span class=\"sep\"></span><code class=\"docstring\">A specification of the layout of an entire site </code>",
+ "240": "<code>Blog.Site</code>",
  "24":
  "<code>MonadWithReader.withReader.{u, v} {ρ : outParam (Type u)} {m : Type u → Type v} [self : MonadWithReader ρ m]\n  {α : Type u} (f : ρ → ρ) (x : m α) : m α</code><span class=\"sep\"></span><code class=\"docstring\">Locally modifies the reader monad's value while running an action.\n\nDuring the inner action `x`, reading the value returns `f` applied to the original value. After\ncontrol returns from `x`, the reader monad's value is restored.\n</code>",
- "239": "<code>Verso.Genre.Blog.BlogPost : Type</code>",
- "238": "<code>Array Blog.BlogPost</code>",
+ "239":
+ "<code>Verso.Genre.Blog.Theme : Type</code><span class=\"sep\"></span><code class=\"docstring\">A specification of how to render a site.\n</code>",
+ "238": "<code>Blog.Theme</code>",
  "237":
- "<code>Verso.Genre.Blog.Site.blog (id : Lean.Name) (text : Part Page) (contents : Array Blog.BlogPost) : Blog.Site</code><span class=\"sep\"></span><code class=\"docstring\">The root of the site is a blog with its associated posts </code>",
+ "<code>Verso.Genre.Blog.blogMain (theme : Blog.Theme) (site : Blog.Site)\n  (linkTargets : Code.LinkTargets Blog.TraverseContext := { }) (options : List String)\n  (components : Blog.Components := by exact %registered_components) (header : String := Output.Html.doctype) : IO UInt32</code><span class=\"sep\"></span><code class=\"docstring\">Generates the HTML for `site`.\n\nParameters:\n* `theme` is the theme used to render content.\n* `site` is the site to be generated.\n* `options` are the command-line options provided by a user.\n\nOptional parameters:\n* `linkTargets` specifies how to create hyperlinks from Lean code to further documentation. By\n  default, no links are generated.\n* `components` contains the implementation of the components. This is automatically filled out from\n  a table.\n* `header` is emitted prior to each HTML document. By default, it produces a `&lt;doctype&gt;`, but it\n  can be overridden to integrate with other static site generators.\n</code>",
  "236":
- "<code>Verso.Genre.Blog.Dir : Type</code><span class=\"sep\"></span><code class=\"docstring\">A directory within the layout of a site.\n</code>",
- "235": "<code>Array Blog.Dir</code>",
+ "<code>Bool</code><span class=\"sep\"></span><code class=\"docstring\">If `true`, the post is not rendered by default </code>",
+ "235":
+ "<code>Verso.Genre.Blog.Post.Category : Type</code><span class=\"sep\"></span><code class=\"docstring\">A category of blog posts.\n</code>",
  "234":
- "<code>Verso.Doc.Part (genre : Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">A logical division of a document.\n</code>",
- "233": "<code>Part Page</code>",
- "232":
- "<code>Verso.Genre.Blog.Site.page (id : Lean.Name) (text : Part Page) (contents : Array Blog.Dir) : Blog.Site</code><span class=\"sep\"></span><code class=\"docstring\">The root of the site is a page </code>",
+ "<code>List Post.Category</code><span class=\"sep\"></span><code class=\"docstring\">The categories in which to include the post </code>",
+ "233":
+ "<code>List String</code><span class=\"sep\"></span><code class=\"docstring\">The authors of the post </code>",
+ "232": "<code>Verso.Genre.Blog.Date : Type</code>",
  "231":
- "<code>UInt32 : Type</code><span class=\"sep\"></span><code class=\"docstring\">Unsigned 32-bit integers.\n\nThis type has special support in the compiler so it can be represented by an unboxed 32-bit value\nrather than wrapping a `BitVec 32`.\n</code>",
+ "<code>Blog.Date</code><span class=\"sep\"></span><code class=\"docstring\">The post's date. By default, this is used in the URL as well as included in the content. </code>",
  "230":
- "<code>IO : Type → Type</code><span class=\"sep\"></span><code class=\"docstring\">A monad that supports arbitrary side effects and throwing exceptions of type `IO.Error`.\n</code>",
+ "<code>Verso.Genre.Blog.Post.Meta.mk (date : Blog.Date) (authors : List String) (categories : List Post.Category)\n  (draft : Bool) (htmlId : Option String) : Post.Meta</code>",
  "23":
  "<code>inline.{u} {α : Sort u} (a : α) : α</code><span class=\"sep\"></span><code class=\"docstring\">`inline (f x)` is an indication to the compiler to inline the definition of `f`\nat the application site itself (by comparison to the `@[inline]` attribute,\nwhich applies to all applications of the function).\n</code>",
  "229":
- "<code>Verso.Output.Html.doctype : String</code><span class=\"sep\"></span><code class=\"docstring\">The default `DOCTYPE` for HTML5. </code>",
- "228": "<code>optParam String Output.Html.doctype</code>",
- "227": "<code>Verso.Genre.Blog.Components : Type</code>",
- "226": "<code>autoParam Blog.Components Blog.blogMain._auto_1</code>",
- "225": "<code>List String</code>",
+ "<code>Verso.Genre.Blog.Post.Meta : Type</code><span class=\"sep\"></span><code class=\"docstring\">The metadata used for blog posts </code>",
+ "228":
+ "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">The HTML ID to assign to the header </code>",
+ "227":
+ "<code>Bool</code><span class=\"sep\"></span><code class=\"docstring\">Whether to hide this page/part from navigation entries </code>",
+ "226":
+ "<code>Verso.Genre.Blog.Page.Meta.mk (showInNav : Bool) (htmlId : Option String) : Page.Meta</code>",
+ "225":
+ "<code>Verso.Genre.Blog.Page.Meta : Type</code><span class=\"sep\"></span><code class=\"docstring\">The metadata used for non-blog-post pages </code>",
  "224":
- "<code>Verso.Code.LinkTargets.mk {Ctxt : Type} (var : Lean.FVarId → Option Ctxt → Array Code.CodeLink)\n  (sort : Lean.Level → Option Ctxt → Array Code.CodeLink)\n  (const option keyword definition moduleName : Lean.Name → Option Ctxt → Array Code.CodeLink) : Code.LinkTargets Ctxt</code>",
- "223": "<code>Verso.Genre.Blog.TraverseContext : Type</code>",
+ "<code>Verso.Genre.Blog.InlineExt.component (name : Lean.Name) (data : Lean.Json) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">A reference to a component.\n</code>",
+ "223":
+ "<code>Verso.Genre.Blog.InlineExt.blob (html : Output.Html) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">A blob of HTML. The contents are discarded.\n</code>",
  "222":
- "<code>Verso.Code.LinkTargets (Ctxt : Type) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Instructions for computing link targets for various code elements.\n\nEach kind of link may have multiple destinations. The first is the default link, while the remainder\nare considered alternates.\n</code>",
- "221": "<code>optParam (Code.LinkTargets Blog.TraverseContext) { }</code>",
+ "<code>Verso.Genre.Blog.InlineExt.htmlSpan (classes : String) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">An HTML span element with the given classes.\n</code>",
+ "221": "<code>?m.1</code>",
  "220":
- "<code>Verso.Genre.Blog.Site : Type</code><span class=\"sep\"></span><code class=\"docstring\">A specification of the layout of an entire site </code>",
+ "<code>Option.some.{u} {α : Type u} (val : α) : Option α</code><span class=\"sep\"></span><code class=\"docstring\">Some value of type `α`. </code>",
  "22":
  "<code>outParam.{u} (α : Sort u) : Sort u</code><span class=\"sep\"></span><code class=\"docstring\">Gadget for marking output parameters in type classes.\n\nFor example, the `Membership` class is defined as:\n```\nclass Membership (α : outParam (Type u)) (γ : Type v)\n```\nThis means that whenever a typeclass goal of the form `Membership ?α ?γ` comes\nup, Lean will wait to solve it until `?γ` is known, but then it will run\ntypeclass inference, and take the first solution it finds, for any value of `?α`,\nwhich thereby determines what `?α` should be.\n\nThis expresses that in a term like `a ∈ s`, `s` might be a `Set α` or\n`List α` or some other type with a membership operation, and in each case\nthe \"member\" type `α` is determined by looking at the container type.\n</code>",
- "219": "<code>Blog.Site</code>",
+ "219": "<code>Option String</code>",
  "218":
- "<code>Verso.Genre.Blog.Theme : Type</code><span class=\"sep\"></span><code class=\"docstring\">A specification of how to render a site.\n</code>",
- "217": "<code>Blog.Theme</code>",
+ "<code>Verso.Genre.Blog.InlineExt.pageref (name : Lean.Name) (id? : Option String) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">A reference to a page or post's internal name as a Lean value, to be shown as a link.\nIf `id?` is `some X`, then the link is suffixed with `#X`.\n</code>",
+ "217":
+ "<code>Verso.Genre.Blog.InlineExt.ref (name : Lean.Name) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">A reference to a label.\n</code>",
  "216":
- "<code>Verso.Genre.Blog.blogMain (theme : Blog.Theme) (site : Blog.Site)\n  (linkTargets : Code.LinkTargets Blog.TraverseContext := { }) (options : List String)\n  (components : Blog.Components := by exact %registered_components) (header : String := Output.Html.doctype) : IO UInt32</code><span class=\"sep\"></span><code class=\"docstring\">Generates the HTML for `site`.\n\nParameters:\n* `theme` is the theme used to render content.\n* `site` is the site to be generated.\n* `options` are the command-line options provided by a user.\n\nOptional parameters:\n* `linkTargets` specifies how to create hyperlinks from Lean code to further documentation. By\n  default, no links are generated.\n* `components` contains the implementation of the components. This is automatically filled out from\n  a table.\n* `header` is emitted prior to each HTML document. By default, it produces a `&lt;doctype&gt;`, but it\n  can be overridden to integrate with other static site generators.\n</code>",
+ "<code>Verso.Genre.Blog.InlineExt.label (name : Lean.Name) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">A label to serve as a cross-reference target.\n</code>",
  "215":
- "<code>Bool</code><span class=\"sep\"></span><code class=\"docstring\">If `true`, the post is not rendered by default </code>",
+ "<code>Verso.Genre.Blog.InlineExt.customHighlight (highlighted : SubVerso.Highlighting.Highlighted) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">Highlighted code that is not necessarily from Lean.\n</code>",
  "214":
- "<code>Verso.Genre.Blog.Post.Category : Type</code><span class=\"sep\"></span><code class=\"docstring\">A category of blog posts.\n</code>",
+ "<code>Verso.Genre.Blog.InlineExt.lexedText (content : Blog.LexedText) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">Lexed text, to be displayed with highlighted syntax.\n</code>",
  "213":
- "<code>List Post.Category</code><span class=\"sep\"></span><code class=\"docstring\">The categories in which to include the post </code>",
+ "<code>Verso.Genre.Blog.InlineExt.message (msg : SubVerso.Highlighting.Highlighted.Message) (expandTraces : List Lean.Name) :\n  Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">Highlighted Lean messages.\n</code>",
  "212":
- "<code>List String</code><span class=\"sep\"></span><code class=\"docstring\">The authors of the post </code>",
- "211": "<code>Verso.Genre.Blog.Date : Type</code>",
+ "<code>Verso.Genre.Blog.InlineExt.highlightedCode (opts : Blog.CodeOpts) (highlighted : SubVerso.Highlighting.Highlighted) :\n  Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">Highlighted Lean code.\n</code>",
+ "211":
+ "<code>Verso.Genre.Blog.InlineExt : Type</code><span class=\"sep\"></span><code class=\"docstring\">The additional inline elements available in pages and posts.\n</code>",
  "210":
- "<code>Blog.Date</code><span class=\"sep\"></span><code class=\"docstring\">The post's date. By default, this is used in the URL as well as included in the content. </code>",
+ "<code>Verso.Genre.Blog.BlockExt.docstringSection (level : Nat) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">A section in a Lean docstring.\n\nLean docstrings may contain nested headers, but they are not sections of the document as a whole.\nThe contents of a docstring section are expected to be a paragraph that contains the section's\ntitle, followed by the actual content.\n</code>",
  "21": "<code>outParam (Type → Type)</code>",
- "209":
- "<code>Verso.Genre.Blog.Post.Meta.mk (date : Blog.Date) (authors : List String) (categories : List Post.Category)\n  (draft : Bool) (htmlId : Option String) : Post.Meta</code>",
- "208":
- "<code>Verso.Genre.Blog.Post.Meta : Type</code><span class=\"sep\"></span><code class=\"docstring\">The metadata used for blog posts </code>",
+ "209": "<code>Option Lean.Name</code>",
+ "208": "<code>Nat</code>",
  "207":
- "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">The HTML ID to assign to the header </code>",
- "206":
- "<code>Bool</code><span class=\"sep\"></span><code class=\"docstring\">Whether to hide this page/part from navigation entries </code>",
- "205":
- "<code>Verso.Genre.Blog.Page.Meta.mk (showInNav : Bool) (htmlId : Option String) : Page.Meta</code>",
+ "<code>Verso.Genre.Blog.BlockExt.docstring (indent : Nat) (declName? : Option Lean.Name) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">A Lean docstring that was indented `indent` spaces in the original source.\n</code>",
+ "206": "<code>Lean.Json : Type</code>",
+ "205": "<code>Lean.Json</code>",
  "204":
- "<code>Verso.Genre.Blog.Page.Meta : Type</code><span class=\"sep\"></span><code class=\"docstring\">The metadata used for non-blog-post pages </code>",
+ "<code>Verso.Genre.Blog.BlockExt.component (name : Lean.Name) (data : Lean.Json) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">A reference to a component.\n</code>",
  "203":
- "<code>Verso.Genre.Blog.InlineExt.component (name : Lean.Name) (data : Lean.Json) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">A reference to a component.\n</code>",
- "202":
- "<code>Verso.Genre.Blog.InlineExt.blob (html : Output.Html) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">A blob of HTML. The contents are discarded.\n</code>",
+ "<code>Verso.Genre.Blog.BlockExt.blob (html : Output.Html) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">A blob of HTML. The contents are discarded.\n</code>",
+ "202": "<code>Output.Html</code>",
  "201":
- "<code>Verso.Genre.Blog.InlineExt.htmlSpan (classes : String) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">An HTML span element with the given classes.\n</code>",
- "200": "<code>?m.1</code>",
+ "<code>Verso.Genre.Blog.BlockExt.htmlDetails (classes : String) (summary : Output.Html) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">When rendered, the content is wrapped in a `&lt;details&gt;` tag with the given summary.\n</code>",
+ "200":
+ "<code>Verso.Genre.Blog.BlockExt.htmlWrapper (tag : String) (attributes : Array (String × String)) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">When rendered, the content is wrapped in the specified HTML tag.\n</code>",
  "20":
  "<code>Verso.Doc.TraverseBlock (g : Doc.Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Specifies how to modify the context while traversing the contents of a given block.\n</code>",
  "2":
  "<code class=\"docstring\">A type universe. `Type ≡ Type 0`, `Type u ≡ Sort (u + 1)`. </code>",
  "199":
- "<code>Option.some.{u} {α : Type u} (val : α) : Option α</code><span class=\"sep\"></span><code class=\"docstring\">Some value of type `α`. </code>",
- "198": "<code>Option String</code>",
- "197":
- "<code>Verso.Genre.Blog.InlineExt.pageref (name : Lean.Name) (id? : Option String) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">A reference to a page or post's internal name as a Lean value, to be shown as a link.\nIf `id?` is `some X`, then the link is suffixed with `#X`.\n</code>",
+ "<code>Verso.Genre.Blog.BlockExt.htmlDiv (classes : String) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">When rendered, the content is wrapped in a `&lt;div&gt;` with the given classes.\n</code>",
+ "198": "<code>Verso.Genre.Blog.LexedText : Type</code>",
+ "197": "<code>Blog.LexedText</code>",
  "196":
- "<code>Verso.Genre.Blog.InlineExt.ref (name : Lean.Name) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">A reference to a label.\n</code>",
- "195":
- "<code>Verso.Genre.Blog.InlineExt.label (name : Lean.Name) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">A label to serve as a cross-reference target.\n</code>",
- "194":
- "<code>Verso.Genre.Blog.InlineExt.customHighlight (highlighted : SubVerso.Highlighting.Highlighted) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">Highlighted code that is not necessarily from Lean.\n</code>",
- "193":
- "<code>Verso.Genre.Blog.InlineExt.lexedText (content : Blog.LexedText) : Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">Lexed text, to be displayed with highlighted syntax.\n</code>",
+ "<code>Verso.Genre.Blog.BlockExt.lexedText (content : Blog.LexedText) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">Lexed text, to be displayed with highlighted syntax.\n</code>",
+ "195": "<code>List Lean.Name</code>",
+ "194": "<code>SubVerso.Highlighting.Highlighted.Message : Type</code>",
+ "193": "<code>SubVerso.Highlighting.Highlighted.Message</code>",
  "192":
- "<code>Verso.Genre.Blog.InlineExt.message (msg : SubVerso.Highlighting.Highlighted.Message) (expandTraces : List Lean.Name) :\n  Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">Highlighted Lean messages.\n</code>",
- "191":
- "<code>Verso.Genre.Blog.InlineExt.highlightedCode (opts : Blog.CodeOpts) (highlighted : SubVerso.Highlighting.Highlighted) :\n  Blog.InlineExt</code><span class=\"sep\"></span><code class=\"docstring\">Highlighted Lean code.\n</code>",
- "190":
- "<code>Verso.Genre.Blog.InlineExt : Type</code><span class=\"sep\"></span><code class=\"docstring\">The additional inline elements available in pages and posts.\n</code>",
+ "<code>Verso.Genre.Blog.BlockExt.message (summarize : Bool) (msg : SubVerso.Highlighting.Highlighted.Message)\n  (expandTraces : List Lean.Name) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">Highlighted Lean messages.\n</code>",
+ "191": "<code>SubVerso.Highlighting.Highlighted : Type</code>",
+ "190": "<code>SubVerso.Highlighting.Highlighted</code>",
  "19":
  "<code>Verso.Doc.TraversePart (g : Doc.Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Specifies how to modify the context while traversing the contents of a given part.\n</code>",
- "189":
- "<code>Verso.Genre.Blog.BlockExt.docstringSection (level : Nat) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">A section in a Lean docstring.\n\nLean docstrings may contain nested headers, but they are not sections of the document as a whole.\nThe contents of a docstring section are expected to be a paragraph that contains the section's\ntitle, followed by the actual content.\n</code>",
- "188": "<code>Option Lean.Name</code>",
- "187": "<code>Nat</code>",
+ "189": "<code>Verso.Genre.Blog.CodeOpts : Type</code>",
+ "188": "<code>Blog.CodeOpts</code>",
+ "187":
+ "<code>Verso.Genre.Blog.BlockExt.highlightedCode (opts : Blog.CodeOpts) (highlighted : SubVerso.Highlighting.Highlighted) :\n  Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">Highlighted Lean code.\n</code>",
  "186":
- "<code>Verso.Genre.Blog.BlockExt.docstring (indent : Nat) (declName? : Option Lean.Name) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">A Lean docstring that was indented `indent` spaces in the original source.\n</code>",
- "185": "<code>Lean.Json : Type</code>",
- "184": "<code>Lean.Json</code>",
- "183":
- "<code>Verso.Genre.Blog.BlockExt.component (name : Lean.Name) (data : Lean.Json) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">A reference to a component.\n</code>",
- "182":
- "<code>Verso.Genre.Blog.BlockExt.blob (html : Output.Html) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">A blob of HTML. The contents are discarded.\n</code>",
- "181": "<code>Output.Html</code>",
- "180":
- "<code>Verso.Genre.Blog.BlockExt.htmlDetails (classes : String) (summary : Output.Html) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">When rendered, the content is wrapped in a `&lt;details&gt;` tag with the given summary.\n</code>",
+ "<code>Verso.Genre.Blog.BlockExt : Type</code><span class=\"sep\"></span><code class=\"docstring\">The additional blocks available in pages and posts.\n</code>",
+ "185":
+ "<code>Verso.Genre.Blog.Post : Genre</code><span class=\"sep\"></span><code class=\"docstring\">A blog post.\n</code>",
+ "184":
+ "<code>Verso.Genre.Blog.Page : Genre</code><span class=\"sep\"></span><code class=\"docstring\">An ordinary web page that is not a blog post.\n</code>",
+ "183": "<code><span class=\"literal string\">\"\\n\"</span> : String</code>",
+ "182": "<code><span class=\"literal string\">\" \"</span> : String</code>",
+ "181": "<code>List TeX</code>",
+ "180": "<code>mkList (xs : List TeX) : TeX</code>",
  "18":
  "<code>Verso.Doc.Traverse (g : Doc.Genre) (m : outParam (Type → Type)) : Type 1</code><span class=\"sep\"></span><code class=\"docstring\">Genre-specific traversal.\n\nThe traversal pass is where cross-references are resolved. The traversal pass repeatedly applies a\ngenre-specific stateful computation until a fixed point is reached, both with respect to the state\nand the document. Traversal may update the state or rewrite parts of the document.\n\nThe methods `part`, `block`, and `inline` provide effects to be carried out before traversing the\ngiven level of the AST, and `part` allows the part's metadata to be updated.\n\n`genrePart` is carried out after `part`. It allows genre-specific rewriting of the entire part based\non genre-specific metadata. This is typically used to construct a table of contents or permalinks,\nbut it can in principle arbitrarily rewrite the part. `inPart` is used to locally transform the\ngenre's traversal context along the lines of `withReader`, and can be used to keep track of e.g. the\ncurrent position in the table of contents.\n\n`genreBlock` and `genreInline` are invoked when traversal encounters `Block.other` and\n`Inline.other`. It may rewrite them, or have state effects.</code>",
- "179":
- "<code>Verso.Genre.Blog.BlockExt.htmlWrapper (tag : String) (attributes : Array (String × String)) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">When rendered, the content is wrapped in the specified HTML tag.\n</code>",
+ "179": "<code>TeX</code>",
  "178":
- "<code>Verso.Genre.Blog.BlockExt.htmlDiv (classes : String) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">When rendered, the content is wrapped in a `&lt;div&gt;` with the given classes.\n</code>",
- "177": "<code>Verso.Genre.Blog.LexedText : Type</code>",
- "176": "<code>Blog.LexedText</code>",
+ "<code>Verso.Output.TeX.asString (doc : TeX) : String</code><span class=\"sep\"></span><code class=\"docstring\">Converts a TeX document to a string to be processed by LaTeX </code>",
+ "177":
+ "<code>Verso.Output.TeX.empty : TeX</code><span class=\"sep\"></span><code class=\"docstring\">The empty TeX document </code>",
+ "176":
+ "<code>Verso.Output.TeX.seq (contents : Array TeX) : TeX</code><span class=\"sep\"></span><code class=\"docstring\">Concatenation of TeX </code>",
  "175":
- "<code>Verso.Genre.Blog.BlockExt.lexedText (content : Blog.LexedText) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">Lexed text, to be displayed with highlighted syntax.\n</code>",
- "174": "<code>List Lean.Name</code>",
- "173": "<code>SubVerso.Highlighting.Highlighted.Message : Type</code>",
- "172": "<code>SubVerso.Highlighting.Highlighted.Message</code>",
+ "<code>Verso.Output.TeX.paragraphBreak : TeX</code><span class=\"sep\"></span><code class=\"docstring\">A paragraph break, rendered to TeX as a blank line </code>",
+ "174":
+ "<code>Verso.Output.TeX.environment (name : String) (optArgs args content : Array TeX) : TeX</code><span class=\"sep\"></span><code class=\"docstring\">A LaTeX environment, with the provided optional and mandatory arguments (in square and curly brackets, respectively) </code>",
+ "173": "<code>Array TeX</code>",
+ "172":
+ "<code>Verso.Output.TeX.command (name : String) (optArgs args : Array TeX) : TeX</code><span class=\"sep\"></span><code class=\"docstring\">A LaTeX command, with the provided optional and mandatory arguments (in square and curly brackets, respectively) </code>",
  "171":
- "<code>Verso.Genre.Blog.BlockExt.message (summarize : Bool) (msg : SubVerso.Highlighting.Highlighted.Message)\n  (expandTraces : List Lean.Name) : Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">Highlighted Lean messages.\n</code>",
- "170": "<code>SubVerso.Highlighting.Highlighted : Type</code>",
+ "<code>Verso.Output.TeX.raw (string : String) : TeX</code><span class=\"sep\"></span><code class=\"docstring\">Raw TeX code to be included without escaping. </code>",
+ "170":
+ "<code>Verso.Output.TeX.text (string : String) : TeX</code><span class=\"sep\"></span><code class=\"docstring\">Text to be shown in the document, escaped as needed. </code>",
  "17":
  "<code>Verso.Doc.Genre.TraverseContext (self : Doc.Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">The reader-style data used in the genre's traversal pass. Instances of `TraversePart` and\n  `TraverseBlock` for a genre specify how this is updated while traversing parts and blocks,\n  respectively.\n  </code>",
- "169": "<code>SubVerso.Highlighting.Highlighted</code>",
- "168": "<code>Verso.Genre.Blog.CodeOpts : Type</code>",
- "167": "<code>Blog.CodeOpts</code>",
+ "169":
+ "<code>Verso.Output.TeX : Type</code><span class=\"sep\"></span><code class=\"docstring\">TeX output\n</code>",
+ "168":
+ "<code>ByteArray : Type</code><span class=\"sep\"></span><code class=\"docstring\">`ByteArray` is like `Array UInt8`, but with an efficient run-time representation as a packed\nbyte buffer.\n</code>",
+ "167": "<code>?m.22</code>",
  "166":
- "<code>Verso.Genre.Blog.BlockExt.highlightedCode (opts : Blog.CodeOpts) (highlighted : SubVerso.Highlighting.Highlighted) :\n  Blog.BlockExt</code><span class=\"sep\"></span><code class=\"docstring\">Highlighted Lean code.\n</code>",
+ "<code>Verso.Output.Html.katexFonts : Array (String × ByteArray)</code><span class=\"sep\"></span><code class=\"docstring\">The KaTeX font files. Keys are filenames of the form `katex/fonts/...`.\n</code>",
  "165":
- "<code>Verso.Genre.Blog.BlockExt : Type</code><span class=\"sep\"></span><code class=\"docstring\">The additional blocks available in pages and posts.\n</code>",
+ "<code>Verso.Output.Html.katex.js : String</code><span class=\"sep\"></span><code class=\"docstring\">The minified KaTeX JS file's contents, to be placed parallel to the CSS and fonts, in a file named `katex/katex.min.js`.\n</code>",
  "164":
- "<code>Verso.Genre.Blog.Post : Genre</code><span class=\"sep\"></span><code class=\"docstring\">A blog post.\n</code>",
+ "<code>Verso.Output.Html.katex.css : String</code><span class=\"sep\"></span><code class=\"docstring\">The minified KaTeX CSS file's contents, to be placed parallel to the JS and fonts, in a file named `katex/katex.min.css`.\n</code>",
  "163":
- "<code>Verso.Genre.Blog.Page : Genre</code><span class=\"sep\"></span><code class=\"docstring\">An ordinary web page that is not a blog post.\n</code>",
- "162": "<code><span class=\"literal string\">\"\\n\"</span> : String</code>",
- "161": "<code><span class=\"literal string\">\" \"</span> : String</code>",
- "160": "<code>List TeX</code>",
+ "<code>Verso.Output.Html.math.js : String</code><span class=\"sep\"></span><code class=\"docstring\">A short script that renders all Verso math using KaTeX.\n</code>",
+ "162":
+ "<code>Verso.Doc.Inline.math {genre : Genre} (mode : MathMode) (string : String) : Doc.Inline genre</code><span class=\"sep\"></span><code class=\"docstring\">Embedded TeX math, to be rendered by an engine such as TeX or KaTeX. The `mode` determines whether\nit is rendered in inline mode or display mode; even display-mode math is an inline element for\npurposes of document structure.\n</code>",
+ "161": "<code>Int</code>",
+ "160": "<code>optParam String fetchDocsJson</code>",
  "16":
  "<code>Verso.Doc.Genre.TraverseState (self : Doc.Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">The mutable state used in the genre's traversal pass.\n  </code>",
- "159": "<code>mkList (xs : List TeX) : TeX</code>",
- "158": "<code>TeX</code>",
- "157":
- "<code>Verso.Output.TeX.asString (doc : TeX) : String</code><span class=\"sep\"></span><code class=\"docstring\">Converts a TeX document to a string to be processed by LaTeX </code>",
+ "159": "<code>?m.19</code>",
+ "158": "<code>Verso.Code.Highlighted.WebAssets.marked.map : String</code>",
+ "157": "<code>Verso.Code.Highlighted.WebAssets.marked : String</code>",
  "156":
- "<code>Verso.Output.TeX.empty : TeX</code><span class=\"sep\"></span><code class=\"docstring\">The empty TeX document </code>",
- "155":
- "<code>Verso.Output.TeX.seq (contents : Array TeX) : TeX</code><span class=\"sep\"></span><code class=\"docstring\">Concatenation of TeX </code>",
- "154":
- "<code>Verso.Output.TeX.paragraphBreak : TeX</code><span class=\"sep\"></span><code class=\"docstring\">A paragraph break, rendered to TeX as a blank line </code>",
- "153":
- "<code>Verso.Output.TeX.environment (name : String) (optArgs args content : Array TeX) : TeX</code><span class=\"sep\"></span><code class=\"docstring\">A LaTeX environment, with the provided optional and mandatory arguments (in square and curly brackets, respectively) </code>",
- "152": "<code>Array TeX</code>",
+ "<code>Verso.Code.Highlighted.WebAssets.tippy.border.css : String</code>",
+ "155": "<code>Verso.Code.Highlighted.WebAssets.popper.map : String</code>",
+ "154": "<code>Verso.Code.Highlighted.WebAssets.tippy.map : String</code>",
+ "153": "<code>Verso.Code.Highlighted.WebAssets.popper : String</code>",
+ "152": "<code>Verso.Code.Highlighted.WebAssets.tippy : String</code>",
  "151":
- "<code>Verso.Output.TeX.command (name : String) (optArgs args : Array TeX) : TeX</code><span class=\"sep\"></span><code class=\"docstring\">A LaTeX command, with the provided optional and mandatory arguments (in square and curly brackets, respectively) </code>",
+ "<code>Verso.Code.fetchDocsJson : String</code><span class=\"sep\"></span><code class=\"docstring\">A JavaScript expression that fetches hover content from `-verso-docs.json` in the site root.\n\nThis is the default means by which the code generated by `highlightingJs` obtains hover content.\n</code>",
  "150":
- "<code>Verso.Output.TeX.raw (string : String) : TeX</code><span class=\"sep\"></span><code class=\"docstring\">Raw TeX code to be included without escaping. </code>",
+ "<code>Verso.Code.highlightingJs (highlightJsonPromise : String := fetchDocsJson) : String</code><span class=\"sep\"></span><code class=\"docstring\">JavaScript code that implements the interactive features of highlighted Lean code, displaying\nhovers and highlighting other occurrences of an identifier.\n\nThe parameter `highlightJsonPromise` is a JavaScript expression that evaluates to a promise\nthat provides the hover content.\n</code>",
  "15":
  "<code>Verso.Doc.Inline.other {genre : Doc.Genre} (container : genre.Inline) (content : Array (Doc.Inline genre)) :\n  Doc.Inline genre</code><span class=\"sep\"></span><code class=\"docstring\">A genre-specific inline element. `container` specifies what kind of element it is, and `content`\nspecifies the contained elements.\n</code>",
  "149":
- "<code>Verso.Output.TeX.text (string : String) : TeX</code><span class=\"sep\"></span><code class=\"docstring\">Text to be shown in the document, escaped as needed. </code>",
+ "<code>Verso.Code.highlightingStyle : String</code><span class=\"sep\"></span><code class=\"docstring\">CSS rules that style highlighted Lean code, including its tokens, messages, and proof states.\n\nPages that contain highlighted code should include these rules in a stylesheet. The colors and\nfonts that the rules apply are controlled by CSS variables, documented in `verso-vars.css`.\n</code>",
  "148":
- "<code>Verso.Output.TeX : Type</code><span class=\"sep\"></span><code class=\"docstring\">TeX output\n</code>",
+ "<code>Verso.Output.Html.«verso-vars.css» : String</code><span class=\"sep\"></span><code class=\"docstring\">CSS variables used by all genres that should support HTML output.\n</code>",
  "147":
  "<code>IO.println.{u_1} {α : Type u_1} [ToString α] (s : α) : IO Unit</code><span class=\"sep\"></span><code class=\"docstring\">Converts `s` to a string using its `ToString α` instance, and prints it with a trailing newline to\nthe current standard output (as determined by `IO.getStdout`).\n</code>",
  "146": "<code><span class=\"literal string\">\"C\"</span> : String</code>",
@@ -650,7 +680,7 @@
  "13":
  "<code>Verso.Doc.Part.metadata {genre : Doc.Genre} : Doc.Part genre → Option genre.PartMetadata</code><span class=\"sep\"></span><code class=\"docstring\">Genre-specific metadata </code>",
  "129":
- "<code>Monad.{u, v} (m : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">[Monads](https://en.wikipedia.org/wiki/Monad_(functional_programming)) are an abstraction of\nsequential control flow and side effects used in functional programming. Monads allow both\nsequencing of effects and data-dependent effects: the values that result from an early step may\ninfluence the effects carried out in a later step.\n\nThe `Monad` API may be used directly. However, it is most commonly accessed through\n[`do`-notation](https://lean-lang.org/doc/reference/4.33.0/find/?domain=Verso.Genre.Manual.section&name=do-notation).\n\nMost `Monad` instances provide implementations of `pure` and `bind`, and use default implementations\nfor the other methods inherited from `Applicative`. Monads should satisfy certain laws, but\ninstances are not required to prove this. An instance of `LawfulMonad` expresses that a given\nmonad's operations are lawful.\n</code>",
+ "<code>Monad.{u, v} (m : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">[Monads](https://en.wikipedia.org/wiki/Monad_(functional_programming)) are an abstraction of\nsequential control flow and side effects used in functional programming. Monads allow both\nsequencing of effects and data-dependent effects: the values that result from an early step may\ninfluence the effects carried out in a later step.\n\nThe `Monad` API may be used directly. However, it is most commonly accessed through\n[`do`-notation](https://lean-lang.org/doc/reference/4.34.0/find/?domain=Verso.Genre.Manual.section&amp;name=do-notation).\n\nMost `Monad` instances provide implementations of `pure` and `bind`, and use default implementations\nfor the other methods inherited from `Applicative`. Monads should satisfy certain laws, but\ninstances are not required to prove this. An instance of `LawfulMonad` expresses that a given\nmonad's operations are lawful.\n</code>",
  "128": "<code>Type → Type u_1</code>",
  "127":
  "<code>Verso.Output.Html.visitM.{u_1} {m : Type → Type u_1} [Monad m]\n  (text : Bool → String → m (Option Html) := fun x x_1 =&gt; pure none)\n  (tag : String → Array (String × String) → Html → m (Option Html) := fun x x_1 x_2 =&gt; pure none)\n  (seq : Array Html → m (Option Html) := fun x =&gt; pure none) (html : Html) : m Html</code><span class=\"sep\"></span><code class=\"docstring\">Visit the entire tree, applying rewrites in some monad. Return `none` to signal that no rewrites are\nto be performed.\n</code>",
@@ -672,10 +702,11 @@
  "118": "<code>Array (String × String)</code>",
  "117":
  "<code>Verso.Output.Html.tag (name : String) (attrs : Array (String × String)) (contents : Html) : Html</code><span class=\"sep\"></span><code class=\"docstring\">A tag with the given name and attributes.\n</code>",
- "116": "<code><span class=\"literal string\">\"&amp;\"</span> : String</code>",
- "115": "<code><span class=\"literal char\">'&'</span> : Char</code>",
+ "116":
+ "<code><span class=\"literal string\">\"&amp;amp;\"</span> : String</code>",
+ "115": "<code><span class=\"literal char\">'&amp;'</span> : Char</code>",
  "114":
- "<code>Verso.Output.Html.text (escape : Bool) (string : String) : Html</code><span class=\"sep\"></span><code class=\"docstring\">Textual content. If `escape` is `true`, then characters such as `'&'` are escaped to entities such\nas `\"&amp;\"` during rendering.\n</code>",
+ "<code>Verso.Output.Html.text (escape : Bool) (string : String) : Html</code><span class=\"sep\"></span><code class=\"docstring\">Textual content. If `escape` is `true`, then characters such as `'&amp;'` are escaped to entities such\nas `\"&amp;amp;\"` during rendering.\n</code>",
  "113":
  "<code>Verso.Output.Html : Type</code><span class=\"sep\"></span><code class=\"docstring\">A representation of HTML, used to render Verso to the web.\n</code>",
  "112":
@@ -695,7 +726,7 @@
  "106":
  "<code>Functor.{u, v} (f : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">A functor in the sense used in functional programming, which means a function `f : Type u → Type v`\nhas a way of mapping a function over its contents. This `map` operator is written `&lt;$&gt;`, and\noverloaded via `Functor` instances.\n\nThis `map` function should respect identity and function composition. In other words, for all terms\n`v : f α`, it should be the case that:\n\n * `id &lt;$&gt; v = v`\n\n * For all functions `h : β → γ` and `g : α → β`, `(h ∘ g) &lt;$&gt; v = h &lt;$&gt; g &lt;$&gt; v`\n\nWhile all `Functor` instances should live up to these requirements, they are not required to _prove_\nthat they do. Proofs may be required or provided via the `LawfulFunctor` class.\n\nAssuming that instances are lawful, this definition corresponds to the category-theoretic notion of\n[functor](https://en.wikipedia.org/wiki/Functor) in the special case where the category is the\ncategory of types and functions between them.\n</code>",
  "105":
- "<code>Applicative.{u, v} (f : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">An [applicative functor](https://lean-lang.org/doc/reference/4.33.0/find/?domain=Verso.Genre.Manual.section&name=monads-and-do) is more powerful than a `Functor`, but\nless powerful than a `Monad`.\n\nApplicative functors capture sequencing of effects with the `&lt;*&gt;` operator, overloaded as `seq`, but\nnot data-dependent effects. The results of earlier computations cannot be used to control later\neffects.\n\nApplicative functors should satisfy four laws. Instances of `Applicative` are not required to prove\nthat they satisfy these laws, which are part of the `LawfulApplicative` class.\n</code>",
+ "<code>Applicative.{u, v} (f : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">An [applicative functor](https://lean-lang.org/doc/reference/4.34.0/find/?domain=Verso.Genre.Manual.section&amp;name=monads-and-do) is more powerful than a `Functor`, but\nless powerful than a `Monad`.\n\nApplicative functors capture sequencing of effects with the `&lt;*&gt;` operator, overloaded as `seq`, but\nnot data-dependent effects. The results of earlier computations cannot be used to control later\neffects.\n\nApplicative functors should satisfy four laws. Instances of `Applicative` are not required to prove\nthat they satisfy these laws, which are part of the `LawfulApplicative` class.\n</code>",
  "104":
  "<code>ArgParse.ValDesc m α</code><span class=\"sep\"></span><code class=\"docstring\">A canonical way to convert a Verso argument into a given type.\n</code>",
  "103":

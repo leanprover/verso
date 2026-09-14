@@ -1,4 +1,4 @@
-<!-- Generated from commit 3bdedf29bada13d8103e6c979001c51dcee210c8 at 2026-08-10T09:09:36Z -->
+<!-- Generated from commit cad4b633e75ea769b851f12f9ca3b4f0dfcc625f at 2026-09-14T16:44:00Z -->
 <!DOCTYPE html>
 <html>
   <head>
@@ -1077,6 +1077,11 @@ a.technical-term:hover {
   text-decoration: currentcolor underline solid;
 }
 
+/* Links inside tooltips show their underline only when hovered. */
+.tippy-box .hl.lean a {
+  text-decoration: none;
+}
+
 .hl.lean .hover-info {
   white-space: normal;
 }
@@ -1084,8 +1089,9 @@ a.technical-term:hover {
 .hl.lean .token .hover-info {
   display: none;
   position: absolute;
-  background-color: #e5e5e5;
-  border: 1px solid black;
+  color: var(--verso-tooltip-color, black);
+  background-color: var(--verso-tooltip-bg-color, #e5e5e5);
+  border: 1px solid var(--verso-tooltip-border-color, black);
   padding: 0.5rem;
   z-index: 300;
 }
@@ -1102,7 +1108,10 @@ a.technical-term:hover {
 .hl.lean .hover-info code {
   white-space: pre-wrap;
   background: none;
-  color: black;
+}
+
+.hl.lean .hover-info code:not(.verso-message) {
+  color: var(--verso-tooltip-color, black);
 }
 
 .hl.lean .hover-info.messages > code {
@@ -1143,10 +1152,24 @@ a.technical-term:hover {
 }
 
 @media (hover: hover) {
-  .hl.lean .token.binding-hl, .hl.lean .literal:hover, .hl.lean .token.typed:hover {
-    background-color: #eee;
+  /* Hovered content nested in a collapsed tactic region keeps its plain background: the
+     region's proof state is the tooltip that appears there, and its label is what
+     highlights. `:where` keeps the exclusion out of the specificity computation. */
+  .hl.lean .token.binding-hl,
+  .hl.lean :is(.literal, .token.typed, .token[data-verso-hover]):hover:not(:where(.tactic:has(> .tactic-toggle:not(:checked)) > label *)) {
+    background-color: var(--verso-code-hover-bg-color, #eeeeee);
     border-radius: 2px;
     transition: none;
+  }
+
+  /* Within a hovered message span, token hover backgrounds are removed so the span's own
+     hover background shows across the whole span. The exception is a hovered documented
+     token, which keeps its background because its tooltip is the one shown. */
+  .hl.lean .has-info:hover .token.binding-hl:not(:hover),
+  .hl.lean .has-info:hover .token.binding-hl:not([data-verso-hover]),
+  .hl.lean .has-info:hover .literal:hover:not([data-verso-hover]),
+  .hl.lean .has-info:hover .token.typed:hover:not([data-verso-hover]) {
+    background-color: transparent;
   }
 }
 
@@ -1158,56 +1181,93 @@ a.technical-term:hover {
   text-decoration-skip-ink: none;
 }
 
+/*
+The underline color comes from the nearest enclosing message span: each severity's span rule
+sets `--verso--region-indicator-color`, which inherits, so a region nested inside one of
+another severity keeps its own indicator color.
+*/
+.hl.lean .has-info :not(.tactic-state):not(.tactic-state *) {
+  text-decoration-color: var(--verso--region-indicator-color);
+}
+
 .hl.lean .has-info .hover-info {
   display: none;
   position: absolute;
   transform: translate(0.25rem, 0.3rem);
-  border: 1px solid black;
+  color: var(--verso-tooltip-color, black);
+  border: 1px solid var(--verso-tooltip-border-color, black);
   padding: 0.5rem;
   z-index: 400;
   text-align: left;
 }
 
-.hl.lean .has-info.error :not(.tactic-state):not(.tactic-state *){
-  text-decoration-color: red;
+.hl.lean .has-info.error {
+  --verso--region-indicator-color: var(--verso-error-indicator-color, #ff0000);
+  --verso--region-hover-color: var(--verso-code-error-hover-color, currentcolor);
+  --verso--region-hover-bg-color: var(--verso-code-error-hover-bg-color, #ffb3b3);
+  color: var(--verso-code-error-color, currentcolor);
+  background-color: var(--verso-code-error-bg-color, transparent);
 }
 
+/*
+The hover highlight follows the tooltip: a message span highlights only when its own tooltip
+is the one that appears. When a hovered nested message span, a hovered documented token, or
+a hovered collapsed tactic label shows its own tooltip instead, the message span does not
+highlight. A span nested in a collapsed tactic region likewise stays plain, because hovering
+it shows the region's proof state; `:where` keeps that exclusion out of the specificity
+computation.
+
+The hover colors come from `--verso--region-hover-color` and `--verso--region-hover-bg-color`,
+which each severity's span rule sets. This keeps the hover conditions in this one rule, and
+because the properties inherit, a region nested inside one of another severity keeps its own
+hover colors.
+*/
 @media (hover: hover) {
-  .hl.lean .has-info.error:hover {
-    background-color: #ffb3b3;
+  .hl.lean .has-info:hover:not(:has(.has-info:hover)):not(:has([data-verso-hover]:hover)):not(:has(.tactic > label:hover + .tactic-toggle:not(:checked))):not(:where(.tactic:has(> .tactic-toggle:not(:checked)) > label *)) {
+    color: var(--verso--region-hover-color, currentcolor);
+    background-color: var(--verso--region-hover-bg-color, transparent);
   }
 }
 
 .hl.lean .hover-info.messages > code.error {
-  background-color: #e5e5e5;
-  border-left: 0.2rem solid #ffb3b3;
+  background-color: var(--verso-tooltip-error-bg-color, #e5e5e5);
+  border-left: 0.2rem solid var(--verso-tooltip-error-border-color, #ffb3b3);
 }
 
-.tippy-box[data-theme~='error'] .hl.lean .hover-info.messages > code.error {
+/*
+A tooltip that shows only messages of the box's own severity leaves severity styling to the
+box itself. When messages of several severities share the tooltip, or a `mixed` tooltip
+combines messages with other content (such as documentation), each message keeps its
+severity accent to distinguish them.
+*/
+.tippy-box .hl.lean.mixed > .hover-info.messages {
+  margin-bottom: 0.5rem;
+}
+
+.tippy-box[data-theme~='error'] .hl.lean:not(.mixed) .hover-info.messages:not(:has(> code.warning)):not(:has(> code.information)) > code.error {
   background: none;
   border: none;
 }
 
 .error .verso-message, .error .verso-message .token, .error .verso-message label {
-  color: var(--verso-error-color);
+  color: var(--verso-message-error-color, #cc0000);
 }
 
 .error .verso-message .case-label:has(input[type="checkbox"])::before {
-  background-color: var(--verso-error-color) !important;
+  background-color: var(--verso-message-error-color, #cc0000) !important;
 }
 
-.hl.lean .has-info.warning :not(.tactic-state):not(.tactic-state *) {
-  text-decoration-color: var(--verso-warning-indicator-color);
-}
-
-@media (hover: hover) {
-  .hl.lean .has-info.warning:hover {
-    background-color:var(--verso-warning-color);
-  }
+.hl.lean .has-info.warning {
+  --verso--region-indicator-color: var(--verso-warning-indicator-color, #e7a71d);
+  --verso--region-hover-color: var(--verso-code-warning-hover-color, currentcolor);
+  --verso--region-hover-bg-color: var(--verso-code-warning-hover-bg-color, #ffd580);
+  color: var(--verso-code-warning-color, currentcolor);
+  background-color: var(--verso-code-warning-bg-color, transparent);
 }
 
 .hl.lean .hover-info.messages > code.warning {
-  background-color: var(--verso-warning-color);
+  background-color: var(--verso-tooltip-warning-bg-color, #e5e5e5);
+  border-left: 0.2rem solid var(--verso-tooltip-warning-border-color, #ffd580);
 }
 
 .lean-output {
@@ -1218,47 +1278,56 @@ a.technical-term:hover {
 }
 
 .lean-output.error {
-  border-color: var(--verso-error-indicator-color);
+  border-color: var(--verso-output-error-color, var(--verso-error-indicator-color, #ff0000));
 }
 
 .lean-output.information {
-  border-color: var(--verso-info-indicator-color);
+  border-color: var(--verso-output-info-color, var(--verso-info-indicator-color, #4777ff));
 }
 
 .lean-output.warning {
-  border-color: var(--verso-warning-indicator-color);
+  border-color: var(--verso-output-warning-color, var(--verso-warning-indicator-color, #e7a71d));
 }
 
-.hl.lean .hover-info.messages > code.error {
-  background-color: #e5e5e5;
-  border-left: 0.2rem solid var(--verso-warning-color);
-}
-
-.tippy-box[data-theme~='warning'] .hl.lean .hover-info.messages > code.warning {
+.tippy-box[data-theme~='warning'] .hl.lean:not(.mixed) .hover-info.messages:not(:has(> code.error)):not(:has(> code.information)) > code.warning {
   background: none;
   border: none;
 }
 
-
-.hl.lean .has-info.information :not(.tactic-state):not(.tactic-state *) {
-  text-decoration-color: var(--verso-info-indicator-color, blue);
+.warning .verso-message, .warning .verso-message .token, .warning .verso-message label {
+  color: var(--verso-message-warning-color, black);
 }
 
-@media (hover: hover) {
-  .hl.lean .has-info.information:hover {
-    background-color: #4777ff;
-  }
+.warning .verso-message .case-label:has(input[type="checkbox"])::before {
+  background-color: var(--verso-message-warning-color, black) !important;
+}
+
+
+.hl.lean .has-info.information {
+  --verso--region-indicator-color: var(--verso-info-indicator-color, #4777ff);
+  --verso--region-hover-color: var(--verso-code-info-hover-color, currentcolor);
+  --verso--region-hover-bg-color: var(--verso-code-info-hover-bg-color, #4777ff);
+  color: var(--verso-code-info-color, currentcolor);
+  background-color: var(--verso-code-info-bg-color, transparent);
 }
 
 
 .hl.lean .hover-info.messages > code.information {
-  background-color: #e5e5e5;
-  border-left: 0.2rem solid #4777ff;
+  background-color: var(--verso-tooltip-info-bg-color, #e5e5e5);
+  border-left: 0.2rem solid var(--verso-tooltip-info-border-color, #4777ff);
 }
 
-.tippy-box[data-theme~='info'] .hl.lean .hover-info.messages > code.information {
+.tippy-box[data-theme~='info'] .hl.lean:not(.mixed) .hover-info.messages:not(:has(> code.error)):not(:has(> code.warning)) > code.information {
   background: none;
   border: none;
+}
+
+.information .verso-message, .information .verso-message .token, .information .verso-message label {
+  color: var(--verso-message-info-color, black);
+}
+
+.information .verso-message .case-label:has(input[type="checkbox"])::before {
+  background-color: var(--verso-message-info-color, black) !important;
 }
 
 .hl.lean div.docstring {
@@ -1285,7 +1354,7 @@ a.technical-term:hover {
   margin-bottom: 0.5rem;
   padding: 0;
   height: 1px;
-  border-top: 1px solid #ccc;
+  border-top: 1px solid var(--verso-tooltip-separator-color, #ccc);
 }
 
 .hl.lean code {
@@ -1296,11 +1365,12 @@ a.technical-term:hover {
   display: none;
   position: relative;
   width: fit-content;
-  border: 1px solid #888888;
+  border: 1px solid var(--verso-tactic-state-border-color, #888888);
   border-radius: 0.1rem;
   padding: 0.5rem;
   font-family: sans-serif;
-  background-color: #ffffff;
+  color: var(--verso-tactic-state-color, black);
+  background-color: var(--verso-tactic-state-bg-color, white);
 }
 
 .hl.lean.popup .tactic-state {
@@ -1310,7 +1380,7 @@ a.technical-term:hover {
   border: none;
   padding: 0.5rem;
   font-family: sans-serif;
-  background-color: #ffffff;
+  background-color: var(--verso-tactic-state-bg-color, white);
 }
 
 
@@ -1344,9 +1414,11 @@ a.technical-term:hover {
 @media (hover: hover) {
   /* Highlight a region on hover only when its own toggle is unchecked, and only the innermost
      hovered region: `label:hover` bubbles to ancestor labels, so suppress the highlight on a region
-     whose label contains a more deeply nested hovered tactic label. */
+     whose label contains a more deeply nested hovered tactic label. The region's proof state is the
+     tooltip for everything else in its label, so the label keeps its highlight while any of that
+     content is hovered. */
   .hl.lean .tactic:has(> .tactic-toggle:not(:checked)) > label:hover:not(:has(.tactic > label:hover)) {
-    background-color: #eeeeee;
+    background-color: var(--verso-code-hover-bg-color, #eeeeee);
   }
 }
 
@@ -1362,7 +1434,7 @@ a.technical-term:hover {
 
 .hl.lean .tactic > label::after {
   content: "";
-  border: 1px solid #bbbbbb;
+  border: 1px solid var(--verso-tactic-toggle-color, #bbbbbb);
   /* These need to be em, not rem, to scale with the font */
   border-radius: 1em;
   height: 0.25em;
@@ -1385,8 +1457,8 @@ a.technical-term:hover {
 */
 
 .hl.lean .tactic > label:has(+ .tactic-toggle:checked)::after {
-  border: 1px solid #999999;
-  background-color: #999999;
+  border: 1px solid var(--verso-tactic-toggle-checked-color, #999999);
+  background-color: var(--verso-tactic-toggle-checked-color, #999999);
   transition: all 0.5s;
 }
 
@@ -1464,7 +1536,7 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 
 .hl.lean .case-label:has(input[type="checkbox"])::before {
   display: inline-block;
-  background-color: black;
+  background-color: currentcolor;
   content: ' ';
   transition: ease 0.2s;
   margin-right: 0.7em;
@@ -1548,26 +1620,22 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
   text-size-adjust: 100%;
 }
 
+/*
+Tippy's stylesheet paints each arrow's fill triangle with the arrow element's `color` (its
+placement-specific `::before` rules use `border-color: initial`, which is `currentcolor`),
+and its border extension paints the outline triangle with the box's border color. Setting
+`color` on the arrow therefore matches it to the tooltip background for every placement.
+*/
 .tippy-box[data-theme~='lean'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 1px solid black;
+  background-color: var(--verso-tooltip-bg-color, #e5e5e5);
+  color: var(--verso-tooltip-color, black);
+  border: 1px solid var(--verso-tooltip-border-color, black);
 }
-.tippy-box[data-theme~='lean'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: #e5e5e5;
-}
-.tippy-box[data-theme~='lean'][data-placement^='bottom'] > .tippy-arrow::before {
-  border-bottom-color: #e5e5e5;
-}
-.tippy-box[data-theme~='lean'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: #e5e5e5;
-}
-.tippy-box[data-theme~='lean'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: #e5e5e5;
+.tippy-box[data-theme~='lean'] > .tippy-arrow {
+  color: var(--verso-tooltip-bg-color, #e5e5e5);
 }
 
 .tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: #e5e5e5;
   border-width: 11px 11px 0;
 }
 .tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::after {
@@ -1582,7 +1650,6 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
   border-width: 0 11px 11px;
 }
 .tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: #e5e5e5;
   border-width: 11px 0 11px 11px;
 }
 .tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::after {
@@ -1591,7 +1658,6 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 }
 
 .tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: #e5e5e5;
   border-width: 11px 11px 11px 0;
 }
 .tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::after {
@@ -1602,39 +1668,39 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 
 
 .tippy-box[data-theme~='warning'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 3px solid var(--verso-warning-color);
+  background-color: var(--verso-tooltip-warning-bg-color, #e5e5e5);
+  color: var(--verso-tooltip-warning-color, black);
+  border: 3px solid var(--verso-tooltip-warning-border-color, #ffd580);
+}
+.tippy-box[data-theme~='warning'] > .tippy-arrow {
+  color: var(--verso-tooltip-warning-bg-color, #e5e5e5);
 }
 
 .tippy-box[data-theme~='error'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 3px solid #f7a7af;
+  background-color: var(--verso-tooltip-error-bg-color, #e5e5e5);
+  color: var(--verso-tooltip-error-color, black);
+  border: 3px solid var(--verso-tooltip-error-border-color, #ffb3b3);
+}
+.tippy-box[data-theme~='error'] > .tippy-arrow {
+  color: var(--verso-tooltip-error-bg-color, #e5e5e5);
 }
 
 .tippy-box[data-theme~='info'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 3px solid #99b3c2;
+  background-color: var(--verso-tooltip-info-bg-color, #e5e5e5);
+  color: var(--verso-tooltip-info-color, black);
+  border: 3px solid var(--verso-tooltip-info-border-color, #4777ff);
+}
+.tippy-box[data-theme~='info'] > .tippy-arrow {
+  color: var(--verso-tooltip-info-bg-color, #e5e5e5);
 }
 
 .tippy-box[data-theme~='tactic'] {
-  background-color: white;
-  color: black;
-  border: 1px solid black;
+  background-color: var(--verso-tactic-state-bg-color, white);
+  color: var(--verso-tactic-state-color, black);
+  border: 1px solid var(--verso-tactic-state-border-color, #888888);
 }
-.tippy-box[data-theme~='tactic'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: white;
-}
-.tippy-box[data-theme~='tactic'][data-placement^='bottom'] > .tippy-arrow::before {
-  border-bottom-color: white;
-}
-.tippy-box[data-theme~='tactic'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: white;
-}
-.tippy-box[data-theme~='tactic'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: white;
+.tippy-box[data-theme~='tactic'] > .tippy-arrow {
+  color: var(--verso-tactic-state-bg-color, white);
 }
 
 .extra-doc-links {
@@ -1658,7 +1724,7 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 }
 
 .verso-message .trace > summary::marker {
-  color: var(--verso-text-color);
+  color: var(--verso-text-color, black);
 }
 
 .verso-message .trace-children {
@@ -1705,10 +1771,39 @@ window.onload = async () => {
       return false;
     }
 
-    // Track whether any tippy is visible (O(1) check instead of DOM scan)
-    let visibleTippyCount = 0;
+    // The innermost element under the pointer, used to show only the most specific hover
+    let hoverTarget = null;
+    document.addEventListener('mouseover', (e) => { hoverTarget = e.target; }, true);
+
+    // Visible tippy references; a tooltip is blocked while an unrelated one is visible
+    const visibleTippies = new Set();
     function blockedByTippy(elem) {
-      return visibleTippyCount > 0;
+      for (const ref of visibleTippies) {
+        if (!ref.contains(elem) && !elem.contains(ref)) return true;
+      }
+      return false;
+    }
+
+    // Whether the element's tooltip would have content to show. Content nested in a
+    // collapsed tactic region is covered by the region's proof-state tooltip, whether or
+    // not a tippy instance is currently attached to it.
+    function showsContent(el) {
+      if (!el._tippy) return false;
+      if (el.classList.contains('tactic')) {
+        const toggle = el.querySelector(':scope > input.tactic-toggle');
+        return !!toggle && !toggle.checked;
+      }
+      return (!!el.querySelector('.hover-info') || 'versoHover' in el.dataset) &&
+        !blockedByTactic(el);
+    }
+
+    // The nearest enclosing element whose tooltip has content
+    function innermostShowable(el) {
+      while (el && el.nodeType === Node.ELEMENT_NODE) {
+        if (showsContent(el)) return el;
+        el = el.parentElement;
+      }
+      return null;
     }
 
     // Binding highlights via event delegation with cached lookups
@@ -1775,6 +1870,40 @@ window.onload = async () => {
       }
     }
 
+    function hideDescendantTooltips(element) {
+      for (const ref of visibleTippies) {
+        if (ref !== element && element.contains(ref)) {
+          ref._tippy.hide();
+        }
+      }
+    }
+
+    // Renders the documentation for a hover ID from the doc table
+    function docHoverContent(hoverId) {
+      const info = document.createElement('span');
+      info.className = 'hover-info';
+      info.style.display = 'block';
+      const data = versoDocData[hoverId];
+      if (data) {
+        info.innerHTML = data;
+        /* Render docstrings - TODO server-side */
+        if ('undefined' !== typeof marked) {
+          for (const d of info.querySelectorAll('code.docstring, pre.docstring')) {
+            const str = d.innerText;
+            const html = marked.parse(str);
+            const rendered = document.createElement('div');
+            rendered.classList.add('docstring');
+            rendered.innerHTML = html;
+            d.parentNode.replaceChild(rendered, d);
+          }
+        }
+      } else {
+        info.innerHTML = 'Failed to load doc ID: ' + hoverId;
+      }
+      return info;
+    }
+
+
 
 
     const defaultTippyProps = {
@@ -1790,23 +1919,27 @@ window.onload = async () => {
       /* ignoreAttributes: true, */
       followCursor: 'initial',
       onShow(inst) {
-        if (inst.reference.className == 'tactic') {
-          const toggle = inst.reference.querySelector(":scope > input.tactic-toggle");
+        const ref = inst.reference;
+        if (ref.className == 'tactic') {
+          const toggle = ref.querySelector(":scope > input.tactic-toggle");
           if (toggle && toggle.checked) {
             return false;
           }
-          hideParentTooltips(inst.reference);
-          if (blockedByTippy(inst.reference)) { return false; }
-
-        } else if (inst.reference.querySelector(".hover-info") || "versoHover" in inst.reference.dataset) {
-          if (blockedByTactic(inst.reference)) { return false };
-          if (blockedByTippy(inst.reference)) { return false; }
+        } else if (ref.querySelector(".hover-info") || "versoHover" in ref.dataset) {
+          if (blockedByTactic(ref)) { return false };
         } else { // Nothing to show here!
           return false;
         }
+        // Show only the most specific hover under the pointer
+        if (hoverTarget && ref.contains(hoverTarget) && innermostShowable(hoverTarget) !== ref) {
+          return false;
+        }
+        hideParentTooltips(ref);
+        hideDescendantTooltips(ref);
+        if (blockedByTippy(ref)) { return false; }
       },
-      onShown(inst) { visibleTippyCount++; },
-      onHidden(inst) { visibleTippyCount = Math.max(0, visibleTippyCount - 1); },
+      onShown(inst) { visibleTippies.add(inst.reference); },
+      onHidden(inst) { visibleTippies.delete(inst.reference); },
       content (tgt) {
         const content = document.createElement("span");
         if (tgt.className == 'tactic') {
@@ -1821,35 +1954,22 @@ window.onload = async () => {
           content.style.maxHeight = "300px";
           content.style.overflowY = "auto";
           content.style.overflowX = "hidden";
+          // Messages come from the inline hover-info; documentation comes from the doc
+          // table. An element with both (a message span sharing a documented token's
+          // extent) shows both in one tooltip.
           const hoverId = tgt.dataset.versoHover;
           const hoverInfo = tgt.querySelector(".hover-info");
-          if (hoverId) { // Docstrings from the table
-            // TODO stop doing an implicit conversion from string to number here
-            let data = versoDocData[hoverId];
-            if (data) {
-              const info = document.createElement("span");
-              info.className = "hover-info";
-              info.style.display = "block";
-              info.innerHTML = data;
-              content.appendChild(info);
-              /* Render docstrings - TODO server-side */
-              if ('undefined' !== typeof marked) {
-                  for (const d of content.querySelectorAll("code.docstring, pre.docstring")) {
-                      const str = d.innerText;
-                      const html = marked.parse(str);
-                      const rendered = document.createElement("div");
-                      rendered.classList.add("docstring");
-                      rendered.innerHTML = html;
-                      d.parentNode.replaceChild(rendered, d);
-                  }
-              }
-            } else {
-              content.innerHTML = "Failed to load doc ID: " + hoverId;
-            }
-          } else if (hoverInfo) { // The inline info, still used for compiler messages
+          if (hoverInfo) {
             content.appendChild(hoverInfo.cloneNode(true));
           }
-          const extraLinks = tgt.parentElement.dataset['versoLinks'];
+          if (hoverId) {
+            // TODO stop doing an implicit conversion from string to number here
+            content.appendChild(docHoverContent(hoverId));
+          }
+          if (hoverInfo && hoverId) {
+            content.classList.add('mixed');
+          }
+          const extraLinks = tgt.dataset['versoLinks'] || tgt.parentElement.dataset['versoLinks'];
           if (extraLinks) {
             try {
               const extras = JSON.parse(extraLinks);
@@ -1907,17 +2027,26 @@ window.onload = async () => {
       if (toggle) toggle.addEventListener('change', () => {
         if (toggle.checked) {
           closedTactics.delete(tactic);
-          tactic.querySelectorAll('.token').forEach(tok => {
-            if (!tok._tippy && tok.matches(tacticTippySelector)) {
-              tippy(tok, defaultTippyProps);
+          tactic.querySelectorAll(tacticTippySelector).forEach(el => {
+            if (!el._tippy) {
+              tippy(el, defaultTippyProps);
             }
           });
         } else {
           closedTactics.add(tactic);
-          tactic.querySelectorAll('.token').forEach(tok => {
-            if (tok._tippy) tok._tippy.destroy();
+          tactic.querySelectorAll(tacticTippySelector).forEach(el => {
+            if (el._tippy) el._tippy.destroy();
           });
         }
+        // The toggle changes which element's tooltip belongs to the pointer's position,
+        // but the pointer stays put, so no hover event announces the change. Show the
+        // right tooltip once the click that flipped the toggle has hidden the old one.
+        setTimeout(() => {
+          if (hoverTarget && hoverTarget.isConnected) {
+            const showable = innermostShowable(hoverTarget);
+            if (showable && showable._tippy) showable._tippy.show();
+          }
+        }, 0);
       });
   });
 }
@@ -1965,6 +2094,30 @@ window.onload = async () => {
                 <li>
                   <a href="Output-Formats/#Verso___Output___Html___asString"><code>Verso.Output.Html.asString</code></a></li>
                 <li>
+                  <span class="header head-2"><span class="level-num">1.1.</span> <a href="Output-Formats/#html-conventions">Conventions</a></span></li>
+                <li>
+                  <span class="header head-3"><span class="level-num">1.1.1.</span> <a href="Output-Formats/#html-conventions-css">CSS</a></span></li>
+                <li>
+                  <a href="Output-Formats/#Verso___Output___Html____FLQQ_verso-vars___css_FLQQ_"><code>verso-vars.css</code></a></li>
+                <li>
+                  <span class="header head-3"><span class="level-num">1.1.2.</span> <a href="Output-Formats/#html-conventions-lean-code">Lean Code in HTML</a></span></li>
+                <li>
+                  <a href="Output-Formats/#Verso___Code___highlightingStyle"><code>highlightingStyle</code></a></li>
+                <li>
+                  <a href="Output-Formats/#Verso___Code___highlightingJs"><code>highlightingJs</code></a></li>
+                <li>
+                  <a href="Output-Formats/#Verso___Code___fetchDocsJson"><code>fetchDocsJson</code></a></li>
+                <li>
+                  <span class="header head-3"><span class="level-num">1.1.3.</span> <a href="Output-Formats/#html-conventions-math">Math</a></span></li>
+                <li>
+                  <a href="Output-Formats/#Verso___Output___Html___katex___css"><code>css</code></a></li>
+                <li>
+                  <a href="Output-Formats/#Verso___Output___Html___katex___js"><code>Verso.Output.Html.katex.js</code></a></li>
+                <li>
+                  <a href="Output-Formats/#Verso___Output___Html___katexFonts"><code>katexFonts</code></a></li>
+                <li>
+                  <a href="Output-Formats/#Verso___Output___Html___math___js"><code>Verso.Output.Html.math.js</code></a></li>
+                <li>
                   <span class="header head-1"><span class="level-num">2.</span> <a href="Output-Formats/#output-tex">TeX</a></span></li>
                 <li>
                   <a href="Output-Formats/#Verso___Output___TeX___text"><code>Verso.Output.TeX</code></a></li>
@@ -1992,6 +2145,9 @@ These libraries may also be used by authors of extensions to the <code class="hl
               <h2 id="output-html">
                 5.1. HTML<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=output-html" title="Permalink">🔗</a></span></h2>
               <p>
+                While most users of Verso don't need to worry about the specific details of the HTML that it produces, authors of new <a class="technical-term" href="Genres/#--tech-term-genres">genres</a> or of substantial extensions to existing genres may need to produce custom HTML.
+Verso's HTML output follows a number of conventions and uses built-in libraries and features.</p>
+              <p>
                 Verso's <code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></code> type represents HTML documents.
 They are typically produced using an embedded DSL that is available when the namespace <code>Verso.Output.Html</code> is opened.</p>
               <div class="namedocs" id="Verso___Output___Html___text">
@@ -2002,22 +2158,22 @@ They are typically produced using an embedded DSL that is available when the nam
                     <p class="docstring-section-label" id="docstring-section-Constructors-next">
                       Constructors</p>
                     <div class="constructor">
-                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html.text"><span class="const token" data-binding="const-Verso.Output.Html.text" data-verso-hover="114">Verso.Output.Html.text</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.12" data-verso-hover="76">escape</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool" data-verso-hover="77">Bool</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.13" data-verso-hover="66">string</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html.text"><span class="const token" data-binding="const-Verso.Output.Html.text" data-verso-hover="114">Verso.Output.Html.text</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.21" data-verso-hover="76">escape</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool" data-verso-hover="77">Bool</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.22" data-verso-hover="66">string</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
   </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></pre><div class="docs">
                         <p>
-                          Textual content. If <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.18" data-verso-hover="76">escape</span></code> is <code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-Bool.true" data-verso-hover="49">true</span></code>, then characters such as <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal char token" data-binding="" data-verso-hover="115">'&'</span></code> are escaped to entities such
-as <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="116">"&amp;"</span></code> during rendering.</p>
+                          Textual content. If <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.27" data-verso-hover="76">escape</span></code> is <code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-Bool.true" data-verso-hover="49">true</span></code>, then characters such as <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal char token" data-binding="" data-verso-hover="115">'&amp;'</span></code> are escaped to entities such
+as <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="116">"&amp;amp;"</span></code> during rendering.</p>
                         </div>
                       </div>
                     <div class="constructor">
-                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html.tag"><span class="const token" data-binding="const-Verso.Output.Html.tag" data-verso-hover="117">Verso.Output.Html.tag</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.14" data-verso-hover="66">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.15" data-verso-hover="118">attrs</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">(</span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">×</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="const token" data-binding="const-Prod" data-verso-hover="81">)</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.16" data-verso-hover="119">contents</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></pre><div class="docs">
+                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html.tag"><span class="const token" data-binding="const-Verso.Output.Html.tag" data-verso-hover="117">Verso.Output.Html.tag</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.23" data-verso-hover="66">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.24" data-verso-hover="118">attrs</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">(</span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">×</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="const token" data-binding="const-Prod" data-verso-hover="81">)</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.25" data-verso-hover="119">contents</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></pre><div class="docs">
                         <p>
                           A tag with the given name and attributes.</p>
                         </div>
                       </div>
                     <div class="constructor">
-                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html.seq"><span class="const token" data-binding="const-Verso.Output.Html.seq" data-verso-hover="120">Verso.Output.Html.seq</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.17" data-verso-hover="121">contents</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></pre><div class="docs">
+                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html.seq"><span class="const token" data-binding="const-Verso.Output.Html.seq" data-verso-hover="120">Verso.Output.Html.seq</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.26" data-verso-hover="121">contents</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></pre><div class="docs">
                         <p>
                           A sequence of HTML values.</p>
                         </div>
@@ -2026,14 +2182,14 @@ as <code class="hl lean inline" data-lean-context="docstring-examples"><span cla
                   </div>
                 </div>
               <div class="namedocs" id="Verso___Output___Html___empty">
-                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc.suggestion&amp;name=Verso.Output.Html.none↪Verso.Output.Html.empty" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___empty" title="Documentation for Verso.Output.Html.empty"><span class="const token" data-binding="const-Verso.Output.Html.empty" data-verso-hover="122">Verso.Output.Html.empty</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___empty" title="Documentation for Verso.Output.Html.empty"><span class="const token" data-binding="const-Verso.Output.Html.empty" data-verso-hover="122">Verso.Output.Html.empty</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div></pre><div class="text">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc.suggestion&amp;name=Verso.Output.Html.none%E2%86%AAVerso.Output.Html.empty" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___empty" title="Documentation for Verso.Output.Html.empty"><span class="const token" data-binding="const-Verso.Output.Html.empty" data-verso-hover="122">Verso.Output.Html.empty</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___empty" title="Documentation for Verso.Output.Html.empty"><span class="const token" data-binding="const-Verso.Output.Html.empty" data-verso-hover="122">Verso.Output.Html.empty</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div></pre><div class="text">
                   <p>
                     The empty HTML document.</p>
                   </div>
                 </div>
               <div class="namedocs" id="Verso___Output___Html___fromArray">
-                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.Html.fromArray" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___fromArray" title="Documentation for Verso.Output.Html.fromArray"><span class="const token" data-binding="const-Verso.Output.Html.fromArray" data-verso-hover="123">Verso.Output.Html.fromArray</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.29" data-verso-hover="121">htmls</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___fromArray" title="Documentation for Verso.Output.Html.fromArray"><span class="const token" data-binding="const-Verso.Output.Html.fromArray" data-verso-hover="123">Verso.Output.Html.fromArray</span></a><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.29" data-verso-hover="121">htmls</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div></pre><div class="text">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.Html.fromArray" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___fromArray" title="Documentation for Verso.Output.Html.fromArray"><span class="const token" data-binding="const-Verso.Output.Html.fromArray" data-verso-hover="123">Verso.Output.Html.fromArray</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.40" data-verso-hover="121">htmls</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___fromArray" title="Documentation for Verso.Output.Html.fromArray"><span class="const token" data-binding="const-Verso.Output.Html.fromArray" data-verso-hover="123">Verso.Output.Html.fromArray</span></a><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.40" data-verso-hover="121">htmls</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div></pre><div class="text">
                   <p>
                     Converts an array of HTML elements into a single element by appending them.</p>
                   <p>
@@ -2041,8 +2197,8 @@ as <code class="hl lean inline" data-lean-context="docstring-examples"><span cla
                   </div>
                 </div>
               <div class="namedocs" id="Verso___Output___Html___fromList">
-                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.Html.fromList" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___fromList" title="Documentation for Verso.Output.Html.fromList"><span class="const token" data-binding="const-Verso.Output.Html.fromList" data-verso-hover="124">Verso.Output.Html.fromList</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.34" data-verso-hover="125">htmls</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-List" data-verso-hover="93">List</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___fromList" title="Documentation for Verso.Output.Html.fromList"><span class="const token" data-binding="const-Verso.Output.Html.fromList" data-verso-hover="124">Verso.Output.Html.fromList</span></a><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.34" data-verso-hover="125">htmls</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-List" data-verso-hover="93">List</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div></pre><div class="text">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.Html.fromList" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___fromList" title="Documentation for Verso.Output.Html.fromList"><span class="const token" data-binding="const-Verso.Output.Html.fromList" data-verso-hover="124">Verso.Output.Html.fromList</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.46" data-verso-hover="125">htmls</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-List" data-verso-hover="93">List</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___fromList" title="Documentation for Verso.Output.Html.fromList"><span class="const token" data-binding="const-Verso.Output.Html.fromList" data-verso-hover="124">Verso.Output.Html.fromList</span></a><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.46" data-verso-hover="125">htmls</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-List" data-verso-hover="93">List</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div></pre><div class="text">
                   <p>
                     Converts a list of HTML elements into a single element by appending them.</p>
                   <p>
@@ -2057,24 +2213,24 @@ as <code class="hl lean inline" data-lean-context="docstring-examples"><span cla
                   </div>
                 </div>
               <div class="namedocs" id="Verso___Output___Html___visitM">
-                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.Html.visitM" title="Permalink">🔗</a></span><span class="label">opaque</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___visitM" title="Documentation for Verso.Output.Html.visitM"><span class="const token" data-binding="const-Verso.Output.Html.visitM" data-verso-hover="127">Verso.Output.Html.visitM.{u_1}</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">{</span><span class="var token" data-binding="var-_uniq.58" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="2">Type</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="2">Type u_1</span><span class="unknown token" data-binding="">}</span><span class="inter-text"> </span><span class="unknown token" data-binding="">[</span><span class="const token" data-binding="const-Monad" data-verso-hover="129">Monad</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.58" data-verso-hover="128">m</span><span class="unknown token" data-binding="">]</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.69" data-verso-hover="130">text</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool" data-verso-hover="77">Bool</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.58" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="keyword token" data-binding="">fun</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.66" data-verso-hover="76">x</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.67" data-verso-hover="66">x_1</span><span class="inter-text"> </span><span class="unknown token" data-binding="">=&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-Pure.pure" data-verso-hover="131">pure</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.86" data-verso-hover="132">tag</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">(</span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">×</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="const token" data-binding="const-Prod" data-verso-hover="81">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.58" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text">
-    </span><span class="keyword token" data-binding="">fun</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.81" data-verso-hover="66">x</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.83" data-verso-hover="118">x_1</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.84" data-verso-hover="119">x_2</span><span class="inter-text"> </span><span class="unknown token" data-binding="">=&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-Pure.pure" data-verso-hover="131">pure</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.94" data-verso-hover="133">seq</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.58" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="keyword token" data-binding="">fun</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.92" data-verso-hover="121">x</span><span class="inter-text"> </span><span class="unknown token" data-binding="">=&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-Pure.pure" data-verso-hover="131">pure</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.96" data-verso-hover="119">html</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.58" data-verso-hover="128">m</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___visitM" title="Documentation for Verso.Output.Html.visitM"><span class="const token" data-binding="const-Verso.Output.Html.visitM" data-verso-hover="127">Verso.Output.Html.visitM.{u_1}</span></a><span class="inter-text">
-  </span><span class="unknown token" data-binding="">{</span><span class="var token" data-binding="var-_uniq.58" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="2">Type</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="2">Type u_1</span><span class="unknown token" data-binding="">}</span><span class="inter-text"> </span><span class="unknown token" data-binding="">[</span><span class="const token" data-binding="const-Monad" data-verso-hover="129">Monad</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.58" data-verso-hover="128">m</span><span class="unknown token" data-binding="">]</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.69" data-verso-hover="130">text</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
-    </span><span class="const token" data-binding="const-Bool" data-verso-hover="77">Bool</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.58" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text">
-    </span><span class="keyword token" data-binding="">fun</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.66" data-verso-hover="76">x</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.67" data-verso-hover="66">x_1</span><span class="inter-text"> </span><span class="unknown token" data-binding="">=&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-Pure.pure" data-verso-hover="131">pure</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.86" data-verso-hover="132">tag</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.Html.visitM" title="Permalink">🔗</a></span><span class="label">opaque</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___visitM" title="Documentation for Verso.Output.Html.visitM"><span class="const token" data-binding="const-Verso.Output.Html.visitM" data-verso-hover="127">Verso.Output.Html.visitM.{u_1}</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">{</span><span class="var token" data-binding="var-_uniq.72" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="2">Type</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="2">Type u_1</span><span class="unknown token" data-binding="">}</span><span class="inter-text"> </span><span class="unknown token" data-binding="">[</span><span class="const token" data-binding="const-Monad" data-verso-hover="129">Monad</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.72" data-verso-hover="128">m</span><span class="unknown token" data-binding="">]</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.83" data-verso-hover="130">text</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool" data-verso-hover="77">Bool</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.72" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="keyword token" data-binding="">fun</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.80" data-verso-hover="76">x</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.81" data-verso-hover="66">x_1</span><span class="inter-text"> </span><span class="unknown token" data-binding="">=&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-Pure.pure" data-verso-hover="131">pure</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.100" data-verso-hover="132">tag</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">(</span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">×</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="const token" data-binding="const-Prod" data-verso-hover="81">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.72" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text">
+    </span><span class="keyword token" data-binding="">fun</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.95" data-verso-hover="66">x</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.97" data-verso-hover="118">x_1</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.98" data-verso-hover="119">x_2</span><span class="inter-text"> </span><span class="unknown token" data-binding="">=&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-Pure.pure" data-verso-hover="131">pure</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.108" data-verso-hover="133">seq</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.72" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="keyword token" data-binding="">fun</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.106" data-verso-hover="121">x</span><span class="inter-text"> </span><span class="unknown token" data-binding="">=&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-Pure.pure" data-verso-hover="131">pure</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.110" data-verso-hover="119">html</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.72" data-verso-hover="128">m</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___visitM" title="Documentation for Verso.Output.Html.visitM"><span class="const token" data-binding="const-Verso.Output.Html.visitM" data-verso-hover="127">Verso.Output.Html.visitM.{u_1}</span></a><span class="inter-text">
+  </span><span class="unknown token" data-binding="">{</span><span class="var token" data-binding="var-_uniq.72" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="2">Type</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="2">Type u_1</span><span class="unknown token" data-binding="">}</span><span class="inter-text"> </span><span class="unknown token" data-binding="">[</span><span class="const token" data-binding="const-Monad" data-verso-hover="129">Monad</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.72" data-verso-hover="128">m</span><span class="unknown token" data-binding="">]</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.83" data-verso-hover="130">text</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+    </span><span class="const token" data-binding="const-Bool" data-verso-hover="77">Bool</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.72" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text">
+    </span><span class="keyword token" data-binding="">fun</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.80" data-verso-hover="76">x</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.81" data-verso-hover="66">x_1</span><span class="inter-text"> </span><span class="unknown token" data-binding="">=&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-Pure.pure" data-verso-hover="131">pure</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.100" data-verso-hover="132">tag</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
     </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text">
       </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">(</span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">×</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="const token" data-binding="const-Prod" data-verso-hover="81">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text">
-        </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.58" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text">
-    </span><span class="keyword token" data-binding="">fun</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.81" data-verso-hover="66">x</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.83" data-verso-hover="118">x_1</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.84" data-verso-hover="119">x_2</span><span class="inter-text"> </span><span class="unknown token" data-binding="">=&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-Pure.pure" data-verso-hover="131">pure</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.94" data-verso-hover="133">seq</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.58" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text">
-    </span><span class="keyword token" data-binding="">fun</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.92" data-verso-hover="121">x</span><span class="inter-text"> </span><span class="unknown token" data-binding="">=&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-Pure.pure" data-verso-hover="131">pure</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.96" data-verso-hover="119">html</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.58" data-verso-hover="128">m</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div></pre><div class="text">
+        </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.72" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text">
+    </span><span class="keyword token" data-binding="">fun</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.95" data-verso-hover="66">x</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.97" data-verso-hover="118">x_1</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.98" data-verso-hover="119">x_2</span><span class="inter-text"> </span><span class="unknown token" data-binding="">=&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-Pure.pure" data-verso-hover="131">pure</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.108" data-verso-hover="133">seq</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.72" data-verso-hover="128">m</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text">
+    </span><span class="keyword token" data-binding="">fun</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.106" data-verso-hover="121">x</span><span class="inter-text"> </span><span class="unknown token" data-binding="">=&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-Pure.pure" data-verso-hover="131">pure</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.110" data-verso-hover="119">html</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.72" data-verso-hover="128">m</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a></div></pre><div class="text">
                   <p>
                     Visit the entire tree, applying rewrites in some monad. Return <code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span></code> to signal that no rewrites are
 to be performed.</p>
@@ -2089,10 +2245,10 @@ whitespace around preformatted content and scripts.</p>
                   </div>
                 </div>
               <div class="namedocs" id="Verso___Output___Html___asString">
-                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.Html.asString" title="Permalink">🔗</a></span><span class="label">opaque</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___asString" title="Documentation for Verso.Output.Html.asString"><span class="const token" data-binding="const-Verso.Output.Html.asString" data-verso-hover="136">Verso.Output.Html.asString</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.105" data-verso-hover="119">html</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.106" data-verso-hover="137">indent</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Nat" data-verso-hover="138">Nat</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="unknown token" data-binding="">0</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.107" data-verso-hover="139">breakLines</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool" data-verso-hover="77">Bool</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool.true" data-verso-hover="49">true</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___asString" title="Documentation for Verso.Output.Html.asString"><span class="const token" data-binding="const-Verso.Output.Html.asString" data-verso-hover="136">Verso.Output.Html.asString</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.105" data-verso-hover="119">html</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.106" data-verso-hover="137">indent</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Nat" data-verso-hover="138">Nat</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="unknown token" data-binding="">0</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.107" data-verso-hover="139">breakLines</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool" data-verso-hover="77">Bool</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool.true" data-verso-hover="49">true</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div></pre><div class="text">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.Html.asString" title="Permalink">🔗</a></span><span class="label">opaque</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___asString" title="Documentation for Verso.Output.Html.asString"><span class="const token" data-binding="const-Verso.Output.Html.asString" data-verso-hover="136">Verso.Output.Html.asString</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.121" data-verso-hover="119">html</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.122" data-verso-hover="137">indent</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Nat" data-verso-hover="138">Nat</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="unknown token" data-binding="">0</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.123" data-verso-hover="139">breakLines</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool" data-verso-hover="77">Bool</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool.true" data-verso-hover="49">true</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___asString" title="Documentation for Verso.Output.Html.asString"><span class="const token" data-binding="const-Verso.Output.Html.asString" data-verso-hover="136">Verso.Output.Html.asString</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.121" data-verso-hover="119">html</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.122" data-verso-hover="137">indent</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Nat" data-verso-hover="138">Nat</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="unknown token" data-binding="">0</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.123" data-verso-hover="139">breakLines</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool" data-verso-hover="77">Bool</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool.true" data-verso-hover="49">true</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div></pre><div class="text">
                   <p>
                     Converts HTML into a string that's suitable for sending to browsers, but is also readable.</p>
                   </div>
@@ -2116,12 +2272,12 @@ The differences are:</p>
                 </ul>
               <p>
                 For example, this definition creates a <code>&lt;ul&gt;</code> list:</p>
-              <code class="hl lean block" data-lean-context="examples"><span class="keyword token" data-binding="kw-occ-Lean.Parser.Command.open-1673" data-verso-hover="140">open</span><span class="inter-text"> </span><span class="unknown token" data-binding="">Verso.Output.Html</span><span class="inter-text">
+              <code class="hl lean block" data-lean-context="examples"><span class="keyword token" data-binding="kw-occ-Lean.Parser.Command.open-1604" data-verso-hover="140">open</span><span class="inter-text"> </span><span class="unknown token" data-binding="">Verso.Output.Html</span><span class="inter-text">
 
-</span><span class="keyword token" data-binding="kw-occ-Lean.Parser.Command.definition-1697">def</span><span class="inter-text"> </span><span class="const token" data-binding="const-mkList" data-verso-hover="141">mkList</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.explicitBinder-1708">(</span><span class="var token" data-binding="var-_uniq.3" data-verso-hover="125">xs</span><span class="inter-text"> </span><span class="built-in delim token" data-binding="kw-occ-Lean.Parser.Term.explicitBinder-1708">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-List" data-verso-hover="93">List</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.explicitBinder-1708">)</span><span class="inter-text"> </span><span class="built-in delim token" data-binding="kw-occ-Lean.Parser.Term.typeSpec-1725">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="inter-text"> </span><span class="built-in delim token" data-binding="kw-occ-Lean.Parser.Command.declValSimple-1732">:=</span><span class="inter-text">
-  </span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«term{{_}}»-1737">{{</span><span class="inter-text"> </span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1740">&lt;</span><span class="unknown token" data-binding="">ul</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1740">&gt;</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«html{{_}}»-1745">{{</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.3" data-verso-hover="125">xs</span><span class="built-in delim token" data-binding="">.</span><span class="const token" data-binding="const-List.map" data-verso-hover="142">map</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.hygienicLParen-1755">(</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«term{{_}}»-1756">{{</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1758">&lt;</span><span class="unknown token" data-binding="">li</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1758">&gt;</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«html{{_}}»-1762">{{</span><span class="var token" data-binding="var-_uniq.19" data-verso-hover="119">·</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«html{{_}}»-1762">}}</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1758">&lt;/</span><span class="unknown token" data-binding="">li</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1758">&gt;</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«term{{_}}»-1756">}}</span><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.paren-1755">)</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«html{{_}}»-1745">}}</span><span class="inter-text"> </span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1740">&lt;/</span><span class="unknown token" data-binding="">ul</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1740">&gt;</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«term{{_}}»-1737">}}</span><span class="inter-text">
+</span><span class="keyword token" data-binding="kw-occ-Lean.Parser.Command.definition-1628">def</span><span class="inter-text"> </span><span class="const token" data-binding="const-mkList" data-verso-hover="141">mkList</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.explicitBinder-1639">(</span><span class="var token" data-binding="var-_uniq.3" data-verso-hover="125">xs</span><span class="inter-text"> </span><span class="built-in delim token" data-binding="kw-occ-Lean.Parser.Term.explicitBinder-1639">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-List" data-verso-hover="93">List</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.explicitBinder-1639">)</span><span class="inter-text"> </span><span class="built-in delim token" data-binding="kw-occ-Lean.Parser.Term.typeSpec-1656">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="113">Html</span></a><span class="inter-text"> </span><span class="built-in delim token" data-binding="kw-occ-Lean.Parser.Command.declValSimple-1663">:=</span><span class="inter-text">
+  </span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«term{{_}}»-1668">{{</span><span class="inter-text"> </span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1671">&lt;</span><span class="unknown token" data-binding="">ul</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1671">&gt;</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«html{{_}}»-1676">{{</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.3" data-verso-hover="125">xs</span><span class="built-in delim token" data-binding="">.</span><span class="const token" data-binding="const-List.map" data-verso-hover="142">map</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.hygienicLParen-1686">(</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«term{{_}}»-1687">{{</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1689">&lt;</span><span class="unknown token" data-binding="">li</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1689">&gt;</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«html{{_}}»-1693">{{</span><span class="var token" data-binding="var-_uniq.19" data-verso-hover="119">·</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«html{{_}}»-1693">}}</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1689">&lt;/</span><span class="unknown token" data-binding="">li</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1689">&gt;</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«term{{_}}»-1687">}}</span><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.paren-1686">)</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«html{{_}}»-1676">}}</span><span class="inter-text"> </span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1671">&lt;/</span><span class="unknown token" data-binding="">ul</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1671">&gt;</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«term{{_}}»-1668">}}</span><span class="inter-text">
 
-</span><span class="has-info information"><span class="hover-container"><span class="hover-info messages"><code class="verso-message information"><span class="text"></span><span class="text">&lt;ul&gt;
+</span><span class="has-info information" data-verso-hover="143"><span class="hover-container"><span class="hover-info messages"><code class="verso-message information"><span class="text"></span><span class="text">&lt;ul&gt;
   &lt;li&gt;
     A&lt;/li&gt;
   &lt;li&gt;
@@ -2130,9 +2286,9 @@ The differences are:</p>
     C&lt;/li&gt;
   &lt;/ul&gt;
 
-</span></code></span></span><span class="keyword token" data-binding="kw-occ-Lean.Parser.Command.eval-1789" data-verso-hover="143">#eval</span></span><span class="inter-text"> </span><span class="const token" data-binding="const-mkList" data-verso-hover="141">mkList</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-«term[_]»-1802">[</span><span class="literal string token" data-binding="" data-verso-hover="144">"A"</span><span class="punctuation separator token" data-binding="kw-occ-«term[_]»-1802">,</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«term{{_}}»-1808">{{</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1810">&lt;</span><span class="unknown token" data-binding="">emph</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1810">&gt;</span><span class="literal string token" data-binding="" data-verso-hover="145">"B"</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1810">&lt;/</span><span class="unknown token" data-binding="">emph</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1810">&gt;</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«term{{_}}»-1808">}}</span><span class="punctuation separator token" data-binding="kw-occ-«term[_]»-1802">,</span><span class="inter-text"> </span><span class="literal string token" data-binding="" data-verso-hover="146">"C"</span><span class="punctuation bracket token" data-binding="kw-occ-«term[_]»-1802">]</span><span class="inter-text">
-  </span><span class="punctuation operator token" data-binding="kw-occ-Lean.Parser.Term.pipeProj-1795">|&gt;.</span><a href="Output-Formats/#Verso___Output___Html___asString" title="Documentation for Verso.Output.Html.asString"><span class="const token" data-binding="const-Verso.Output.Html.asString" data-verso-hover="136">asString</span></a><span class="inter-text">
-  </span><span class="punctuation operator token" data-binding="kw-occ-«term_|>_»-1795">|&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-IO.println" data-verso-hover="147">IO.println</span><span class="inter-text">
+</span></code></span></span><span class="keyword token" data-binding="kw-occ-Lean.Parser.Command.eval-1720">#eval</span></span><span class="inter-text"> </span><span class="const token" data-binding="const-mkList" data-verso-hover="141">mkList</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-«term[_]»-1733">[</span><span class="literal string token" data-binding="" data-verso-hover="144">"A"</span><span class="punctuation separator token" data-binding="kw-occ-«term[_]»-1733">,</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«term{{_}}»-1739">{{</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1741">&lt;</span><span class="unknown token" data-binding="">emph</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1741">&gt;</span><span class="literal string token" data-binding="" data-verso-hover="145">"B"</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1741">&lt;/</span><span class="unknown token" data-binding="">emph</span><span class="punctuation operator token" data-binding="kw-occ-Verso.Output.Html.«html<__>_</_>»-1741">&gt;</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.Html.«term{{_}}»-1739">}}</span><span class="punctuation separator token" data-binding="kw-occ-«term[_]»-1733">,</span><span class="inter-text"> </span><span class="literal string token" data-binding="" data-verso-hover="146">"C"</span><span class="punctuation bracket token" data-binding="kw-occ-«term[_]»-1733">]</span><span class="inter-text">
+  </span><span class="punctuation operator token" data-binding="kw-occ-Lean.Parser.Term.pipeProj-1726">|&gt;.</span><a href="Output-Formats/#Verso___Output___Html___asString" title="Documentation for Verso.Output.Html.asString"><span class="const token" data-binding="const-Verso.Output.Html.asString" data-verso-hover="136">asString</span></a><span class="inter-text">
+  </span><span class="punctuation operator token" data-binding="kw-occ-«term_|>_»-1726">|&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-IO.println" data-verso-hover="147">IO.println</span><span class="inter-text">
 </span><span class="unknown token" data-binding=""></span></code><pre class="hl lean lean-output information"><span class="verso-message"><span class="text"></span><span class="text"></span><span class="text">&lt;ul&gt;
   &lt;li&gt;
     A&lt;/li&gt;
@@ -2142,54 +2298,221 @@ The differences are:</p>
     C&lt;/li&gt;
   &lt;/ul&gt;
 
-</span></span></pre></section>
+</span></span></pre><section>
+                <h3 id="html-conventions">
+                  5.1.1. Conventions<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=html-conventions" title="Permalink">🔗</a></span></h3>
+                <div class="paragraph">
+                  <p>
+                    While Verso genres may generate whatever output is necessary, some aspects of the Verso infrastructure make assumptions about generated HTML.
+In particular, Verso assumes that HTML follows these conventions:</p>
+                  <ul>
+                    <li>
+                      <p>
+                        Each page contains a <code>&lt;base&gt;</code> tag that points at the site root, and all URLs are relative to the site root.</p>
+                      </li>
+                    <li>
+                      <p>
+                        Pages are served as directories that contain an <code>index.html</code> file, rather than as bare HTML files. In other words, instead of <code>page.html</code>, the page should be served as <code>page/index.html</code>. This affects the meaning of relative URLs.</p>
+                      </li>
+                    </ul>
+                  </div>
+                <section>
+                  <h4 id="html-conventions-css">
+                    5.1.1.1. CSS<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=html-conventions-css" title="Permalink">🔗</a></span></h4>
+                  <p>
+                    The names of CSS variables that are intended for customization begin with <code>--verso-</code>, with a single <code>-</code> before the variable's name.
+Variables that are a part of the Verso implementation and are not intended to be directly customized use two <code>-</code> characters, and thus begin with <code>--verso--</code>.</p>
+                  <p>
+                    The customizable variables and their default values are defined in <code>verso-vars.css</code>, which is included as the string constant <code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Output___Html____FLQQ_verso-vars___css_FLQQ_" title="Documentation for Verso.Output.Html.«verso-vars.css»"><span class="const token" data-binding="const-Verso.Output.Html.«verso-vars.css»" data-verso-hover="148">Html.«verso-vars.css»</span></a></code>.
+Each page should include this stylesheet.</p>
+                  <div class="namedocs" id="Verso___Output___Html____FLQQ_verso-vars___css_FLQQ_">
+                    <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.Html.%C2%ABverso-vars.css%C2%BB" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html____FLQQ_verso-vars___css_FLQQ_" title="Documentation for Verso.Output.Html.«verso-vars.css»"><span class="const token" data-binding="const-Verso.Output.Html.«verso-vars.css»" data-verso-hover="148">Verso.Output.Html.«verso-vars.css»</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html____FLQQ_verso-vars___css_FLQQ_" title="Documentation for Verso.Output.Html.«verso-vars.css»"><span class="const token" data-binding="const-Verso.Output.Html.«verso-vars.css»" data-verso-hover="148">Verso.Output.Html.«verso-vars.css»</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div></pre><div class="text">
+                      <p>
+                        CSS variables used by all genres that should support HTML output.</p>
+                      </div>
+                    </div>
+                  </section>
+                <section>
+                  <h4 id="html-conventions-lean-code">
+                    5.1.1.2. Lean Code in HTML<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=html-conventions-lean-code" title="Permalink">🔗</a></span></h4>
+                  <p>
+                    Lean code is rendered using a set of built-in CSS rules.
+The colors and fonts that they use are controlled by CSS variables, documented in <code>verso-vars.css</code>.</p>
+                  <p>
+                    Each category of token that can be highlighted supports customization of its color, font weight, font style, and font family.
+Constants (such as <code>List</code> or <code>id</code>) are controlled by the <code>--verso-code-const-</code> family, keywords (such as <code>def</code> or <code>induction</code>) by the <code>--verso-code-keyword-</code> family, and local bindings (such as <code>x</code> in <code>let x := 5</code>) by the <code>--verso-code-var-</code> family.
+For example, keywords are styled by <code>--verso-code-keyword-color</code>, <code>--verso-code-keyword-weight</code>, <code>--verso-code-keyword-style</code>, and <code>--verso-code-keyword-font-family</code>.</p>
+                  <div class="paragraph">
+                    <p>
+                      Each message severity (info, warning, and error) has four sets of related styles, exemplified here for the <code>error</code> severity:</p>
+                    <ul>
+                      <li>
+                        <p>
+                          the affected code itself, via <code>--verso-code-error-color</code>, <code>--verso-code-error-bg-color</code>, <code>--verso-code-error-hover-color</code>, and <code>--verso-code-error-hover-bg-color</code>, plus <code>--verso-error-indicator-color</code> for the wavy underline that marks the presence of a message,</p>
+                        </li>
+                      <li>
+                        <p>
+                          the text of the message, via <code>--verso-message-error-color</code>,</p>
+                        </li>
+                      <li>
+                        <p>
+                          the tooltip that displays the message, via <code>--verso-tooltip-error-color</code>, <code>--verso-tooltip-error-bg-color</code>, and <code>--verso-tooltip-error-border-color</code>, and</p>
+                        </li>
+                      <li>
+                        <p>
+                          the marker bar on output blocks, via <code>--verso-output-error-color</code>.</p>
+                        </li>
+                      </ul>
+                    </div>
+                  <p>
+                    Tooltips share a generic palette (<code>--verso-tooltip-color</code>, <code>--verso-tooltip-bg-color</code>, <code>--verso-tooltip-border-color</code>, and <code>--verso-tooltip-separator-color</code>) that the severity-specific tooltip colors default to.
+Proof states are styled by the <code>--verso-tactic-state-</code> and <code>--verso-tactic-toggle-</code> variable families, and the hover highlight on interactive code by <code>--verso-code-hover-bg-color</code>.</p>
+                  <p>
+                    Data intended for hovers is deduplicated while generating HTML.
+The content of all hovers is saved in <code>-verso-docs.json</code> in the site root.
+The <code>data-verso-hover</code> attribute stores the index of the hover information in this file.</p>
+                  <div class="paragraph">
+                    <p>
+                      Rendering highlighted code requires supporting CSS and JavaScript on each page that contains it:</p>
+                    <ul>
+                      <li>
+                        <p>
+                          <code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Code___highlightingStyle" title="Documentation for Verso.Code.highlightingStyle"><span class="const token" data-binding="const-Verso.Code.highlightingStyle" data-verso-hover="149">highlightingStyle</span></a></code> contains the CSS rules that style highlighted code.</p>
+                        </li>
+                      <li>
+                        <p>
+                          <code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Code___highlightingJs" title="Documentation for Verso.Code.highlightingJs"><span class="const token" data-binding="const-Verso.Code.highlightingJs" data-verso-hover="150">highlightingJs</span></a></code> produces JavaScript code that displays hovers and highlights other occurrences of an identifier. By default, it obtains hover content using <code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Code___fetchDocsJson" title="Documentation for Verso.Code.fetchDocsJson"><span class="const token" data-binding="const-Verso.Code.fetchDocsJson" data-verso-hover="151">fetchDocsJson</span></a></code>.</p>
+                        </li>
+                      <li>
+                        <p>
+                          Hovers are displayed using the <code>tippy.js</code> and <code>popper.js</code> libraries. Copies of them are included as the string constants <code class="hl lean inline" data-lean-context="examples"><span class="const token" data-binding="const-Verso.Code.Highlighted.WebAssets.tippy" data-verso-hover="152">Highlighted.WebAssets.tippy</span></code> and <code class="hl lean inline" data-lean-context="examples"><span class="const token" data-binding="const-Verso.Code.Highlighted.WebAssets.popper" data-verso-hover="153">Highlighted.WebAssets.popper</span></code>, with source maps <code class="hl lean inline" data-lean-context="examples"><span class="const token" data-binding="const-Verso.Code.Highlighted.WebAssets.tippy.map" data-verso-hover="154">Highlighted.WebAssets.tippy.map</span></code> and <code class="hl lean inline" data-lean-context="examples"><span class="const token" data-binding="const-Verso.Code.Highlighted.WebAssets.popper.map" data-verso-hover="155">Highlighted.WebAssets.popper.map</span></code> and a stylesheet <code class="hl lean inline" data-lean-context="examples"><span class="const token" data-binding="const-Verso.Code.Highlighted.WebAssets.tippy.border.css" data-verso-hover="156">Highlighted.WebAssets.tippy.border.css</span></code>.</p>
+                        </li>
+                      <li>
+                        <p>
+                          Markdown in documentation shown in hovers is rendered by the <code>marked</code> library, included as the string constant <code class="hl lean inline" data-lean-context="examples"><span class="const token" data-binding="const-Verso.Code.Highlighted.WebAssets.marked" data-verso-hover="157">Highlighted.WebAssets.marked</span></code> with source map <code class="hl lean inline" data-lean-context="examples"><span class="const token" data-binding="const-Verso.Code.Highlighted.WebAssets.marked.map" data-verso-hover="158">Highlighted.WebAssets.marked.map</span></code>.</p>
+                        </li>
+                      </ul>
+                    </div>
+                  <div class="namedocs" id="Verso___Code___highlightingStyle">
+                    <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Code.highlightingStyle" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Code___highlightingStyle" title="Documentation for Verso.Code.highlightingStyle"><span class="const token" data-binding="const-Verso.Code.highlightingStyle" data-verso-hover="149">Verso.Code.highlightingStyle</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Code___highlightingStyle" title="Documentation for Verso.Code.highlightingStyle"><span class="const token" data-binding="const-Verso.Code.highlightingStyle" data-verso-hover="149">Verso.Code.highlightingStyle</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div></pre><div class="text">
+                      <p>
+                        CSS rules that style highlighted Lean code, including its tokens, messages, and proof states.</p>
+                      <p>
+                        Pages that contain highlighted code should include these rules in a stylesheet. The colors and
+fonts that the rules apply are controlled by CSS variables, documented in <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.237" data-verso-hover="159">verso</span><span class="punctuation operator token" data-binding="kw-occ-«term_-_»-0">-</span><span class="unknown token" data-binding="">vars.css</span></code>.</p>
+                      </div>
+                    </div>
+                  <div class="namedocs" id="Verso___Code___highlightingJs">
+                    <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Code.highlightingJs" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Code___highlightingJs" title="Documentation for Verso.Code.highlightingJs"><span class="const token" data-binding="const-Verso.Code.highlightingJs" data-verso-hover="150">Verso.Code.highlightingJs</span></a><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.426" data-verso-hover="160">highlightJsonPromise</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Code___fetchDocsJson" title="Documentation for Verso.Code.fetchDocsJson"><span class="const token" data-binding="const-Verso.Code.fetchDocsJson" data-verso-hover="151">fetchDocsJson</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Code___highlightingJs" title="Documentation for Verso.Code.highlightingJs"><span class="const token" data-binding="const-Verso.Code.highlightingJs" data-verso-hover="150">Verso.Code.highlightingJs</span></a><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.426" data-verso-hover="160">highlightJsonPromise</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text">
+    </span><a href="Output-Formats/#Verso___Code___fetchDocsJson" title="Documentation for Verso.Code.fetchDocsJson"><span class="const token" data-binding="const-Verso.Code.fetchDocsJson" data-verso-hover="151">fetchDocsJson</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div></pre><div class="text">
+                      <p>
+                        JavaScript code that implements the interactive features of highlighted Lean code, displaying
+hovers and highlighting other occurrences of an identifier.</p>
+                      <p>
+                        The parameter <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.425" data-verso-hover="160">highlightJsonPromise</span></code> is a JavaScript expression that evaluates to a promise
+that provides the hover content.</p>
+                      </div>
+                    </div>
+                  <div class="namedocs" id="Verso___Code___fetchDocsJson">
+                    <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Code.fetchDocsJson" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Code___fetchDocsJson" title="Documentation for Verso.Code.fetchDocsJson"><span class="const token" data-binding="const-Verso.Code.fetchDocsJson" data-verso-hover="151">Verso.Code.fetchDocsJson</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Code___fetchDocsJson" title="Documentation for Verso.Code.fetchDocsJson"><span class="const token" data-binding="const-Verso.Code.fetchDocsJson" data-verso-hover="151">Verso.Code.fetchDocsJson</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div></pre><div class="text">
+                      <p>
+                        A JavaScript expression that fetches hover content from <code class="hl lean inline" data-lean-context="docstring-examples"><span class="punctuation operator token" data-binding="kw-occ-«term-_»-0">-</span><span class="var token" data-binding="var-_uniq.541" data-verso-hover="161">verso</span><span class="punctuation operator token" data-binding="kw-occ-«term_-_»-0">-</span><span class="unknown token" data-binding="">docs.json</span></code> in the site root.</p>
+                      <p>
+                        This is the default means by which the code generated by <code class="hl lean inline" data-lean-context="docstring-examples"><a href="Output-Formats/#Verso___Code___highlightingJs" title="Documentation for Verso.Code.highlightingJs"><span class="const token" data-binding="const-Verso.Code.highlightingJs" data-verso-hover="150">highlightingJs</span></a></code> obtains hover content.</p>
+                      </div>
+                    </div>
+                  </section>
+                <section>
+                  <h4 id="html-conventions-math">
+                    5.1.1.3. Math<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=html-conventions-math" title="Permalink">🔗</a></span></h4>
+                  <p>
+                    TeX-style mathematical notation (written <code>$`f(x)`</code> or <code>$$`f(x)`</code>, and represented by the <code class="hl lean inline" data-lean-context="examples"><span class="const token" data-binding="const-Verso.Doc.Inline.math" data-verso-hover="162">Inline.math</span></code> constructor) is rendered to a <code>&lt;code&gt;</code> element with the class <code>math</code>, together with the class <code>inline</code> or <code>display</code> according to the requested mode.
+The element's text content is the TeX code, which is not processed while generating HTML.
+For example, <code>$`\frac{1}{2}`</code> is represented in HTML as <code>&lt;code class="math inline"&gt;\frac{1}{2}&lt;/code&gt;</code>.</p>
+                  <p>
+                    Math is typeset in the browser using the bundled KaTeX library.
+When a page has loaded, the script in <code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Output___Html___math___js" title="Documentation for Verso.Output.Html.math.js"><span class="const token" data-binding="const-Verso.Output.Html.math.js" data-verso-hover="163">Html.math.js</span></a></code> renders every element with these classes.
+Pages that contain mathematical notation should include this script together with KaTeX itself: its stylesheet (<code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Output___Html___katex___css" title="Documentation for Verso.Output.Html.katex.css"><span class="const token" data-binding="const-Verso.Output.Html.katex.css" data-verso-hover="164">Html.katex.css</span></a></code>), its code (<code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Output___Html___katex___js" title="Documentation for Verso.Output.Html.katex.js"><span class="const token" data-binding="const-Verso.Output.Html.katex.js" data-verso-hover="165">Html.katex.js</span></a></code>), and its fonts (<code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Output___Html___katexFonts" title="Documentation for Verso.Output.Html.katexFonts"><span class="const token" data-binding="const-Verso.Output.Html.katexFonts" data-verso-hover="166">Html.katexFonts</span></a></code>).
+The stylesheet refers to the fonts by relative paths, so the file layout described in their docstrings should be preserved.</p>
+                  <div class="namedocs" id="Verso___Output___Html___katex___css">
+                    <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.Html.katex.css" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___katex___css" title="Documentation for Verso.Output.Html.katex.css"><span class="const token" data-binding="const-Verso.Output.Html.katex.css" data-verso-hover="164">Verso.Output.Html.katex.css</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___katex___css" title="Documentation for Verso.Output.Html.katex.css"><span class="const token" data-binding="const-Verso.Output.Html.katex.css" data-verso-hover="164">Verso.Output.Html.katex.css</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div></pre><div class="text">
+                      <p>
+                        The minified KaTeX CSS file's contents, to be placed parallel to the JS and fonts, in a file named <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.788" data-verso-hover="167">katex</span><span class="punctuation operator token" data-binding="kw-occ-«term_/_»-0">/</span><span class="unknown token" data-binding="">katex.min.css</span></code>.</p>
+                      </div>
+                    </div>
+                  <div class="namedocs" id="Verso___Output___Html___katex___js">
+                    <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.Html.katex.js" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___katex___js" title="Documentation for Verso.Output.Html.katex.js"><span class="const token" data-binding="const-Verso.Output.Html.katex.js" data-verso-hover="165">Verso.Output.Html.katex.js</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___katex___js" title="Documentation for Verso.Output.Html.katex.js"><span class="const token" data-binding="const-Verso.Output.Html.katex.js" data-verso-hover="165">Verso.Output.Html.katex.js</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div></pre><div class="text">
+                      <p>
+                        The minified KaTeX JS file's contents, to be placed parallel to the CSS and fonts, in a file named <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.1104" data-verso-hover="167">katex</span><span class="punctuation operator token" data-binding="kw-occ-«term_/_»-0">/</span><span class="unknown token" data-binding="">katex.min.js</span></code>.</p>
+                      </div>
+                    </div>
+                  <div class="namedocs" id="Verso___Output___Html___katexFonts">
+                    <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.Html.katexFonts" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___katexFonts" title="Documentation for Verso.Output.Html.katexFonts"><span class="const token" data-binding="const-Verso.Output.Html.katexFonts" data-verso-hover="166">Verso.Output.Html.katexFonts</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">(</span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">×</span><span class="inter-text"> </span><span class="const token" data-binding="const-ByteArray" data-verso-hover="168">ByteArray</span><span class="const token" data-binding="const-Prod" data-verso-hover="81">)</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___katexFonts" title="Documentation for Verso.Output.Html.katexFonts"><span class="const token" data-binding="const-Verso.Output.Html.katexFonts" data-verso-hover="166">Verso.Output.Html.katexFonts</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">(</span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="81">×</span><span class="inter-text"> </span><span class="const token" data-binding="const-ByteArray" data-verso-hover="168">ByteArray</span><span class="const token" data-binding="const-Prod" data-verso-hover="81">)</span></div></pre><div class="text">
+                      <p>
+                        The KaTeX font files. Keys are filenames of the form <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">katex</span><span class="punctuation operator token" data-binding="">/</span><span class="unknown token" data-binding="">fonts</span><span class="punctuation operator token" data-binding="">/</span><span class="built-in delim token" data-binding="">...</span></code>.</p>
+                      </div>
+                    </div>
+                  <div class="namedocs" id="Verso___Output___Html___math___js">
+                    <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.Html.math.js" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___Html___math___js" title="Documentation for Verso.Output.Html.math.js"><span class="const token" data-binding="const-Verso.Output.Html.math.js" data-verso-hover="163">Verso.Output.Html.math.js</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___Html___math___js" title="Documentation for Verso.Output.Html.math.js"><span class="const token" data-binding="const-Verso.Output.Html.math.js" data-verso-hover="163">Verso.Output.Html.math.js</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div></pre><div class="text">
+                      <p>
+                        A short script that renders all Verso math using KaTeX.</p>
+                      </div>
+                    </div>
+                  </section>
+                </section>
+              </section>
             <section>
               <h2 id="output-tex">
                 5.2. TeX<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=output-tex" title="Permalink">🔗</a></span></h2>
               <p>
-                Verso's <code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a></code> type represents LaTeX documents.
+                Verso's <code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a></code> type represents LaTeX documents.
 They are typically produced using an embedded DSL that is available when the namespace <code>Verso.Output.TeX</code> is opened.</p>
               <div class="namedocs" id="Verso___Output___TeX___text">
-                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.TeX.paragraphBreak" title="Permalink">🔗</a></span><span class="label">inductive type</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">Verso.Output.TeX</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="2">Type</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">Verso.Output.TeX</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="2">Type</span></div></pre><div class="text">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.TeX.paragraphBreak" title="Permalink">🔗</a></span><span class="label">inductive type</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">Verso.Output.TeX</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="2">Type</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">Verso.Output.TeX</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="2">Type</span></div></pre><div class="text">
                   <p>
                     TeX output</p>
                   <div class="docstring-section" role="group" aria-labelledby="docstring-section-Constructors-next-next">
                     <p class="docstring-section-label" id="docstring-section-Constructors-next-next">
                       Constructors</p>
                     <div class="constructor">
-                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX.text"><span class="const token" data-binding="const-Verso.Output.TeX.text" data-verso-hover="149">Verso.Output.TeX.text</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.117" data-verso-hover="66">string</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a></pre><div class="docs">
+                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX.text"><span class="const token" data-binding="const-Verso.Output.TeX.text" data-verso-hover="170">Verso.Output.TeX.text</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.25" data-verso-hover="66">string</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a></pre><div class="docs">
                         <p>
                           Text to be shown in the document, escaped as needed.</p>
                         </div>
                       </div>
                     <div class="constructor">
-                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX.raw"><span class="const token" data-binding="const-Verso.Output.TeX.raw" data-verso-hover="150">Verso.Output.TeX.raw</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.118" data-verso-hover="66">string</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a></pre><div class="docs">
+                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX.raw"><span class="const token" data-binding="const-Verso.Output.TeX.raw" data-verso-hover="171">Verso.Output.TeX.raw</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.26" data-verso-hover="66">string</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a></pre><div class="docs">
                         <p>
                           Raw TeX code to be included without escaping.</p>
                         </div>
                       </div>
                     <div class="constructor">
-                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX.command"><span class="const token" data-binding="const-Verso.Output.TeX.command" data-verso-hover="151">Verso.Output.TeX.command</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.119" data-verso-hover="66">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.120" data-verso-hover="152">optArgs</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.121" data-verso-hover="152">args</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a></pre><div class="docs">
+                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX.command"><span class="const token" data-binding="const-Verso.Output.TeX.command" data-verso-hover="172">Verso.Output.TeX.command</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.27" data-verso-hover="66">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.28" data-verso-hover="173">optArgs</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.29" data-verso-hover="173">args</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a></pre><div class="docs">
                         <p>
                           A LaTeX command, with the provided optional and mandatory arguments (in square and curly brackets, respectively)</p>
                         </div>
                       </div>
                     <div class="constructor">
-                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX.environment"><span class="const token" data-binding="const-Verso.Output.TeX.environment" data-verso-hover="153">Verso.Output.TeX.environment</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.122" data-verso-hover="66">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
-  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.123" data-verso-hover="152">optArgs</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.124" data-verso-hover="152">args</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.125" data-verso-hover="152">content</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a></pre><div class="docs">
+                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX.environment"><span class="const token" data-binding="const-Verso.Output.TeX.environment" data-verso-hover="174">Verso.Output.TeX.environment</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.30" data-verso-hover="66">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.31" data-verso-hover="173">optArgs</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.32" data-verso-hover="173">args</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.33" data-verso-hover="173">content</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a></pre><div class="docs">
                         <p>
                           A LaTeX environment, with the provided optional and mandatory arguments (in square and curly brackets, respectively)</p>
                         </div>
                       </div>
                     <div class="constructor">
-                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX.paragraphBreak"><span class="const token" data-binding="const-Verso.Output.TeX.paragraphBreak" data-verso-hover="154">Verso.Output.TeX.paragraphBreak</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a></pre><div class="docs">
+                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX.paragraphBreak"><span class="const token" data-binding="const-Verso.Output.TeX.paragraphBreak" data-verso-hover="175">Verso.Output.TeX.paragraphBreak</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a></pre><div class="docs">
                         <p>
                           A paragraph break, rendered to TeX as a blank line</p>
                         </div>
                       </div>
                     <div class="constructor">
-                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX.seq"><span class="const token" data-binding="const-Verso.Output.TeX.seq" data-verso-hover="155">Verso.Output.TeX.seq</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.126" data-verso-hover="152">contents</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a></pre><div class="docs">
+                      <pre class="name-and-type hl lean"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX.seq"><span class="const token" data-binding="const-Verso.Output.TeX.seq" data-verso-hover="176">Verso.Output.TeX.seq</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.34" data-verso-hover="173">contents</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a></pre><div class="docs">
                         <p>
                           Concatenation of TeX</p>
                         </div>
@@ -2198,13 +2521,13 @@ They are typically produced using an embedded DSL that is available when the nam
                   </div>
                 </div>
               <div class="namedocs" id="Verso___Output___TeX___empty">
-                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.TeX.empty" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___TeX___empty" title="Documentation for Verso.Output.TeX.empty"><span class="const token" data-binding="const-Verso.Output.TeX.empty" data-verso-hover="156">Verso.Output.TeX.empty</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___TeX___empty" title="Documentation for Verso.Output.TeX.empty"><span class="const token" data-binding="const-Verso.Output.TeX.empty" data-verso-hover="156">Verso.Output.TeX.empty</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a></div></pre><div class="text">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.TeX.empty" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___TeX___empty" title="Documentation for Verso.Output.TeX.empty"><span class="const token" data-binding="const-Verso.Output.TeX.empty" data-verso-hover="177">Verso.Output.TeX.empty</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___TeX___empty" title="Documentation for Verso.Output.TeX.empty"><span class="const token" data-binding="const-Verso.Output.TeX.empty" data-verso-hover="177">Verso.Output.TeX.empty</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a></div></pre><div class="text">
                   <p>
                     The empty TeX document</p>
                   </div>
                 </div>
               <div class="namedocs" id="Verso___Output___TeX___asString">
-                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.TeX.asString" title="Permalink">🔗</a></span><span class="label">opaque</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___TeX___asString" title="Documentation for Verso.Output.TeX.asString"><span class="const token" data-binding="const-Verso.Output.TeX.asString" data-verso-hover="157">Verso.Output.TeX.asString</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.140" data-verso-hover="158">doc</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___TeX___asString" title="Documentation for Verso.Output.TeX.asString"><span class="const token" data-binding="const-Verso.Output.TeX.asString" data-verso-hover="157">Verso.Output.TeX.asString</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.140" data-verso-hover="158">doc</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Output.TeX.asString" title="Permalink">🔗</a></span><span class="label">opaque</span><pre class="signature hl lean block"><div class="wide-only"><a href="Output-Formats/#Verso___Output___TeX___asString" title="Documentation for Verso.Output.TeX.asString"><span class="const token" data-binding="const-Verso.Output.TeX.asString" data-verso-hover="178">Verso.Output.TeX.asString</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.50" data-verso-hover="179">doc</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div><div class="narrow-only"><a href="Output-Formats/#Verso___Output___TeX___asString" title="Documentation for Verso.Output.TeX.asString"><span class="const token" data-binding="const-Verso.Output.TeX.asString" data-verso-hover="178">Verso.Output.TeX.asString</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.50" data-verso-hover="179">doc</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
   </span><span class="const token" data-binding="const-String" data-verso-hover="67">String</span></div></pre><div class="text">
                   <p>
                     Converts a TeX document to a string to be processed by LaTeX</p>
@@ -2216,7 +2539,7 @@ The differences are:</p>
               <ul>
                 <li>
                   <p>
-                    <code>\Lean{...}</code> escapes back to Lean, expecting a value of type <code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a></code>.</p>
+                    <code>\Lean{...}</code> escapes back to Lean, expecting a value of type <code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a></code>.</p>
                   </li>
                 <li>
                   <p>
@@ -2229,25 +2552,25 @@ The differences are:</p>
                 </ul>
               <p>
                 For example, this definition creates a bulleted list list:</p>
-              <code class="hl lean block" data-lean-context="examples"><span class="keyword token" data-binding="kw-occ-Lean.Parser.Command.open-2713" data-verso-hover="140">open</span><span class="inter-text"> </span><span class="unknown token" data-binding="">Verso.Output.TeX</span><span class="inter-text">
+              <code class="hl lean block" data-lean-context="examples"><span class="keyword token" data-binding="kw-occ-Lean.Parser.Command.open-1552" data-verso-hover="140">open</span><span class="inter-text"> </span><span class="unknown token" data-binding="">Verso.Output.TeX</span><span class="inter-text">
 
-</span><span class="keyword token" data-binding="kw-occ-Lean.Parser.Command.definition-2736">def</span><span class="inter-text"> </span><span class="const token" data-binding="const-mkList" data-verso-hover="159">mkList</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.explicitBinder-2747">(</span><span class="var token" data-binding="var-_uniq.3" data-verso-hover="160">xs</span><span class="inter-text"> </span><span class="built-in delim token" data-binding="kw-occ-Lean.Parser.Term.explicitBinder-2747">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-List" data-verso-hover="93">List</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.explicitBinder-2747">)</span><span class="inter-text"> </span><span class="built-in delim token" data-binding="kw-occ-Lean.Parser.Term.typeSpec-2763">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="148">TeX</span></a><span class="inter-text"> </span><span class="built-in delim token" data-binding="kw-occ-Lean.Parser.Command.declValSimple-2769">:=</span><span class="inter-text">
+</span><span class="keyword token" data-binding="kw-occ-Lean.Parser.Command.definition-1575">def</span><span class="inter-text"> </span><span class="const token" data-binding="const-mkList" data-verso-hover="180">mkList</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.explicitBinder-1586">(</span><span class="var token" data-binding="var-_uniq.3" data-verso-hover="181">xs</span><span class="inter-text"> </span><span class="built-in delim token" data-binding="kw-occ-Lean.Parser.Term.explicitBinder-1586">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-List" data-verso-hover="93">List</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.explicitBinder-1586">)</span><span class="inter-text"> </span><span class="built-in delim token" data-binding="kw-occ-Lean.Parser.Term.typeSpec-1602">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___TeX___text" title="Documentation for Verso.Output.TeX"><span class="const token" data-binding="const-Verso.Output.TeX" data-verso-hover="169">TeX</span></a><span class="inter-text"> </span><span class="built-in delim token" data-binding="kw-occ-Lean.Parser.Command.declValSimple-1608">:=</span><span class="inter-text">
   </span><span class="unknown token" data-binding="">\TeX{</span><span class="inter-text">
-    </span><span class="unknown token" data-binding="">\begin{</span><span class="unknown token" data-binding="">itemize</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«tex\begin{_}[_]{_}_\end{_}»-2784">}</span><span class="inter-text">
-      </span><span class="unknown token" data-binding="">\Lean{</span><span class="var token" data-binding="var-_uniq.3" data-verso-hover="160">xs</span><span class="built-in delim token" data-binding="">.</span><span class="const token" data-binding="const-List.map" data-verso-hover="142">map</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.hygienicLParen-2819">(</span><span class="unknown token" data-binding="">\TeX{</span><span class="unknown token" data-binding="">\</span><span class="unknown token" data-binding="">item</span><span class="inter-text"> </span><span class="literal string token" data-binding="" data-verso-hover="161">" "</span><span class="inter-text"> </span><span class="unknown token" data-binding="">\Lean{</span><span class="var token" data-binding="var-_uniq.17" data-verso-hover="158">·</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«tex\Lean{_}»-2835">}</span><span class="inter-text"> </span><span class="literal string token" data-binding="" data-verso-hover="162">"\n"</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«term\TeX{_}»-2820">}</span><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.paren-2819">)</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«tex\Lean{_}»-2806">}</span><span class="inter-text">
-    </span><span class="unknown token" data-binding="">\end{</span><span class="unknown token" data-binding="">itemize</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«tex\begin{_}[_]{_}_\end{_}»-2784">}</span><span class="inter-text">
-  </span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«term\TeX{_}»-2774">}</span><span class="inter-text">
+    </span><span class="unknown token" data-binding="">\begin{</span><span class="unknown token" data-binding="">itemize</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«tex\begin{_}[_]{_}_\end{_}»-1623">}</span><span class="inter-text">
+      </span><span class="unknown token" data-binding="">\Lean{</span><span class="var token" data-binding="var-_uniq.3" data-verso-hover="181">xs</span><span class="built-in delim token" data-binding="">.</span><span class="const token" data-binding="const-List.map" data-verso-hover="142">map</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.hygienicLParen-1658">(</span><span class="unknown token" data-binding="">\TeX{</span><span class="unknown token" data-binding="">\</span><span class="unknown token" data-binding="">item</span><span class="inter-text"> </span><span class="literal string token" data-binding="" data-verso-hover="182">" "</span><span class="inter-text"> </span><span class="unknown token" data-binding="">\Lean{</span><span class="var token" data-binding="var-_uniq.17" data-verso-hover="179">·</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«tex\Lean{_}»-1674">}</span><span class="inter-text"> </span><span class="literal string token" data-binding="" data-verso-hover="183">"\n"</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«term\TeX{_}»-1659">}</span><span class="punctuation bracket token" data-binding="kw-occ-Lean.Parser.Term.paren-1658">)</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«tex\Lean{_}»-1645">}</span><span class="inter-text">
+    </span><span class="unknown token" data-binding="">\end{</span><span class="unknown token" data-binding="">itemize</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«tex\begin{_}[_]{_}_\end{_}»-1623">}</span><span class="inter-text">
+  </span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«term\TeX{_}»-1613">}</span><span class="inter-text">
 
-</span><span class="has-info information"><span class="hover-container"><span class="hover-info messages"><code class="verso-message information"><span class="text"></span><span class="text">\begin{itemize}
+</span><span class="has-info information" data-verso-hover="143"><span class="hover-container"><span class="hover-info messages"><code class="verso-message information"><span class="text"></span><span class="text">\begin{itemize}
 \item A
 \item \emph{B}
 \item C
 
 \end{itemize}
 
-</span></code></span></span><span class="keyword token" data-binding="kw-occ-Lean.Parser.Command.eval-2876" data-verso-hover="143">#eval</span></span><span class="inter-text"> </span><span class="const token" data-binding="const-mkList" data-verso-hover="159">mkList</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-«term[_]»-2889">[</span><span class="literal string token" data-binding="" data-verso-hover="144">"A"</span><span class="punctuation separator token" data-binding="kw-occ-«term[_]»-2889">,</span><span class="inter-text"> </span><span class="unknown token" data-binding="">\TeX{</span><span class="unknown token" data-binding="">\</span><span class="unknown token" data-binding="">emph</span><span class="punctuation bracket token" data-binding="kw-occ-group-2905">{</span><span class="literal string token" data-binding="" data-verso-hover="145">"B"</span><span class="punctuation bracket token" data-binding="kw-occ-group-2905">}</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«term\TeX{_}»-2895">}</span><span class="punctuation separator token" data-binding="kw-occ-«term[_]»-2889">,</span><span class="inter-text"> </span><span class="literal string token" data-binding="" data-verso-hover="146">"C"</span><span class="punctuation bracket token" data-binding="kw-occ-«term[_]»-2889">]</span><span class="inter-text">
-  </span><span class="punctuation operator token" data-binding="kw-occ-Lean.Parser.Term.pipeProj-2882">|&gt;.</span><a href="Output-Formats/#Verso___Output___TeX___asString" title="Documentation for Verso.Output.TeX.asString"><span class="const token" data-binding="const-Verso.Output.TeX.asString" data-verso-hover="157">asString</span></a><span class="inter-text">
-  </span><span class="punctuation operator token" data-binding="kw-occ-«term_|>_»-2882">|&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-IO.println" data-verso-hover="147">IO.println</span><span class="inter-text">
+</span></code></span></span><span class="keyword token" data-binding="kw-occ-Lean.Parser.Command.eval-1715">#eval</span></span><span class="inter-text"> </span><span class="const token" data-binding="const-mkList" data-verso-hover="180">mkList</span><span class="inter-text"> </span><span class="punctuation bracket token" data-binding="kw-occ-«term[_]»-1728">[</span><span class="literal string token" data-binding="" data-verso-hover="144">"A"</span><span class="punctuation separator token" data-binding="kw-occ-«term[_]»-1728">,</span><span class="inter-text"> </span><span class="unknown token" data-binding="">\TeX{</span><span class="unknown token" data-binding="">\</span><span class="unknown token" data-binding="">emph</span><span class="punctuation bracket token" data-binding="kw-occ-group-1744">{</span><span class="literal string token" data-binding="" data-verso-hover="145">"B"</span><span class="punctuation bracket token" data-binding="kw-occ-group-1744">}</span><span class="punctuation bracket token" data-binding="kw-occ-Verso.Output.TeX.«term\TeX{_}»-1734">}</span><span class="punctuation separator token" data-binding="kw-occ-«term[_]»-1728">,</span><span class="inter-text"> </span><span class="literal string token" data-binding="" data-verso-hover="146">"C"</span><span class="punctuation bracket token" data-binding="kw-occ-«term[_]»-1728">]</span><span class="inter-text">
+  </span><span class="punctuation operator token" data-binding="kw-occ-Lean.Parser.Term.pipeProj-1721">|&gt;.</span><a href="Output-Formats/#Verso___Output___TeX___asString" title="Documentation for Verso.Output.TeX.asString"><span class="const token" data-binding="const-Verso.Output.TeX.asString" data-verso-hover="178">asString</span></a><span class="inter-text">
+  </span><span class="punctuation operator token" data-binding="kw-occ-«term_|>_»-1721">|&gt;</span><span class="inter-text"> </span><span class="const token" data-binding="const-IO.println" data-verso-hover="147">IO.println</span><span class="inter-text">
 </span><span class="unknown token" data-binding=""></span></code><pre class="hl lean lean-output information"><span class="verso-message"><span class="text"></span><span class="text"></span><span class="text">\begin{itemize}
 \item A
 \item \emph{B}
