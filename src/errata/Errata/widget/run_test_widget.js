@@ -5,7 +5,6 @@ import {
     EditorContext,
     EnvPosContext,
     Markdown,
-    useClientNotificationEffect,
     useEvent,
     useRpcSession,
 } from "@leanprover/infoview";
@@ -56,7 +55,7 @@ const preStyle = {
     wordBreak: "break-word",
     background: "var(--vscode-textCodeBlock-background, rgba(127,127,127,0.1))",
     borderRadius: "3px",
-    fontSize: "12px",
+    fontSize: "0.95em",
 };
 
 function formatDuration(ms) {
@@ -91,6 +90,11 @@ const dimColor = "var(--vscode-descriptionForeground, #717171)";
 
 // The editor theme's colour for errors: a run that could not start, and a rejected seed.
 const errorColor = "var(--vscode-errorForeground, #c62828)";
+
+// The size of the text that accompanies a result rather than stating it: the badges, the hints, the
+// durations, and the run settings. It is a fraction of the text around it, so the whole widget
+// follows the editor's font size.
+const dimSize = "0.9em";
 
 // The time since `runStart`, an instant on the client's clock, ticking while mounted; shows zero
 // until the start is known.
@@ -249,9 +253,9 @@ function chunkSpan(chunks, i, execStartTime, hovered, setHovered) {
 // Renders captured output: stdout and stderr interleaved in order. Hovering a chunk highlights it
 // and reports its stream and time offset.
 //
-// The spans live in `cache` from one render to the next. A reply that brings more output leaves the
-// chunks already shown in place, so their spans stand and the reply costs a span for each chunk it
-// carries. Output that grew from something else, such as another run's, starts the spans over.
+// The spans live in `cache` from one render to the next. A reply that adds output leaves the chunks
+// already shown in place, so their spans are kept and only the new chunks get spans. Output that
+// replaced what was shown, such as another run's, starts the spans over.
 function outputBlock(cache, chunks, execStartTime, hovered, setHovered) {
     const c = cache.current;
     const grew =
@@ -285,8 +289,10 @@ function outputBlock(cache, chunks, execStartTime, hovered, setHovered) {
 }
 
 // The collapsible output disclosure: a summary naming the hovered chunk's stream and time offset,
-// the interleaved chunks, and a copy button floating over the output, revealed on hover. Whether
-// it is open belongs to the caller, so a collapse outlasts the output being replaced.
+// the interleaved chunks, and a copy button floating over the output, revealed on hover. The button
+// copies `copy` when the caller gives it, which is how the test's own output shows alone while the
+// button still offers the whole run's. Whether it is open belongs to the caller, so a collapse
+// outlasts the output being replaced.
 const OutputSection = React.memo(function OutputSection(props) {
     const chunks = props.chunks;
     const execStartTime = props.execStartTime;
@@ -295,6 +301,8 @@ const OutputSection = React.memo(function OutputSection(props) {
     const [hovered, setHovered] = React.useState(-1);
     // The spans of the chunks, from one render to the next.
     const spanCache = React.useRef({ spans: [], last: null, execStartTime: 0 });
+    // Whether a chunk of the output on show is under the pointer.
+    const showing = hovered >= 0 && hovered < chunks.length;
     // Briefly true after the output is copied, to confirm the copy in the button label.
     const [copied, setCopied] = React.useState(false);
     // Whether the cursor is over the output area, revealing the floating copy button.
@@ -321,7 +329,7 @@ const OutputSection = React.memo(function OutputSection(props) {
     }
 
     function copyOutput() {
-        const text = chunks
+        const text = (props.copy || chunks)
             .map(function (c) {
                 return c.text;
             })
@@ -411,18 +419,32 @@ const OutputSection = React.memo(function OutputSection(props) {
         },
         e(
             "summary",
-            { style: { color: dimColor, fontSize: "11px", cursor: "pointer" } },
-            hovered >= 0 && hovered < chunks.length
-                ? [
-                      "Output  —  ",
-                      e(
-                          "span",
-                          { key: "stream", style: { fontFamily: monoFont } },
-                          chunks[hovered].stream,
-                      ),
-                      " " + chunkOffset(chunks[hovered], execStartTime),
-                  ]
-                : "Output",
+            // The output of the test's own code is a peer of the named results below it, so its
+            // line reads as they do.
+            { style: { cursor: "pointer", lineHeight: 1.5 } },
+            "Output",
+            // The stream and offset of the chunk under the pointer hold their place in the line at
+            // all times, the code font among them, so the line is the same height whether or not a
+            // chunk is under the pointer and the output below stays where it is. The code font's
+            // span holds a no-break space while there is nothing to name, which keeps the line box
+            // it contributes.
+            e(
+                "span",
+                {
+                    style: {
+                        color: dimColor,
+                        fontSize: dimSize,
+                        visibility: showing ? "visible" : "hidden",
+                    },
+                },
+                "  —  ",
+                e(
+                    "span",
+                    { style: { fontFamily: monoFont } },
+                    showing ? chunks[hovered].stream : " ",
+                ),
+                " " + (showing ? chunkOffset(chunks[hovered], execStartTime) : ""),
+            ),
         ),
         e(
             "div",
@@ -441,12 +463,140 @@ const OutputSection = React.memo(function OutputSection(props) {
     );
 });
 
+// The control that goes to the check a failure came from, as the InfoView's own sections offer a
+// place: an icon at the right of the row that names the thing, with where it leads in its tooltip.
+// An assertion records its own source position, which is where the control goes.
+function sourceButton(source, reveal) {
+    if (!source) return null;
+    const file = decodeURIComponent((source.uri || "").split("/").pop() || "");
+    const where = file + ":" + (source.startLine + 1) + ":" + source.startColumn;
+    return e("button", {
+        onClick: function () {
+            reveal(source);
+        },
+        title: "Go to " + where,
+        "aria-label": "Go to " + where,
+        className: "link pointer dim mh2 codicon codicon-go-to-file",
+        style: {
+            background: "none",
+            border: "none",
+            padding: 0,
+            color: "var(--vscode-textLink-foreground, #0078d4)",
+        },
+    });
+}
+
+// The button floated to the right of a result's own row. A click there is the control's own, so it
+// leaves the disclosure as it was.
+function sourceControl(source, reveal) {
+    const button = sourceButton(source, reveal);
+    if (!button) return null;
+    return e(
+        "span",
+        {
+            className: "fr",
+            onClick: function (ev) {
+                ev.preventDefault();
+            },
+        },
+        button,
+    );
+}
+
+// A result that reveals something is a disclosure, and the browser draws its triangle. A result
+// with nothing to reveal is a row of the same shape whose marker is there but invisible, so the
+// names of the results in a tree line up whether or not they open.
+const treeStyle =
+    ".errata-leaf { display: list-item; list-style: disclosure-closed inside }\n" +
+    ".errata-leaf::marker { color: transparent }";
+
+// One named result in the tree: its verdict, its name, and how long its own code took. A result
+// that reported something opens to show it, in the order a reader wants it: why it did not pass,
+// what its own code wrote, then the named results inside it. A result that reported nothing beyond
+// its verdict is a row of its own, with no triangle to open.
+function NamedResult(props) {
+    const result = props.results[props.id];
+    // This result's own spans, and the chunk of them under the cursor.
+    const spanCache = React.useRef({ spans: [], last: null, execStartTime: 0 });
+    const [hovered, setHovered] = React.useState(-1);
+    const inside = props.kids[props.id] || [];
+    const reported = !!(result.message || result.detail || result.output.length || inside.length);
+    const open = reported && props.isOpen(props.id);
+    // A result reads as the panel's own text, so its rows take the size around them and the tree
+    // stays legible at any editor font. Nesting adds no size of its own, so a result at any depth
+    // reads the same.
+    const rowStyle = { marginTop: "2px" };
+    const row = [
+        e(
+            "span",
+            {
+                key: "status",
+                role: "img",
+                "aria-label": STATUS_LABELS[result.status] || "Running",
+                style: { color: STATUS_COLORS[result.status] || dimColor, fontWeight: 600 },
+            },
+            STATUS_SYMBOLS[result.status] || "…",
+        ),
+        " " + (result.name || "result"),
+        result.durationMs
+            ? e(
+                  "span",
+                  { key: "duration", style: { color: dimColor, fontSize: dimSize } },
+                  "  " + formatDuration(result.durationMs),
+              )
+            : null,
+        sourceControl(result.location, props.reveal),
+    ];
+
+    if (!reported) return e("div", { className: "errata-leaf", style: rowStyle }, ...row);
+
+    return e(
+        "details",
+        {
+            open,
+            onToggle: /** @param ev {React.ToggleEvent<HTMLDetailsElement>} */ function (ev) {
+                props.onOpenChange(props.id, ev.currentTarget.open);
+            },
+            style: { marginTop: "2px" },
+        },
+        e("summary", { style: { ...rowStyle, marginTop: 0, cursor: "pointer" } }, ...row),
+        open
+            ? e(
+                  "div",
+                  { style: { marginLeft: "1em" } },
+                  result.message ? block(result.message) : null,
+                  result.detail ? block(result.detail) : null,
+                  result.output.length
+                      ? outputBlock(
+                            spanCache,
+                            result.output,
+                            props.execStartTime,
+                            hovered,
+                            setHovered,
+                        )
+                      : null,
+                  inside.map(function (id) {
+                      return e(NamedResult, { ...props, key: id, id });
+                  }),
+              )
+            : null,
+    );
+}
+
 /**
- * @typedef {{stream: string, text: string, time?: number}} Chunk
- * @typedef {{status: string, durationMs: number, message?: string, detail?: string,
- *            output?: Chunk[], description?: string, seed?: number}} Outcome
- * @typedef {{phase: string, chunks: Chunk[], startTime: number, startedAt: number,
- *            buildMs: number, execStartTime: number}} RunFields
+ * @typedef {"passed" | "failed" | "error"} Status the verdict of a result, as Lean reports it
+ * @typedef {Status | ""} ShownStatus a verdict, or blank while a result is still running
+ * @typedef {{uri: string, startLine: number, startColumn: number, endLine: number,
+ *            endColumn: number}} Source the span of a failed check
+ * @typedef {{stream: string, text: string, time?: number, result?: number}} Chunk
+ * @typedef {{id: number, parent: number, name: string, status: ShownStatus, durationMs: number,
+ *            message: string, detail: string, location: Source | null,
+ *            output: Chunk[]}} ResultNode
+ * @typedef {{status: Status, durationMs: number, message?: string, detail?: string,
+ *            location?: Source, results?: ResultNode[], description?: string,
+ *            seed?: string}} Outcome
+ * @typedef {{phase: string, chunks: Chunk[], results: ResultNode[], startTime: number,
+ *            startedAt: number, buildMs: number, execStartTime: number}} RunFields
  *
  * The run's lifecycle as a single state, so the widget shows exactly one of a spinner, a verdict,
  * an error, or nothing:
@@ -476,7 +626,142 @@ const idleState = { tag: "idle" };
 
 /** @returns {RunFields} */
 function blankFields() {
-    return { phase: "", chunks: [], startTime: 0, startedAt: 0, buildMs: 0, execStartTime: 0 };
+    return {
+        phase: "",
+        chunks: [],
+        results: [],
+        startTime: 0,
+        startedAt: 0,
+        buildMs: 0,
+        execStartTime: 0,
+    };
+}
+
+/**
+ * A run's result, before anything is known of it beyond where it sits.
+ * @returns {ResultNode}
+ */
+function blankResult(id) {
+    return {
+        id,
+        parent: 0,
+        name: "",
+        status: "",
+        durationMs: 0,
+        message: "",
+        detail: "",
+        location: null,
+        output: [],
+    };
+}
+
+/**
+ * The results of a run, updated with the chunks and the reports from named results in one reply.
+ *
+ * A report gives a result's identifier, parent, and name when it starts, and its verdict when it
+ * finishes. A result's output is the chunks whose `result` field names it. All of one result's
+ * chunks in a reply are appended at once, so its output array is rebuilt once per reply. The chunk
+ * objects are shared with the run's own output, so a result holds only references to them.
+ *
+ * @param results {ResultNode[]}
+ * @returns {ResultNode[]}
+ */
+function mergeResults(results, reply) {
+    const next = results.slice();
+    function at(id) {
+        while (next.length <= id) next.push(blankResult(next.length));
+        return next[id];
+    }
+    for (const ev of reply.results || []) {
+        const shown = at(ev.id);
+        next[ev.id] = {
+            ...shown,
+            parent: ev.parent || 0,
+            name: ev.name || shown.name,
+            status: ev.status || shown.status,
+            durationMs: ev.durationMs || shown.durationMs,
+            message: ev.message || shown.message,
+            detail: ev.detail || shown.detail,
+            location: ev.location || shown.location,
+        };
+    }
+    const arrived = new Map();
+    for (const c of reply.chunks || []) {
+        const id = c.result || 0;
+        if (!arrived.has(id)) arrived.set(id, []);
+        arrived.get(id).push(c);
+    }
+    for (const [id, added] of arrived) {
+        const shown = at(id);
+        next[id] = { ...shown, output: shown.output.concat(added) };
+    }
+    return next;
+}
+
+/**
+ * The results of a finished run, as the outcome records them, each with the output of its own code.
+ * A remounted widget shows these, since the run's chunks are gone by then.
+ * @returns {ResultNode[]}
+ */
+function resultsOfOutcome(outcome) {
+    const results = (outcome && outcome.results) || [];
+    return results.map(function (r) {
+        return {
+            ...blankResult(r.id || 0),
+            parent: r.parent || 0,
+            name: r.name || "",
+            status: r.status || "",
+            durationMs: r.durationMs || 0,
+            message: r.message || "",
+            detail: r.detail || "",
+            location: r.location || null,
+            output: r.output || [],
+        };
+    });
+}
+
+/**
+ * Every result's output, the results in the order they ran, for a run whose own chunks are gone.
+ * @param results {ResultNode[]}
+ * @returns {Chunk[]}
+ */
+function allOutput(results) {
+    const all = [];
+    for (const result of results) for (const chunk of result.output) all.push(chunk);
+    return all;
+}
+
+/**
+ * Whether each result, or any result below it, failed or raised an error. A named result has a
+ * higher identifier than the result that contains it, so one pass from the last result to the first
+ * marks every result above a failure.
+ * @param results {ResultNode[]}
+ * @returns {boolean[]}
+ */
+function failingPaths(results) {
+    const failing = results.map(function (result) {
+        return result.status === "failed" || result.status === "error";
+    });
+    for (let i = results.length - 1; i > 0; i--) {
+        if (failing[i]) failing[results[i].parent] = true;
+    }
+    return failing;
+}
+
+/**
+ * The named results each result contains, by identifier, in the order they started.
+ * @param results {ResultNode[]}
+ * @returns {number[][]}
+ */
+function childrenOf(results) {
+    const children = results.map(function () {
+        return [];
+    });
+    for (let i = 1; i < results.length; i++) {
+        const parent = results[i].parent;
+        if (parent >= 0 && parent < children.length && parent !== i) children[parent].push(i);
+    }
+    return children;
 }
 
 /**
@@ -489,6 +774,7 @@ function fieldsOf(st) {
     return {
         phase: st.phase,
         chunks: st.chunks,
+        results: st.results,
         startTime: st.startTime,
         startedAt: st.startedAt,
         buildMs: st.buildMs,
@@ -538,14 +824,18 @@ function step(st, ev) {
                 res.startTime && shown.startTime && res.startTime !== shown.startTime
                     ? blankFields()
                     : shown;
-            // The start on the client's clock is taken from the first reply about the run, which is
-            // the one that reports how long it had been going by then. The clock carries it from
-            // there, at the same reading for every render.
+            // The run's start on the client's clock is set once, from the first reply about the
+            // run: the time the reply arrived, less how long the server says the run had been
+            // going. Later replies leave it unchanged.
             const synced = prev.startTime !== 0;
             const merged = {
                 phase: res.phase || prev.phase,
                 chunks:
                     res.chunks && res.chunks.length ? prev.chunks.concat(res.chunks) : prev.chunks,
+                results:
+                    (res.chunks && res.chunks.length) || (res.results && res.results.length)
+                        ? mergeResults(prev.results, res)
+                        : prev.results,
                 startTime: res.startTime || prev.startTime,
                 startedAt: !synced && res.elapsedMs ? ev.now - res.elapsedMs : prev.startedAt,
                 buildMs: res.buildMs || prev.buildMs,
@@ -610,14 +900,20 @@ function TestRun(props) {
     });
     // Whether the file has no unsaved changes; the test runs the saved version, so Run is gated on it.
     const [clean, setClean] = React.useState(true);
+    // Whether the file has changed since the test's run started, as the server last reported it.
+    const [edited, setEdited] = React.useState(false);
     // The seed for property tests as typed, or blank to have one drawn.
     const [seed, setSeed] = React.useState("");
     // Whether the run settings (the seed field) are shown, behind the gear button.
     const [settingsOpen, setSettingsOpen] = React.useState(false);
-    // Why the last cancel did not reach the server, while the run it was meant to stop carries on.
+    // The error from the last cancel that failed, shown while the run it was meant to stop goes on.
     const [cancelError, setCancelError] = React.useState(null);
     // Whether the output disclosure is expanded; open by default, collapsible to hide large output.
     const [outputOpen, setOutputOpen] = React.useState(true);
+    // Whether a named result starts open, and the ones the reader has since opened or closed, by
+    // identifier. A change of the setting clears those, so the new default reaches the whole tree.
+    const [expandNamed, setExpandNamed] = React.useState(false);
+    const [openResults, setOpenResults] = React.useState({});
     // Whether the widget's own disclosure is expanded, alongside the InfoView's other sections.
     const [panelOpen, setPanelOpen] = React.useState(true);
     // Bumped when the language server restarts, so the widget connects again through its new session.
@@ -634,8 +930,10 @@ function TestRun(props) {
     });
     // Bumped on each run start, cancel, and disconnect so a superseded await loop ignores late replies.
     const gen = React.useRef(0);
-    // The position past the chunks already received, from the server's last reply.
+    // The positions past the chunks and the named-result reports already received, from the
+    // server's last reply.
     const sinceRef = React.useRef(0);
+    const sinceResultsRef = React.useRef(0);
     // The last phase the widget saw; "" forces the next await to return the run's current phase at once.
     const phaseRef = React.useRef("");
     // Whether the widget is connected, so late clean-check replies are dropped.
@@ -660,43 +958,37 @@ function TestRun(props) {
     const running = st.tag === "running";
     const starting = st.tag === "running" && st.phase === "starting";
 
-    // Asks the server whether the buffer is saved. While it is dirty, asks again every 1.5 s so
-    // the button re-enables shortly after a save.
-    function checkClean() {
+    // Asks the server about the file: whether it is saved, and whether it has changed since the
+    // test's run started. The server holds the document as it is being edited and the run as it was
+    // started, so it answers both however the widget came to be mounted. It asks again every 1.5 s
+    // while the widget is up, so an edit anywhere in the file and a save both show shortly after.
+    function checkFile() {
         if (cleanTimer.current) {
             clearTimeout(cleanTimer.current);
             cleanTimer.current = null;
         }
         const myGen = cleanGen.current + 1;
         cleanGen.current = myGen;
-        rsRef.current.call("Errata.Widget.bufferClean", { decl: props.decl }).then(
-            function (c) {
+        rsRef.current.call("Errata.Widget.fileState", { decl: props.decl }).then(
+            function (file) {
                 if (!alive.current || cleanGen.current !== myGen) return;
-                setClean(c);
-                if (!c) cleanTimer.current = setTimeout(checkClean, 1500);
+                setClean(file.clean);
+                setEdited(file.changedSinceRun);
+                cleanTimer.current = setTimeout(checkFile, 1500);
             },
-            function () {},
+            function () {
+                if (!alive.current || cleanGen.current !== myGen) return;
+                cleanTimer.current = setTimeout(checkFile, 1500);
+            },
         );
     }
-
-    // An edit to this file means the buffer is dirty. The retry then finds out when it is saved.
-    useClientNotificationEffect(
-        "textDocument/didChange",
-        function (params) {
-            if (params.textDocument.uri !== uri) return;
-            cleanGen.current += 1;
-            setClean(false);
-            if (cleanTimer.current) clearTimeout(cleanTimer.current);
-            cleanTimer.current = setTimeout(checkClean, 1500);
-        },
-        [uri],
-    );
 
     function loop(myGen) {
         rsRef.current
             .call("Errata.Widget.awaitOutput", {
                 decl: props.decl,
                 since: sinceRef.current,
+                sinceResults: sinceResultsRef.current,
                 version: version,
                 phase: phaseRef.current,
             })
@@ -713,6 +1005,7 @@ function TestRun(props) {
                     ) {
                         shownStart.current = res.startTime;
                         sinceRef.current = 0;
+                        sinceResultsRef.current = 0;
                         phaseRef.current = "";
                         loop(myGen);
                         return;
@@ -720,6 +1013,7 @@ function TestRun(props) {
                     if (res.startTime) shownStart.current = res.startTime;
                     if (res.phase) phaseRef.current = res.phase;
                     sinceRef.current = res.nextSince || 0;
+                    sinceResultsRef.current = res.nextSinceResults || 0;
                     dispatch({ type: "server", res: res, now: Date.now() });
                     if (!res.done) loop(myGen);
                 },
@@ -747,12 +1041,13 @@ function TestRun(props) {
             const myGen = gen.current + 1;
             gen.current = myGen;
             sinceRef.current = 0;
+            sinceResultsRef.current = 0;
             phaseRef.current = "";
             shownStart.current = 0;
             awaitFails.current = 0;
             loop(myGen);
             alive.current = true;
-            checkClean();
+            checkFile();
             return function () {
                 gen.current += 1;
                 alive.current = false;
@@ -794,6 +1089,36 @@ function TestRun(props) {
         [settingsOpen],
     );
 
+    // A result the reader has opened or closed stays as they left it. Otherwise the settings
+    // decide, except on the way down to a result that did not pass: that path is open, so a failure
+    // and the results it happened in are in view as soon as the run reports them.
+    // Has the editor open a file at the check that failed, with the check itself selected.
+    function reveal(source) {
+        const shown = ec.revealLocation({
+            uri: source.uri,
+            range: {
+                start: { line: source.startLine, character: source.startColumn },
+                end: { line: source.endLine, character: source.endColumn },
+            },
+        });
+        if (shown && shown.catch) shown.catch(function () {});
+    }
+
+    function isResultOpen(id, failing) {
+        return id in openResults ? openResults[id] : expandNamed || failing[id];
+    }
+
+    function setResultOpen(id, open) {
+        setOpenResults(function (opened) {
+            return { ...opened, [id]: open };
+        });
+    }
+
+    function setNamedResultsOpen(open) {
+        setExpandNamed(open);
+        setOpenResults({});
+    }
+
     function closeSettings(refocus) {
         setSettingsOpen(false);
         if (refocus && gearRef.current) gearRef.current.focus();
@@ -809,10 +1134,15 @@ function TestRun(props) {
         const myGen = gen.current + 1;
         gen.current = myGen;
         sinceRef.current = 0;
+        sinceResultsRef.current = 0;
         phaseRef.current = "building";
         shownStart.current = 0;
         awaitFails.current = 0;
         setCancelError(null);
+        setEdited(false);
+        // A run's results are its own, so they open as the settings and its failures decide rather
+        // than as the reader left the run before it.
+        setOpenResults({});
         dispatch({ type: "start", now: Date.now() });
         const request = {
             decl: props.decl,
@@ -830,7 +1160,7 @@ function TestRun(props) {
                 if (gen.current !== myGen) return;
                 dispatch({ type: "fail", error: errorMessage(err) });
                 // A start refused for unsaved changes means the clean state is stale.
-                checkClean();
+                checkFile();
             },
         );
     }
@@ -851,6 +1181,30 @@ function TestRun(props) {
     }
 
     const name = props.name || "test";
+
+    // What to say about the file beside the button. That the result on show came from the file as
+    // it was before a change is a state of the result, so it reads as the verdict does. That the
+    // file has to be saved before a run is an instruction, so it reads as the other notes do. A run
+    // that has yet to report anything has nothing to go stale.
+    let fileHint = null;
+    if (!running) {
+        const stale = edited && st.tag !== "idle";
+        const saveNote = clean
+            ? null
+            : e(
+                  "span",
+                  { key: "save", style: { color: dimColor, fontSize: dimSize } },
+                  stale ? "— save to run" : "unsaved — save to run",
+              );
+        fileHint = stale
+            ? e(
+                  "span",
+                  { style: { display: "inline-flex", alignItems: "baseline", gap: "8px" } },
+                  e("span", { key: "modified", style: { fontWeight: 600 } }, "File modified"),
+                  saveNote,
+              )
+            : saveNote;
+    }
 
     const header = e(
         "div",
@@ -885,19 +1239,17 @@ function TestRun(props) {
         running && cancelError
             ? e(
                   "span",
-                  { style: { color: errorColor, fontSize: "11px" } },
+                  { style: { color: errorColor, fontSize: dimSize } },
                   "could not cancel: " + cancelError,
               )
             : null,
-        !clean && !running
-            ? e("span", { style: { color: dimColor, fontSize: "11px" } }, "unsaved — save to run")
-            : null,
+        fileHint,
         // The seed lives behind the gear, so a rejected one is named here as well, where the
         // disabled button is.
         clean && !seedValid && !running
             ? e(
                   "span",
-                  { style: { color: errorColor, fontSize: "11px" } },
+                  { style: { color: errorColor, fontSize: dimSize } },
                   "invalid seed — see run settings",
               )
             : null,
@@ -939,23 +1291,23 @@ function TestRun(props) {
         }),
     );
 
-    // The settings themselves, in a popup below the gear: the seed for property tests, and the
-    // reason for a rejected one.
+    const settingRow = {
+        display: "flex",
+        alignItems: "center",
+        gap: "6px",
+        whiteSpace: "nowrap",
+        fontSize: dimSize,
+    };
+
+    // The settings themselves, in a popup below the gear: the seed for property tests, the reason
+    // for a rejected one, and how the named results of a run first appear.
     const settingsPopup = settingsOpen
         ? e(
               Popup,
               { anchor: gearRef.current, onClose: closeSettings },
               e(
                   "label",
-                  {
-                      style: {
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          whiteSpace: "nowrap",
-                          fontSize: "11px",
-                      },
-                  },
+                  { style: settingRow },
                   "Seed",
                   e("input", {
                       ref: seedRef,
@@ -972,7 +1324,6 @@ function TestRun(props) {
                       style: {
                           width: "12ch",
                           fontFamily: monoFont,
-                          fontSize: "11px",
                           outline: seedValid
                               ? undefined
                               : "1px solid var(--vscode-inputValidation-errorBorder, #be1100)",
@@ -983,9 +1334,23 @@ function TestRun(props) {
                   ? null
                   : e(
                         "div",
-                        { style: { marginTop: "4px", fontSize: "11px", color: errorColor } },
+                        { style: { marginTop: "4px", fontSize: dimSize, color: errorColor } },
                         seedHint,
                     ),
+              e(
+                  "label",
+                  { style: { ...settingRow, marginTop: "4px" } },
+                  e("input", {
+                      type: "checkbox",
+                      checked: expandNamed,
+                      title: "Show what each named result reported, rather than its verdict alone",
+                      onChange: function (ev) {
+                          setNamedResultsOpen(ev.target.checked);
+                      },
+                      style: { margin: 0 },
+                  }),
+                  "Expand named results",
+              ),
           )
         : null;
 
@@ -993,19 +1358,53 @@ function TestRun(props) {
     const timings = st.tag === "idle" ? null : st;
     const execStartTime = timings ? timings.execStartTime : 0;
 
-    // Prefer the live, server-timestamped chunks; fall back to a cached outcome's output.
+    // Prefer the live results, whose chunks have the times the runner stamped on them; otherwise
+    // use the ones a cached outcome recorded.
+    const liveResults = timings ? timings.results : [];
+    const results = liveResults.length ? liveResults : resultsOfOutcome(outcome);
+    const kids = childrenOf(results);
+    const failing = failingPaths(results);
+    // What the test's own code reported, which is what the verdict line and the summary under it
+    // show. The outcome's message is the innermost failure's, and that result reports it in the
+    // tree itself, so taking it here as well would say it twice. A run with no results at all,
+    // such as one whose build failed, has only the outcome to report.
+    const own = results.length ? results[0] : null;
+    const ownMessage = own ? own.message : (outcome && outcome.message) || "";
+    const ownDetail = own ? own.detail : (outcome && outcome.detail) || "";
+    const ownLocation = own ? own.location : (outcome && outcome.location) || null;
+    const rootOutput = results.length ? results[0].output : [];
+    // The whole run's output, in the order the test produced it, which the copy button copies.
     const liveChunks = timings ? timings.chunks : [];
-    const chunks = liveChunks.length ? liveChunks : outcome && outcome.output ? outcome.output : [];
+    const allChunks = liveChunks.length ? liveChunks : allOutput(results);
     // Keyed so it keeps its state when the message and detail blocks appear ahead of it.
-    const outputSection = chunks.length
+    const outputSection = rootOutput.length
         ? e(OutputSection, {
               key: "output",
-              chunks,
+              chunks: rootOutput,
+              copy: allChunks,
               execStartTime,
               open: outputOpen,
               onOpenChange: setOutputOpen,
           })
         : null;
+
+    // The named results below the test, each with what it reported inside it.
+    const resultTree = kids.length
+        ? kids[0].map(function (id) {
+              return e(NamedResult, {
+                  key: id,
+                  id,
+                  results,
+                  kids,
+                  execStartTime,
+                  reveal,
+                  isOpen: function (resultId) {
+                      return isResultOpen(resultId, failing);
+                  },
+                  onOpenChange: setResultOpen,
+              });
+          })
+        : [];
 
     // The primary status/progress element, then dimmed badges: start time, build and run durations.
     let primary = null;
@@ -1082,7 +1481,7 @@ function TestRun(props) {
                   ...badges.map(function (b, i) {
                       return e(
                           "span",
-                          { key: i, style: { color: dimColor, fontSize: "11px" } },
+                          { key: i, style: { color: dimColor, fontSize: dimSize } },
                           "· ",
                           b.onClick
                               ? e(
@@ -1105,12 +1504,20 @@ function TestRun(props) {
                               : b.text,
                       );
                   }),
+                  // The row is a flex, so the control sits at the end of it rather than floating.
+                  ownLocation
+                      ? e(
+                            "span",
+                            { key: "where", style: { marginLeft: "auto" } },
+                            sourceButton(ownLocation, reveal),
+                        )
+                      : null,
               )
             : null;
 
     const extras = [];
-    if (outcome && outcome.message) extras.push(e("div", { key: "msg" }, block(outcome.message)));
-    if (outcome && outcome.detail) extras.push(e("div", { key: "detail" }, block(outcome.detail)));
+    if (outcome && ownMessage) extras.push(e("div", { key: "msg" }, block(ownMessage)));
+    if (outcome && ownDetail) extras.push(e("div", { key: "detail" }, block(ownDetail)));
 
     // The test's docstring, rendered from the Markdown Lean produced for it, alongside its result.
     const descriptionSection =
@@ -1119,14 +1526,14 @@ function TestRun(props) {
                   "div",
                   {
                       key: "description",
-                      style: { marginTop: "4px", fontSize: "12px" },
+                      style: { marginTop: "4px" },
                   },
                   e(Markdown, { contents: outcome.description }),
               )
             : null;
 
     const body =
-        infoRow || descriptionSection || extras.length || outputSection
+        infoRow || descriptionSection || extras.length || outputSection || resultTree.length
             ? e(
                   "div",
                   { style: { marginTop: "4px" } },
@@ -1134,6 +1541,9 @@ function TestRun(props) {
                   descriptionSection,
                   ...extras,
                   outputSection,
+                  resultTree.length
+                      ? e("div", { key: "results" }, e("style", null, treeStyle), resultTree)
+                      : null,
               )
             : null;
 
@@ -1141,8 +1551,8 @@ function TestRun(props) {
     // sections. Its content is dropped while collapsed, as those sections do, so a long-running
     // test's output costs nothing to keep out of sight.
     //
-    // While the buffer is dirty, the pointer arriving means Run may be next, so the saved state is
-    // checked at once.
+    // The pointer arriving means Run may be next, so the file's state is checked at once rather
+    // than at the next poll.
     return e(
         "details",
         {
@@ -1150,13 +1560,13 @@ function TestRun(props) {
             onToggle: /** @param ev {React.ToggleEvent<HTMLDetailsElement>} */ function (ev) {
                 setPanelOpen(ev.currentTarget.open);
             },
-            onMouseEnter: clean ? undefined : checkClean,
+            onMouseEnter: checkFile,
         },
         e(
             "summary",
             { className: "mv2 pointer non-selectable" },
             "Errata test: ",
-            e("span", { style: { fontFamily: monoFont, fontSize: "12px" } }, name),
+            e("span", { style: { fontFamily: monoFont, fontSize: "0.95em" } }, name),
             runSettings,
         ),
         settingsPopup,

@@ -21,7 +21,8 @@ Evaluates the test named by {lean}`declName`, defined in {lean}`module`, to a ru
 The action is the definition that {lit}`@[test]` compiled beside the test, reached through
 {lit}`import all` of its module so a module-private test is still reachable.
 -/
-unsafe def evalTestM (module declName : Name) : CoreM (Errata.TestM Unit × Option String) :=
+unsafe def evalTestM (module declName : Name) :
+    CoreM (Errata.TestM Unit × Option String × Errata.Location) :=
   MetaM.run' do
     let env ← getEnv
     let some idx := env.getModuleIdx? module
@@ -33,7 +34,14 @@ unsafe def evalTestM (module declName : Name) : CoreM (Errata.TestM Unit × Opti
       | throwError "`{declName}` is not a test in `{module}`"
     let ty := mkApp (mkConst ``Errata.TestM) (mkConst ``Unit)
     let act ← evalExpr (Errata.TestM Unit) ty (mkConst test.run) (safety := .unsafe)
-    return (act, ← findDocString? env test.name)
+    -- The test's own source range, which a failure with no more specific place is reported at.
+    let range ← findDeclarationRanges? test.name
+    let location : Errata.Location := {
+      file := test.file
+      startPos := (range.map (·.range.pos)).getD ⟨0, 0⟩
+      endPos := (range.map (·.range.endPos)).getD ⟨0, 0⟩
+    }
+    return (act, ← findDocString? env test.name, location)
 
 /-- Writes one JSON protocol line to the runner's real stdout and flushes it for prompt streaming. -/
 private def emitLine (out : IO.FS.Stream) (key : String) (value : Json) : IO Unit := do
@@ -71,14 +79,35 @@ unsafe def runImpl (args : List String) : IO UInt32 := do
   let env ← importModules
     #[{ module := targetModule, importAll := true }, { module := `Errata }] {} (loadExts := true)
   let coreCtx : Core.Context := { fileName := "<errata-run-one>", fileMap := default }
-  let ((act, doc?), _) ← (evalTestM targetModule declName).toIO coreCtx { env }
+  let ((act, doc?, location), _) ← (evalTestM targetModule declName).toIO coreCtx { env }
   -- Mark when the test body starts, so the widget shows output offsets within the test itself,
   -- excluding the build and module-import time before this point.
   emitLine out "exec" (toJson (← nowMs))
+  -- The results that are open, innermost last, and the identifier of the next one.
+  -- Output and result events arrive in the order the test produced them, so the result that wrote
+  -- a chunk is the innermost one open when it arrives.
+  let openResults ← IO.mkRef #[Errata.ResultNode.root]
+  let nextResult ← IO.mkRef (Errata.ResultNode.root + 1)
+  let innermost : IO Nat := return (← openResults.get).back?.getD Errata.ResultNode.root
   let sink := fun (o : Errata.Output) => do
-    let chunk := { Errata.OutputChunk.ofOutput o with time := ← nowMs }
+    let chunk := { Errata.OutputChunk.ofOutput o with time := ← nowMs, result := ← innermost }
     emitLine out "chunk" (toJson chunk)
-  let outcome ← Errata.runAction default act (seed? := seed?) (sink := sink)
+  let watch := fun (ev : Errata.ResultEvent) => do
+    match ev with
+    | .started path =>
+      let parent ← innermost
+      let id ← nextResult.modifyGet fun n => (n, n + 1)
+      openResults.modify (·.push id)
+      let started : Errata.ResultNode := { id, parent, name := path.back?.getD "" }
+      emitLine out "result" (toJson started)
+    | .finished r =>
+      let id ← innermost
+      openResults.modify (·.pop)
+      -- The result's output already went out as chunks while it ran, so the report of the finished
+      -- result leaves it out.
+      let node := { Errata.ResultNode.ofResult id (← innermost) location r with output := #[] }
+      emitLine out "result" (toJson node)
+  let outcome ← Errata.runAction location act (seed? := seed?) (sink := sink) (watch := watch)
   emitLine out "outcome" (toJson { outcome with description? := doc? })
   return 0
 

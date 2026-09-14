@@ -15,6 +15,7 @@ import all Errata.FS
 import all ErrataTests.Fixture
 import all ErrataTests.Fixture.Sub
 import all ErrataTests.Docstrings
+import all ErrataTests.WidgetInteractive
 
 open Errata
 
@@ -1161,23 +1162,23 @@ def reportMarkdown : Test := do
 @[test]
 def runOnePasses : Test := do
   let o ← runValue default (pure () : Test)
-  assertBEq "passed" o.status
+  assertBEq .passed o.status
 
 /-- `runValue` reports a failing value as failed and carries its message. -/
 @[test]
 def runOneFails : Test := do
   let o ← runValue default (TestResult.fail { message := "boom" })
-  assertBEq "failed" o.status
+  assertBEq .failed o.status
   assertBEq (some "boom") o.message?
 
 /-- A failing run surfaces its captured output in the outcome. -/
 @[test]
 def runOneCapturesOutput : Test := do
   let o ← runValue default (do IO.println "trace line"; failHere "nope" : Test)
-  assertBEq "failed" o.status
-  assertBEq 1 o.output.size
-  assertBEq "stdout" o.output[0]!.stream
-  assertContains "trace line" o.output[0]!.text
+  assertBEq .failed o.status
+  assertBEq 1 o.allOutput.size
+  assertBEq "stdout" o.allOutput[0]!.stream
+  assertContains "trace line" o.allOutput[0]!.text
 
 /--
 An outcome takes the most severe verdict among a test and its named results, with the message of
@@ -1186,17 +1187,59 @@ the innermost result that has it, which is where the assertion failed.
 @[test]
 def runOneAggregates : Test := do
   let o ← runValue default (do result "a" (pure ()); result "b" (failHere "bad") : Test)
-  assertBEq "failed" o.status
+  assertBEq .failed o.status
   assertBEq (some "bad") o.message?
+
+/--
+An outcome reports one scope per result: the test's own first, then the named results in the order
+they started, each naming the scope that contains it.
+-/
+@[test]
+def runOneNodes : Test := do
+  let o ← runValue default (do
+    result "a" (result "inner" (pure ()))
+    result "b" (failHere "bad") : Test)
+  assertBEq #["", "a", "inner", "b"] (o.results.map (·.name))
+  assertBEq #[0, 0, 1, 0] (o.results.map (·.parent))
+  assertBEq #[0, 1, 2, 3] (o.results.map (·.id))
+  assertBEq #[some .failed, some .passed, some .passed, some .failed]
+    (o.results.map (·.status?))
+  result "the failure's message is on the result that raised it" do
+    assertBEq (some "bad") o.results[3]!.message?
+
+/-- Each scope of an outcome holds what its own code wrote, and what a scope inside it wrote is there. -/
+@[test]
+def runOneNodeOutput : Test := do
+  let o ← runValue default (do
+    IO.println "outer"
+    result "inner" (IO.println "within")
+    IO.println "after" : Test)
+  let text (node : ResultNode) : String := node.output.foldl (fun acc c => acc ++ c.text) ""
+  assertBEq #["outer\nafter\n", "within\n"] (o.results.map text)
+
+/-- A named result is reported as it starts and again as it finishes, the reports properly nested. -/
+@[test]
+def runOneWatchesResults : Test := do
+  let seen ← IO.mkRef (#[] : Array String)
+  let watch (ev : ResultEvent) : IO Unit :=
+    let said :=
+      match ev with
+      | .started path => "start " ++ ".".intercalate path.toList
+      | .finished r => "end " ++ ".".intercalate r.resultPath.toList
+    seen.modify (·.push said)
+  let _ ← runAction default (do
+    result "a" (result "inner" (pure ()))
+    result "b" (pure ()) : Test) (watch := watch)
+  assertBEq #["start a", "start a.inner", "end a.inner", "end a", "start b", "end b"] (← seen.get)
 
 /-- A passing run still surfaces its captured output. -/
 @[test]
 def runOnePassOutput : Test := do
   let o ← runValue default (do IO.println "printed"; return true : IO Bool)
-  assertBEq "passed" o.status
-  assertBEq 1 o.output.size
-  assertBEq "stdout" o.output[0]!.stream
-  assertContains "printed" o.output[0]!.text
+  assertBEq .passed o.status
+  assertBEq 1 o.allOutput.size
+  assertBEq "stdout" o.allOutput[0]!.stream
+  assertContains "printed" o.allOutput[0]!.text
 
 /-- Captured output keeps stdout and stderr distinct and interleaved in order. -/
 @[test]
@@ -1206,11 +1249,11 @@ def runOneStreams : Test := do
     IO.eprintln "err one"
     IO.println "out two"
     return true : IO Bool)
-  assertBEq "passed" o.status
-  assertBEq 3 o.output.size
-  assertBEq "stdout" o.output[0]!.stream
-  assertBEq "stderr" o.output[1]!.stream
-  assertBEq "stdout" o.output[2]!.stream
+  assertBEq .passed o.status
+  assertBEq 3 o.allOutput.size
+  assertBEq "stdout" o.allOutput[0]!.stream
+  assertBEq "stderr" o.allOutput[1]!.stream
+  assertBEq "stdout" o.allOutput[2]!.stream
 /-- `failure` from the `Alternative` instance fails a test. -/
 @[test]
 def alternativeFailure : Test := expectFail failure

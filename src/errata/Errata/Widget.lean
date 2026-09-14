@@ -40,6 +40,11 @@ promise is resolved and replaced whenever a chunk arrives or the run finishes, w
 meta structure RunState where
   /-- Every output chunk produced so far, in order. -/
   chunks : IO.Ref (Array Errata.OutputChunk)
+  /--
+  The reports from named results so far, in order. A named result is reported when it starts, with
+  its identifier, parent, and name, and again when it finishes, with its verdict.
+  -/
+  results : IO.Ref (Array Errata.ResultNode)
   /-- Whether the run has finished. -/
   finished : IO.Ref Bool
   /-- The final outcome, set when the run finishes. -/
@@ -61,6 +66,8 @@ meta structure RunState where
   Updated as each is spawned.
   -/
   kill : IO.Ref (IO Unit)
+  /-- A hash of the document's text when the run started. -/
+  sourceHash : UInt64
 
 /-- The live runs, keyed by the test's declaration name so a run survives re-elaboration. -/
 meta initialize runRegistry : IO.Ref (Std.HashMap Name RunState) ← IO.mkRef {}
@@ -74,8 +81,8 @@ meta structure StartRequest where
   /-- A hash of the test's source, recorded with the run so an edit can invalidate it. -/
   version : String
   /--
-  The seed for property tests in decimal digits, or {lean}`none` to have one drawn. A string
-  carries every natural number exactly through JavaScript's JSON.
+  The seed for property tests, or {lean}`none` to have one randomly generated. Because JavaScript
+  represents JSON numbers as floats, cutting off their range, it is a string of decimal digits.
   -/
   seed? : Option String := none
 deriving Lean.FromJson, Lean.ToJson
@@ -86,6 +93,11 @@ meta structure AwaitRequest where
   decl : Json
   /-- The number of chunks the widget already has, so only later ones are returned. -/
   since : Nat
+  /--
+  The number of reports from named results that the widget already has, counted the same way as
+  {name (full := AwaitRequest.since)}`since`.
+  -/
+  sinceResults : Nat := 0
   /-- The test's source hash; a run recorded under a different one is stale and ignored. -/
   version : String
   /-- The phase the widget last saw; a reply is returned at once when the run's phase differs. -/
@@ -112,6 +124,16 @@ meta structure AwaitResult where
   chunks : Array Errata.OutputChunk := #[]
   /-- The position past the returned chunks, to pass as the next request's start. -/
   nextSince : Nat := 0
+  /--
+  The reports from named results that are newer than those the widget already has. A named result
+  is reported when it starts and again when it finishes.
+  -/
+  results : Array Errata.ResultNode := #[]
+  /--
+  How many reports from named results the run has made so far. The widget sends this back with its
+  next request, as the number of reports it already has.
+  -/
+  nextSinceResults : Nat := 0
   /-- When the run started, in milliseconds since the Unix epoch. -/
   startTime : Nat := 0
   /--
@@ -174,6 +196,10 @@ private meta partial def readLoop (out : IO.FS.Handle) (state : RunState) : IO U
       if let .ok chunk := (fromJson? c : Except String Errata.OutputChunk) then
         state.chunks.modify (·.push chunk)
         signalRun state
+    else if let .ok n := j.getObjVal? "result" then
+      if let .ok node := (fromJson? n : Except String Errata.ResultNode) then
+        state.results.modify (·.push node)
+        signalRun state
     else if let .ok ex := j.getObjVal? "exec" then
       if let .ok t := (fromJson? ex : Except String Nat) then
         state.execStartTime.set t
@@ -183,16 +209,29 @@ private meta partial def readLoop (out : IO.FS.Handle) (state : RunState) : IO U
         state.outcome.set oc
   readLoop out state
 
+/-- The number of characters of a failed subprocess's output to be reported. -/
+private meta def detailLimit : Nat := 4000
+
+/--
+The end of a subprocess's output, which is where it says what went wrong: its last
+{name}`detailLimit` characters. A build that fails after a long log then sends the widget a reply of
+a few kilobytes.
+-/
+private meta def endOf (text : String) : String :=
+  if text.length ≤ detailLimit then text
+  else "…\n" ++ text.drop (text.length - detailLimit)
+
 /-- The outcome shown when the build step fails, carrying its message and detail. -/
 private meta def buildFailure (detail : String) : Errata.RunOutcome := {
-  status := "error", durationMs := 0, message? := some "lake build failed", detail? := some detail
+  status := .error, durationMs := 0, message? := some "lake build failed"
+  detail? := some (endOf detail)
 }
 
 /-- The outcome shown when the runner exits without reporting one: its exit code and stderr. -/
 private meta def runnerFailure (code : UInt32) (stderr : String) : Errata.RunOutcome := {
-  status := "error", durationMs := 0
+  status := .error, durationMs := 0
   message? := some s!"the test runner exited with code {code} before reporting an outcome"
-  detail? := if stderr.trimAscii.isEmpty then none else some stderr
+  detail? := if stderr.trimAscii.isEmpty then none else some (endOf stderr)
 }
 
 /--
@@ -248,11 +287,27 @@ private meta def bufferIsClean : RequestM Bool := do
   | some disk => return docMeta.text.source == disk.crlfToLf
   | none => return true
 
+/-- The state of a test's file, as its widget shows it beside the Run button. -/
+meta structure FileState where
+  /-- Whether the document has no unsaved changes, which a run needs. -/
+  clean : Bool
+  /-- Whether the document has changed since the test's run started, so its result is stale. -/
+  changedSinceRun : Bool
+deriving Lean.FromJson, Lean.ToJson
+
 open Server in
-/-- Server RPC method reporting whether the file has no unsaved changes, gating the Run button. -/
+/--
+Server RPC method reporting the state of a test's file: whether it has unsaved changes, which gates
+the Run button, and whether it has changed since the test's run started.
+-/
 @[server_rpc_method]
-meta def bufferClean (_ : RunRef) : RequestM (RequestTask Bool) := do
-  return RequestTask.pure (← bufferIsClean)
+meta def fileState (req : RunRef) : RequestM (RequestTask FileState) := do
+  let declName ← decodeDecl req.decl
+  let source := (← RequestM.readDoc).meta.text.source
+  let changedSinceRun := match (← runRegistry.get).get? declName with
+    | some state => state.sourceHash != source.hash
+    | none => false
+  return RequestTask.pure { clean := ← bufferIsClean, changedSinceRun }
 
 open Server in
 /-- Server RPC method that starts running a test: builds its saved source, then streams its output. -/
@@ -262,15 +317,17 @@ meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
   let seed? ← req.seed?.mapM fun s =>
     match s.toNat? with
     | some seed => pure seed
-    | none => throw (.mk .invalidParams s!"the seed must be a natural number in decimal digits: {s}")
+    | none =>
+      throw (.mk .invalidParams s!"the seed must be a natural number in decimal digits: {s}")
   unless ← bufferIsClean do
     throw (.mk .invalidParams "the file has unsaved changes; save it before running the test")
   dropRun declName
   let state : RunState := {
-    chunks := ← IO.mkRef #[], finished := ← IO.mkRef false, outcome := ← IO.mkRef none,
+    chunks := ← IO.mkRef #[], results := ← IO.mkRef #[],
+    finished := ← IO.mkRef false, outcome := ← IO.mkRef none,
     wakeup := ← IO.mkRef (← IO.Promise.new), phase := ← IO.mkRef "building", version := req.version,
     startTime := ← nowMs, buildMs := ← IO.mkRef 0, execStartTime := ← IO.mkRef 0,
-    kill := ← IO.mkRef (pure ())
+    kill := ← IO.mkRef (pure ()), sourceHash := (← RequestM.readDoc).meta.text.source.hash
   }
   runRegistry.modify (·.insert declName state)
   let _ ← IO.asTask (buildAndRun req.module req.decl.compress seed? state)
@@ -282,7 +339,7 @@ Builds the reply for a waiter given the run's current state and the position it 
 chunks past that position come together with the run's completion status, so a widget that
 reconnects to a finished run settles in a single reply.
 -/
-private meta def replyFrom (state : RunState) (since : Nat) : IO AwaitResult := do
+private meta def replyFrom (state : RunState) (since sinceResults : Nat) : IO AwaitResult := do
   -- The finished flag is read before the chunks: once it is set, every chunk has been recorded, so
   -- a reply that says done carries all of them.
   let done ← state.finished.get
@@ -293,10 +350,11 @@ private meta def replyFrom (state : RunState) (since : Nat) : IO AwaitResult := 
   let elapsedMs := (← nowMs) - startTime
   let buildMs ← state.buildMs.get
   let execStartTime ← state.execStartTime.get
-  let slice := chunks.extract since chunks.size
+  let results ← state.results.get
   return {
-    chunks := slice, nextSince := chunks.size, phase, startTime, elapsedMs, buildMs, execStartTime,
-    done, outcome
+    chunks := chunks.extract since chunks.size, nextSince := chunks.size
+    results := results.extract sinceResults results.size, nextSinceResults := results.size
+    phase, startTime, elapsedMs, buildMs, execStartTime, done, outcome
   }
 
 open Server in
@@ -315,11 +373,15 @@ meta def awaitOutput (req : AwaitRequest) : RequestM (RequestTask AwaitResult) :
     return RequestTask.pure ({ done := true } : AwaitResult)
   let p ← state.wakeup.get
   let chunks ← state.chunks.get
-  -- Return at once when there is new output, the run finished, or its phase changed (so a widget
-  -- reconnecting mid-build learns it is building rather than waiting silently); otherwise wait.
-  if chunks.size > req.since || (← state.finished.get) || (← state.phase.get) != req.phase then
-    return RequestTask.pure (← replyFrom state req.since)
-  RequestM.mapTaskCheap (p.resultD ()).asServerTask fun _ => liftM (replyFrom state req.since)
+  let results ← state.results.get
+  -- Return at once when there is new output, a named result has started or finished, the run
+  -- finished, or its phase changed (so a widget reconnecting mid-build learns it is building rather
+  -- than waiting silently); otherwise wait.
+  if chunks.size > req.since || results.size > req.sinceResults || (← state.finished.get) ||
+      (← state.phase.get) != req.phase then
+    return RequestTask.pure (← replyFrom state req.since req.sinceResults)
+  RequestM.mapTaskCheap (p.resultD ()).asServerTask fun _ =>
+    liftM (replyFrom state req.since req.sinceResults)
 
 open Server in
 /--
