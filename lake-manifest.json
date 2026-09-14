@@ -15,7 +15,7 @@
    "type": "git",
    "subDir": null,
    "scope": "",
-   "rev": "6e558472c981dbee8cb9fcde92fa9593daf04228",
+   "rev": "a1a61c9678da010e958ed24cdfa6f635b85f172a",
    "name": "illuminate",
    "manifestFile": "lake-manifest.json",
    "inputRev": "main",
