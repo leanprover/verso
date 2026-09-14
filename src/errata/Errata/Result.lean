@@ -166,6 +166,19 @@ structure Result where
   description? : Option String := none
 deriving Repr, Inhabited, DecidableEq
 
+/--
+What a named result is doing, for a runner that follows a test while it runs.
+
+The events of one run are properly nested: a named result starts, the named results inside it start
+and finish, and then it finishes.
+-/
+inductive ResultEvent where
+  /-- The named result at this path has started. -/
+  | started (path : Array String)
+  /-- The named result at this path has finished, with this outcome. -/
+  | finished (result : Result)
+deriving Repr, Inhabited
+
 /-- The test name below the module: the declaration and any named result, dotted. -/
 def Result.testName (result : Result) : String :=
   if result.resultPath.isEmpty then result.test
