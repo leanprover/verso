@@ -217,26 +217,32 @@ function chunkLabel(c, execStartTime) {
 
 // One output chunk in the editor's code font, italic for stderr, highlighted while hovered.
 // Memoized, so a hover change re-renders only the two chunks whose highlight changes.
-const ChunkSpan = React.memo(function ChunkSpan(props) {
-    const c = props.chunk;
-    return e(
-        "span",
-        {
-            title: chunkLabel(c, props.execStartTime),
-            onMouseEnter: function () {
-                props.onHover(props.index);
+const ChunkSpan = React.memo(
+    /**
+     * @param props {{chunk: Chunk, index: number, execStartTime: number, hovered: boolean,
+     *                onHover: (index: number) => void}}
+     */
+    function ChunkSpan(props) {
+        const c = props.chunk;
+        return e(
+            "span",
+            {
+                title: chunkLabel(c, props.execStartTime),
+                onMouseEnter: function () {
+                    props.onHover(props.index);
+                },
+                style: {
+                    fontStyle: c.stream === "stderr" ? "italic" : undefined,
+                    borderRadius: "2px",
+                    backgroundColor: props.hovered
+                        ? "var(--vscode-editor-hoverHighlightBackground, rgba(120,170,255,0.3))"
+                        : undefined,
+                },
             },
-            style: {
-                fontStyle: c.stream === "stderr" ? "italic" : undefined,
-                borderRadius: "2px",
-                backgroundColor: props.hovered
-                    ? "var(--vscode-editor-hoverHighlightBackground, rgba(120,170,255,0.3))"
-                    : undefined,
-            },
-        },
-        c.text,
-    );
-});
+            c.text,
+        );
+    },
+);
 
 // One chunk's span, at its position in the output.
 function chunkSpan(chunks, i, execStartTime, hovered, setHovered) {
@@ -293,175 +299,183 @@ function outputBlock(cache, chunks, execStartTime, hovered, setHovered) {
 // copies `copy` when the caller gives it, which is how the test's own output shows alone while the
 // button still offers the whole run's. Whether it is open belongs to the caller, so a collapse
 // outlasts the output being replaced.
-const OutputSection = React.memo(function OutputSection(props) {
-    const chunks = props.chunks;
-    const execStartTime = props.execStartTime;
-    // The position of the output chunk under the cursor, highlighted with its timestamp shown, or
-    // -1. A position keeps the highlight and the summary in step at any length of output.
-    const [hovered, setHovered] = React.useState(-1);
-    // The spans of the chunks, from one render to the next.
-    const spanCache = React.useRef({ spans: [], last: null, execStartTime: 0 });
-    // Whether a chunk of the output on show is under the pointer.
-    const showing = hovered >= 0 && hovered < chunks.length;
-    // Briefly true after the output is copied, to confirm the copy in the button label.
-    const [copied, setCopied] = React.useState(false);
-    // Whether the cursor is over the output area, revealing the floating copy button.
-    const [over, setOver] = React.useState(false);
-    // Whether the copy button has keyboard focus, which also reveals it.
-    const [focused, setFocused] = React.useState(false);
-    // The timer that ends the copy confirmation, so another copy restarts it in full.
-    const copiedTimer = React.useRef(null);
+const OutputSection = React.memo(
+    /**
+     * @param props {{chunks: Chunk[], copy?: Chunk[], execStartTime: number, open: boolean,
+     *                onOpenChange: (open: boolean) => void}}
+     */
+    function OutputSection(props) {
+        const chunks = props.chunks;
+        const execStartTime = props.execStartTime;
+        // The position of the output chunk under the cursor, highlighted with its timestamp shown, or
+        // -1. A position keeps the highlight and the summary in step at any length of output.
+        const [hovered, setHovered] = React.useState(-1);
+        // The spans of the chunks, from one render to the next.
+        const spanCache = React.useRef({ spans: [], last: null, execStartTime: 0 });
+        // Whether a chunk of the output on show is under the pointer.
+        const showing = hovered >= 0 && hovered < chunks.length;
+        // Briefly true after the output is copied, to confirm the copy in the button label.
+        const [copied, setCopied] = React.useState(false);
+        // Whether the cursor is over the output area, revealing the floating copy button.
+        const [over, setOver] = React.useState(false);
+        // Whether the copy button has keyboard focus, which also reveals it.
+        const [focused, setFocused] = React.useState(false);
+        // The timer that ends the copy confirmation, so another copy restarts it in full.
+        const copiedTimer = React.useRef(null);
 
-    React.useEffect(function () {
-        return function () {
+        React.useEffect(function () {
+            return function () {
+                if (copiedTimer.current) clearTimeout(copiedTimer.current);
+            };
+        }, []);
+
+        // Confirms a copy in the button's label for a moment.
+        function confirmCopy() {
+            setCopied(true);
             if (copiedTimer.current) clearTimeout(copiedTimer.current);
-        };
-    }, []);
-
-    // Confirms a copy in the button's label for a moment.
-    function confirmCopy() {
-        setCopied(true);
-        if (copiedTimer.current) clearTimeout(copiedTimer.current);
-        copiedTimer.current = setTimeout(function () {
-            copiedTimer.current = null;
-            setCopied(false);
-        }, 1500);
-    }
-
-    function copyOutput() {
-        const text = (props.copy || chunks)
-            .map(function (c) {
-                return c.text;
-            })
-            .join("");
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(confirmCopy, function () {});
-            return;
+            copiedTimer.current = setTimeout(function () {
+                copiedTimer.current = null;
+                setCopied(false);
+            }, 1500);
         }
-        // A page served outside a secure context copies from a selection instead, made in a field
-        // held off the side of the view.
-        const field = document.createElement("textarea");
-        field.value = text;
-        field.style.position = "fixed";
-        field.style.opacity = "0";
-        document.body.appendChild(field);
-        field.select();
-        try {
-            if (document.execCommand("copy")) confirmCopy();
-        } catch (err) {
-            // The copy was refused, and the label stands as it is.
-        } finally {
-            document.body.removeChild(field);
+
+        function copyOutput() {
+            const text = (props.copy || chunks)
+                .map(function (c) {
+                    return c.text;
+                })
+                .join("");
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(confirmCopy, function () {});
+                return;
+            }
+            // A page served outside a secure context copies from a selection instead, made in a field
+            // held off the side of the view.
+            const field = document.createElement("textarea");
+            field.value = text;
+            field.style.position = "fixed";
+            field.style.opacity = "0";
+            document.body.appendChild(field);
+            field.select();
+            try {
+                if (document.execCommand("copy")) confirmCopy();
+            } catch (err) {
+                // The copy was refused, and the label stands as it is.
+            } finally {
+                document.body.removeChild(field);
+            }
         }
-    }
 
-    // The copy icon (two overlapping sheets), or a check mark once the output has been copied.
-    const copyIcon = e(
-        "svg",
-        {
-            width: 13,
-            height: 13,
-            viewBox: "0 0 24 24",
-            fill: "none",
-            stroke: "currentColor",
-            strokeWidth: 2,
-            strokeLinecap: "round",
-            strokeLinejoin: "round",
-        },
-        copied
-            ? e("path", { key: "check", d: "M20 6L9 17l-5-5" })
-            : [
-                  e("rect", { key: "sheet", x: 9, y: 9, width: 13, height: 13, rx: 2, ry: 2 }),
-                  e("path", {
-                      key: "back",
-                      d: "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1",
-                  }),
-              ],
-    );
+        // The copy icon (two overlapping sheets), or a check mark once the output has been copied.
+        const copyIcon = e(
+            "svg",
+            {
+                width: 13,
+                height: 13,
+                viewBox: "0 0 24 24",
+                fill: "none",
+                stroke: "currentColor",
+                strokeWidth: 2,
+                strokeLinecap: "round",
+                strokeLinejoin: "round",
+            },
+            copied
+                ? e("path", { key: "check", d: "M20 6L9 17l-5-5" })
+                : [
+                      e("rect", { key: "sheet", x: 9, y: 9, width: 13, height: 13, rx: 2, ry: 2 }),
+                      e("path", {
+                          key: "back",
+                          d: "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1",
+                      }),
+                  ],
+        );
 
-    // Revealed while the pointer is over the output or the button has keyboard focus.
-    const copyButton = e(
-        "button",
-        {
-            onClick: copyOutput,
-            onFocus: function () {
-                setFocused(true);
-            },
-            onBlur: function () {
-                setFocused(false);
-            },
-            title: copied ? "Copied" : "Copy output to clipboard",
-            "aria-label": "Copy output to clipboard",
-            style: {
-                position: "absolute",
-                top: "4px",
-                right: "4px",
-                zIndex: 1,
-                display: "flex",
-                alignItems: "center",
-                padding: "3px",
-                lineHeight: 0,
-                opacity: over || focused || copied ? 0.95 : 0,
-                transition: "opacity 0.1s",
-            },
-        },
-        copyIcon,
-    );
-
-    return e(
-        "details",
-        {
-            open: props.open,
-            onToggle: /** @param ev {React.ToggleEvent<HTMLDetailsElement>} */ function (ev) {
-                props.onOpenChange(ev.currentTarget.open);
-            },
-            style: { marginTop: "4px" },
-        },
-        e(
-            "summary",
-            // The output of the test's own code is a peer of the named results below it, so its
-            // line reads as they do.
-            { style: { cursor: "pointer", lineHeight: 1.5 } },
-            "Output",
-            // The stream and offset of the chunk under the pointer hold their place in the line at
-            // all times, the code font among them, so the line is the same height whether or not a
-            // chunk is under the pointer and the output below stays where it is. The code font's
-            // span holds a no-break space while there is nothing to name, which keeps the line box
-            // it contributes.
-            e(
-                "span",
-                {
-                    style: {
-                        color: dimColor,
-                        fontSize: dimSize,
-                        visibility: showing ? "visible" : "hidden",
-                    },
+        // Revealed while the pointer is over the output or the button has keyboard focus.
+        const copyButton = e(
+            "button",
+            {
+                onClick: copyOutput,
+                onFocus: function () {
+                    setFocused(true);
                 },
-                "  —  ",
+                onBlur: function () {
+                    setFocused(false);
+                },
+                title: copied ? "Copied" : "Copy output to clipboard",
+                "aria-label": "Copy output to clipboard",
+                style: {
+                    position: "absolute",
+                    top: "4px",
+                    right: "4px",
+                    zIndex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "3px",
+                    lineHeight: 0,
+                    opacity: over || focused || copied ? 0.95 : 0,
+                    transition: "opacity 0.1s",
+                },
+            },
+            copyIcon,
+        );
+
+        return e(
+            "details",
+            {
+                open: props.open,
+                onToggle: /** @param ev {React.SyntheticEvent<HTMLDetailsElement>} */ function (
+                    ev,
+                ) {
+                    props.onOpenChange(ev.currentTarget.open);
+                },
+                style: { marginTop: "4px" },
+            },
+            e(
+                "summary",
+                // The output of the test's own code is a peer of the named results below it, so its
+                // line reads as they do.
+                { style: { cursor: "pointer", lineHeight: 1.5 } },
+                "Output",
+                // The stream and offset of the chunk under the pointer hold their place in the line at
+                // all times, the code font among them, so the line is the same height whether or not a
+                // chunk is under the pointer and the output below stays where it is. The code font's
+                // span holds a no-break space while there is nothing to name, which keeps the line box
+                // it contributes.
                 e(
                     "span",
-                    { style: { fontFamily: monoFont } },
-                    showing ? chunks[hovered].stream : " ",
+                    {
+                        style: {
+                            color: dimColor,
+                            fontSize: dimSize,
+                            visibility: showing ? "visible" : "hidden",
+                        },
+                    },
+                    "  —  ",
+                    e(
+                        "span",
+                        { style: { fontFamily: monoFont } },
+                        showing ? chunks[hovered].stream : " ",
+                    ),
+                    " " + (showing ? chunkOffset(chunks[hovered], execStartTime) : ""),
                 ),
-                " " + (showing ? chunkOffset(chunks[hovered], execStartTime) : ""),
             ),
-        ),
-        e(
-            "div",
-            {
-                style: { position: "relative" },
-                onMouseEnter: function () {
-                    setOver(true);
+            e(
+                "div",
+                {
+                    style: { position: "relative" },
+                    onMouseEnter: function () {
+                        setOver(true);
+                    },
+                    onMouseLeave: function () {
+                        setOver(false);
+                    },
                 },
-                onMouseLeave: function () {
-                    setOver(false);
-                },
-            },
-            copyButton,
-            outputBlock(spanCache, chunks, execStartTime, hovered, setHovered),
-        ),
-    );
-});
+                copyButton,
+                outputBlock(spanCache, chunks, execStartTime, hovered, setHovered),
+            ),
+        );
+    },
+);
 
 // The control that goes to the check a failure came from, as the InfoView's own sections offer a
 // place: an icon at the right of the row that names the thing, with where it leads in its tooltip.
@@ -554,7 +568,7 @@ function NamedResult(props) {
         "details",
         {
             open,
-            onToggle: /** @param ev {React.ToggleEvent<HTMLDetailsElement>} */ function (ev) {
+            onToggle: /** @param ev {React.SyntheticEvent<HTMLDetailsElement>} */ function (ev) {
                 props.onOpenChange(props.id, ev.currentTarget.open);
             },
             style: { marginTop: "2px" },
@@ -1557,7 +1571,7 @@ function TestRun(props) {
         "details",
         {
             open: panelOpen,
-            onToggle: /** @param ev {React.ToggleEvent<HTMLDetailsElement>} */ function (ev) {
+            onToggle: /** @param ev {React.SyntheticEvent<HTMLDetailsElement>} */ function (ev) {
                 setPanelOpen(ev.currentTarget.open);
             },
             onMouseEnter: checkFile,
