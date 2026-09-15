@@ -141,7 +141,7 @@ function placeUnder(anchor) {
 function Popup(props) {
     const anchor = props.anchor;
     const ref = React.useRef(null);
-    // Held in a ref, so the listeners are installed once rather than on every render around them.
+    // Held in a ref, so the listeners are installed once, when the popup opens.
     const onCloseRef = React.useRef(props.onClose);
     React.useEffect(function () {
         onCloseRef.current = props.onClose;
@@ -862,7 +862,8 @@ function step(st, ev) {
             return st.tag === "running" ? { tag: "cancelled", ...merged } : st;
         }
         case "cancel":
-            return { tag: "cancelled", ...fieldsOf(st) };
+            // A run that finished while the cancel was on its way keeps its outcome.
+            return st.tag === "running" ? { tag: "cancelled", ...fieldsOf(st) } : st;
         case "fail":
             // Only a run in progress can fail; a failed probe of a settled state is no news.
             return st.tag === "running" ? { tag: "failed", error: ev.error, ...fieldsOf(st) } : st;
@@ -1154,8 +1155,7 @@ function TestRun(props) {
         awaitFails.current = 0;
         setCancelError(null);
         setEdited(false);
-        // A run's results are its own, so they open as the settings and its failures decide rather
-        // than as the reader left the run before it.
+        // Each run's results open as the settings and its failures decide.
         setOpenResults({});
         dispatch({ type: "start", now: Date.now() });
         const request = {
@@ -1183,8 +1183,11 @@ function TestRun(props) {
     // arrive leaves a running test reported as running, with the reason beside the button.
     function cancel() {
         setCancelError(null);
+        // A reply that arrives after a new run has started is about the run before it.
+        const myGen = gen.current;
         rsRef.current.call("Errata.Widget.cancelTest", { decl: props.decl }).then(
             function () {
+                if (gen.current !== myGen) return;
                 gen.current += 1;
                 dispatch({ type: "cancel" });
             },
@@ -1518,7 +1521,7 @@ function TestRun(props) {
                               : b.text,
                       );
                   }),
-                  // The row is a flex, so the control sits at the end of it rather than floating.
+                  // The row is a flex, so an automatic left margin puts the control at its end.
                   ownLocation
                       ? e(
                             "span",

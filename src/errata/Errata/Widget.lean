@@ -166,13 +166,35 @@ private meta def signalRun (state : RunState) : IO Unit := do
   state.wakeup.set (← IO.Promise.new)
   p.resolve ()
 
-/-- Marks the run of a name finished, if any, kills its process, and forgets it. -/
-private meta def dropRun (declName : Name) : IO Unit := do
-  if let some state := (← runRegistry.get).get? declName then
-    state.finished.set true
-    try (← state.kill.get) catch _ => pure ()
-    signalRun state
-    runRegistry.modify (·.erase declName)
+/-- Marks a run finished, kills its process, and wakes its waiters. -/
+private meta def stopRun (state : RunState) : IO Unit := do
+  state.finished.set true
+  try (← state.kill.get) catch _ => pure ()
+  signalRun state
+
+/--
+Forgets the run of a name, if any, and stops it. The run is taken out of the registry in the same
+step that finds it, so a run that a concurrent request has just started stays in place.
+{name}`onlyIf` picks which runs are dropped.
+-/
+private meta def dropRun (declName : Name) (onlyIf : RunState → Bool := fun _ => true) :
+    IO Unit := do
+  let taken ← runRegistry.modifyGet fun runs =>
+    match runs.get? declName with
+    | some state => if onlyIf state then (some state, runs.erase declName) else (none, runs)
+    | none => (none, runs)
+  if let some state := taken then stopRun state
+
+/--
+Records how to kill the process a run is waiting on. A run that was cancelled before this point
+kills the process at once, and the result is {lean}`false`.
+-/
+private meta def setKill (state : RunState) (kill : IO Unit) : IO Bool := do
+  state.kill.set kill
+  if (← state.finished.get) then
+    try kill catch _ => pure ()
+    return false
+  return true
 
 /--
 Ends a run, with {name}`fallback` as its outcome when the runner reported none. A run that was
@@ -227,6 +249,11 @@ private meta def buildFailure (detail : String) : Errata.RunOutcome := {
   detail? := some (endOf detail)
 }
 
+/-- The outcome shown when building or running the test raises an error, such as a failed spawn. -/
+private meta def launchFailure (e : IO.Error) : Errata.RunOutcome := {
+  status := .error, durationMs := 0, message? := some s!"the test could not be run: {e}"
+}
+
 /-- The outcome shown when the runner exits without reporting one: its exit code and stderr. -/
 private meta def runnerFailure (code : UInt32) (stderr : String) : Errata.RunOutcome := {
   status := .error, durationMs := 0
@@ -243,12 +270,15 @@ private meta def buildAndRun (module declJson : String) (seed? : Option Nat) (st
     IO Unit := do
   -- `lake query` builds the runner exe and the test's module (so the run reflects the saved source)
   -- and prints the exe's absolute path on stdout; progress and errors go to stderr.
+  -- The `+` prefix names a module, so a library's root module builds alone.
   let build ← IO.Process.spawn {
     stdin := .null, stdout := .piped, stderr := .piped
-    cmd := "lake", args := #["query", "errata-run-one", module]
+    cmd := "lake", args := #["query", "errata-run-one", "+" ++ module]
   }
-  state.kill.set build.kill
-  let errTask ← IO.asTask build.stderr.readToEnd
+  unless ← setKill state build.kill do
+    let _ ← build.wait
+    return
+  let errTask ← IO.asTask (prio := .dedicated) build.stderr.readToEnd
   let queryOut ← build.stdout.readToEnd
   let buildErr := (← IO.wait errTask).toOption.getD ""
   if (← build.wait) != 0 then
@@ -257,21 +287,23 @@ private meta def buildAndRun (module declJson : String) (seed? : Option Nat) (st
   let some runnerPath := (queryOut.splitOn "\n").find? (!·.trimAscii.isEmpty) |>.map (·.trimAscii.copy)
     | finishWith state (buildFailure "lake query did not report the runner's path")
       return
-  -- Spawn the runner directly rather than through `lake exe` so it inherits the language server's
-  -- broad `LEAN_PATH`. The runner imports the arbitrary test module at runtime, which is not a
-  -- dependency of the exe, so `lake exe` would narrow `LEAN_PATH` to the exe's own deps and the
-  -- import would fail.
+  -- A run cancelled while its build finished ends here.
+  if (← state.finished.get) then return
+  -- The runner inherits the language server's `LEAN_PATH`, which reaches every module of the
+  -- workspace, including the test module that it imports at runtime.
   let run ← IO.Process.spawn {
     stdin := .null, stdout := .piped, stderr := .piped
     cmd := runnerPath, args := #[module, declJson] ++ (seed?.map (#[toString ·])).getD #[]
   }
-  state.kill.set run.kill
+  unless ← setKill state run.kill do
+    let _ ← run.wait
+    return
   state.buildMs.set ((← nowMs) - state.startTime)
   state.phase.set "running"
   signalRun state
-  -- The runner's stderr carries anything that went wrong outside the test body, such as a failed
+  -- The runner's stderr has anything that went wrong outside the test body, such as a failed
   -- import; it becomes the outcome's detail when the runner reports no outcome of its own.
-  let runErrTask ← IO.asTask run.stderr.readToEnd
+  let runErrTask ← IO.asTask (prio := .dedicated) run.stderr.readToEnd
   readLoop run.stdout state
   let code ← run.wait
   let runErr := (← IO.wait runErrTask).toOption.getD ""
@@ -321,7 +353,6 @@ meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
       throw (.mk .invalidParams s!"the seed must be a natural number in decimal digits: {s}")
   unless ← bufferIsClean do
     throw (.mk .invalidParams "the file has unsaved changes; save it before running the test")
-  dropRun declName
   let state : RunState := {
     chunks := ← IO.mkRef #[], results := ← IO.mkRef #[],
     finished := ← IO.mkRef false, outcome := ← IO.mkRef none,
@@ -329,8 +360,13 @@ meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
     startTime := ← nowMs, buildMs := ← IO.mkRef 0, execStartTime := ← IO.mkRef 0,
     kill := ← IO.mkRef (pure ()), sourceHash := (← RequestM.readDoc).meta.text.source.hash
   }
-  runRegistry.modify (·.insert declName state)
-  let _ ← IO.asTask (buildAndRun req.module req.decl.compress seed? state)
+  -- The new run replaces the previous one in the same step that finds it.
+  let previous? ← runRegistry.modifyGet fun runs => (runs.get? declName, runs.insert declName state)
+  if let some previous := previous? then stopRun previous
+  -- The task spends most of its time blocked on the build and the runner, so it has its own thread.
+  let _ ← IO.asTask (prio := .dedicated) do
+    try buildAndRun req.module req.decl.compress seed? state
+    catch e => finishWith state (launchFailure e)
   return RequestTask.pure ()
 
 open Server in
@@ -392,8 +428,7 @@ going.
 @[server_rpc_method]
 meta def dropStaleRun (req : VersionRef) : RequestM (RequestTask Unit) := do
   let declName ← decodeDecl req.decl
-  if let some state := (← runRegistry.get).get? declName then
-    if state.version == req.version then dropRun declName
+  dropRun declName (onlyIf := (·.version == req.version))
   return RequestTask.pure ()
 
 open Server in

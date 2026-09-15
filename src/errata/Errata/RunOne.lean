@@ -232,9 +232,9 @@ def summarizeResults (seed : Nat) (testLocation : Location) (results : Array Res
   }
 
 /--
-Runs one test action to completion and condenses its results into a {name}`RunOutcome`. Captured
-output is kept on a passing result too, since the widget shows it on demand rather than only on
-failure. Without a seed for property tests, one is drawn.
+Runs one test action to completion and condenses its results into a {name}`RunOutcome`. Every
+result keeps its captured output, whatever its verdict, so the widget can show it on request.
+Without a seed for property tests, one is generated.
 -/
 def runAction (location : Location) (act : TestM Unit) (seed? : Option Nat := none)
     (sink : Output → IO Unit := fun _ => pure ())

@@ -19,7 +19,7 @@ failing tests.
 private def shouldPass : Bool := true
 
 /--
-Writing to {lit}`stdin` and {lit}`stderr`.
+Writing to {lit}`stdout` and {lit}`stderr`.
 -/
 @[test]
 def bothStreams : Test := do

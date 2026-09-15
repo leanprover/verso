@@ -108,6 +108,9 @@ unsafe def runImpl (args : List String) : IO UInt32 := do
       let node := { Errata.ResultNode.ofResult id (← innermost) location r with output := #[] }
       emitLine out "result" (toJson node)
   let outcome ← Errata.runAction location act (seed? := seed?) (sink := sink) (watch := watch)
+  -- The test's own result is reported once the test ends, with its verdict and message.
+  if let some root := outcome.root? then
+    emitLine out "result" (toJson { root with output := #[] })
   emitLine out "outcome" (toJson { outcome with description? := doc? })
   return 0
 
