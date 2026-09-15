@@ -151,6 +151,7 @@ jobs:
                   inkscape --version
 
             - name: Run tests
+              id: tests
               run: |
                   lake test -- --test-options --verbose --wfail --junit=errata-report.xml --markdown=errata-summary.md -- --check-tex
 
@@ -161,10 +162,12 @@ jobs:
 
             # Publishing a check run needs a token with `checks: write`, which pull requests from
             # forks never receive; those runs get their results from the job summary and the
-            # uploaded artifact instead.
+            # uploaded artifact instead. The report exists once the tests have run, whether they
+            # passed or failed.
             - name: Publish the JUnit test report
               if:
-                  always() && (github.event_name != 'pull_request' ||
+                  always() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure')
+                  && (github.event_name != 'pull_request' ||
                   github.event.pull_request.head.repo.full_name == github.repository)
               uses: dorny/test-reporter@v3
               with:
@@ -241,6 +244,11 @@ jobs:
                   pushd static-web
                   npx tsc --noEmit -p jsconfig.json
                   popd
+
+            # The widget is checked against the React and InfoView declarations that `npm ci`
+            # installs, which are the versions the InfoView runs it with.
+            - name: Type check the run-test widget JS code
+              run: npm run typecheck:widget
 
             - name: Check the ToC width storage key stays in sync
               run: |

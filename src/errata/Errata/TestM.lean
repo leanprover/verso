@@ -172,6 +172,31 @@ private def captureStream (emit : Output → IO Unit) (mk : String → Output) :
   return (stream, close)
 
 /--
+Runs an action that reports to a live destination, using the streams from before the test's output
+was redirected, so that a destination which prints reaches the runner's own streams from any nesting
+depth. The first failure is reported on the runner's stderr, and the destination is left alone from
+then on.
+-/
+private def toLiveDestination (ctx : Context) (act : IO Unit) : IO Unit := do
+  unless ← ctx.outputFailed.get do
+    let run : IO Unit :=
+      match ctx.realStreams? with
+      | some real => IO.withStdout real.stdout <| IO.withStderr real.stderr <| act
+      | none => act
+    try
+      run
+    catch e =>
+      ctx.outputFailed.set true
+      -- Saying so can fail in turn, when the destination that just failed was stderr itself.
+      if let some real := ctx.realStreams? then
+        try real.stderr.putStr s!"warning: live output destination failed: {e}\n" catch _ => pure ()
+
+/-- Hands a result event to the context's watcher, as output is handed to its destination. -/
+private def notifyResult (ctx : Context) (ev : ResultEvent) : IO Unit := do
+  if let some watch := ctx.watchResults then
+    toLiveDestination ctx (watch ev)
+
+/--
 Runs a test action with the given context, capturing its outcome as data rather than letting it
 propagate. The action's stdout and stderr are recorded as text, in order and tagged by stream, and
 returned alongside the outcome. Each fragment is also handed to the context's output destination as
@@ -192,13 +217,7 @@ def runCapturing (ctx : Context) (act : TestM Unit) :
   let emit (o : Output) : IO Unit := do
     log.modify (·.push o)
     if let some dest := ctx.writeOutput then
-      unless ← ctx.outputFailed.get do
-        try
-          IO.withStdout real.stdout <| IO.withStderr real.stderr <| dest o
-        catch e =>
-          ctx.outputFailed.set true
-          -- Saying so can fail in turn, when the destination that just failed was stderr itself.
-          try real.stderr.putStr s!"warning: live output destination failed: {e}\n" catch _ => pure ()
+      toLiveDestination ctx (dest o)
   let (outStream, outClose) ← captureStream emit .stdout
   let (errStream, errClose) ← captureStream emit .stderr
   -- Closing inside the captured action makes dangling bytes at the end of the test an error of the
@@ -263,12 +282,14 @@ def result (name : String) (act : TestM Unit) : TestM Unit := do
   let dur ← withReader (fun c =>
       { c with resultPath := c.resultPath.push name, log, insideMs, description? := none }) do
     let ctx ← read
+    notifyResult ctx (.started ctx.resultPath)
     let start ← IO.monoMsNow
     let (outcome, output) ← runCapturing ctx act
     let stop ← IO.monoMsNow
     let dur := stop - start
     let recorded ← log.get
     let own := ctx.resultOfOutcome outcome output dur (← insideMs.get) recorded
+    notifyResult ctx (.finished own)
     outer.log.modify (·.push own ++ recorded)
     pure dur
   -- The enclosing scope's own time leaves out this block's whole duration.
