@@ -48,25 +48,26 @@ unsafe def evalTestEntry (module declName : Name) : CoreM Errata.TestEntry :=
       location, docstring? := test.docstring?, run := act
     }
 
-/-- Writes one JSON protocol line to the runner's real stdout and flushes it for prompt streaming. -/
-private def emitLine (out : IO.FS.Stream) (key : String) (value : Json) : IO Unit := do
+/-- Writes one JSON protocol line to the protocol file and flushes it for prompt streaming. -/
+private def emitLine (out : IO.FS.Handle) (key : String) (value : Json) : IO Unit := do
   out.putStr ((Json.mkObj [(key, value)]).compress ++ "\n")
   out.flush
 
 /--
-Imports the module, runs the test named by the declaration, and streams its result. The seed for
-property tests is the third argument, or is drawn when there is none.
+Imports the module, runs the test named by the declaration, and streams its result as JSON lines
+appended to the protocol file, the first argument. The seed for property tests is the fourth
+argument, or is generated when there is none.
 -/
 unsafe def runImpl (args : List String) : IO UInt32 := do
   let usage : IO UInt32 := do
-    IO.eprintln "usage: errata-run-one <module-json> <decl-json> [seed]"
+    IO.eprintln "usage: errata-run-one <protocol-file> <module-json> <decl-json> [seed]"
     return 2
-  let (modStr, declStr, seed?) ←
+  let (protocolPath, modStr, declStr, seed?) ←
     match args with
-    | [modStr, declStr] => pure (modStr, declStr, none)
-    | [modStr, declStr, seedStr] =>
+    | [protocolPath, modStr, declStr] => pure (protocolPath, modStr, declStr, none)
+    | [protocolPath, modStr, declStr, seedStr] =>
       match seedStr.toNat? with
-      | some seed => pure (modStr, declStr, some seed)
+      | some seed => pure (protocolPath, modStr, declStr, some seed)
       | none => return ← usage
     | _ => return ← usage
   -- A name is either encoded by `nameToJson` or given in its dotted form.
@@ -76,9 +77,9 @@ unsafe def runImpl (args : List String) : IO UInt32 := do
     | .error _ => pure s.toName
   let targetModule ← parseName modStr
   let declName ← parseName declStr
-  -- The runner's real stdout carries the JSON protocol; the test's own output is captured by
-  -- `runEntryOutcome` and forwarded as chunk lines, so this handle is taken before that redirection.
-  let out ← IO.getStdout
+  -- The test's own output is captured by `runEntryOutcome` and forwarded as chunk lines. Anything
+  -- else written to stdout, such as a subprocess's output, goes to the runner's real stdout.
+  let out ← IO.FS.Handle.mk protocolPath .append
   -- The search path includes the directories in `LEAN_PATH`.
   initSearchPath (← findSysroot)
   enableInitializersExecution

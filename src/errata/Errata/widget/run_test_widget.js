@@ -11,10 +11,16 @@ import {
 
 const e = React.createElement;
 
-// The last settled outcome of each test, keyed by its declaration and tagged with the source
-// version that produced it. Leaving and returning to a test's `@[test]` marker shows its previous
-// result again. The most recent RESULT_CACHE_LIMIT of them are held, each with the whole of its
-// run's captured output, both by result and as the chunks in the order the test produced them.
+// The last settled run of each test, keyed by its declaration and tagged with the source version
+// that produced it. Leaving and returning to a test's `@[test]` marker shows its previous result
+// again, just as it was shown when the run finished. The most recent RESULT_CACHE_LIMIT of them are
+// held, each with the whole of its run's captured output.
+/**
+ * @typedef {{version: string, outcome: Outcome, fields: RunFields, since: number,
+ *   sinceResults: number}} CachedRun a finished run: its outcome, the chunks and results the widget
+ *   received, and the positions past them on the server
+ * @type {Map<string, CachedRun>}
+ */
 const resultCache = new Map();
 const RESULT_CACHE_LIMIT = 32;
 
@@ -786,12 +792,12 @@ function fieldsOf(st) {
 }
 
 /**
- * A finished state showing a recorded outcome, with no live chunks or timings of its own.
- * @param outcome {Outcome}
+ * A finished state showing a cached run, with the chunks, results, and timings it had.
+ * @param cached {CachedRun}
  * @returns {RunUi}
  */
-function doneState(outcome) {
-    return { tag: "done", outcome, ...blankFields() };
+function doneState(cached) {
+    return { tag: "done", outcome: cached.outcome, ...cached.fields };
 }
 
 /**
@@ -900,7 +906,7 @@ function TestRun(props) {
 
     const [st, dispatch] = React.useReducer(step, undefined, function () {
         const cached = resultCache.get(declKey);
-        return cached && cached.version === version ? doneState(cached.outcome) : idleState;
+        return cached && cached.version === version ? doneState(cached) : idleState;
     });
     // Whether the file has no unsaved changes; the test runs the saved version, so Run is gated on it.
     const [clean, setClean] = React.useState(true);
@@ -1037,17 +1043,21 @@ function TestRun(props) {
             );
     }
 
-    // Connect to any run in progress for this test, replaying its output from the start, and find
-    // out whether the buffer is saved. Runs on mount and again after a server restart, through the
-    // session the InfoView made for the new server.
+    // Connect to any run in progress for this test, and find out whether the buffer is saved. Runs on
+    // mount and again after a server restart, through the session the InfoView made for the new
+    // server. A run restored from the cache is followed from where the cache left it, so the server
+    // sends only what came after; any other run's output is replayed from the start.
     React.useEffect(
         function () {
             const myGen = gen.current + 1;
             gen.current = myGen;
-            sinceRef.current = 0;
-            sinceResultsRef.current = 0;
+            const cached = resultCache.get(declKey);
+            const resumed =
+                st.tag === "done" && cached && cached.outcome === st.outcome ? cached : null;
+            sinceRef.current = resumed ? resumed.since : 0;
+            sinceResultsRef.current = resumed ? resumed.sinceResults : 0;
             phaseRef.current = "";
-            shownStart.current = 0;
+            shownStart.current = resumed ? resumed.fields.startTime : 0;
             awaitFails.current = 0;
             loop(myGen);
             alive.current = true;
@@ -1079,11 +1089,13 @@ function TestRun(props) {
     React.useEffect(
         function () {
             if (st.tag === "done") {
-                // A state restored from the cache has no chunks of its own, so the cached ones stay.
-                const prev = resultCache.get(declKey);
-                const kept = !st.chunks.length && prev && prev.outcome === st.outcome;
-                const chunks = kept ? prev.chunks : st.chunks;
-                cacheResult(declKey, { version, outcome: st.outcome, chunks });
+                cacheResult(declKey, {
+                    version,
+                    outcome: st.outcome,
+                    fields: fieldsOf(st),
+                    since: sinceRef.current,
+                    sinceResults: sinceResultsRef.current,
+                });
             } else if (st.tag !== "idle") resultCache.delete(declKey);
         },
         [st.tag, st.tag === "done" ? st.outcome : null],
@@ -1369,8 +1381,9 @@ function TestRun(props) {
     const timings = st.tag === "idle" ? null : st;
     const execStartTime = timings ? timings.execStartTime : 0;
 
-    // Prefer the live results, whose chunks have the times the runner stamped on them; otherwise
-    // use the ones a cached outcome recorded.
+    // The results the widget received, restored with the rest of a cached run, whose chunks have the
+    // times the runner stamped on them. A run that reported no results, such as one whose build
+    // failed, has only its outcome's.
     const liveResults = timings ? timings.results : [];
     const results = liveResults.length ? liveResults : resultsOfOutcome(outcome);
     const kids = childrenOf(results);
@@ -1385,13 +1398,7 @@ function TestRun(props) {
     const ownLocation = own ? own.location : (outcome && outcome.location) || null;
     const rootOutput = results.length ? results[0].output : [];
     // The whole run's output, in the order the test produced it, which the copy button copies.
-    const liveChunks = timings ? timings.chunks : [];
-    const cached = outcome && !liveChunks.length ? resultCache.get(declKey) : null;
-    const allChunks = liveChunks.length
-        ? liveChunks
-        : cached && cached.outcome === outcome
-          ? cached.chunks
-          : [];
+    const allChunks = timings ? timings.chunks : [];
     // Keyed so it keeps its state when the message and detail blocks appear ahead of it.
     const outputSection = rootOutput.length
         ? e(OutputSection, {

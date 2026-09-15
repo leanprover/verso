@@ -207,12 +207,11 @@ private meta def finishWith (state : RunState) (fallback : Errata.RunOutcome) : 
   signalRun state
 
 /--
-Reads the runner's JSON protocol from its stdout: a {lit}`chunk` line per output fragment, then an
-{lit}`outcome` line. Returns at end of input, which is reached when the process exits or is killed.
+Handles one line of the runner's JSON protocol: an {lit}`exec` line when the test body starts, a
+{lit}`chunk` line per output fragment, a {lit}`result` line as each named result starts and
+finishes, and an {lit}`outcome` line at the end.
 -/
-private meta partial def readLoop (out : IO.FS.Handle) (state : RunState) : IO Unit := do
-  let line ← out.getLine
-  if line.isEmpty then return
+private meta def handleLine (state : RunState) (line : String) : IO Unit := do
   if let .ok j := Json.parse line then
     if let .ok c := j.getObjVal? "chunk" then
       if let .ok chunk := (fromJson? c : Except String Errata.OutputChunk) then
@@ -229,7 +228,44 @@ private meta partial def readLoop (out : IO.FS.Handle) (state : RunState) : IO U
     else if let .ok o := j.getObjVal? "outcome" then
       if let .ok oc := (fromJson? o : Except String Errata.RunOutcome) then
         state.outcome.set oc
-  readLoop out state
+
+/-- How long to wait, in milliseconds, before reading the protocol file again once it is read up. -/
+private meta def protocolPollMs : UInt32 := 15
+
+/--
+Follows the file that the runner writes its JSON protocol to, handling each line once it is
+complete. Returns once the runner has exited and the file has been read to its end.
+
+{name}`exitCode` reports the runner's exit code once it has exited. {name}`pending` is the start of
+a line whose end the runner has yet to write, and {name}`exited` is whether the runner had exited
+before the current read began, so that everything it wrote is already in the file.
+-/
+private meta partial def followProtocol (file : IO.FS.Handle) (exitCode : IO (Option UInt32))
+    (state : RunState) (pending : String := "") (exited : Bool := false) : IO Unit := do
+  let text ← file.getLine
+  if text.endsWith "\n" then
+    handleLine state (pending ++ text)
+    followProtocol file exitCode state "" exited
+  else if !text.isEmpty then
+    followProtocol file exitCode state (pending ++ text) exited
+  else if exited then
+    unless pending.isEmpty do handleLine state pending
+  else
+    let nowExited := (← exitCode).isSome
+    unless nowExited do IO.sleep protocolPollMs
+    followProtocol file exitCode state pending nowExited
+
+/--
+Passes along what the runner writes to its standard output, which is output that the test's capture
+misses, such as that of a subprocess the test starts. Each line becomes a chunk of the test's own
+output.
+-/
+private meta partial def forwardStdout (out : IO.FS.Handle) (state : RunState) : IO Unit := do
+  let line ← out.getLine
+  if line.isEmpty then return
+  state.chunks.modify (·.push { stream := "stdout", text := line, time := ← nowMs })
+  signalRun state
+  forwardStdout out state
 
 /-- The number of characters of a failed subprocess's output to be reported. -/
 private meta def detailLimit : Nat := 4000
@@ -291,25 +327,41 @@ private meta def buildAndRun (source : System.FilePath) (moduleJson declJson : S
       return
   -- A run cancelled while its build finished ends here.
   if (← state.finished.get) then return
-  -- The runner inherits the language server's `LEAN_PATH`, which reaches every module of the
-  -- workspace, including the test module that it imports at runtime.
-  let run ← IO.Process.spawn {
-    stdin := .null, stdout := .piped, stderr := .piped
-    cmd := runnerPath, args := #[moduleJson, declJson] ++ (seed?.map (#[toString ·])).getD #[]
-  }
-  unless ← setKill state run.kill do
-    let _ ← run.wait
-    return
-  state.buildMs.set ((← nowMs) - state.startTime)
-  state.phase.set "running"
-  signalRun state
-  -- The runner's stderr has anything that went wrong outside the test body, such as a failed
-  -- import; it becomes the outcome's detail when the runner reports no outcome of its own.
-  let runErrTask ← IO.asTask (prio := .dedicated) run.stderr.readToEnd
-  readLoop run.stdout state
-  let code ← run.wait
-  let runErr := (← IO.wait runErrTask).toOption.getD ""
-  finishWith state (runnerFailure code runErr)
+  -- The runner writes its protocol to a file that only the runner writes to, so output from outside
+  -- the test's capture stays on the runner's stdout.
+  IO.FS.withTempFile fun _ protocolPath => do
+    let protocol ← IO.FS.Handle.mk protocolPath .read
+    -- The runner inherits the language server's `LEAN_PATH`, which reaches every module of the
+    -- workspace, including the test module that it imports at runtime.
+    let run ← IO.Process.spawn {
+      stdin := .null, stdout := .piped, stderr := .piped
+      cmd := runnerPath
+      args := #[protocolPath.toString, moduleJson, declJson] ++ (seed?.map (#[toString ·])).getD #[]
+    }
+    unless ← setKill state run.kill do
+      let _ ← run.wait
+      return
+    state.buildMs.set ((← nowMs) - state.startTime)
+    state.phase.set "running"
+    signalRun state
+    -- The runner's stderr has anything that went wrong outside the test body, such as a failed
+    -- import; it becomes the outcome's detail when the runner reports no outcome of its own.
+    let runErrTask ← IO.asTask (prio := .dedicated) run.stderr.readToEnd
+    let runOutTask ← IO.asTask (prio := .dedicated) (forwardStdout run.stdout state)
+    -- The exit code, recorded when the runner is found to have exited.
+    let code ← IO.mkRef none
+    let exitCode : IO (Option UInt32) := do
+      if let some c ← code.get then return some c
+      let c? ← run.tryWait
+      code.set c?
+      return c?
+    followProtocol protocol exitCode state
+    let _ ← IO.wait runOutTask
+    let runErr := (← IO.wait runErrTask).toOption.getD ""
+    let code ← match ← code.get with
+      | some c => pure c
+      | none => run.wait
+    finishWith state (runnerFailure code runErr)
 
 open Server in
 /-- Whether the document's live text matches what is on disk, i.e. it has no unsaved changes. -/
