@@ -242,11 +242,10 @@ jobs:
                   npx tsc --noEmit -p jsconfig.json
                   popd
 
+            # The widget is checked against the React and InfoView declarations that `npm ci`
+            # installs, which are the versions the InfoView runs it with.
             - name: Type check the run-test widget JS code
-              run: |
-                  pushd src/errata/Errata/widget
-                  npx tsc --noEmit -p jsconfig.json
-                  popd
+              run: npm run typecheck:widget
 
             - name: Check the ToC width storage key stays in sync
               run: |
