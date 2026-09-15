@@ -40,6 +40,16 @@ structure TestDecl where
 deriving Inhabited
 
 /--
+The name used for reports of test results. If the module's name is a prefix of the test's name, it
+is stripped; after, it is converted to a string.
+-/
+def testNameBelow (moduleName declName : Name) : String :=
+  let below :=
+    if moduleName.isPrefixOf declName then declName.components.drop moduleName.components.length
+    else declName.components
+  ".".intercalate (below.map (·.toString))
+
+/--
 The tests recorded by {lit}`@[test]`, per module. Tests are recorded as modules are elaborated;
 {lit}`getAllTests%` reads them back at elaboration time to build the runnable test array, and the
 single-test runner reads them from an imported environment at run time.

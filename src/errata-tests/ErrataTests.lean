@@ -1210,10 +1210,10 @@ def runOneNodes : Test := do
 /-- Each scope of an outcome holds what its own code wrote, and what a scope inside it wrote is there. -/
 @[test]
 def runOneNodeOutput : Test := do
-  let o ← runValue default (do
+  let o ← runValue default <| show Test from do
     IO.println "outer"
     result "inner" (IO.println "within")
-    IO.println "after" : Test)
+    IO.println "after"
   let text (node : ResultNode) : String := node.output.foldl (fun acc c => acc ++ c.text) ""
   assertBEq #["outer\nafter\n", "within\n"] (o.results.map text)
 
@@ -1227,9 +1227,9 @@ def runOneWatchesResults : Test := do
       | .started path => "start " ++ ".".intercalate path.toList
       | .finished r => "end " ++ ".".intercalate r.resultPath.toList
     seen.modify (·.push said)
-  let _ ← runAction default (do
+  let _ ← runValue default  (watch := watch) do
     result "a" (result "inner" (pure ()))
-    result "b" (pure ()) : Test) (watch := watch)
+    result "b" (pure ())
   assertBEq #["start a", "start a.inner", "end a.inner", "end a", "start b", "end b"] (← seen.get)
 
 /-- A passing run still surfaces its captured output. -/
@@ -1244,11 +1244,11 @@ def runOnePassOutput : Test := do
 /-- Captured output keeps stdout and stderr distinct and interleaved in order. -/
 @[test]
 def runOneStreams : Test := do
-  let o ← runValue default (do
+  let o ← runValue default <| show IO Bool from do
     IO.println "out one"
     IO.eprintln "err one"
     IO.println "out two"
-    return true : IO Bool)
+    return true
   assertBEq .passed o.status
   assertBEq 3 o.allOutput.size
   assertBEq "stdout" o.allOutput[0]!.stream

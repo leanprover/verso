@@ -76,8 +76,8 @@ meta initialize runRegistry : IO.Ref (Std.HashMap Name RunState) ← IO.mkRef {}
 meta structure StartRequest where
   /-- The test declaration to run, encoded by {name}`nameToJson`. -/
   decl : Json
-  /-- The module that defines the test, as a dotted name. -/
-  module : String
+  /-- The module that defines the test, encoded by {name}`nameToJson`. -/
+  module : Json
   /-- A hash of the test's source, recorded with the run so an edit can invalidate it. -/
   version : String
   /--
@@ -264,16 +264,18 @@ private meta def runnerFailure (code : UInt32) (stderr : String) : Errata.RunOut
 /--
 Builds the test's module from the saved source, then runs the test, streaming its output into the
 run state. Building first means a Run reflects the latest saved version of the test.
-{name}`seed?` is the seed for property tests, or {lean}`none` to have the runner draw one.
+{name}`source` is the file that defines the test, and {name}`moduleJson` and {name}`declJson` are
+the module and the test declaration, encoded by {name}`nameToJson`. {name}`seed?` is the seed for
+property tests, or {lean}`none` to have the runner draw one.
 -/
-private meta def buildAndRun (module declJson : String) (seed? : Option Nat) (state : RunState) :
-    IO Unit := do
-  -- `lake query` builds the runner exe and the test's module (so the run reflects the saved source)
-  -- and prints the exe's absolute path on stdout; progress and errors go to stderr.
-  -- The `+` prefix names a module, so a library's root module builds alone.
+private meta def buildAndRun (source : System.FilePath) (moduleJson declJson : String)
+    (seed? : Option Nat) (state : RunState) : IO Unit := do
+  -- `lake query` builds the runner exe and the module of the given source file (so the run reflects
+  -- the saved source) and prints the exe's absolute path on stdout; progress and errors go to
+  -- stderr. The file names exactly one module, whatever characters its name contains.
   let build ← IO.Process.spawn {
     stdin := .null, stdout := .piped, stderr := .piped
-    cmd := "lake", args := #["query", "errata-run-one", "+" ++ module]
+    cmd := "lake", args := #["query", "errata-run-one", source.toString]
   }
   unless ← setKill state build.kill do
     let _ ← build.wait
@@ -293,7 +295,7 @@ private meta def buildAndRun (module declJson : String) (seed? : Option Nat) (st
   -- workspace, including the test module that it imports at runtime.
   let run ← IO.Process.spawn {
     stdin := .null, stdout := .piped, stderr := .piped
-    cmd := runnerPath, args := #[module, declJson] ++ (seed?.map (#[toString ·])).getD #[]
+    cmd := runnerPath, args := #[moduleJson, declJson] ++ (seed?.map (#[toString ·])).getD #[]
   }
   unless ← setKill state run.kill do
     let _ ← run.wait
@@ -351,6 +353,9 @@ meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
     | some seed => pure seed
     | none =>
       throw (.mk .invalidParams s!"the seed must be a natural number in decimal digits: {s}")
+  let _ ← decodeDecl req.module
+  let some source := System.Uri.fileUriToPath? (← RequestM.readDoc).meta.uri
+    | throw (.mk .invalidParams "the test's document is not a file")
   unless ← bufferIsClean do
     throw (.mk .invalidParams "the file has unsaved changes; save it before running the test")
   let state : RunState := {
@@ -365,7 +370,7 @@ meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
   if let some previous := previous? then stopRun previous
   -- The task spends most of its time blocked on the build and the runner, so it has its own thread.
   let _ ← IO.asTask (prio := .dedicated) do
-    try buildAndRun req.module req.decl.compress seed? state
+    try buildAndRun source req.module.compress req.decl.compress seed? state
     catch e => finishWith state (launchFailure e)
   return RequestTask.pure ()
 

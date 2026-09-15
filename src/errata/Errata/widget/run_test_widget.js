@@ -14,7 +14,7 @@ const e = React.createElement;
 // The last settled outcome of each test, keyed by its declaration and tagged with the source
 // version that produced it. Leaving and returning to a test's `@[test]` marker shows its previous
 // result again. The most recent RESULT_CACHE_LIMIT of them are held, each with the whole of its
-// run's captured output.
+// run's captured output, both by result and as the chunks in the order the test produced them.
 const resultCache = new Map();
 const RESULT_CACHE_LIMIT = 32;
 
@@ -735,17 +735,6 @@ function resultsOfOutcome(outcome) {
 }
 
 /**
- * Every result's output, the results in the order they ran, for a run whose own chunks are gone.
- * @param results {ResultNode[]}
- * @returns {Chunk[]}
- */
-function allOutput(results) {
-    const all = [];
-    for (const result of results) for (const chunk of result.output) all.push(chunk);
-    return all;
-}
-
-/**
  * Whether each result, or any result below it, failed or raised an error. A named result has a
  * higher identifier than the result that contains it, so one pass from the last result to the first
  * marks every result above a failure.
@@ -1089,8 +1078,13 @@ function TestRun(props) {
     // cancelled, or fails clears it, so a remount shows only the latest result.
     React.useEffect(
         function () {
-            if (st.tag === "done") cacheResult(declKey, { version, outcome: st.outcome });
-            else if (st.tag !== "idle") resultCache.delete(declKey);
+            if (st.tag === "done") {
+                // A state restored from the cache has no chunks of its own, so the cached ones stay.
+                const prev = resultCache.get(declKey);
+                const kept = !st.chunks.length && prev && prev.outcome === st.outcome;
+                const chunks = kept ? prev.chunks : st.chunks;
+                cacheResult(declKey, { version, outcome: st.outcome, chunks });
+            } else if (st.tag !== "idle") resultCache.delete(declKey);
         },
         [st.tag, st.tag === "done" ? st.outcome : null],
     );
@@ -1392,7 +1386,12 @@ function TestRun(props) {
     const rootOutput = results.length ? results[0].output : [];
     // The whole run's output, in the order the test produced it, which the copy button copies.
     const liveChunks = timings ? timings.chunks : [];
-    const allChunks = liveChunks.length ? liveChunks : allOutput(results);
+    const cached = outcome && !liveChunks.length ? resultCache.get(declKey) : null;
+    const allChunks = liveChunks.length
+        ? liveChunks
+        : cached && cached.outcome === outcome
+          ? cached.chunks
+          : [];
     // Keyed so it keeps its state when the message and detail blocks appear ahead of it.
     const outputSection = rootOutput.length
         ? e(OutputSection, {

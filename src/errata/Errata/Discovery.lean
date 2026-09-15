@@ -147,19 +147,12 @@ meta initialize
         | none => ""
       let props := pure <| json% {
         decl: $(Errata.nameToJson decl),
-        module: $(toString (← getMainModule)),
+        module: $(Errata.nameToJson (← getMainModule)),
         name: $(toString (privateToUserName decl)),
         version: $version
       }
       Lean.Widget.savePanelWidgetInfo Errata.Widget.runTestWidget.javascriptHash.val props widgetStx
   }
-
-/-- The test's name below its module: the declaration's components past the module prefix, dotted. -/
-meta def testNameBelow (moduleName declName : Name) : String :=
-  let below :=
-    if moduleName.isPrefixOf declName then declName.components.drop moduleName.components.length
-    else declName.components
-  ".".intercalate (below.map (·.toString))
 
 /--
 A module to read tests from: the module itself, or, with a trailing {lit}`.*`, the module and every

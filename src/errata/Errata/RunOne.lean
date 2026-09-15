@@ -232,29 +232,23 @@ def summarizeResults (seed : Nat) (testLocation : Location) (results : Array Res
   }
 
 /--
-Runs one test action to completion and condenses its results into a {name}`RunOutcome`. Every
-result keeps its captured output, whatever its verdict, so the widget can show it on request.
-Without a seed for property tests, one is generated.
+Runs one test entry to completion, as the batch runner does, and condenses its results into a
+{name}`RunOutcome` whose description is the entry's docstring. Every result keeps its captured
+output, whatever its verdict, so the widget can show it on request. Without a seed for property
+tests, one is generated.
 -/
-def runAction (location : Location) (act : TestM Unit) (seed? : Option Nat := none)
+def runEntryOutcome (entry : TestEntry) (seed? : Option Nat := none)
     (sink : Output → IO Unit := fun _ => pure ())
     (watch : ResultEvent → IO Unit := fun _ => pure ()) : IO RunOutcome := do
-  let cfg := {
-    ← mkContext (seed := seed?) with location, writeOutput := sink, watchResults := watch
-  }
-  let start ← IO.monoMsNow
-  let (outcome, output) ← runCapturing cfg act
-  let dur := (← IO.monoMsNow) - start
-  let logged ← cfg.log.get
-  -- The test's own result leads the results it recorded, as the batch runner orders them.
-  let own := cfg.resultOfOutcome outcome output dur (← cfg.insideMs.get) logged
-  return summarizeResults cfg.seed cfg.location (#[own] ++ logged)
+  let cfg := { ← mkContext (seed := seed?) with writeOutput := sink, watchResults := watch }
+  let outcome := summarizeResults cfg.seed entry.location (← runEntry cfg entry)
+  return { outcome with description? := entry.docstring? }
 
-/-- Runs one testable value as {name}`runAction` does. -/
+/-- Runs one testable value as {name}`runEntryOutcome` does, as a test with an empty name. -/
 def runValue {α} [IsTest α] (location : Location) (value : α) (seed? : Option Nat := none)
     (sink : Output → IO Unit := fun _ => pure ())
     (watch : ResultEvent → IO Unit := fun _ => pure ()) : IO RunOutcome :=
-  runAction location (IsTest.toTest value) seed? sink watch
+  runEntryOutcome (.of "" "" "" location value) seed? sink watch
 
 /-- Runs one testable value with a default failure location, for callers without a source range. -/
 def runValueDefault {α} [IsTest α] (value : α) : IO RunOutcome := runValue default value

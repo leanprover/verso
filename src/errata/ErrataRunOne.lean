@@ -16,13 +16,14 @@ def nowMs : IO Nat :=
   return (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.toInt.toNat
 
 /--
-Evaluates the test named by {lean}`declName`, defined in {lean}`module`, to a runnable action.
+Evaluates the test named by {lean}`declName`, defined in {lean}`module`, to a test entry, as test
+discovery builds one.
 
-The action is the definition that {lit}`@[test]` compiled beside the test, reached through
-{lit}`import all` of its module so a module-private test is still reachable.
+The entry's action is the definition that {lit}`@[test]` compiled beside the test, reached through
+{lit}`import all` of its module so a module-private test is still reachable. The runner has no
+package name to give the entry, so that field is empty.
 -/
-unsafe def evalTestM (module declName : Name) :
-    CoreM (Errata.TestM Unit × Option String × Errata.Location) :=
+unsafe def evalTestEntry (module declName : Name) : CoreM Errata.TestEntry :=
   MetaM.run' do
     let env ← getEnv
     let some idx := env.getModuleIdx? module
@@ -41,7 +42,11 @@ unsafe def evalTestM (module declName : Name) :
       startPos := (range.map (·.range.pos)).getD ⟨0, 0⟩
       endPos := (range.map (·.range.endPos)).getD ⟨0, 0⟩
     }
-    return (act, ← findDocString? env test.name, location)
+    return {
+      package := "", moduleName := module.toString
+      test := Errata.testNameBelow module (privateToUserName test.name)
+      location, docstring? := test.docstring?, run := act
+    }
 
 /-- Writes one JSON protocol line to the runner's real stdout and flushes it for prompt streaming. -/
 private def emitLine (out : IO.FS.Stream) (key : String) (value : Json) : IO Unit := do
@@ -54,7 +59,7 @@ property tests is the third argument, or is drawn when there is none.
 -/
 unsafe def runImpl (args : List String) : IO UInt32 := do
   let usage : IO UInt32 := do
-    IO.eprintln "usage: errata-run-one <module> <decl-json> [seed]"
+    IO.eprintln "usage: errata-run-one <module-json> <decl-json> [seed]"
     return 2
   let (modStr, declStr, seed?) ←
     match args with
@@ -64,22 +69,23 @@ unsafe def runImpl (args : List String) : IO UInt32 := do
       | some seed => pure (modStr, declStr, some seed)
       | none => return ← usage
     | _ => return ← usage
-  let targetModule := modStr.toName
-  let declName ←
-    match Json.parse declStr with
+  -- A name is either encoded by `nameToJson` or given in its dotted form.
+  let parseName (s : String) : IO Name :=
+    match Json.parse s with
     | .ok j => IO.ofExcept (Errata.nameOfJson? j)
-    | .error _ => pure declStr.toName
+    | .error _ => pure s.toName
+  let targetModule ← parseName modStr
+  let declName ← parseName declStr
   -- The runner's real stdout carries the JSON protocol; the test's own output is captured by
-  -- `runValue` and forwarded as chunk lines, so this handle is taken before that redirection.
+  -- `runEntryOutcome` and forwarded as chunk lines, so this handle is taken before that redirection.
   let out ← IO.getStdout
+  -- The search path includes the directories in `LEAN_PATH`.
   initSearchPath (← findSysroot)
-  if let some leanPath ← IO.getEnv "LEAN_PATH" then
-    searchPathRef.modify (· ++ System.SearchPath.parse leanPath)
   enableInitializersExecution
   let env ← importModules
     #[{ module := targetModule, importAll := true }, { module := `Errata }] {} (loadExts := true)
   let coreCtx : Core.Context := { fileName := "<errata-run-one>", fileMap := default }
-  let ((act, doc?, location), _) ← (evalTestM targetModule declName).toIO coreCtx { env }
+  let (entry, _) ← (evalTestEntry targetModule declName).toIO coreCtx { env }
   -- Mark when the test body starts, so the widget shows output offsets within the test itself,
   -- excluding the build and module-import time before this point.
   emitLine out "exec" (toJson (← nowMs))
@@ -105,13 +111,13 @@ unsafe def runImpl (args : List String) : IO UInt32 := do
       openResults.modify (·.pop)
       -- The result's output already went out as chunks while it ran, so the report of the finished
       -- result leaves it out.
-      let node := { Errata.ResultNode.ofResult id (← innermost) location r with output := #[] }
+      let node := { Errata.ResultNode.ofResult id (← innermost) entry.location r with output := #[] }
       emitLine out "result" (toJson node)
-  let outcome ← Errata.runAction location act (seed? := seed?) (sink := sink) (watch := watch)
+  let outcome ← Errata.runEntryOutcome entry (seed? := seed?) (sink := sink) (watch := watch)
   -- The test's own result is reported once the test ends, with its verdict and message.
   if let some root := outcome.root? then
     emitLine out "result" (toJson { root with output := #[] })
-  emitLine out "outcome" (toJson { outcome with description? := doc? })
+  emitLine out "outcome" (toJson outcome)
   return 0
 
 @[implemented_by runImpl]
