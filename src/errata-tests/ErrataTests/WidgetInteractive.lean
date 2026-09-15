@@ -13,6 +13,12 @@ set_option doc.verso true
 open Errata
 
 /--
+How much longer the pauses in these tests are than their shortest version, which keeps the test
+suite fast. Set it to {lean}`100` to watch the output stream into the widget.
+-/
+private def sleepMultiplier : UInt32 := 1
+
+/--
 Whether the tests in this module should generally pass. Set it to {name}`false` to experiment with
 failing tests.
 -/
@@ -35,7 +41,7 @@ Writing individual lines, with pauses.
 def streamedOutput : Test := do
   for step in [1, 2, 3, 4, 5] do
     IO.println s!"step {step} of 5"
-    IO.sleep <| 300 * step
+    IO.sleep <| 3 * step * sleepMultiplier
   IO.eprintln "the last step wrote to stderr"
   assertTrue shouldPass "`shouldPass` is false"
 
@@ -98,11 +104,11 @@ def nestedResults : Test := do
   result "parsing" do
     IO.println "reading the source"
     for _ in 0...5 do
-      IO.sleep 200
+      IO.sleep <| 2 * sleepMultiplier
       IO.println "..."
     result "tokens" do
       IO.println "12 tokens"
-      IO.sleep 500
+      IO.sleep <| 5 * sleepMultiplier
       assertBEq 12 12
     result "syntax" do
       assertBEq "(+ 1 2)" (if shouldPass then "(+ 1 2)" else "(+ 1 3)")
