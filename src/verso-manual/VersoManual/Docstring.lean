@@ -89,7 +89,7 @@ meta def ValDesc.documentableName : ValDesc m (Ident × Name) where
             m!"Set option 'verso.docstring.allowDeprecated' to '{true}' to allow documentation for deprecated names."
       else
         -- Defer to default Lean deprecation warnings and settings if it's not a hard error
-        Lean.Linter.checkDeprecated x
+        Lean.Linter.checkDeprecated x false
       pure (n, x)
     | other => throwError "Expected identifier, got {other}"
 

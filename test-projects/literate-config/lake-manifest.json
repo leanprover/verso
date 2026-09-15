@@ -1,0 +1,78 @@
+{
+  "version": "1.2.0",
+  "packagesDir": ".lake/packages",
+  "packages": [
+    {
+      "type": "path",
+      "scope": "",
+      "name": "verso",
+      "manifestFile": "lake-manifest.json",
+      "inherited": false,
+      "dir": "../..",
+      "configFile": "lakefile.lean"
+    },
+    {
+      "url": "https://github.com/leanprover/lean4-cli",
+      "type": "git",
+      "subDir": null,
+      "scope": "",
+      "rev": "e92c9f15fdfacc8536f31cfb3b7ad26c3c8cd204",
+      "name": "Cli",
+      "manifestFile": "lake-manifest.json",
+      "inputRev": "main",
+      "inherited": true,
+      "configFile": "lakefile.toml"
+    },
+    {
+      "url": "https://github.com/leanprover/illuminate",
+      "type": "git",
+      "subDir": null,
+      "scope": "",
+      "rev": "a1a61c9678da010e958ed24cdfa6f635b85f172a",
+      "name": "illuminate",
+      "manifestFile": "lake-manifest.json",
+      "inputRev": "main",
+      "inherited": true,
+      "configFile": "lakefile.lean"
+    },
+    {
+      "url": "https://github.com/leanprover-community/plausible",
+      "type": "git",
+      "subDir": null,
+      "scope": "",
+      "rev": "118aa17ee84656b8bd727fef7c458ee8c833385c",
+      "name": "plausible",
+      "manifestFile": "lake-manifest.json",
+      "inputRev": "main",
+      "inherited": true,
+      "configFile": "lakefile.toml"
+    },
+    {
+      "url": "https://github.com/acmepjz/md4lean",
+      "type": "git",
+      "subDir": null,
+      "scope": "",
+      "rev": "31907cc18f48a95384f99cee5582c00fb39e0f67",
+      "name": "MD4Lean",
+      "manifestFile": "lake-manifest.json",
+      "inputRev": "main",
+      "inherited": true,
+      "configFile": "lakefile.lean"
+    },
+    {
+      "url": "https://github.com/leanprover/subverso",
+      "type": "git",
+      "subDir": null,
+      "scope": "",
+      "rev": "9b90b7f938d6169246325df002351014f49945ef",
+      "name": "subverso",
+      "manifestFile": "lake-manifest.json",
+      "inputRev": "main",
+      "inherited": true,
+      "configFile": "lakefile.lean"
+    }
+  ],
+  "name": "«literate-config-test»",
+  "lakeDir": ".lake",
+  "fixedToolchain": false
+}
