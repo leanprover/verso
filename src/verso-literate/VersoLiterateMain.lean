@@ -12,7 +12,7 @@ public import MD4Lean
 public import Lean.DocString.Syntax
 public import Lean.DocString.Extension
 public import Lean.Elab.Frontend
-public import Lean.Server.InfoUtils
+public import Lean.Elab.InfoTree.Util
 public import Lean.Server.References
 
 public import VersoLiterate
