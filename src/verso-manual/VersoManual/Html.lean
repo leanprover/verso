@@ -379,9 +379,13 @@ where
       | none => {{<span class="unnumbered"></span>}}
       | some ns => {{<span class="number">{{sectionNumberString ns}}</span>" "}}
 
-public def titlePage (title : Html) (authors : List String) (authorshipNote : Option String) (intro : Html) : Html := {{
+/--
+Renders a manual's title page using the supplied heading's level, anchor, and contents.
+-/
+public def titlePage (heading : Heading) (authors : List String) (authorshipNote : Option String)
+    (intro : Html) : Html := {{
   <div class="titlepage">
-    <h1>{{title}}</h1>
+    {{heading.toHtml}}
     <div class="authors">
       {{authors.toArray.map ({{ <span class="author">{{Coe.coe ·}}</span> }})}}
       {{if let some note := authorshipNote then {{<p class="note">{{note}}</p>}} else .empty }}

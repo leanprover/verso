@@ -763,6 +763,8 @@ where
     let definitionIds := state.definitionIds ctxt
     let linkTargets := config.linkTargets state (← readThe AllRemotes)
     let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets {})
+    let heading :=
+      partHeading state ctxt (text.metadata.bind (·.id)) 1 titleHtml (showNumber := false) (showPermalink := false)
     let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets {})
     let bookToc ← text.subParts.mapM (fun p => toc 0 opts (ctxt.inPart p) state definitionIds linkTargets p)
     let bookTocHtml := open Verso.Output.Html in
@@ -778,7 +780,7 @@ where
         Manual.toHtml { opts with headerLevel := 2 } (ctxt.inPart p) state definitionIds linkTargets {} p
     let pageContent := open Verso.Output.Html in
       {{<section>
-          {{Html.titlePage titleHtml authors authorshipNote introHtml}}
+          {{Html.titlePage heading authors authorshipNote introHtml}}
           {{bookTocHtml}}
           {{contents}}
         </section>}}
@@ -890,13 +892,8 @@ where
       (root : Bool) (depth : Nat) (dir : System.FilePath) (part : Part Manual) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) Unit := do
     let thisFile := part.metadata.bind (·.file) |>.getD (part.titleString.sluggify.toString)
     let dir := if root then dir else dir.join thisFile
-    let sectionNum := sectionHtml ctxt
-    let pageTitleHtml := sectionNum ++ (← Html.seq <$> part.title.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets codeOptions))
-    let titleHtml :=
-      pageTitleHtml ++
-      if let some id := part.metadata.bind (·.id) then
-        permalink id state
-      else .empty
+    let titleHtml ← Html.seq <$> part.title.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets codeOptions)
+    let heading := partHeading state ctxt (part.metadata.bind (·.id)) 1 titleHtml
     let introHtml ← Html.seq <$> part.content.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets codeOptions)
     let contents ←
       if depth == 0 || part.htmlSplit == .never then
@@ -925,13 +922,13 @@ where
             </section>
           }}
         else .empty
-        {{<section>{{Html.titlePage titleHtml authors authorshipNote introHtml ++ contents}} {{subTocHtml}}</section>}}
+        {{<section>{{Html.titlePage heading authors authorshipNote introHtml ++ contents}} {{subTocHtml}}</section>}}
       else
         let subTocHtml :=
           if (depth > 0 && part.htmlSplit != .never) && subToc.size > 0 && part.htmlToc then
             {{<ol class="section-toc">{{subToc.map (·.html config.sectionTocDepth)}}</ol>}}
           else .empty
-        {{<section><h1>{{titleHtml}}</h1> {{introHtml}} {{contents}} {{subTocHtml}}</section>}}
+        {{<section>{{heading.toHtml}} {{introHtml}} {{contents}} {{subTocHtml}}</section>}}
 
     ensureDir dir
     IO.FS.withFile (dir.join "index.html") .write fun h => do
