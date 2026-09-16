@@ -15,7 +15,7 @@ public section
 open Lean Elab
 open Verso ArgParse Doc Elab Genre.Manual Html
 open Verso.Doc.Html (HtmlT)
-open Verso.Output (Html)
+open Verso.Output
 
 namespace Verso.Genre.Manual
 

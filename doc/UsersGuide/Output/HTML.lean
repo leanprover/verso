@@ -15,6 +15,7 @@ open InlineLean
 open Verso.Doc
 
 open Verso.Output
+open Lean (Html)
 
 open Verso.Code
 
@@ -26,24 +27,22 @@ tag := "output-html"
 While most users of Verso don't need to worry about the specific details of the HTML that it produces, authors of new {tech}[genres] or of substantial extensions to existing genres may need to produce custom HTML.
 Verso's HTML output follows a number of conventions and uses built-in libraries and features.
 
-Verso's {name}`Html` type represents HTML documents.
-They are typically produced using an embedded DSL that is available when the namespace `Verso.Output.Html` is opened.
+Lean's {name}`Html` type represents HTML documents.
+In Verso, they are typically produced using an embedded DSL that is available when the namespace `Verso.Output.Html` is opened.
 
 {docstring Html}
 
 {docstring Html.empty}
 
-{docstring Html.fromArray}
+{docstring Html.ofArray}
 
-{docstring Html.fromList}
+{docstring Html.ofList}
 
 {docstring Html.append}
 
-{docstring Html.visitM}
+{docstring Html.rewritePostM}
 
-{docstring Html.format}
-
-{docstring Html.asString}
+{docstring Html.render}
 
 HTML documents are written in double curly braces, in a syntax very much like HTML itself.
 The differences are:
@@ -59,19 +58,12 @@ def mkList (xs : List Html) : Html :=
   {{ <ul> {{ xs.map ({{<li>{{·}}</li>}}) }} </ul>}}
 
 #eval mkList ["A", {{<emph>"B"</emph>}}, "C"]
-  |>.asString
+  |>.render
   |> IO.println
 ```
 
 ```leanOutput htmllist
-<ul>
-  <li>
-    A</li>
-  <li>
-    <emph>B</emph></li>
-  <li>
-    C</li>
-  </ul>
+<ul><li>A</li><li><emph>B</emph></li><li>C</li></ul>
 ```
 
 # Conventions

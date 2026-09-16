@@ -29,7 +29,7 @@ set_option doc.verso true
 
 public section
 
-open Lean (Name Json NameMap ToJson FromJson)
+open Lean (Name Json NameMap ToJson FromJson Html)
 open Std (HashSet HashMap TreeSet)
 open Verso.Doc
 open Verso.Multi
@@ -238,7 +238,7 @@ structure PartMetadata where
   file : Option String := none
   /-- The internal unique ID, which is automatically assigned during traversal. -/
   id : Option InternalId := none
-  /-- Should this section be numbered? If {name}`false`, then it's like `\section*` in LaTeX -/
+  /-- Should this section be numbered? If {name}`false`, then it's like {lit}`\section*` in LaTeX -/
   number : Bool := true
   /-- If {name}`true`, the part is only rendered in draft mode. -/
   draft : Bool := false
@@ -341,7 +341,7 @@ structure TraverseState extends HtmlAssets where
   ids : TreeSet InternalId := {}
   quickJump : DomainMappers := {}
   /--
-  TeX `\usepackage{…}` lines contributed by block and inline extensions whose blocks actually
+  TeX {lit}`\usepackage{…}` lines contributed by block and inline extensions whose blocks actually
   occur in the document. Populated during traversal at each block/inline occurrence so unused
   extensions don't pollute the preamble.
   -/
@@ -496,10 +496,10 @@ def getDomainObject? (state : TraverseState) (domain : Name) (canonicalName : St
   state.domains.get? domain >>= fun d => d.get? canonicalName
 
 def setDomainTitle (state : TraverseState) (domain : Name) (title : String) : TraverseState :=
-  {state with domains := state.domains.insert! domain {state.domains.get? domain |>.getD {} with title := some title}}
+  {state with domains := state.domains.insert! domain {state.domains.get? domain |>.getD {} with title := some title} }
 
 def setDomainDescription (state : TraverseState) (domain : Name) (description : String) : TraverseState :=
-  {state with domains := state.domains.insert! domain {state.domains.get? domain |>.getD {} with description := some description}}
+  {state with domains := state.domains.insert! domain {state.domains.get? domain |>.getD {} with description := some description} }
 
 open Verso.Search in
 def addQuickJumpMapper (state : TraverseState) (domain : Name) (domainMapper : DomainMapper) : TraverseState :=
@@ -665,9 +665,9 @@ abbrev BlockTraversal genre :=
   ReaderT TraverseContext (StateT TraverseState (BuildLogT IO)) (Option (Doc.Block genre))
 
 abbrev BlockToHtml (genre : Genre) (m) :=
-  (Doc.Inline genre → Html.HtmlT genre m Output.Html) →
-  (Doc.Block genre → Html.HtmlT genre m Output.Html) →
-  InternalId → Json → Array (Doc.Block genre) → Html.HtmlT genre m Output.Html
+  (Doc.Inline genre → Html.HtmlT genre m Html) →
+  (Doc.Block genre → Html.HtmlT genre m Html) →
+  InternalId → Json → Array (Doc.Block genre) → Html.HtmlT genre m Html
 
 abbrev BlockToTeX (genre : Genre) (m) :=
   (Doc.Inline genre → TeX.TeXT genre m Output.TeX) →
@@ -679,8 +679,8 @@ abbrev InlineTraversal genre :=
   ReaderT TraverseContext (StateT TraverseState (BuildLogT IO)) (Option (Doc.Inline genre))
 
 abbrev InlineToHtml (genre : Genre) (m) :=
-  (Doc.Inline genre → Html.HtmlT genre m Output.Html) →
-    InternalId → Json → Array (Doc.Inline genre) → Html.HtmlT genre m Output.Html
+  (Doc.Inline genre → Html.HtmlT genre m Html) →
+    InternalId → Json → Array (Doc.Inline genre) → Html.HtmlT genre m Html
 
 abbrev InlineToTeX (genre : Genre) (m) :=
   (Doc.Inline genre → TeX.TeXT genre m Output.TeX) →
@@ -783,7 +783,7 @@ structure InlineDescr extends HtmlAssets where
 
   The empty array means that the inline should not be included.
   -/
-  localContentItem : InternalId → Json → Array (Doc.Inline Manual) → Except String (Array (String × Verso.Output.Html)) :=
+  localContentItem : InternalId → Json → Array (Doc.Inline Manual) → Except String (Array (String × Html)) :=
     fun _ _ _ => pure #[]
 
   /--
@@ -791,7 +791,7 @@ structure InlineDescr extends HtmlAssets where
   will fail.
   -/
   toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
-  /-- Required TeX `\usepackage` lines -/
+  /-- Required TeX {lit}`\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
   preamble : List String := {}
@@ -827,7 +827,7 @@ structure BlockDescr extends HtmlAssets where
 
   The empty array means that the block should not be included.
   -/
-  localContentItem : InternalId → Json → Array (Doc.Block Manual) → Except String (Array (String × Verso.Output.Html)) :=
+  localContentItem : InternalId → Json → Array (Doc.Block Manual) → Except String (Array (String × Html)) :=
     fun _ _ _ => pure #[]
 
   /--
@@ -835,7 +835,7 @@ structure BlockDescr extends HtmlAssets where
   will fail.
   -/
   toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
-  /-- Required TeX `\usepackage` lines -/
+  /-- Required TeX {lit}`\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
   preamble : List String := {}
@@ -1575,7 +1575,7 @@ def sectionHtml (ctxt : TraverseContext) : Html :=
   match sectionString ctxt with
   | none => .empty
    -- Non-breaking space because section numbers shouldn't end up on a line alone
-  | some s => .text true (s ++ " ")
+  | some s => .text (s ++ " ")
 
 open Html in
 /--
@@ -1618,7 +1618,7 @@ instance : Html.GenreHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (Bu
       if let some id := m.id then permalink id st
       else .empty
     let mkHeader lvl content :=
-      .tag s!"h{lvl}" attrs (sectionNumber ++ content ++ permalink? «meta»)
+      .element s!"h{lvl}" attrs (sectionNumber ++ content ++ permalink? «meta»)
     go txt mkHeader
 
   block goI goB b content := do

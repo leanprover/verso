@@ -16,7 +16,7 @@ public section
 
 open Lean Elab
 open Verso ArgParse Doc Elab Genre.Manual Html
-open Verso.Output (Html)
+open Verso.Output
 open Verso.Doc.Html (HtmlT)
 open Verso.Illuminate (elabAndStoreDiagram)
 open Verso.Genre.Manual.InlineLean.Scopes (runWithOpenDecls runWithVariables)
@@ -98,7 +98,7 @@ block_extension Block.diagram
           (if isInline then ["display: inline-block"] else [])
       pure {{
         <div class="diagram" style={{style}}>
-          {{Html.text false svgStr}}
+          {{Html.raw svgStr}}
         </div>
       }}
   usePackages := ["\\usepackage{svg}"]

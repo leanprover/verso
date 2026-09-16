@@ -18,7 +18,7 @@ public import Verso.Doc.Elab.Monad
 open Verso Genre Manual ArgParse
 open Verso.Doc.Elab
 open Verso.Multi (AllRemotes)
-open Lean (Json ToJson FromJson)
+open Lean (Json ToJson FromJson Html)
 
 namespace Verso.Genre.Manual
 
