@@ -5,6 +5,8 @@ Author: David Thrane Christiansen
 -/
 module
 
+deprecated_module "use Lean.Data.Html.Spec instead" (since := "2026-09-16")
+
 namespace Verso.Output.Html
 
 /-- Void tags are those that cannot have child nodes - they must not have closing tags.
