@@ -1,0 +1,116 @@
+:root {
+    /** Typography **/
+    /* The font family used for headers, ToC entries, etc */
+    --verso-structure-font-family: "Helvetica Neue", "Segoe UI", "Roboto", Arial, sans-serif;
+    /* The font family used for body text */
+    --verso-text-font-family: "Helvetica Neue", "Segoe UI", "Roboto", Arial, sans-serif;
+    /* The font family used for code */
+    --verso-code-font-family: monospace;
+
+    /** Text colors **/
+    --verso-text-color: black;
+    --verso-code-color: black;
+    --verso-structure-color: black;
+
+    /** Selected items (e.g. search results) */
+    --verso-selected-color: #def;
+
+    /** Tooltips **/
+    /*
+    These colors are used for the tooltips that display documentation and messages for code,
+    and for the equivalent popups that are shown when scripts are unavailable. The
+    severity-specific tooltip colors below default to the foreground and background given
+    here. The separator color draws the rule between sections of a tooltip's content.
+    */
+    --verso-tooltip-color: black;
+    --verso-tooltip-bg-color: #e5e5e5;
+    --verso-tooltip-border-color: black;
+    --verso-tooltip-separator-color: #ccc;
+
+    /** Message colors **/
+    /*
+    These colors are used to render Lean's feedback. Each severity (info, warning, error)
+    has four sets of related styles:
+
+    - The affected code itself: foreground and background, both at rest and while hovered,
+      plus the indicator color, which draws the wavy underline marking that a message is
+      present.
+    - The text of the message, via the message color.
+    - The tooltip that displays the message: foreground, background, and border. The border
+      color also draws the accent bar next to a message when it is shown without scripts,
+      and the background also colors the tooltip's arrow.
+    - The marker bar in the margin of output blocks, via the output color.
+    */
+    --verso-code-info-color: currentcolor;
+    --verso-code-info-bg-color: transparent;
+    --verso-code-info-hover-color: currentcolor;
+    --verso-code-info-hover-bg-color: #4777ff;
+    --verso-info-indicator-color: #4777ff;
+    --verso-message-info-color: black;
+    --verso-tooltip-info-color: var(--verso-tooltip-color);
+    --verso-tooltip-info-bg-color: var(--verso-tooltip-bg-color);
+    --verso-tooltip-info-border-color: #4777ff;
+    --verso-output-info-color: var(--verso-info-indicator-color);
+
+    --verso-code-warning-color: currentcolor;
+    --verso-code-warning-bg-color: transparent;
+    --verso-code-warning-hover-color: currentcolor;
+    --verso-code-warning-hover-bg-color: #ffd580;
+    --verso-warning-indicator-color: #e7a71d; /* 2.11 contrast ratio for white, 9.94 for black */
+    --verso-message-warning-color: black;
+    --verso-tooltip-warning-color: var(--verso-tooltip-color);
+    --verso-tooltip-warning-bg-color: var(--verso-tooltip-bg-color);
+    --verso-tooltip-warning-border-color: #ffd580;
+    --verso-output-warning-color: var(--verso-warning-indicator-color);
+
+    --verso-code-error-color: currentcolor;
+    --verso-code-error-bg-color: transparent;
+    --verso-code-error-hover-color: currentcolor;
+    --verso-code-error-hover-bg-color: #ffb3b3;
+    --verso-error-indicator-color: #ff0000;
+    --verso-message-error-color: #cc0000;
+    --verso-tooltip-error-color: var(--verso-tooltip-color);
+    --verso-tooltip-error-bg-color: var(--verso-tooltip-bg-color);
+    --verso-tooltip-error-border-color: #ffb3b3;
+    --verso-output-error-color: var(--verso-error-indicator-color);
+
+    /** Proof states **/
+    /*
+    These colors are used for the proof state displays that can be expanded inside of proofs
+    and shown in tooltips. The toggle colors are used for the control that expands and
+    collapses a proof state.
+    */
+    --verso-tactic-state-color: black;
+    --verso-tactic-state-bg-color: white;
+    --verso-tactic-state-border-color: #888888;
+    --verso-tactic-toggle-color: #bbbbbb;
+    --verso-tactic-toggle-checked-color: #999999;
+
+    /** Code Highlighting **/
+    /*
+    These variables control the rendering of Lean code emitted by Verso. Each category that can be
+    highlighted supports the customization of color, weight, style, and family.
+    */
+    /* Constants (e.g. `List` or `id` or `none`) */
+    --verso-code-const-color: var(--verso-code-color);
+    --verso-code-const-weight: normal;
+    --verso-code-const-style: normal;
+    --verso-code-const-font-family: var(--verso-code-font-family);
+
+    /* Keywords/atoms (e.g. `for` or `def` or `induction`) */
+    --verso-code-keyword-color: var(--verso-code-color);
+    --verso-code-keyword-weight: bold;
+    --verso-code-keyword-style: normal;
+    --verso-code-keyword-font-family: var(--verso-code-font-family);
+
+    /* Local bindings (e.g. `x` in `let x := 5`) */
+    --verso-code-var-color: var(--verso-code-color);
+    --verso-code-var-weight: normal;
+    --verso-code-var-style: italic;
+    --verso-code-var-font-family: var(--verso-code-font-family);
+
+    /* The background of interactive code while hovered (hoverable tokens, occurrences of a
+       hovered binding, and the tactics that expand to a proof state) */
+    --verso-code-hover-bg-color: #eeeeee;
+}
+
