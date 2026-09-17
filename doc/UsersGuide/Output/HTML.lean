@@ -28,7 +28,6 @@ While most users of Verso don't need to worry about the specific details of the 
 Verso's HTML output follows a number of conventions and uses built-in libraries and features.
 
 Lean's {name}`Html` type represents HTML documents.
-In Verso, they are typically produced using an embedded DSL that is available when the namespace `Verso.Output.Html` is opened.
 
 {docstring Html}
 
@@ -44,20 +43,14 @@ In Verso, they are typically produced using an embedded DSL that is available wh
 
 {docstring Html.render}
 
-HTML documents are written in double curly braces, in a syntax very much like HTML itself.
-The differences are:
- * Double curly braces escape back to Lean. This can be done for HTML elements, attribute values, or whole sets of attributes.
- * Text content is written as Lean string literals to facilitate precise control over whitespace.
- * Interpolated Lean strings (with `s!`) may be used in any context that expects a string.
 
+HTML documents are typically produced using an embedded DSL, accessible via the `html%{…}` literal syntax.
 For example, this definition creates a `<ul>` list:
 ```lean -keep (name := htmllist)
-open Verso.Output.Html
-
 def mkList (xs : List Html) : Html :=
-  {{ <ul> {{ xs.map ({{<li>{{·}}</li>}}) }} </ul>}}
+  html%{ <ul>{ xs.map fun x => html%{<li>{x}</li>} }</ul>}
 
-#eval mkList ["A", {{<emph>"B"</emph>}}, "C"]
+#eval mkList ["A", html%{<emph>B</emph>}, "C"]
   |>.render
   |> IO.println
 ```
