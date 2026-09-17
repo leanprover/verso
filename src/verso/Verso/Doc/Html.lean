@@ -176,12 +176,14 @@ partial def Part.toHtml [Monad m] [GenreHtml g m] [TraversePart g] [TraverseBloc
   | .none => do
     pure html%{
       <section>
-        { mkHeader (← options).headerLevel (.seq <| ← p.title.mapM ToHtml.toHtml) }
-        {← p.content.mapM ToHtml.toHtml}
-        {← withOptions (fun o => {o with headerLevel := o.headerLevel + 1}) <|
-          p.subParts.mapM fun subPart =>
-            withReader (fun ctxt => {ctxt with traverseContext := TraversePart.inPart subPart ctxt.traverseContext}) <|
-              Part.toHtml (mkHeader := mkPartHeader) subPart }
+        {.ofArray #[
+          mkHeader (← options).headerLevel (.seq <| ← p.title.mapM ToHtml.toHtml),
+          ← p.content.mapM ToHtml.toHtml,
+          ← withOptions (fun o => {o with headerLevel := o.headerLevel + 1}) <|
+            p.subParts.mapM fun subPart =>
+              withReader (fun ctxt => {ctxt with traverseContext := TraversePart.inPart subPart ctxt.traverseContext}) <|
+                Part.toHtml (mkHeader := mkPartHeader) subPart
+        ]}
       </section>
     }
   | some m =>
