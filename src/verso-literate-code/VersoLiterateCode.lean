@@ -156,22 +156,22 @@ partial def md2Html (md : MD4Lean.Document) (trackHeadings : Bool := false)
 
 where
   block : MD4Lean.Block → Html
-  | .p txt => {{<p>{{txt.map text}}</p>}}
-  | .ul _ _ items => {{<ul>{{items.map fun ⟨_, _, _, txt⟩ => blocks txt}}</ul>}}
-  | .ol _ _ _ items => {{<ol>{{items.map fun ⟨_, _, _, txt⟩ => blocks txt}}</ol>}}
+  | .p txt => html%{<p>{txt.map text}</p>}
+  | .ul _ _ items => html%{<ul>{items.map fun ⟨_, _, _, txt⟩ => blocks txt}</ul>}
+  | .ol _ _ _ items => html%{<ol>{items.map fun ⟨_, _, _, txt⟩ => blocks txt}</ol>}
   | .table hd rows =>
-    {{<table>
-        <thead><tr>{{hd.map fun h => {{<th>{{texts h}} </th>}} }}</tr></thead>
+    html%{<table>
+        <thead><tr>{hd.map fun h => html%{<th>{texts h} </th>} }</tr></thead>
         <tbody>
-          {{rows.map fun r => {{<tr>{{r.map fun c => {{<td>{{texts c}}</td>}} }}</tr>}} }}
+          {rows.map fun r => html%{<tr>{r.map fun c => html%{<td>{texts c}</td>} }</tr>} }
         </tbody>
       </table>
-    }}
+    }
   | .header n title => .element s!"h{n + 1}" #[] <| texts title
-  | .blockquote bs => {{<blockquote>{{blocks bs}}</blockquote>}}
-  | .hr => {{<hr/>}}
+  | .blockquote bs => html%{<blockquote>{blocks bs}</blockquote>}
+  | .hr => html%{<hr/>}
   | .html xs => .raw (String.join xs.toList)
-  | .code _ _ _ ss => {{<pre><code>{{String.join ss.toList}}</code></pre>}}
+  | .code _ _ _ ss => html%{<pre><code>{String.join ss.toList}</code></pre>}
 
   blocks : Array MD4Lean.Block → Html
   | xs => xs.map block
@@ -185,15 +185,15 @@ where
 
   text : MD4Lean.Text → Html
   | .normal s => s
-  | .a href title _ txt => {{<a href={{attr href}} title={{attr title}}>{{texts txt}}</a>}}
+  | .a href title _ txt => html%{<a href={attr href} title={attr title}>{texts txt}</a>}
   | .nullchar => .empty
-  | .em xs => {{<em>{{texts xs}}</em>}}
-  | .strong xs => {{<strong>{{texts xs}}</strong>}}
-  | .del xs => {{<del>{{texts xs}}</del>}}
-  | .br _ => {{<br />}}
+  | .em xs => html%{<em>{texts xs}</em>}
+  | .strong xs => html%{<strong>{texts xs}</strong>}
+  | .del xs => html%{<del>{texts xs}</del>}
+  | .br _ => html%{<br />}
   | .softbr s => s
-  | .code c => {{<code>{{String.join c.toList}}</code>}}
-  | .img src title alt => {{<img src={{attr src}} title={{attr title}} alt={{String.join <| Array.toList <| alt.filterMap fun | .normal s => some s | _ => none}}/>}}
+  | .code c => html%{<code>{String.join c.toList}</code>}
+  | .img src title alt => html%{<img src={attr src} title={attr title} alt={String.join <| Array.toList <| alt.filterMap fun | .normal s => some s | _ => none}/>}
   | .u xs => texts xs -- TODO
   | .wikiLink _target txt => texts txt -- TODO
   | .entity x => .raw x
@@ -496,7 +496,7 @@ partial def partToHtmlWithIds [Monad m] (p : Part Literate) (usedIds : Std.HashS
     used := used'
     hdgs := hdgs ++ subHdgs
     subHtml := subHtml ++ subPartHtml
-  let html := {{<section>{{headerHtml}}{{contentHtml}}{{subHtml}}</section>}}
+  let html := html%{<section>{headerHtml}{contentHtml}{subHtml}</section>}
   return (html, hdgs, used)
 
 open Verso.Output Html in
@@ -519,7 +519,7 @@ def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (doc
   for c in item.code, idx in 0...* do
     match c with
     | .markdown i _ s =>
-      html := html ++ {{<div class=s!"md-text {docCls}" style=s!"--indent: {i}">{{(md2Html s).1}}</div>}}
+      html := html ++ html%{<div class={s!"md-text {docCls}"} style={s!"--indent: {i}"}>{(md2Html s).1}</div>}
       hasContent := true
     | .verso i _ x => do
       let text ←
@@ -528,7 +528,7 @@ def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (doc
       let sub ←
         withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true}) <|
         x.subsections.mapM fun (p : Part Literate) => ToHtml.toHtml p
-      html := html ++ {{ <div class=s!"verso-text {docCls}" style=s!"--indent: {i}">{{text ++ sub}}</div> }}
+      html := html ++ html%{ <div class={s!"verso-text {docCls}"} style={s!"--indent: {i}"}>{text ++ sub}</div> }
       hasContent := true
     | .highlighted hl =>
       if newlinesOnly hl then
@@ -555,14 +555,14 @@ def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (doc
         headings := headings ++ sectionHdgs
         sub := sub ++ sectionHtml
       let idAttr := htmlId.map ("id", ·.htmlId.toString) |>.toArray
-      html := html ++ {{ <div class="verso-text mod-doc" {{ idAttr }} style=s!"--indent: {nextIndent}">{{text ++ sub}}</div> }}
+      html := html ++ html%{ <div class="verso-text mod-doc" {... idAttr} style={s!"--indent: {nextIndent}"}>{text ++ sub}</div> }
     | .markdownModDoc doc =>
       let htmlId := (← read).traverseState.modDocLink (← read).traverseContext.currentModule itemIdx idx
       let idAttr := htmlId.map ("id", ·.htmlId.toString) |>.toArray
       let (mdHtml, mdHdgs, used') := md2Html doc (trackHeadings := true) usedIds
       usedIds := used'
       headings := headings ++ mdHdgs
-      html := html ++ {{ <div class="md-text mod-doc" {{idAttr}}>{{mdHtml}}</div>}}
+      html := html ++ html%{ <div class="md-text mod-doc" {... idAttr}>{mdHtml}</div>}
   return (html, headings, usedIds)
 where
   -- Trimming the leading newline is necessary because we display each section in HTML block mode,
@@ -762,26 +762,26 @@ needed because the `<base>` tag makes bare `#id` anchors resolve relative to the
 def buildPageToc (headings : Array Heading) (pageUrl : String := "") : Html :=
   let items := headings.map fun h =>
     let levelClass := s!"toc-level-{h.level}"
-    {{<li class={{levelClass}}><a href={{s!"{pageUrl}#{h.htmlId}"}}>{{h.title}}</a></li>}}
-  {{<nav class="page-toc" aria-label="Page table of contents">
-      <div class="page-toc-title">"On this page"</div>
-      <ul>{{items}}</ul>
-    </nav>}}
+    html%{<li class={levelClass}><a href={s!"{pageUrl}#{h.htmlId}"}>{h.title}</a></li>}
+  html%{<nav class="page-toc" aria-label="Page table of contents">
+      <div class="page-toc-title">On this page</div>
+      <ul>{items}</ul>
+    </nav>}
 
 open Verso Output Html in
-partial def page (title : String) (siteRoot : String) (headContents : Html) (current : Name) (root : Dir) (htmlId? : Option String) (code : Html) (pageToc : Html := .empty) (litConfig : LiterateConfig := {}) : Html := {{
+partial def page (title : String) (siteRoot : String) (headContents : Html) (current : Name) (root : Dir) (htmlId? : Option String) (code : Html) (pageToc : Html := .empty) (litConfig : LiterateConfig := {}) : Html := html%{
   <html>
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <base href={{siteRoot}}/>
-      <title>{{title}}</title>
-      {{ headContents }}
+      <base href={siteRoot}/>
+      <title>{title}</title>
+      { headContents }
     </head>
     <body>
-      <a href="#main-content" class="skip-link">"Skip to content"</a>
+      <a href="#main-content" class="skip-link">Skip to content</a>
       <!-- Checkbox hack for hamburger menu -->
-      <input type="checkbox" id="menu-toggle" class="menu-toggle" role="button" aria-label="Menu" />
+      <input type="checkbox" id="menu-toggle" class="menu-toggle" role="button" aria-label="Menu"/>
 
       <!-- Hamburger button -->
       <label for="menu-toggle" class="hamburger" aria-label="Toggle navigation">
@@ -794,7 +794,7 @@ partial def page (title : String) (siteRoot : String) (headContents : Html) (cur
         <aside class="sidebar">
           <div class="sidebar-content">
             <nav class="module-tree" aria-label="Module navigation">
-              {{navTree current root litConfig}}
+              {navTree current root litConfig}
               </nav>
           </div>
         </aside>
@@ -804,40 +804,40 @@ partial def page (title : String) (siteRoot : String) (headContents : Html) (cur
           <!-- Title bar with breadcrumbs -->
           <header class="title-bar">
             <ol class="breadcrumbs" aria-label="Breadcrumb">
-              {{ breadcrumbs }}
+              { breadcrumbs }
             </ol>
           </header>
 
           <!-- Content wrapper: code + page ToC -->
           <div class="content-wrapper">
             <!-- Code content -->
-            <section class="code-content" {{htmlId?.map ("id", ·) |>.toArray}}>
-              {{code}}
+            <section class="code-content" {... htmlId?.map ("id", ·) |>.toArray}>
+              {code}
             </section>
-            {{ pageToc }}
+            { pageToc }
           </div>
         </main>
       </div>
     </body>
   </html>
-}}
+}
 where
   breadcrumbs := Id.run do
     let ctx := moduleContext current litConfig
     let mkLabel (e : BreadcrumbEntry) : Html :=
-      if e.isCustomTitle then e.title else {{<code>{{e.title}}</code>}}
+      if e.isCustomTitle then e.title else html%{<code>{e.title}</code>}
     let mut bc := Html.empty
     for e in ctx.parents do
       if e.isLink then
-        bc := bc ++ {{<li><a href={{e.href}}>{{mkLabel e}}</a></li>}}
+        bc := bc ++ html%{<li><a href={e.href}>{mkLabel e}</a></li>}
       else
-        bc := bc ++ {{<li>{{mkLabel e}}</li>}}
-    bc := bc ++ {{<li><span class="current">{{mkLabel ctx.self}}</span></li>}}
+        bc := bc ++ html%{<li>{mkLabel e}</li>}
+    bc := bc ++ html%{<li><span class="current">{mkLabel ctx.self}</span></li>}
     return bc
 
-  navLeaf (myName : Html) (current : Bool) : Html := {{<div class=s!"leaf{if current then " current" else ""}">{{myName}}</div>}}
+  navLeaf (myName : Html) (current : Bool) : Html := html%{<div class={s!"leaf{if current then " current" else ""}"}>{myName}</div>}
   navNode (myName : Html) («open» : Bool) (current : Bool) (children : Array Html) : Html :=
-    {{<details {{if «open» then #[("open", "")] else #[]}}><summary {{if current then #[("class", "current")] else #[]}}>{{myName}}</summary>{{children}}</details>}}
+    html%{<details {... if «open» then #[("open", "")] else #[]}><summary {... if current then #[("class", "current")] else #[]}>{myName}</summary>{children}</details>}
 
   /--
   When there is exactly one top-level entry, render it as a non-collapsible title header
@@ -855,14 +855,14 @@ where
             | true => (ctx.self.title, true)
             | false => (if let .str _ s := rootName then s else rootName.toString, false)
           let cls := if hasCustomTitle then "custom-title" else ""
-          {{<a href={{ctx.href}} title={{x.name.toString}} class={{cls}}>{{label}}</a>}}
+          html%{<a href={ctx.href} title={x.name.toString} class={cls}>{label}</a>}
         else
           let label := if let .str _ s := rootName then s else rootName.toString
           (label : Html)
       let childCurr := match curr with
         | c :: cs => if c == rootName then some cs else none
         | [] => none
-      #[{{<div class=s!"nav-title{if childCurr == some [] then " current" else ""}">{{rootLabel}}</div>}}] ++
+      #[html%{<div class={s!"nav-title{if childCurr == some [] then " current" else ""}"}>{rootLabel}</div>}] ++
         rootDir.children.map fun (x, d) =>
           match childCurr with
           | some (c :: cs) =>
@@ -886,7 +886,7 @@ where
           | true => (ctx.self.title, true)
           | false => (if let .str _ s := name then s else name.toString, false)
         let cls := if hasCustomTitle then "custom-title" else ""
-        {{<a href={{ctx.href}} title={{x.name.toString}} class={{cls}}>{{label}}</a>}}
+        html%{<a href={ctx.href} title={x.name.toString} class={cls}>{label}</a>}
       else
         let label := if let .str _ s := name then s else name.toString
         (label : Html)

@@ -313,13 +313,12 @@ partial def partToPage (tut : Part Tutorial) : EmitM (Part Blog.Page) := do
   return { tut with title, metadata := htmlMeta, content, subParts }
 
 
-def defaultLocalToC (toc : LocalToC) : Html := {{
+def defaultLocalToC (toc : LocalToC) : Html := html%{
     <li>
-      <a href={{toc.link.relativeLink}}>{{toc.title}}</a>
-      {{ if toc.children.isEmpty then .empty
-          else {{<ol>{{toc.children.map defaultLocalToC}}</ol>}} }}
+      <a href={toc.link.relativeLink}>{toc.title}</a>{ if toc.children.isEmpty then .empty
+          else html%{<ol>{toc.children.map defaultLocalToC}</ol>} }
     </li>
-  }}
+  }
 termination_by toc
 decreasing_by
   rename_i toc' h
@@ -432,25 +431,25 @@ nav.local-toc .code-link.download::before {
 
 def tutorialNavHtml (code? : Option (String × String)) (live? : Option LiveConfig) (toc : LocalToC) : Html :=
   if toc.children.isEmpty && live?.isNone && code?.isNone then .empty
-    else {{
+    else html%{
       <nav class="local-toc">
         <div> <!-- This is for scroll prevention -->
-          <h1>{{toc.title}}</h1>
-          {{ if live?.isSome || code?.isSome then {{
+          <h1>{toc.title}</h1>
+          { if live?.isSome || code?.isSome then html%{
               <div class="code-links">
-                {{if let some live := live? then
-                  {{ <a href={{live.url}} class="live code-link">"Live"</a> }}
-                  else .empty}}
-                {{if let some (url, _file) := code? then {{ <a href={{url}} class="download code-link"><code>".zip"</code></a> }} else .empty}}
+                {if let some live := live? then
+                  html%{ <a href={live.url} class="live code-link">Live</a> }
+                  else .empty
+                }{if let some (url, _file) := code? then html%{ <a href={url} class="download code-link"><code>.zip</code></a> } else .empty}
               </div>
-            }}
+            }
             else .empty
-          }}
+          }
         </div>
-        {{if toc.children.isEmpty then .empty
-          else {{<ol>{{toc.children.map defaultLocalToC}}</ol>}} }}
+        {if toc.children.isEmpty then .empty
+          else html%{<ol>{toc.children.map defaultLocalToC}</ol>} }
       </nav>
-    }}
+    }
 
 def toSite (tuts : Tutorials) : EmitM Blog.Site := do
   let contentPages : Array Blog.Dir ← tuts.topics.flatMap (·.tutorials) |>.filterMapM fun t => do
@@ -625,13 +624,13 @@ open Verso.Output.Html in
 open Verso.Genre.Blog.Template in
 def defaultTheme := { Blog.Theme.default with
   pageTemplate :=  do
-    pure {{
-      {{(← param? "tutorialNav").getD .empty}}
+    pure html%{
+      {(← param? "tutorialNav").getD .empty}
       <article>
-        <h1>{{← param "title"}}</h1>
-        {{← param "content"}}
+        <h1>{← param "title"}</h1>
+        {← param "content"}
       </article>
-    }}
+    }
   cssFiles := Blog.Theme.default.cssFiles ++ #[("local-toc.css", localToCStyle)]
 }
 

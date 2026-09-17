@@ -174,46 +174,46 @@ includes popper/tippy/highlighting/copy-button assets needed for code hover tool
 -/
 private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Bool := true) (includeKaTeXAssets : Bool := true) : Html :=
   let faviconTag : Html := match litConfig.metadata.favicon with
-    | some fav => {{<link rel="icon" href={{(System.FilePath.fileName fav).getD fav}}/>}}
-    | none => {{<link rel="icon" href="data:,"/>}}
+    | some fav => html%{<link rel="icon" href={(System.FilePath.fileName fav).getD fav}/>}
+    | none => html%{<link rel="icon" href="data:,"/>}
   let descTag : Html := match litConfig.metadata.description with
-    | some desc => {{<meta name="description" content={{desc}}/>}}
+    | some desc => html%{<meta name="description" content={desc}/>}
     | none => .empty
   let extraCssTags : Html := litConfig.extraCss.foldl (init := .empty) fun acc css =>
-    acc ++ {{<link rel="stylesheet" href={{(⟨css⟩ : System.FilePath).fileName.getD css}}/>}}
+    acc ++ html%{<link rel="stylesheet" href={(⟨css⟩ : System.FilePath).fileName.getD css}/>}
   let extraJsTags : Html := litConfig.extraJs.foldl (init := .empty) fun acc js =>
-    acc ++ {{<script src={{(⟨js⟩ : System.FilePath).fileName.getD js}} defer="defer"></script>}}
+    acc ++ html%{<script src={(⟨js⟩ : System.FilePath).fileName.getD js} defer="defer"></script>}
   let hasThemeCss := !litConfig.theme.isEmpty || !litConfig.themeDark.isEmpty
-  let themeCssTag : Html := if hasThemeCss then {{<link rel="stylesheet" href="literate-theme.css"/>}} else .empty
-  let katexAssets : Html := if includeKaTeXAssets then {{
+  let themeCssTag : Html := if hasThemeCss then html%{<link rel="stylesheet" href="literate-theme.css"/>} else .empty
+  let katexAssets : Html := if includeKaTeXAssets then html%{
     <script src="katex/katex.js"></script>
     <script src="katex/math.js"></script>
     <link rel="stylesheet" href="katex/katex.css"/>
-  }} else .empty
-  let codeAssets : Html := if includeCodeAssets then {{
+  } else .empty
+  let codeAssets : Html := if includeCodeAssets then html%{
     <script src="popper.js"></script>
     <script src="tippy.js"></script>
     <script src="marked.js"></script>
-    <script>{{Html.raw highlightingJs}}</script>
-    <style>{{Html.raw highlightingStyle}}</style>
+    <script>{Html.raw highlightingJs}</script>
+    <style>{Html.raw highlightingStyle}</style>
     <link rel="stylesheet" href="tippy-border.css"/>
-  }} else .empty
-  let copyButtonTag : Html := if includeCodeAssets then {{
+  } else .empty
+  let copyButtonTag : Html := if includeCodeAssets then html%{
     <script src="copy-button.js" defer="defer"></script>
-  }} else .empty
-  {{
-    {{ faviconTag }}
-    {{ descTag }}
-    {{ katexAssets }}
-    {{ codeAssets }}
+  } else .empty
+  html%{
+    { faviconTag }
+    { descTag }
+    { katexAssets }
+    { codeAssets }
     <link rel="stylesheet" href="verso-vars.css"/>
     <link rel="stylesheet" href="literate.css"/>
-    {{ themeCssTag }}
-    {{ copyButtonTag }}
-    {{ searchAssetTags }}
-    {{ extraCssTags }}
-    {{ extraJsTags }}
-  }}
+    { themeCssTag }
+    { copyButtonTag }
+    { searchAssetTags }
+    { extraCssTags }
+    { extraJsTags }
+  }
 
 open Verso Output Doc Html in
 /--
@@ -246,7 +246,7 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
       hlState := hlState'
       boxHtml := boxHtml ++ itemHtml
     if boxHtml == .empty then return (.empty, hlState)
-    return ({{<div class="code-box">{{boxHtml}}</div>}}, hlState)
+    return (html%{<div class="code-box">{boxHtml}</div>}, hlState)
 
   -- Filter docstrings based on resolved config
   let filterDocstrings (item : ModuleItem') : ModuleItem' :=
@@ -279,12 +279,12 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
       importHlState := { importHlState with hlState := st }
       importHtml := importHtml ++ codeHtml
   if resolved.showImports && importHtml != .empty then
-    body := body ++ {{
+    body := body ++ html%{
       <details class="imports-list">
-        <summary>"Imports"</summary>
-        <div class="imports-code">{{importHtml}}</div>
+        <summary>Imports</summary>
+        <div class="imports-code">{importHtml}</div>
       </details>
-    }}
+    }
 
   -- Process items: prose (modDoc) flows between code boxes
   let mut currentCodeItems : Array (Nat × ModuleItem') := #[]
@@ -322,7 +322,7 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
       let (codeBoxHtml, hlState') ← renderCodeItemWithOutput origIdx codeItem hlState
       hlState := hlState'
       unless codeBoxHtml == .empty do
-        body := body ++ {{<div class="code-box">{{codeBoxHtml}}</div>}}
+        body := body ++ html%{<div class="code-box">{codeBoxHtml}</div>}
     else
       currentCodeItems := currentCodeItems.push (origIdx, item)
 
@@ -383,37 +383,37 @@ partial def emitLandingPage (outDir : System.FilePath) (dir : Dir) (litConfig : 
   let headContents := mkHeadContents litConfig (includeCodeAssets := false) (includeKaTeXAssets := false)
   let landingTitle := litConfig.metadata.title.getD "Module Index"
   let toc := buildToc dir
-  let pageContents : Html := {{
+  let pageContents : Html := html%{
     <html>
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>{{landingTitle}}</title>
-        {{ headContents }}
+        <title>{landingTitle}</title>
+        { headContents }
       </head>
       <body>
         <main class="landing-page" id="main-content">
-          <h1>{{landingTitle}}</h1>
-          {{ toc }}
+          <h1>{landingTitle}</h1>
+          { toc }
         </main>
       </body>
     </html>
-  }}
+  }
   IO.FS.writeFile (outDir / "index.html") <| "<!DOCTYPE html>\n" ++ pageContents.render
 where
   buildToc (dir : Dir) : Html :=
     if dir.children.isEmpty then .empty
-    else {{<ul class="module-toc">{{dir.children.map fun (_, d) => tocEntry d}}</ul>}}
+    else html%{<ul class="module-toc">{dir.children.map fun (_, d) => tocEntry d}</ul>}
   tocEntry (dir : Dir) : Html :=
     let link : Html :=
       if let some m := dir.mod then
         let ctx := moduleContext m.name litConfig
-        {{<a href={{ctx.href}}>{{m.name.toString}}</a>}}
+        html%{<a href={ctx.href}>{m.name.toString}</a>}
       else
         -- namespace-only node (no module file)
         .empty
     let children := buildToc dir
-    {{<li>{{link}}{{children}}</li>}}
+    html%{<li>{link}{children}</li>}
 
 open Verso Output Html in
 /--
@@ -424,30 +424,30 @@ the search infrastructure (loaded via the shared head) resolves correctly.
 def emitSearchResultsPage (outDir : System.FilePath) (litConfig : LiterateConfig := {}) : IO Unit := do
   let headContents := mkHeadContents litConfig (includeCodeAssets := false) (includeKaTeXAssets := false)
   let siteTitle := litConfig.metadata.title.getD "Module Index"
-  let pageContents : Html := {{
+  let pageContents : Html := html%{
     <html>
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <base href="../"/>
-        <title>{{s!"Search — {siteTitle}"}}</title>
+        <title>{s!"Search — {siteTitle}"}</title>
         <!-- Start the xref.json download in parallel with script loading. The
              search page JS can't fetch it until it runs, so without the preload
              the data fetch sits at the tail of the critical path. -->
         <link rel="preload" href="xref.json" as="fetch"/>
-        {{ headContents }}
+        { headContents }
       </head>
       <body>
         <main class="landing-page search-page" id="main-content">
-          <h1>"Search"</h1>
+          <h1>Search</h1>
           <div data-search-host class="search-page-host"></div>
-          <noscript><p>"This search feature requires JavaScript."</p></noscript>
+          <noscript><p>This search feature requires JavaScript.</p></noscript>
           <div id="search-page-results"></div>
           <script type="module" src="-verso-search/search-page.js"></script>
         </main>
       </body>
     </html>
-  }}
+  }
   IO.FS.createDirAll (outDir / "search")
   IO.FS.writeFile (outDir / "search" / "index.html") <| "<!DOCTYPE html>\n" ++ pageContents.render
 

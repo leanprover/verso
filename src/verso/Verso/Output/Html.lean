@@ -17,6 +17,8 @@ public import Lean.Data.Html
 import Verso.Output.Html.Entities
 public import Verso.Output.Html.AttributeName
 public import Verso.Output.Html.Comments
+
+/- Deprecated imports temporarily kept to implement deprecated syntax (2026-09-16). -/
 public meta import Verso.Output.Html.AttributeName
 public meta import Verso.Output.Html.Comments
 public meta import Verso.Output.Html.Tags
@@ -189,6 +191,9 @@ elab_rules : term
   | `(term| {{ $[$h:html]* }}) => do
     let h ← h.mapM fun (x : TSyntax `html) => withRef x <| elabHtml x
     return h.foldl (init := (.const ``Html.empty [])) (mkApp2 (.const ``Html.append []))
+
+-- TODO: remove syntax and elaborators above
+deprecated_syntax Verso.Output.Html.«term{{_}}» "use Lean.Data.Html instead" (since := "2026-09-16")
 
 /-- The default `DOCTYPE` for HTML5. -/
 public abbrev doctype := "<!DOCTYPE html>"

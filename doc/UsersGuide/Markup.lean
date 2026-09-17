@@ -139,25 +139,25 @@ block_extension MarkupExample (title : String) where
     let #[stx, parsed] := contents
       | reportError s!"Expected two blocks, got {contents.size}"
         return .empty
-    pure {{
+    pure html%{
       <div class="markup-example">
-        <div class="markup-example-header">{{ title }}</div>
+        <div class="markup-example-header">{ title }</div>
         <div class="content">
           <div class="syntax">
-            <div class="title">"Verso Markup"</div>
-            {{← goB stx}}
+            <div class="title">Verso Markup</div>
+            {← goB stx}
           </div>
           <div class="result">
-            <div class="title">"Result"</div>
-            {{← goB parsed}}
+            <div class="title">Result</div>
+            {← goB parsed}
           </div>
         </div>
       </div>
-    }}
+    }
   localContentItem _id data _contents := open Verso.Output.Html in do
     let .str title := data
       | throw s!"Expected a title string, got {data.compress}"
-    pure #[(title, {{ {{title}} }})]
+    pure #[(title, .text title)]
   extraCss := [
 r#"
 .markup-example {

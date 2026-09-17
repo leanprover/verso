@@ -9,6 +9,8 @@ public import Lean.DocString.Parser
 public import Lean.PrettyPrinter.Formatter
 public import Lean.PrettyPrinter.Parenthesizer
 
+deprecated_module "use Lean.Data.Html.Syntax instead" (since := "2026-09-16")
+
 namespace Verso.Output.Html
 
 

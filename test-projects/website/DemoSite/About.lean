@@ -21,7 +21,7 @@ def redBox : BlockComponent where
   toHtml id _data _goI goB contents := do
     saveCss (s!"#{id}:hover " ++ "{ border: 5px solid red; }")
     saveCss ".red-box { border: 2px solid red; }"
-    pure {{<div class="red-box" id={{id}}>{{← contents.mapM goB}}</div>}}
+    pure html%{<div class="red-box" id={id}>{← contents.mapM goB}</div>}
 
 @[directive redBox]
 def redBoxImpl : DirectiveExpanderOf Unit
@@ -32,7 +32,7 @@ block_component gallery where
   toHtml id _data _goI goB contents := do
     saveCss (s!"#{id}:hover " ++ "{ border: 5px solid red; }")
     saveCss ".red-box { border: 2px solid red; }"
-    pure {{<div class="red-box" id={{id}}>{{← contents.mapM goB}}</div>}}
+    pure html%{<div class="red-box" id={id}>{← contents.mapM goB}</div>}
 
 
 block_component image where
@@ -40,12 +40,12 @@ block_component image where
     let .arr #[.str alt, .str url] := data
       | reportError s!"Failed to deserialize {data}"
         pure .empty
-    pure {{
-      <div class="image-item" id={{id}}>
-        <img href={{url}} alt={{alt}}/>
-        <div class="description">{{← contents.mapM goB}}</div>
+    pure html%{
+      <div class="image-item" id={id}>
+        <img href={url} alt={alt}/>
+        <div class="description">{← contents.mapM goB}</div>
       </div>
-    }}
+    }
 
 
 @[directive gallery]
@@ -75,11 +75,11 @@ block_component +directive button' (onclick : String) where
     saveJs <| "window.addEventListener('load', () => {" ++
       s!"document.getElementById('{id}')?.addEventListener('click', () => " ++
       "{ alert(" ++ onclick.quote ++ ");})});"
-    pure {{
-      <button id={{id}}>
-        {{← contents.mapM goB}}
+    pure html%{
+      <button id={id}>
+        {← contents.mapM goB}
       </button>
-    }}
+    }
 
 
 inline_component button (onclick : String) where
@@ -87,11 +87,11 @@ inline_component button (onclick : String) where
     saveJs <| "window.addEventListener('load', () => {" ++
       s!"document.getElementById('{id}')?.addEventListener('click', () => " ++
       "{ alert('hello');});});"
-    pure {{
-      <button id={{id}}>
-        {{← contents.mapM goI}}
+    pure html%{
+      <button id={id}>
+        {← contents.mapM goI}
       </button>
-    }}
+    }
 
 structure ButtonArgs where
   onClick : String

@@ -172,18 +172,18 @@ r#"
 
 section
 open Verso.Output Html
-private def exampleFileHtmlWrapper (descr : Html) (content : Html) : Html := {{
+private def exampleFileHtmlWrapper (descr : Html) (content : Html) : Html := html%{
   <div class="example-file">
-    {{descr}}
-    {{content}}
+    {descr}
+    {content}
   </div>
-}}
+}
 
 private def exampleFileLines (str : String) : Html :=
   if str.isEmpty || str == "\n" then
-    {{<code class="empty">"<empty>"</code>}}
+    html%{<code class="empty">&lt;empty&gt;</code>}
   else
-    getLines str |>.map ({{<code class="line">{{show String from ·}}</code>}})
+    getLines str |>.map (html%{<code class="line">{show String from ·}</code>})
 where
   getLines (file : String) : Array String :=
     let lines := file.splitToList (· == '\n') |>.toArray
@@ -209,7 +209,7 @@ block_extension Block.exampleLeanFile (filename : String) where
       let .str filename := data
         | reportError "Failed to deserialize filename from {data.compress} (expected a string)"
           return .empty
-      let descr := {{<code>{{filename}}</code>}}
+      let descr := html%{<code>{filename}</code>}
       return exampleFileHtmlWrapper descr (← blocks.mapM goB)
 
 @[block_extension Block.exampleFile]
@@ -260,12 +260,12 @@ def Block.exampleFile.descr : BlockDescr := withHighlighting {
             return .empty
         let descr : Html :=
           match type with
-          | .stdin => {{<code>"stdin"</code>}}
-          | .stdout => {{<code>"stdout"</code>}}
-          | .stderr => {{<code>"stderr"</code>}}
-          | .input f => {{"Input: "<code>{{f.toString}}</code>}}
-          | .output f => {{"Output: "<code>{{f.toString}}</code>}}
-          | .other f => {{"File: "<code>{{f.toString}}</code>}}
+          | .stdin => html%{<code>stdin</code>}
+          | .stdout => html%{<code>stdout</code>}
+          | .stderr => html%{<code>stderr</code>}
+          | .input f => html%{Input: <code>{f.toString}</code>}
+          | .output f => html%{Output: <code>{f.toString}</code>}
+          | .other f => html%{File: <code>{f.toString}</code>}
 
         return exampleFileHtmlWrapper descr (exampleFileLines str)
 }

@@ -16,50 +16,49 @@ def theme : Theme := { Theme.default with
     let postList :=
       match (← param? "posts") with
       | none => Html.empty
-      | some html => {{ <h2> "Posts" </h2> }} ++ html
+      | some html => html%{ <h2> Posts </h2> } ++ html
     let catList :=
       match (← param? (α := Post.Categories) "categories") with
       | none => Html.empty
-      | some ⟨cats⟩ => {{
+      | some ⟨cats⟩ => html%{
           <div class="category-directory">
-            <h2> "Categories" </h2>
+            <h2> Categories </h2>
             <ul>
-            {{ cats.map fun (target, cat) =>
-              {{<li><a href={{target}}>{{Post.Category.name cat}}</a></li>}}
-            }}
+            { cats.map fun (target, cat) =>
+              html%{<li><a href={target}>{Post.Category.name cat}</a></li>}
+            }
             </ul>
           </div>
-        }}
-    return {{
+        }
+    return html%{
       <html>
         <head>
           <meta charset="utf-8"/>
           <meta name="viewport" content="width=device-width, initial-scale=1"/>
           <meta name="color-scheme" content="light dark"/>
           <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sakura.css/css/sakura.css" type="text/css"/>
-          <title>{{ (← param (α := String) "title") }} " — Verso "</title>
-          {{← builtinHeader }}
+          <title>{ (← param (α := String) "title") } — Verso&#32;</title>
+          {← builtinHeader }
           <link rel="stylesheet" href="static/style.css"/>
         </head>
         <body>
           <header>
             <div class="inner-wrap">
-            <a class="logo" href="."><h1>"A Verso Site"</h1></a>
-            {{ ← topNav }}
+            <a class="logo" href="."><h1>A Verso Site</h1></a>{ ← topNav }
             </div>
           </header>
           <main>
             <div class="wrap">
-              {{ (← param "content") }}
-              {{ postList }}
-              {{ catList }}
+              { (← param "content")
+              }{ postList
+              }{ catList }
             </div>
           </main>
         </body>
       </html>
-    }}
+    }
   }
-  |>.override #[] ⟨do return {{<div class="frontpage"><h1>{{← param "title"}}</h1> {{← param "content"}}</div>}}, id⟩
+  |>.override #[] ⟨do return html%{<div class="frontpage"><h1>{← param "title"}</h1> {← param "content"}</div>}, id⟩
 
 def_literate_page litPage from LitLean in "test-projects/website-literate" as "Literate Lean page"
 

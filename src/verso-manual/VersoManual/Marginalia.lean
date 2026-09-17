@@ -123,7 +123,7 @@ default ToC width these are the old 1400px and 1500px viewport breakpoints):
 
 open Verso.Output Html in
 def Marginalia.html (content : Html) : Html :=
-  {{<span class="marginalia"><span class="note">{{content}}</span></span>}}
+  html%{<span class="marginalia"><span class="note">{content}</span></span>}
 
 /-
 This is a slight misnomer as it is not literally rendered as a margin

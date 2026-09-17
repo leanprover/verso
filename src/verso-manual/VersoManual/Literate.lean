@@ -24,7 +24,7 @@ open Lean
 block_extension Block.literateDocstring where
   traverse _ _ _ _ := pure none
   toHtml := some fun _goI goB _id _data contents => do
-    pure {{<div class="literate-docstring">{{← contents.mapM goB}}</div>}}
+    pure html%{<div class="literate-docstring">{← contents.mapM goB}</div>}
   toTeX := some fun _goI goB _id _data contents => do
     contents.mapM goB
 
@@ -46,12 +46,12 @@ block_extension Block.literateDocstringPart (level : Nat) where
         reportError s!"Expected a block at the beginning of a docstring section"
         pure .empty
     let contents := contents.extract 1
-    pure {{
+    pure html%{
       <section>
-        {{.element s!"h{level + 1}" #[] title}}
-        {{← contents.mapM goB}}
+        {.element s!"h{level + 1}" #[] title
+        }{← contents.mapM goB}
       </section>
-    }}
+    }
   toTeX := some fun goI goB _id data contents =>
     open Verso.Output.TeX in do
       let .ok (level : Nat) := FromJson.fromJson? data

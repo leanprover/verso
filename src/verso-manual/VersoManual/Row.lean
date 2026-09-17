@@ -28,11 +28,11 @@ block_extension Block.row (alignItems : String) where
       let .str ai := data
         | reportError "Expected string JSON for row" *> pure .empty
       let style := s!"display: flex; flex-wrap: wrap; align-items: {ai}; gap: 1em;"
-      pure {{
-        <div class="verso-row" style={{style}}>
-          {{← content.mapM blockHtml}}
+      pure html%{
+        <div class="verso-row" style={style}>
+          {← content.mapM blockHtml}
         </div>
-      }}
+      }
   toTeX :=
     some <| fun _ go _ _ content => do
       let rendered ← content.mapM go

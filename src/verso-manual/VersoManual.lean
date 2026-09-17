@@ -166,7 +166,7 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
               if h : objs.size = 1 then
                 let obj := objs[0]
                 let dest := obj.link.link
-                return {{<a href={{dest}} data-verso-remote={{remote}}>{{← content.mapM go}}</a>}}
+                return html%{<a href={dest} data-verso-remote={remote}>{← content.mapM go}</a>}
               else
                 let dests := objs.map (s!" * {·.link.link}") |>.toList |> "\n".intercalate
                 reportError s!"Remote '{remote}' domain '{domain}' contains multiple destinations for '{name}':\n{dests}"
@@ -176,7 +176,7 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
         -- If any error was logged, just don't emit a link
         content.mapM go
       | .ok {resolvedDestination := some dest, ..} =>
-        pure {{<a href={{dest.link}}>{{← content.mapM go}}</a>}}
+        pure html%{<a href={dest.link}>{← content.mapM go}</a>}
 
 section
 open Lean
@@ -221,7 +221,7 @@ block_extension Block.paragraph where
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ go _ _ content => do
-      pure <| {{<div class="paragraph">{{← content.mapM go}}</div>}}
+      pure <| html%{<div class="paragraph">{← content.mapM go}</div>}
 
 /--
 Indicates that all the block-level elements contained within the directive are a single logical
@@ -555,12 +555,12 @@ def relativizeLinks (html : Html) : Html :=
 
 open Output.Html in
 def xref (toc : List Html.Toc) (xrefJson : String) (findJs : String) (state : TraverseState) (config : Config) : Html :=
-  page toc #["find"] "Cross-Reference Redirection" "Cross-Reference Redirection" {{
+  page toc #["find"] "Cross-Reference Redirection" "Cross-Reference Redirection" html%{
     <section>
       <h1 id="title"></h1>
       <div id="message"></div>
     </section>
-  }}
+  }
   state
   config
   (localItems := #[])
@@ -587,22 +587,22 @@ def searchResultsPage (toc : List Html.Toc) (bookTitle : Html) (state : Traverse
   -- `bookTitle` (fourth arg) becomes the `.header-title` content; the `<h1>"Search"</h1>`
   -- below is the page heading inside the main content. `"Search"` is only the `<title>`.
   --
-  page toc #["search"] "Search" bookTitle {{
+  page toc #["search"] "Search" bookTitle html%{
     <section class="search-page">
-      <h1>"Search"</h1>
+      <h1>Search</h1>
       <div data-search-host class="search-page-host"></div>
-      <noscript><p>"This search feature requires JavaScript."</p></noscript>
+      <noscript><p>This search feature requires JavaScript.</p></noscript>
       <div id="search-page-results"></div>
       <script type="module" src="-verso-search/search-page.js"></script>
     </section>
-  }}
+  }
   state config
   (localItems := #[])
   /-
   Start the xref.json download in parallel with script loading. The search page JS can't fetch it
   until it runs, so without the preload the data fetch sits at the tail of the critical path.
   -/
-  (extraHead := {{<link rel="preload" href="xref.json" as="fetch"/>}})
+  (extraHead := html%{<link rel="preload" href="xref.json" as="fetch"/>})
 
 def emitSearchResultsHtml
     (toc : List Html.Toc) (dir : System.FilePath) (bookTitle : Html)
@@ -767,22 +767,22 @@ where
     let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets {})
     let bookToc ← text.subParts.mapM (fun p => toc 0 opts (ctxt.inPart p) state definitionIds linkTargets p)
     let bookTocHtml := open Verso.Output.Html in
-      if bookToc.size > 0 then {{
+      if bookToc.size > 0 then html%{
         <section>
-        <h2>"Table of Contents"</h2>
-        <ol class="section-toc">{{bookToc.map (·.html config.rootTocDepth)}}</ol>
+        <h2>Table of Contents</h2>
+        <ol class="section-toc">{bookToc.map (·.html config.rootTocDepth)}</ol>
         </section>
-      }} else .empty
+      } else .empty
     let contents ←
       Html.seq <$>
       text.subParts.mapM fun p =>
         Manual.toHtml { opts with headerLevel := 2 } (ctxt.inPart p) state definitionIds linkTargets {} p
     let pageContent := open Verso.Output.Html in
-      {{<section>
-          {{Html.titlePage titleHtml authors authorshipNote introHtml}}
-          {{bookTocHtml}}
-          {{contents}}
-        </section>}}
+      html%{<section>
+          {Html.titlePage titleHtml authors authorshipNote introHtml
+          }{bookTocHtml
+          }{contents}
+        </section>}
     let toc := (← text.subParts.mapM (toc 0 opts ctxt state definitionIds linkTargets)).toList
     let thisPageToc : Array Html ← do
       let (errs, items) ← localContents opts ctxt state text
@@ -919,20 +919,20 @@ where
     let subToc ← part.subParts.mapM (fun p => toc depth opts (ctxt.inPart p) state definitionIds linkTargets p)
     let pageContent :=
       if root then
-        let subTocHtml := if subToc.size > 0 then {{
+        let subTocHtml := if subToc.size > 0 then html%{
             <section>
-            <h2>"Contents"</h2>
-            <ol class="section-toc">{{subToc.map (·.html config.rootTocDepth)}}</ol>
+            <h2>Contents</h2>
+            <ol class="section-toc">{subToc.map (·.html config.rootTocDepth)}</ol>
             </section>
-          }}
+          }
         else .empty
-        {{<section>{{Html.titlePage titleHtml authors authorshipNote introHtml ++ contents}} {{subTocHtml}}</section>}}
+        html%{<section>{Html.titlePage titleHtml authors authorshipNote introHtml ++ contents}{subTocHtml}</section>}
       else
         let subTocHtml :=
           if (depth > 0 && part.htmlSplit != .never) && subToc.size > 0 && part.htmlToc then
-            {{<ol class="section-toc">{{subToc.map (·.html config.sectionTocDepth)}}</ol>}}
+            html%{<ol class="section-toc">{subToc.map (·.html config.sectionTocDepth)}</ol>}
           else .empty
-        {{<section><h1>{{titleHtml}}</h1> {{introHtml}} {{contents}} {{subTocHtml}}</section>}}
+        html%{<section><h1>{titleHtml}</h1> {introHtml}{contents}{subTocHtml}</section>}
 
     ensureDir dir
     IO.FS.withFile (dir.join "index.html") .write fun h => do
