@@ -172,7 +172,7 @@ def index.descr : InlineDescr where
     some <| fun _go id inl _content => do
       let some link := (← read).traverseState.externalTags.get? id
         | panic! s!"Untagged index target with data {inl}"
-      return {{<span id={{link.htmlId.toString}}></span>}}
+      return html%{<span id={link.htmlId.toString}></span>}
 
 def Inline.see : Inline where
   name := `Verso.Genre.Manual.see
@@ -267,31 +267,31 @@ def RenderedEntry.toHtml [Monad m] [MonadLiftT IO m] [MonadBuildLog (Doc.Html.Ht
   let termPart ← oneTerm entry.id entry.term entry.links
   let subPart ←
     if entry.subterms.size != 0 || entry.see.size != 0 then
-      pure {{
+      pure html%{
         <ol>
-          {{ ← entry.subterms.mapM fun (_,rid,t,ls) => ({{<li>{{·}}</li>}}) <$> oneTerm rid t ls }}
-          {{ ← entry.see.mapM fun (rid, also, txt) => do
-            return {{
+          { ← entry.subterms.mapM fun (_,rid,t,ls) => (html%{<li>{·}</li>}) <$> oneTerm rid t ls
+          }{ ← entry.see.mapM fun (rid, also, txt) => do
+            return html%{
               <li>
-                s!"See {if also then "also " else ""}"
-                <a href=s!"#{rid.toString}">{{← inlineHtml txt}}</a>
+                {s!"See {if also then "also " else ""}"
+                }<a href={s!"#{rid.toString}"}>{← inlineHtml txt}</a>
               </li>
-            }}
-          }}
+            }
+          }
         </ol>
-      }}
+      }
     else pure .empty
   pure <| termPart ++ subPart
 where
   oneTerm id term links : Doc.Html.HtmlT Manual m Html := open Doc.Html HtmlT in do
     let xref ← state
-    let termHtml ← ({{<span id={{id.toString}}>{{·}}</span>}}) <$> inlineHtml term
+    let termHtml ← (html%{<span id={id.toString}>{·}</span>}) <$> inlineHtml term
     match h : links.size with
     | 0 => pure termHtml
     | 1 =>
       if let some dest := xref.externalTags[links[0]]? then
         let addr := dest.link
-        pure {{<a href={{addr}}>{{termHtml}}</a>}}
+        pure html%{<a href={addr}>{termHtml}</a>}
       else
         reportError s!"No external tag for {id.toString}"
         pure .empty
@@ -299,12 +299,12 @@ where
       let links ← links.mapIdxM fun i id => do
         if let some (dest : Link) := xref.externalTags[id]? then
           let addr := dest.link
-          pure {{" " <a href={{addr}}> s!"({i})" </a>}}
+          pure html%{&nbsp;<a href={addr}> {s!"({i})"} </a>}
         else
           reportError s!"No external tag for {id}"
           pure .empty
 
-      pure {{ {{termHtml}} {{links}} }}
+      pure html%{ {termHtml}{links} }
 
 -- TODO this is probably the wrong comparison. Eventually, this will have to be configurable
 -- due to localization.
@@ -449,21 +449,21 @@ def theIndex.descr : BlockDescr where
           let h := (← read).1.headerLevel + 1
           let hdr := Html.element s!"h{h}" #[("id", s!"---index-hdr-{cat.id}")] (cat.header)
           let entries' ← entries.mapM fun e => do
-            return softHyphenateIdentifiers {{<li>{{← e.toHtml goI}}</li>}}
-          return {{<div class="division">{{hdr ++ {{<ol>{{entries'}}</ol>}} }}</div>}}
+            return softHyphenateIdentifiers html%{<li>{← e.toHtml goI}</li>}
+          return html%{<div class="division">{hdr ++ html%{<ol>{entries'}</ol>} }</div>}
         let path := (← read).traverseContext.path
-        return {{
+        return html%{
           <div class="theIndex">
             <nav>
               <ol>
-                {{ r.map fun (cat, _) =>
+                { r.map fun (cat, _) =>
                     let href := path.link (htmlId := s!"---index-hdr-{cat.id}")
-                    {{<li><a href={{href}}>{{cat.header}}</a></li>}} }}
+                    html%{<li><a href={href}>{cat.header}</a></li>} }
               </ol>
             </nav>
-            {{out}}
+            {out}
           </div>
-        }}
+        }
 where
   indexCss : CSS := r###"
     main .theIndex {

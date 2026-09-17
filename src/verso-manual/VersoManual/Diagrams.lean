@@ -96,11 +96,11 @@ block_extension Block.diagram
         ";".intercalate <|
           s!"width: {css}" ::
           (if isInline then ["display: inline-block"] else [])
-      pure {{
-        <div class="diagram" style={{style}}>
-          {{Html.raw svgStr}}
+      pure html%{
+        <div class="diagram" style={style}>
+          {Html.raw svgStr}
         </div>
-      }}
+      }
   usePackages := ["\\usepackage{svg}"]
   toTeX :=
     some <| fun _ _ _ data _ => do

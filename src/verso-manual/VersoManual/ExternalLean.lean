@@ -204,7 +204,7 @@ inline_extension Inline.leanOutput
         reportError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
       | .ok ((txt, plain, expandTraces) : Highlighted.Message × Bool × List Name) =>
-        if plain then pure {{<code>{{txt.toString}}</code>}}
+        if plain then pure html%{<code>{txt.toString}</code>}
         else txt.toHtml expandTraces (g := Manual)
 
 open Verso.Code.External

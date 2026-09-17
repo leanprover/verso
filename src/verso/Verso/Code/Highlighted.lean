@@ -150,10 +150,10 @@ public instance : ToJson CodeLink where
   toJson l := json%{"short": $l.shortDescription, "long": $l.description, "href": $l.href}
 
 public def CodeLink.inlineHtml (link : CodeLink) (text : Html) : Html :=
-  {{<a href={{link.href}} title={{link.description}}>{{text}}</a>}}
+  html%{<a href={link.href} title={link.description}>{text}</a>}
 
 public def CodeLink.menuHtml (link : CodeLink) : Html :=
-  {{<a href={{link.href}} title={{link.description}}>{{link.shortDescription}}</a>}}
+  html%{<a href={link.href} title={link.description}>{link.shortDescription}</a>}
 
 public def CodeLink.manyHtml (links : Array CodeLink) (text : Html) : Html :=
   if h : links.size = 1 then
@@ -413,42 +413,42 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :
       | none => .empty
       | some txt => separatedDocs txt
     match sigFmt with
-    | some fmt => some <$> addHover {{ <code data-rich-format={{fmt}}>{{sig}}</code> {{docs}} }}
-    | none => some <$> addHover {{ <code>{{sig}}</code> {{docs}} }}
+    | some fmt => some <$> addHover html%{ <code data-rich-format={fmt}>{sig}</code>{docs} }
+    | none => some <$> addHover html%{ <code>{sig}</code>{docs} }
   | .anonCtor _n sig doc sigFmt =>
     let docs :=
       match doc with
       | none => .empty
       | some txt => separatedDocs txt
     match sigFmt with
-    | some fmt => some <$> addHover {{ <code data-rich-format={{fmt}}>{{sig}}</code> {{docs}} }}
-    | none => some <$> addHover {{ <code>{{sig}}</code> {{docs}} }}
+    | some fmt => some <$> addHover html%{ <code data-rich-format={fmt}>{sig}</code>{docs} }
+    | none => some <$> addHover html%{ <code>{sig}</code>{docs} }
   | .option optName _declName doc =>
     let docs := match doc with
       | none => .empty
       | some txt => separatedDocs txt
-    some <$> addHover {{ <code>{{toString optName}}</code> {{docs}} }}
+    some <$> addHover html%{ <code>{toString optName}</code>{docs} }
   | .keyword _ _ none => pure none
-  | .keyword _ _ (some doc) => some <$> addHover {{<code class="docstring">{{doc}}</code>}}
+  | .keyword _ _ (some doc) => some <$> addHover html%{<code class="docstring">{doc}</code>}
   | .var _ type tyFmt =>
     match tyFmt with
-    | some fmt => some <$> addHover {{ <code data-rich-format={{fmt}}>{{type}}</code> }}
-    | none => some <$> addHover {{ <code>{{type}}</code> }}
+    | some fmt => some <$> addHover html%{ <code data-rich-format={fmt}>{type}</code> }
+    | none => some <$> addHover html%{ <code>{type}</code> }
   | .str (some s) _ =>
-    some <$> addHover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
+    some <$> addHover html%{ <code><span class="literal string">{s.quote}</span> : String</code>}
   | .str none _ => pure none
   | .char c =>
-    some <$> addHover {{ <code><span class="literal char">{{s!"{repr c}"}}</span>" : Char"</code>}}
+    some <$> addHover html%{ <code><span class="literal char">{s!"{repr c}"}</span> : Char</code>}
   | .withType t =>
-    some <$> addHover {{ <code>{{t}}</code> }}
+    some <$> addHover html%{ <code>{t}</code> }
   | .num (some t) _ =>
-    some <$> addHover {{ <code>{{t}}</code> }}
+    some <$> addHover html%{ <code>{t}</code> }
   | .sort (some doc) =>
-    some <$> addHover {{<code class="docstring">{{doc}}</code>}}
+    some <$> addHover html%{<code class="docstring">{doc}</code>}
   | .levelConst i =>
-    some <$> addHover {{<code class="docstring">s!"The universe level {i}"</code>}}
+    some <$> addHover html%{<code class="docstring">{s!"The universe level {i}"}</code>}
   | .levelVar x =>
-    some <$> addHover {{<code class="docstring">s!"The universe parameter {x}"</code>}}
+    some <$> addHover html%{<code class="docstring">{s!"The universe parameter {x}"}</code>}
   | .levelOp op =>
     let doc? :=
       match op with
@@ -458,11 +458,11 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :
         some "The impredicative maximum of two universes:\n\n * `imax u 0 = 0`\n * `imax u (v+1) = max u (v+1)`"
       | _ => none
     doc?.mapM fun doc =>
-     addHover {{<code class="docstring">{{doc}}</code>}}
+     addHover html%{<code class="docstring">{doc}</code>}
   | _ => pure none
 where
   separatedDocs txt :=
-    {{<span class="sep"/><code class="docstring">{{txt}}</code>}}
+    html%{<span class="sep"/><code class="docstring">{txt}</code>}
 
 public defmethod Lean.MessageSeverity.«class» : Lean.MessageSeverity → String
   | .information => "information"
@@ -515,53 +515,53 @@ defmethod Token.htmlContent (tok : Token) : HighlightHtmlM g Html := do
 public defmethod Token.toHtml (tok : Token) : HighlightHtmlM g Html := do
   let idAttr ← tok.kind.idAttr
   let hoverAttr := (← tok.kind.hover?).map (fun i => #[("data-verso-hover", toString i)]) |>.getD #[]
-  tok.kind.addLink {{
-    <span class={{tok.kind.«class» ++ " token"}} data-binding={{tok.kind.data}} {{hoverAttr}} {{idAttr}}>{{← tok.htmlContent}}</span>
-  }}
+  tok.kind.addLink html%{
+    <span class={tok.kind.«class» ++ " token"} data-binding={tok.kind.data} {... hoverAttr} {... idAttr}>{← tok.htmlContent}</span>
+  }
 
 public defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (index : Nat) : Highlighted.Goal expr → HighlightHtmlM g Html
   | {name, goalPrefix, hypotheses, conclusion, ..} => do
     let hypsHtml : Html ←
       if hypotheses.size = 0 then pure .empty
-      else pure {{
+      else pure html%{
         <span class="hypotheses">
-          {{← hypotheses.mapM fun
-              | ⟨names, t, _⟩ => do pure {{
+          {← hypotheses.mapM fun
+              | ⟨names, t, _⟩ => do pure html%{
                   <span class="hypothesis">
-                    <span class="name">{{(← names.mapM (·.toHtml)).toList.intersperse {{" "}} }}</span><span class="colon">":"</span>
-                    <span class="type">{{← exprHtml t}}</span>
+                    <span class="name">{(← names.mapM (·.toHtml)).toList.intersperse (.text " ")}</span><span class="colon">:</span>
+                    <span class="type">{← exprHtml t}</span>
                   </span>
-                }}
-          }}
+                }
+          }
         </span>
-      }}
-    let conclHtml ← do pure {{
+      }
+    let conclHtml ← do pure html%{
         <span class="conclusion">
-          <span class="prefix">{{goalPrefix}}</span><span class="type">{{← exprHtml conclusion}}</span>
+          <span class="prefix">{goalPrefix}</span><span class="type">{← exprHtml conclusion}</span>
         </span>
-      }}
+      }
     let collapsePolicy := (← options).collapseGoals
     let id ← uniqueId
-    pure {{
+    pure html%{
       <span class="goal">
-        {{ match name with
-          | none => {{
-             {{hypsHtml}}
-             {{conclHtml}}
-            }}
-          | some n => {{
-              <span class="labeled-case" {{openAttr collapsePolicy index}}>
+        { match name with
+          | none => html%{
+              {hypsHtml}
+              {conclHtml}
+            }
+          | some n => html%{
+              <span class="labeled-case" {... openAttr collapsePolicy index}>
                 <label class="case-label">
-                  <input type="checkbox" id={{id}} {{openAttr collapsePolicy index}}/>
-                  <span for={{id}} class="goal-name">{{n}}</span>
+                  <input type="checkbox" id={id} {... openAttr collapsePolicy index}/>
+                  <span for={id} class="goal-name">{n}</span>
                 </label>
-               {{hypsHtml}}
-               {{conclHtml}}
+                {hypsHtml}
+                {conclHtml}
               </span>
-            }}
-        }}
+            }
+        }
       </span>
-    }}
+    }
   where
     openAttr policy index :=
       match policy with
@@ -570,8 +570,8 @@ public defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g H
       | .subsequent => if index = 0 then #[("checked", "checked")] else #[]
 
 public partial defmethod Highlighted.MessageContents.toHtml (expandTraces : List Lean.Name) (maxTraceDepth : Nat) (exprHtml : expr → HighlightHtmlM g Html) : Highlighted.MessageContents expr → HighlightHtmlM g Html
-  | .text s => pure {{<span class="text">{{s}}</span>}}
-  | .term e => do return {{<span class="highlighted">{{← exprHtml e}}</span>}}
+  | .text s => pure html%{<span class="text">{s}</span>}
+  | .term e => do return html%{<span class="highlighted">{← exprHtml e}</span>}
   | .append xs => xs.foldlM (init := Html.empty) fun html m =>
       (html ++ ·) <$> m.toHtml expandTraces maxTraceDepth exprHtml
   | .trace cls msg children collapsed => do
@@ -581,12 +581,12 @@ public partial defmethod Highlighted.MessageContents.toHtml (expandTraces : List
       if maxTraceDepth = 0 then pure Html.empty
       else
         let cs ← children.mapM (·.toHtml expandTraces (maxTraceDepth - 1) exprHtml)
-        pure {{<ul class="trace-children">{{cs.map ({{<li>{{·}}</li>}})}}</ul>}}
-      if children.size > 0 then return {{
-        <details class="trace" role="group" {{if collapsed then #[] else #[("open", "open")]}}><summary><span class="trace-class">s!"[{cls}]"</span> " " {{msgHtml}}</summary>{{childHtml}}</details>
-      }} else return {{
-        <span class="trace"><span class="trace-class">s!"[{cls}]"</span> " " {{msgHtml}}</span>
-      }}
+        pure html%{<ul class="trace-children">{cs.map (html%{<li>{·}</li>})}</ul>}
+      if children.size > 0 then return html%{
+        <details class="trace" role="group" {... if collapsed then #[] else #[("open", "open")]}><summary><span class="trace-class">{s!"[{cls}]"}</span> {msgHtml}</summary>{childHtml}</details>
+      } else return html%{
+        <span class="trace"><span class="trace-class">{s!"[{cls}]"}</span> {msgHtml}</span>
+      }
 
   | .goal g => g.toHtml exprHtml 0
 
@@ -650,7 +650,7 @@ public partial defmethod Highlighted.normalize : Highlighted → Highlighted
 
 public partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
   | .token t => t.toHtml
-  | .text str | .unparsed str => pure {{<span class="inter-text">{{str}}</span>}}
+  | .text str | .unparsed str => pure html%{<span class="inter-text">{str}</span>}
   | .span infos hl =>
     if let some cls := spanClass infos then do
       -- A span around a single token shares the token's extent, so the token's documentation
@@ -662,17 +662,17 @@ public partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g H
         if let .token _ := hl then
           takeAttrs #["data-verso-hover", "data-verso-links"] inner
         else (#[], inner)
-      pure {{<span class={{"has-info " ++ cls}} {{spanAttrs}}>
+      pure html%{<span class={"has-info " ++ cls} {... spanAttrs}>
           <span class="hover-container">
-            <span class={{"hover-info messages"}}>
-              {{← infos.mapM fun (s, info) => do return {{
-                <code class={{"verso-message " ++ s.«class»}}>{{← info.toHtml [] 10 toHtml}}</code> }}
-              }}
+            <span class={"hover-info messages"}>
+              {← infos.mapM fun (s, info) => do return html%{
+                <code class={"verso-message " ++ s.«class»}>{← info.toHtml [] 10 toHtml}</code> }
+              }
             </span>
           </span>
-          {{inner}}
+          {inner}
         </span>
-      }}
+      }
     else
       panic! "No highlights!"
       --toHtml hl
@@ -682,48 +682,48 @@ public partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g H
       let checkedAttr :=
         if visibleStates.isVisible startPos endPos then #[("checked", "checked")] else #[]
       let id ← uniqueId (base := s!"tactic-state-{hash info}-{startPos}-{endPos}")
-      pure {{
+      pure html%{
         <span class="tactic">
-          <label for={{id}}>{{← toHtml hl}}</label>
-          <input type="checkbox" class="tactic-toggle" id={{id}} {{checkedAttr}}/>
+          <label for={id}>{← toHtml hl}</label>
+          <input type="checkbox" class="tactic-toggle" id={id} {... checkedAttr}/>
           <span class="tactic-state">
-            {{← if info.isEmpty then
-                pure {{"All goals completed! 🐙"}}
+            {← if info.isEmpty then
+                pure html%{All goals completed! 🐙}
               else
-                info.mapIdxM (fun i x => x.toHtml toHtml i)}}
+                info.mapIdxM (fun i x => x.toHtml toHtml i)}
           </span>
         </span>
-      }}
+      }
     else
       toHtml hl
   | .point s info => do
     let info ← info.toHtml [] 10 toHtml
-    return {{
-      <span class={{"verso-message " ++ s.«class»}}>{{info}}</span>
-    }}
+    return html%{
+      <span class={"verso-message " ++ s.«class»}>{info}</span>
+    }
   | .seq hls => hls.mapM toHtml
 
 public defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
   let code := (if trim then code.trim else code).elideRedundantProofStates
   let idAttr := htmlId.map (fun x => #[("id", x)]) |>.getD #[]
-  pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
+  pure html%{ <code class="hl lean block" data-lean-context={toString contextName} {... idAttr}> { ← code.toHtml } </code> }
 
 public defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
   let code := (if trim then code.trim else code).elideRedundantProofStates
   let idAttr := htmlId.map (fun x => #[("id", x)]) |>.getD #[]
   if let some ctx := contextName then
-    pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
+    pure html%{ <code class="hl lean inline" data-lean-context={toString ctx} {... idAttr}> { ← code.toHtml } </code> }
   else
-    pure {{ <code class="hl lean inline" {{idAttr}}> {{ ← code.toHtml }} </code> }}
+    pure html%{ <code class="hl lean inline" {... idAttr}> { ← code.toHtml } </code> }
 
 public defmethod Highlighted.Message.toHtml (message : Highlighted.Message) (expandTraces : List Lean.Name) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
   let contents ← message.contents.toHtml expandTraces maxTraceDepth (·.toHtml)
-  return {{<span class=s!"verso-message">{{contents}}</span>}}
+  return html%{<span class={s!"verso-message"}>{contents}</span>}
 
 public defmethod Highlighted.Message.blockHtml (message : Highlighted.Message) (summarize : Bool) (expandTraces : List Lean.Name := []) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
   let wrap html :=
-    if summarize then {{<details class=s!"lean-output {message.severity.class}"><summary>"Expand..."</summary><pre class="hl lean">{{html}}</pre></details>}}
-    else {{<pre class=s!"hl lean lean-output {message.severity.class}">{{html}}</pre>}}
+    if summarize then html%{<details class={s!"lean-output {message.severity.class}"}><summary>Expand...</summary><pre class="hl lean">{html}</pre></details>}
+    else html%{<pre class={s!"hl lean lean-output {message.severity.class}"}>{html}</pre>}
   wrap <$> message.toHtml expandTraces (maxTraceDepth := maxTraceDepth)
 
 

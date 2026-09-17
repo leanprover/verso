@@ -88,7 +88,7 @@ def dirLinks : Site → TemplateM (Array Html)
     subs.filterMapM fun
       | .page name _id txt .. | .blog name _id txt .. =>
         if txt.metadata.map (·.showInNav) |>.getD true then
-          pure <| some {{<li><a href=s!"{name}/">{{txt.titleString}}</a></li>}}
+          pure <| some html%{<li><a href={s!"{name}/"}>{txt.titleString}</a></li>}
         else
           pure none
       | .static .. => pure none
@@ -96,21 +96,21 @@ def dirLinks : Site → TemplateM (Array Html)
     subs.mapM fun s => do
       let name ← s.postName'
       let url ← mkLink [name]
-      return {{<li><a href={{url}}>{{s.contents.titleString}}</a></li>}}
+      return html%{<li><a href={url}>{s.contents.titleString}</a></li>}
 where
   mkLink dest := do
     let dest' ← relative dest
     return String.join (dest'.map (· ++ "/"))
 
 def topNav (homeLink : Option String := none) : Template := do
-    pure {{
+    pure html%{
       <nav class="top" role="navigation">
         <ol>
-          {{homeLink.map ({{<li class="home"><a href=".">s!"{·}"</a></li>}}) |>.getD .empty}}
-          {{ ← dirLinks (← read).site }}
+          {homeLink.map (html%{<li class="home"><a href=".">{s!"{·}"}</a></li>}) |>.getD .empty}
+          { ← dirLinks (← read).site }
         </ol>
       </nav>
-    }}
+    }
 
 namespace Default
 
@@ -248,21 +248,21 @@ def primary : Template := do
   let postList :=
     match (← param? "posts") with
     | none => Html.empty
-    | some html => {{ <h2> "Posts" </h2> }} ++ html
+    | some html => html%{ <h2> Posts </h2> } ++ html
   let catList :=
     match (← param? (α := Post.Categories) "categories") with
     | none => Html.empty
-    | some ⟨cats⟩ => {{
+    | some ⟨cats⟩ => html%{
         <div class="categories">
-          <h2> "Categories" </h2>
+          <h2> Categories </h2>
           <ul>
-          {{ cats.map fun (target, cat) =>
-            {{<li><a href={{target}}>{{Post.Category.name cat}}</a></li>}}
-          }}
+          { cats.map fun (target, cat) =>
+            html%{<li><a href={target}>{Post.Category.name cat}</a></li>}
+          }
           </ul>
         </div>
-      }}
-  return {{
+      }
+  return html%{
     <html>
       <head>
         <meta charset="utf-8"/>
@@ -270,67 +270,67 @@ def primary : Template := do
         <meta name="color-scheme" content="light dark"/>
         <!-- Stop favicon requests -->
         <link rel="icon" href="data:," />
-        <style>{{defaultBlogStyle}}</style>
-        <style>":root { --justify-important: left; }"</style>
-        <title>{{← param (α := String) "title"}}</title>
-        {{← builtinHeader}}
+        <style>{defaultBlogStyle}</style>
+        <style>{":root { --justify-important: left; }"}</style>
+        <title>{← param (α := String) "title"}</title>
+        {← builtinHeader}
       </head>
       <body>
         <header>
-        {{← topNav}}
+        {← topNav}
         </header>
         <main>
-          {{← param "content"}}
-          {{postList}}
-          {{catList}}
+          {← param "content"}
+          {postList}
+          {catList}
         </main>
       </body>
     </html>
-  }}
+  }
 
 def page : Template := do
-  pure {{
+  pure html%{
     <article>
-      <h1>{{← param "title"}}</h1>
-      {{← param "content"}}
+      <h1>{← param "title"}</h1>
+      {← param "content"}
     </article>
-  }}
+  }
 
 def post : Template := do
   let catAddr ← do
     if let some p := (← param? "path") then
       pure <| fun slug => p ++ "/" ++ slug
     else pure <| fun slug => slug
-  pure {{
-    <h1>{{← param "title"}}</h1>
-    {{ match (← param? "metadata") with
+  pure html%{
+    <h1>{← param "title"}</h1>
+    { match (← param? "metadata") with
        | none => Html.empty
-       | some md => {{
+       | some md => html%{
         <div class="metadata">
           <div class="authors">
-            {{(md : Post.PartMetadata).authors.map ({{<span class="author">{{Html.text ·}}</span>}}) |>.toArray}}
+            {(md : Post.PartMetadata).authors.map (html%{<span class="author">{Html.text ·}</span>}) |>.toArray}
           </div>
           <div class="date">
-            {{md.date.toIso8601String}}
+            {md.date.toIso8601String}
           </div>
-          {{if md.categories.isEmpty then Html.empty
-            else {{
+          {if md.categories.isEmpty then Html.empty
+            else html%{
               <ul class="categories">
-                {{md.categories.toArray.map (fun cat => {{<li><a href=s!"{catAddr cat.slug}">{{cat.name}}</a></li>}})}}
+                {md.categories.toArray.map (fun cat => html%{<li><a href={s!"{catAddr cat.slug}"}>{cat.name}</a></li>})}
               </ul>
-            }}
-          }}
+            }
+          }
         </div>
-       }}
-     }}
-    {{← param "content"}}
-  }}
+       }
+    }
+    {← param "content"}
+  }
 
 def category : Template := do
   let category : Post.Category ← param "category"
-  pure {{
-    <h1>{{category.name}}</h1>
-  }}
+  pure html%{
+    <h1>{category.name}</h1>
+  }
 
 def archiveEntry : Template := do
   let post : BlogPost ← param "post"
@@ -343,35 +343,34 @@ def archiveEntry : Template := do
       pure <| fun slug => p ++ "/" ++ slug
     else pure <| fun slug => slug
 
-  return #[{{
+  return #[html%{
     <li>
-      <a href={{target}} class="title">
-        <span class="name">{{post.contents.titleString}}</span>
-      </a>
-      {{ match post.contents.metadata with
+      <a href={target} class="title">
+        <span class="name">{post.contents.titleString}</span>
+      </a>{ match post.contents.metadata with
          | none => Html.empty
-         | some md => {{
+         | some md => html%{
           <div class="metadata">
             <div class="authors">
-              {{(md : Post.PartMetadata).authors.map ({{<span class="author">{{Html.text ·}}</span>}}) |>.toArray}}
+              {(md : Post.PartMetadata).authors.map (html%{<span class="author">{Html.text ·}</span>}) |>.toArray}
             </div>
             <div class="date">
-              {{md.date.toIso8601String}}
+              {md.date.toIso8601String}
             </div>
-            {{if md.categories.isEmpty then Html.empty
-              else {{
+            {if md.categories.isEmpty then Html.empty
+              else html%{
                 <ul class="categories">
-                  {{md.categories.toArray.map (fun cat => {{<li><a href=s!"{catAddr cat.slug}">{{cat.name}}</a></li>}})}}
+                  {md.categories.toArray.map (fun cat => html%{<li><a href={s!"{catAddr cat.slug}"}>{cat.name}</a></li>})}
                 </ul>
-              }}
-            }}
+              }
+            }
           </div>
-         }}
-       }}
-      {{summary}}
-      <a href={{target}} class="read-more">"Read more"</a>
+         }
+      }
+      {summary}
+      <a href={target} class="read-more">Read more</a>
     </li>
-  }}]
+  }]
 
 end Default
 

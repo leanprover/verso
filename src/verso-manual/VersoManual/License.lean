@@ -40,17 +40,16 @@ private def paragraphed (text : String) : Array String := Id.run do
   paras
 
 private def paragraphedHtml (text : String) : Html :=
-  paragraphed text |>.map (fun (s : String) => {{<p>{{s}}</p>}})
+  paragraphed text |>.map (fun (s : String) => html%{<p>{s}</p>})
 
 def LicenseInfo.toHtml (license : LicenseInfo) (headerLevel : Nat) : Html :=
   let {identifier, dependency, howUsed, link, text} := license
-  {{<section class="license-info">
-      {{.element s!"h{headerLevel}" #[] dependency }}
-      {{link.map (fun url => {{<a class="link" href={{url}}>{{url}}</a>}}) |>.getD .empty}}
-      {{howUsed.map paragraphedHtml |>.getD .empty}}
-      <code class="spdx">{{identifier}}</code>
-      {{text.map textHtml}}
-    </section>}}
+  html%{<section class="license-info">
+      {.element s!"h{headerLevel}" #[] dependency
+      }{link.map (fun url => html%{<a class="link" href={url}>{url}</a>}) |>.getD .empty
+      }{howUsed.map paragraphedHtml |>.getD .empty
+      }<code class="spdx">{identifier}</code>{text.map textHtml}
+    </section>}
 where
   textHtml
     | (hdr?, txt) =>
@@ -59,7 +58,7 @@ where
           Html.element s!"h{headerLevel+1}" #[] hdr
         else
           .empty
-      {{<section>{{hdrHtml}}{{paragraphedHtml txt}}</section>}}
+      html%{<section>{hdrHtml}{paragraphedHtml txt}</section>}
 
 public section
 

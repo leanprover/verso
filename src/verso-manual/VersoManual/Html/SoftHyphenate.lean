@@ -39,7 +39,7 @@ public def softHyphenateText (esc : Bool) (str : String) : Html := Id.run do
     if prior == some '.' && current != '.' then
       strs := strs.push (.ofString esc <| str.extract start iter)
       -- Break lines after dots without hyphens
-      strs := strs.push {{<wbr/>}}
+      strs := strs.push html%{<wbr/>}
       start := iter
     else if current.isUpper then
       if prior.map (·.isLower) |>.getD false then
