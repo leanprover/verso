@@ -219,43 +219,43 @@ public partial def Toc.html (depth : Option Nat) : Toc → Html
         else path.link id
       let sectionNum :=
         match sectionNum with
-        | none => {{<span class="unnumbered"></span>}}
-        | some ns => {{<span class="number">{{sectionNumberString ns}}</span>" "}}
-      {{
+        | none => html%{<span class="unnumbered"></span>}
+        | some ns => html%{<span class="number">{sectionNumberString ns}</span>{" "}}
+      html%{
         <li>
-          <a href={{page}}>{{sectionNum}}{{title}}</a>
-          {{if children.isEmpty || depth == some 1 then .empty
-            else {{<ol> {{children.map (·.html (depth.map Nat.pred))}} </ol>}} }}
+          <a href={page}>{sectionNum}{title}</a>
+          {if children.isEmpty || depth == some 1 then .empty
+            else html%{<ol>{children.map (·.html (depth.map Nat.pred))}</ol>} }
         </li>
-      }}
+      }
 
 def Toc.navButtons (path : Path) (toc : Toc) : Html :=
   let z := Zipper.followPath toc.onlyPages path
   let prev := z.bind Zipper.prev |>.map (·.focus)
   let next := z.bind Zipper.next |>.map (·.focus)
-  {{
+  html%{
     <nav class="prev-next-buttons">
-      {{if let some somePrev := prev
-          then button prev {{<span class="arrow">"←"</span><span class="where">{{getTitle somePrev |>.getD ""}}</span>}} "prev"
-          else {{<div></div>}}}}
-      {{if let some someNext := next
-          then button next {{<span class="where">{{getTitle someNext |>.getD "Next"}}</span><span class="arrow">"→"</span>}} "next"
-          else {{<div></div>}}}}
+      {if let some somePrev := prev
+          then button prev html%{<span class="arrow">←</span><span class="where">{getTitle somePrev |>.getD ""}</span>} "prev"
+          else html%{<div></div>} }
+      {if let some someNext := next
+          then button next html%{<span class="where">{getTitle someNext |>.getD "Next"}</span><span class="arrow">→</span>} "next"
+          else html%{<div></div>} }
     </nav>
-  }}
+  }
 
 where
   button (toc : Option Toc) (label : Html) (rel : Option String := none) : Html :=
     if let some dest := toc then
       let relAttr := rel.map (fun r => #[("rel", r)]) |>.getD #[]
       let titleAttr := toc.bind getTitle |>.map (fun t => #[("title", t)]) |>.getD #[]
-      {{
-        <a class="local-button active" href={{dest.path.link dest.id}} {{relAttr ++ titleAttr}}>
-          {{label}}
+      html%{
+        <a class="local-button active" href={dest.path.link dest.id} {...relAttr ++ titleAttr}>
+          {label}
         </a>
-      }}
+      }
     else
-      {{<span class="local-button inactive">{{label}}</span>}}
+      html%{<span class="local-button inactive">{label}</span>}
 
   getTitle (toc : Toc) : Option String := do
     let n := toc.sectionNum.map (sectionNumberString · ++ " ") |>.getD ""
@@ -298,44 +298,44 @@ def Toc.localHtml (path : Path) (toc : Toc) (localItems : Array Html) : Html := 
       else
         out := out ++ splitTocElem false (path.size - currentPath.size == 1) false entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.titleInToc) toc.children
     else break
-  {{<div class="split-tocs">{{out}}</div>}}
+  html%{<div class="split-tocs">{out}</div>}
 where
   splitTocWrapper (isTop isOpen thisPage : Bool) (chapterId : String) («section» : Html) (title : Html) (children : Option Html) :=
     let toggleId := s!"--verso-manual-toc-{chapterId}"
     let «class» := if isTop then "split-toc book" else "split-toc"
     let checked := if isOpen then #[("checked", "checked")] else #[]
-    {{
-      <div class={{«class»}}>
+    html%{
+      <div class={«class»}>
         <div class="title">
-          {{if children.isNone then {{
+          {if children.isNone then html%{
               <span class="no-toggle"/>
-            }}
-            else {{
-              <label for={{toggleId}} class="toggle-split-toc">
+            }
+            else html%{
+              <label for={toggleId} class="toggle-split-toc">
                 <input
                   type="checkbox"
                   class="toggle-split-toc"
-                  id={{toggleId}}
-                  {{checked}}/>
+                  id={toggleId}
+                  {...checked}/>
               </label>
-            }}
-          }}
-          {{«section»}}
-          <span class={{if thisPage && !isTop then "current" else ""}}>
-            {{if isTop then "Table of Contents" else title}}
+            }
+          }
+          {«section»}
+          <span class={if thisPage && !isTop then "current" else ""}>
+            {if isTop then "Table of Contents" else title}
           </span>
         </div>
-        {{if let some children := children then children
+        {if let some children := children then children
           else .empty
-        }}
+        }
       </div>
-    }}
+    }
   splitTocElem (isTop isOpen thisPage : Bool) (chapterId : String) («section» : Html) (title : Html) (children : List Toc) :=
     let children :=
       if children.isEmpty then none
-      else some {{
+      else some html%{
         <table>
-          {{children.map fun c =>
+          {children.map fun c =>
             let classes := String.intercalate " " <|
               (if c.path.isPrefixOf path && !thisPage then
                 ["current"]
@@ -344,29 +344,29 @@ where
                 ["numbered"]
                else ["unnumbered"])
 
-            {{<tr class={{classes}}>
+            html%{<tr class={classes}>
                 <td class="num">
-                  {{if let some ns := c.sectionNum then sectionNumberString ns
-                    else .empty}}
+                  {if let some ns := c.sectionNum then sectionNumberString ns
+                    else .empty}
                 </td>
                 <td>
-                  {{linkify c.path c.id c.titleInToc}}
+                  {linkify c.path c.id c.titleInToc}
                 </td>
-              </tr>}}
-          }}
+              </tr>}
+          }
         </table>
-      }}
+      }
 
     splitTocWrapper isTop isOpen thisPage chapterId «section» title children
 
   splitTocLocalElem (isTop isOpen : Bool) (chapterId : String) («section» : Html) (title : Html) (children : Array Html) :=
     let children :=
       if children.isEmpty then none
-      else some {{
+      else some html%{
         <ol>
-          {{children.map ({{<li>{{·}}</li>}})}}
+          {children.map (html%{<li>{·}</li>})}
         </ol>
-      }}
+      }
 
     splitTocWrapper isTop isOpen true chapterId «section» title children
 
@@ -374,22 +374,22 @@ where
   linkify (path : Path) (id : Option String) (html : Html) :=
     match html with
     | .element "a" _ _ => html
-    | other => {{<a href={{path.link id}}>{{other}}</a>}}
+    | other => html%{<a href={path.link id}>{other}</a>}
   sectionNum num :=
       match num with
-      | none => {{<span class="unnumbered"></span>}}
-      | some ns => {{<span class="number">{{sectionNumberString ns}}</span>" "}}
+      | none => html%{<span class="unnumbered"></span>}
+      | some ns => html%{<span class="number">{sectionNumberString ns}</span>{" "}}
 
-public def titlePage (title : Html) (authors : List String) (authorshipNote : Option String) (intro : Html) : Html := {{
+public def titlePage (title : Html) (authors : List String) (authorshipNote : Option String) (intro : Html) : Html := html%{
   <div class="titlepage">
-    <h1>{{title}}</h1>
+    <h1>{title}</h1>
     <div class="authors">
-      {{authors.toArray.map ({{ <span class="author">{{Coe.coe ·}}</span> }})}}
-      {{if let some note := authorshipNote then {{<p class="note">{{note}}</p>}} else .empty }}
+      {authors.toArray.map (html%{<span class="author">{Coe.coe ·}</span>})}
+      {if let some note := authorshipNote then html%{<p class="note">{note}</p>} else .empty }
     </div>
-    {{intro}}
+    {intro}
   </div>
-}}
+}
 
 /--
 If the current address has no trailing slash, then add it. Otherwise, relative URLs don't work right
@@ -437,43 +437,43 @@ public def page
     (extraJsFiles : Array (String × Bool) := #[]) : Html :=
   let relativeRoot := String.join <| "./" :: path.toList.map (fun _ => "../")
   let defer := #[("defer", "defer")]
-  {{
+  html%{
     <html>
       <head>
         <script>
-          {{addSlashJs}}
+          {addSlashJs}
         </script>
         <script>
-          {{tocWidthPreloadJs}}
+          {tocWidthPreloadJs}
         </script>
-        <base href={{relativeRoot}}/>
+        <base href={relativeRoot}/>
         <meta charset="utf-8"/>
         <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/>
-        <title>{{textTitle}}</title>
+        <title>{textTitle}</title>
         <link rel="stylesheet" href="book.css" />
         <link rel="stylesheet" href="verso-vars.css" />
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
-        {{ searchAssetTags }}
+        { searchAssetTags }
         <script src="toc-resize.js" defer="defer"></script>
-        {{extraJsFiles.map fun f => ({{<script src=s!"{f.1}" {{if f.2 then defer else #[]}}></script>}})}}
-        {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
-        {{extraCss.toArray.map ({{<style>{{Html.raw ·.css}}</style>}})}}
-        {{extraJs.toArray.map ({{<script>{{Html.raw ·.js}}</script>}})}}
-        {{extraHead}}
+        {extraJsFiles.map fun f => (html%{<script src={s!"{f.1}"} {...if f.2 then defer else #[]}></script>})}
+        {extraStylesheets.map (fun url => html%{<link rel="stylesheet" href={url}/>})}
+        {extraCss.toArray.map (html%{<style>{Html.raw ·.css}</style>})}
+        {extraJs.toArray.map (html%{<script>{Html.raw ·.js}</script>})}
+        {extraHead}
       </head>
       <body>
         <header>
           <div class="header-logo-wrapper">
-            {{if let some url := logo then
-                let logoHtml := {{<img src={{url}}/>}}
+            {if let some url := logo then
+                let logoHtml := html%{<img src={url}/>}
                 let logoDest :=
                   if let some root := logoLink then root
                   else "/"
-                {{<a href={{logoDest}} id="logo">{{logoHtml}}</a>}}
-              else .empty }}
+                html%{<a href={logoDest} id="logo">{logoHtml}</a>}
+              else .empty }
           </div>
           <div class="header-title-wrapper">
-            <a href={{if let some dest := logoLink then dest else "/"}} class="header-title"><h1>{{bookTitle}}</h1></a>
+            <a href={if let some dest := logoLink then dest else "/"} class="header-title"><h1>{bookTitle}</h1></a>
           </div>
         </header>
         <label for="toggle-toc" id="toggle-toc-click">
@@ -486,35 +486,35 @@ public def page
           <nav id="toc">
             <input type="checkbox" id="toggle-toc" />
             <div class="first">
-              <a href={{if let some dest := logoLink then dest else "/"}} class="toc-title"><h1>{{bookTitle}}</h1></a>
-              {{toc.localHtml path localItems}}
+              <a href={if let some dest := logoLink then dest else "/"} class="toc-title"><h1>{bookTitle}</h1></a>
+              {toc.localHtml path localItems}
             </div>
             <div class="last">
-              {{ if repoLink.isSome || issueLink.isSome then {{
+              { if repoLink.isSome || issueLink.isSome then html%{
                 <ul id="meta-links">
-                  {{if let some url := repoLink then
-                    {{ <li><a href={{url}}>"Source Code"</a></li> }}
-                    else .empty}}
-                  {{if let some url := issueLink then
-                    {{ <li><a href={{url}}>"Report Issues"</a></li> }}
-                    else .empty}}
+                  {if let some url := repoLink then
+                    html%{<li><a href={url}>Source Code</a></li>}
+                    else .empty}
+                  {if let some url := issueLink then
+                    html%{<li><a href={url}>Report Issues</a></li>}
+                    else .empty}
                 </ul>
-                }} else .empty }}
+                } else .empty }
             </div>
           </nav>
           <div class="toc-resize-handle"/>
           <main>
             <div class="content-wrapper">
-              {{if showNavButtons then toc.navButtons path else .empty}}
-              {{contents}}
-              {{extraContents}}
-              {{if showNavButtons then toc.navButtons path else .empty}}
+              {if showNavButtons then toc.navButtons path else .empty}
+              {contents}
+              {extraContents}
+              {if showNavButtons then toc.navButtons path else .empty}
             </div>
           </main>
         </div>
       </body>
     </html>
-  }}
+  }
 
 
 

@@ -198,21 +198,21 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
         let some post := posts.find? (·.id == postId)
           | pure none
         pure <| some (addr, post)
-      let postList := {{
+      let postList := html%{
         <ul class="post-list">
-          {{← catPosts.mapM fun (_addr, p) => do
-            theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk pathToBlog, #[]⟩), ("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}}
+          {← catPosts.mapM fun (_addr, p) => do
+            theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk pathToBlog, #[]⟩), ("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}
         </ul>
-      }}
+      }
       let catParams := Template.Params.ofList [("title", cat.name), ("category", ⟨.mk cat, #[]⟩), ("posts", ⟨.mk postList, #[]⟩)]
       writePage theme catParams (template := theme.categoryTemplate)
 
-  let postList := {{
+  let postList := html%{
     <ul class="post-list">
-      {{← posts.mapM fun p => do
-        theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk pathToBlog, #[]⟩), ("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}}
+      {← posts.mapM fun p => do
+        theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk pathToBlog, #[]⟩), ("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}
     </ul>
-  }}
+  }
   let path ← currentPath
   let allCats : Post.Categories := .mk <| meta.categories.toArray.map fun (c, _) =>
     (dirPathToString (trailing := true) <| (path / c.slug).toList, c)

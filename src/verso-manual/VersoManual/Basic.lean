@@ -1601,10 +1601,10 @@ def permalink (id : InternalId) (st : TraverseState) (inline : Bool := true) : H
     -- The names may contain characters with meaning in URLs, such as spaces or ampersands.
     let domain := System.Uri.escapeUri (toString domain)
     let canonicalName := System.Uri.escapeUri canonicalName
-    {{<span class={{classes}}>
-        <a href=s!"/find/?domain={domain}&name={canonicalName}" title="Permalink">"🔗"</a>
+    html%{<span class={classes}>
+        <a href={s!"/find/?domain={domain}&name={canonicalName}"} title="Permalink">🔗</a>
       </span>
-    }}
+    }
 
 
 open Verso.Output.Html in

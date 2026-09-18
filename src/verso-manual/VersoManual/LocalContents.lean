@@ -90,10 +90,10 @@ open Verso.Output Html
 
 def LocalContentItem.toHtml (item : LocalContentItem) : Html :=
   have := item.linkTexts_nonempty
-  let txt := {{<a href={{item.dest}}>{{item.linkTexts[0].2}}</a>}}
+  let txt := html%{<a href={item.dest}>{item.linkTexts[0].2}</a>}
   if let some ⟨level, numbering⟩ := item.header? then
-    let numHtml := if let some l := numbering then {{<span class="level-num">{{l}}</span>" "}} else .empty
-    {{<span class=s!"header head-{level}">{{numHtml}}{{txt}}</span>}}
+    let numHtml := if let some l := numbering then html%{<span class="level-num">{l}</span>{" "}} else .empty
+    html%{<span class={s!"header head-{level}"}>{numHtml}{txt}</span>}
   else
     txt
 

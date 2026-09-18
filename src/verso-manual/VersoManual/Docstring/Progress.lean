@@ -145,53 +145,53 @@ public def progress.descr : BlockDescr where
 
     let namespaces := namespaces.qsort (·.toString ≤ ·.toString)
 
-    return {{
+    return html%{
       <dl>
-        {{namespaces.map fun ns =>
+        {namespaces.map fun ns =>
           let wanted := check.getD ns []
           let notDocumented := wanted.filter (!ok.contains ·) |>.mergeSort (fun x y => x.toString < y.toString)
           let percentMissing :=
             if wanted.isEmpty then 0
             else notDocumented.length.toFloat * 100.0 / wanted.length.toFloat
-          {{
-            <dt><code>{{ns.toString}}</code></dt>
+          html%{
+            <dt><code>{ns.toString}</code></dt>
             <dd>
               <details>
                 <summary>
-                  <progress id=s!"prog-{ns}" value=s!"{100 - percentMissing.toUInt8.toNat}" min="0" max="100"></progress>
-                  <label for=s!"prog-ns">s!"Missing {percentMissing}%"</label>
+                  <progress id={s!"prog-{ns}"} value={s!"{100 - percentMissing.toUInt8.toNat}"} min="0" max="100"></progress>
+                  <label for={s!"prog-ns"}>{s!"Missing {percentMissing}%"}</label>
                 </summary>
-                {{notDocumented |>.map (·.toString) |> String.intercalate ", " }}
+                {notDocumented |>.map (·.toString) |> String.intercalate ", " }
                 <pre>
-                  {{ notDocumented.map ("{docstring " ++ ·.toString ++ "}\n\n") |> String.join }}
+                  { notDocumented.map ("{docstring " ++ ·.toString ++ "}\n\n") |> String.join }
                 </pre>
                 <pre>
-                  "```exceptions\n"
-                  {{ notDocumented.map (·.toString ++ "\n") |> String.join }}
-                  "```\n"
+                  {"```exceptions\n"}
+                  { notDocumented.map (·.toString ++ "\n") |> String.join }
+                  {"```\n"}
                 </pre>
               </details>
             </dd>
-          }}
-        }}
-        <dt>"Tactics"</dt>
+          }
+        }
+        <dt>Tactics</dt>
         <dd>
           <details>
             <summary>
-              <progress id="progress-tactics" value=s!"{100 - tacticPercent.toUInt8.toNat}" min="0" max="100"></progress>
-              <label for="progress-tactics">s!"Missing {tacticPercent}% ({undocTactics.size}/{allTactics.size})"</label>
+              <progress id="progress-tactics" value={s!"{100 - tacticPercent.toUInt8.toNat}"} min="0" max="100"></progress>
+              <label for="progress-tactics">{s!"Missing {tacticPercent}% ({undocTactics.size}/{allTactics.size})"}</label>
             </summary>
-            {{ undocTactics.map (·.toString) |>.toList |> String.intercalate ", " }}
+            { undocTactics.map (·.toString) |>.toList |> String.intercalate ", " }
             <pre>
-              {{ undocTactics.map ("{docstring " ++ ·.toString ++ "}\n") |>.toList |> String.join }}
+              { undocTactics.map ("{docstring " ++ ·.toString ++ "}\n") |>.toList |> String.join }
             </pre>
             <pre>
-              "```exceptions\n"
-              {{ undocTactics.map (·.toString ++ "\n") |>.toList |> String.join }}
-              "```\n"
+              {"```exceptions\n"}
+              { undocTactics.map (·.toString ++ "\n") |>.toList |> String.join }
+              {"```\n"}
             </pre>
           </details>
         </dd>
       </dl>
-    }}
+    }
   toTeX := some (fun _ _ _ _ _ => pure <| Output.TeX.text "Unsupported")

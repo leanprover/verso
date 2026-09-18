@@ -149,7 +149,7 @@ public def deftech.descr : InlineDescr where
     some <| fun go id inl content => do
       let some link := (← state).externalTags[id]?
         | panic! s!"Untagged index target with data {inl}"
-      return {{<span id={{link.htmlId.toString}} class="def-technical-term">{{← content.mapM go}}</span>}}
+      return html%{<span id={link.htmlId.toString} class="def-technical-term">{← content.mapM go}</span>}
 
 public def Inline.tech : Inline where
   name := `Verso.Genre.Manual.tech
@@ -195,7 +195,7 @@ public meta def tech : RoleExpanderOf TechArgs
 open Verso.Output Html in
 private def techLink (addr : String) (content : Html) (remote? : Option String := none) :=
   let remoteAttr := remote?.map (fun r => #[("data-verso-remote", r)]) |>.getD #[]
-  {{<a class="technical-term" href={{addr}} {{remoteAttr}}>{{content}}</a>}}
+  html%{<a class="technical-term" href={addr} {...remoteAttr}>{content}</a>}
 
 @[inline_extension tech]
 public def tech.descr : InlineDescr where
