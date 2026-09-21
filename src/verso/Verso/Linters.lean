@@ -15,7 +15,7 @@ set_option linter.missingDocs true
 public section
 
 open Lean Linter Elab Command
-open Lean.Doc.Syntax
+open Lean.Doc (BlockView InlineView)
 
 /-- Generates curly-quote suggestions -/
 register_option linter.typography.quotes : Bool := {
@@ -76,9 +76,10 @@ def typography : Linter where
         let h ← liftTermElabM <| MessageData.hint m!"Replace with Unicode" #[{suggestion := replacement}] (ref? := strLit)
         logLintIf linter strLit (m!"Use {what} ('{replacement}')" ++ h)
 
-    discard <| stx.replaceM fun
-      | `(inline|$s:str) => do
-        if let some ⟨start, stop⟩ := s.raw.getRange? then
+    discard <| stx.replaceM fun stx => do
+      let some (.text s) := InlineView.of ⟨stx⟩
+        | pure none
+      if let some ⟨start, stop⟩ := s.content.raw.getRange? then
           let mut state : PunctuationState :=
             if start == 0 || (start.prev text.source).get text.source ∈ ['\n', ' '] then
               .atBeginning (start.prev text.source)
@@ -130,7 +131,6 @@ def typography : Linter where
             | _, _ =>
               state := if c.isDigit then .afterDigit else .none
         pure none
-      | _ => pure none
 
 initialize addLinter typography
 
@@ -189,12 +189,13 @@ def emphasisMinimization : Linter where
 
     let text ← getFileMap
 
-    discard <| stx.replaceM fun
-      | `(inline|_[%$tk1 $e* ]%$tk2) => do
-        lintDelimited linter.verso.markup.emph text tk1 tk2 '_'
+    discard <| stx.replaceM fun stx => do
+      match InlineView.of ⟨stx⟩ with
+      | some (.emph e) =>
+        lintDelimited linter.verso.markup.emph text e.opener e.closer '_'
         pure none
-      | `(inline|*[%$tk1 $e* ]%$tk2) => do
-        lintDelimited linter.verso.markup.emph text tk1 tk2 '*'
+      | some (.bold b) =>
+        lintDelimited linter.verso.markup.emph text b.opener b.closer '*'
         pure none
       | _ => pure none
 
@@ -211,13 +212,13 @@ def codeMinimization : Linter where
 
     let text ← getFileMap
 
-    discard <| stx.replaceM fun
-      | `(inline|code(%$tk1 $_ )%$tk2) => do
-        lintDelimited linter.verso.markup.code text tk1 tk2 '`'
+    discard <| stx.replaceM fun stx => do
+      if let some (.code c) := InlineView.of ⟨stx⟩ then
+        lintDelimited linter.verso.markup.code text c.opener c.closer '`'
         pure none
-      | `(block|```%$tk1 $[$_ $_*]? | $_ ```%$tk2) => do
-        lintDelimited linter.verso.markup.codeBlock text tk1 tk2 '`' (minimal := 3)
+      else if let some (.codeblock c) := BlockView.of ⟨stx⟩ then
+        lintDelimited linter.verso.markup.codeBlock text c.openFence c.closeFence '`' (minimal := 3)
         pure none
-      | _ => pure none
+      else pure none
 
 initialize addLinter codeMinimization

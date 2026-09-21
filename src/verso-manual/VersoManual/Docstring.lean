@@ -55,7 +55,7 @@ open Verso.Doc.Elab.PartElabM
 open Verso.Code
 open Verso.ArgParse
 open Verso.Code.Highlighted.WebAssets
-open Lean.Doc.Syntax
+open Lean.Doc (CodeView)
 
 open SubVerso.Highlighting
 
@@ -1833,10 +1833,10 @@ meta def tacticInline : RoleExpanderOf TacticInlineOptions
   | {«show»}, inlines => do
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
-    let `(inline|code( $tac:str )) := arg
+    let some { content := tac, .. } := CodeView.of arg
       | throwErrorAt arg "Expected code literal with the tactic name"
-    let tacTok := tac.getString
-    let tacName := tac.getString.toName
+    let tacTok := tac.getVersoCode
+    let tacName := tac.getVersoCode.toName
     let some tacticDoc := (← getTactic? (.inl tacTok)) <|> (← getTactic? (.inr tacName))
       | throwErrorAt tac "Didn't find tactic named {tac}"
 
@@ -1990,14 +1990,14 @@ meta def convInline : RoleExpander
   | _args, inlines => do
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
-    let `(inline|code( $convTac:str )) := arg
+    let some { content := convTac, .. } := CodeView.of arg
       | throwErrorAt arg "Expected code literal with the conv tactic name"
-    let convTacName := convTac.getString.toName
+    let convTacName := convTac.getVersoCode.toName
     let convTacDoc ← getConvTactic (.inr (mkIdent convTacName)) none
 
-    let hl : Highlighted := convToken convTacDoc convTac.getString
+    let hl : Highlighted := convToken convTacDoc convTac.getVersoCode
 
-    return #[← `(Verso.Doc.Inline.other (Inline.conv $(quote hl)) #[Verso.Doc.Inline.code $(quote convTac.getString)])]
+    return #[← `(Verso.Doc.Inline.other (Inline.conv $(quote hl)) #[Verso.Doc.Inline.code $(quote convTac.getVersoCode)])]
 where
   convToken (t : ConvTacticDoc) (showStr : String) : Highlighted :=
     .token ⟨.keyword (some t.name) none t.docs?, showStr⟩

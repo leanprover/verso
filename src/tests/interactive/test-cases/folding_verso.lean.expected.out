@@ -11,7 +11,10 @@
  {"startLine": 51, "endLine": 63},
  {"startLine": 54, "endLine": 63},
  {"startLine": 11, "endLine": 13},
+ {"startLine": 25, "endLine": 26},
  {"startLine": 28, "endLine": 30},
+ {"startLine": 41, "endLine": 42},
+ {"startLine": 57, "endLine": 58},
  {"startLine": 61, "endLine": 63},
  {"startLine": 25, "endLine": 26},
  {"startLine": 25, "endLine": 26},
@@ -24,4 +27,5 @@
  {"startLine": 14, "kind": "region", "endLine": 15},
  {"startLine": 17, "kind": "region", "endLine": 31},
  {"startLine": 33, "kind": "region", "endLine": 43},
+ {"startLine": 57, "kind": "region", "endLine": 58},
  {"startLine": 61, "kind": "region", "endLine": 63}]

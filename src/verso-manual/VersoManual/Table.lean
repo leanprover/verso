@@ -15,7 +15,7 @@ public section
 open Verso Doc Elab
 open Verso.Genre Manual
 open Verso.ArgParse
-open Lean.Doc.Syntax
+open Lean.Doc (UnorderedListView)
 
 open Lean Elab
 
@@ -194,15 +194,13 @@ meta def table : DirectiveExpanderOf TableConfig
     -- The table should be a list of lists. Extract them!
     let #[oneBlock] := contents
       | throwError "Expected a single unordered list"
-    let `(block|ul{$items*}) := oneBlock
+    let some outer := UnorderedListView.of oneBlock
       | throwErrorAt oneBlock "Expected a single unordered list"
-    let preRows ← items.mapM getLi
+    let preRows := outer.items.map (·.contents)
     let rows ← preRows.mapM fun blks => do
-      let #[oneInRow] := blks.filter (·.raw.isOfKind ``Lean.Doc.Syntax.ul)
+      let #[inner] := blks.filterMap UnorderedListView.of
         | throwError "Each row should have exactly one list in it"
-      let `(block|ul{ $cellItems*}) := oneInRow
-        | throwErrorAt oneInRow "Each row should have exactly one list in it"
-      cellItems.mapM getLi
+      pure (inner.items.map (·.contents))
     if h : rows.size = 0 then
       throwErrorAt oneBlock "Expected at least one row"
     else
@@ -216,8 +214,3 @@ meta def table : DirectiveExpanderOf TableConfig
       let flattened := rows.flatten
       let blocks : Array (Syntax.TSepArray `term ",") ← flattened.mapM (·.mapM elabBlock)
       ``(Block.other (Block.table $(quote columns) $(quote cfg.header) $(quote cfg.name) $(quote cfg.alignment)) #[Block.ul #[$[Verso.Doc.ListItem.mk #[$blocks,*]],*]])
-
-where
-  getLi : Syntax → DocElabM (TSyntaxArray `block)
-    | `(list_item| * $content* ) => pure content
-    | other => throwErrorAt other "Expected list item"

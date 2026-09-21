@@ -145,7 +145,7 @@ meta def syntaxError : CodeBlockExpanderOf SyntaxErrorConfig
       (kind := Lsp.SymbolKind.file)
       (detail? := some "Syntax error")
 
-    let s := str.getString
+    let s := str.getVersoCodeBlock
     match runParserCategory' (← getEnv) (← getOptions) config.category s with
     | .ok stx =>
       throwErrorAt str m!"Expected a syntax error for category {config.category}, but got {indentD stx}"

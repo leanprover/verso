@@ -294,3 +294,59 @@ set_option linter.verso.manual.headerTags true in
 Some text.
 
 :::::::
+
+/-!
+# `verso.code.warnLineLength` (default: 60, `Manual` genre only)
+
+The limit applies to a line's own width. A code block's indentation is the leading whitespace of
+each of its line tokens, so indenting a block does not make its lines count as longer.
+-/
+
+/-!
+A line within the limit produces no warning.
+-/
+#guard_msgs in
+set_option verso.code.warnLineLength 20 in
+#docs (Verso.Genre.Manual) shortLines "Short lines" :=
+:::::::
+
+```Genre.Manual.InlineLean.lean
+def a := 1
+```
+
+:::::::
+
+/-!
+A line past the limit is reported, at the line itself.
+-/
+/--
+warning: Line 1 is too long (33 columns exceeds 20).
+
+Note: Example code is shown on mobile devices and other narrow contexts. Long lines are likely to be truncated in the rendered output.
+
+Hint: The limit of this linter can be changed with the option `verso.code.warnLineLength`. This linter can be disabled by setting this option to 0.
+-/
+#guard_msgs in
+set_option verso.code.warnLineLength 20 in
+#docs (Verso.Genre.Manual) longLines "Long lines" :=
+:::::::
+
+```Genre.Manual.InlineLean.lean
+def someRatherLongNameIndeed := 1
+```
+
+:::::::
+
+/-!
+Setting the option to 0 disables the linter.
+-/
+#guard_msgs in
+set_option verso.code.warnLineLength 0 in
+#docs (Verso.Genre.Manual) lineLengthOff "Line length off" :=
+:::::::
+
+```Genre.Manual.InlineLean.lean
+def anotherRatherLongNameHere := 1
+```
+
+:::::::

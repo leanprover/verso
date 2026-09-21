@@ -351,7 +351,7 @@ namespace CodeBlockCases
 @[code_block]
 def registeredBlock : CodeBlockExpanderOf Unit
   | (), str => do
-    `(Verso.Doc.Block.code $(quote str.getString))
+    `(Verso.Doc.Block.code $(quote str.getVersoCodeBlock))
 
 #docs (.none) codeBlockRegistered "Registered code block" :=
 :::::::
@@ -362,7 +362,7 @@ content
 
 def unregisteredBlock : CodeBlockExpanderOf Unit
   | (), str => do
-    `(Verso.Doc.Block.code $(quote str.getString))
+    `(Verso.Doc.Block.code $(quote str.getVersoCodeBlock))
 
 /--
 error: Declaration `unregisteredBlock` can be used as a code block expander but is not registered as a code block. Register it with `@[code_block]`.

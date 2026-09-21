@@ -163,4 +163,4 @@ meta def diagram : CodeBlockExpanderOf DiagramConfig
     ``(Verso.Doc.Block.other
         (Block.diagram $(quote svg) $(quote cssWidth)
         $(quote <| cfg.texWidth.getD "\\textwidth") $(quote cfg.inline))
-        #[Verso.Doc.Block.code $(quote str.getString)])
+        #[Verso.Doc.Block.code $(quote str.getVersoCodeBlock)])

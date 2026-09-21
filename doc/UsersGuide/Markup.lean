@@ -12,20 +12,17 @@ open Verso Genre Manual
 
 section
 open Lean
-open Lean.Doc.Syntax
+open Lean.Doc (ArgValView ArgView BlockView CodeBlockView DescItemView InlineView LinebreakView OrderedListItemView ParaView UnorderedListItemView VersoBlock VersoInline mkVersoTextFromRef)
 
 variable [Monad m] [MonadError m] [MonadQuotation m]
 
-def newlinesToSpace (inls : Array (TSyntax `inline)) : m (Array (TSyntax `inline)) := do
+def newlinesToSpace (inls : Array VersoInline) : m (Array VersoInline) := do
   let mut out := #[]
   for h : i in [:inls.size] do
-    match inls[i] with
-    | inl@`(inline|line!$s) =>
-      if i < inls.size - 1 then
-        out := out.push (←  `(inline| " "))
-      else
-        out := out.push inl
-    | inl => out := out.push inl
+    let inl := inls[i]
+    if (LinebreakView.of inl).isSome && i < inls.size - 1 then
+      out := out.push (← `(Lean.Doc.Parser.inline| $(← mkVersoTextFromRef " "):versoText))
+    else out := out.push inl
   return out
 
 def log10 (n : Nat) : Nat :=
@@ -40,93 +37,120 @@ def asCode (s : String) : String :=
     (lw - s.length).fold (init := s) fun _ _ => (" " ++ ·)
   (lines.mapIdx fun i l => (s!"{toString (i + 1) |> pad}|{l}⏎\n")) |> String.join |>.trimAsciiEnd |>.copy
 
-partial def preview (stx : Syntax) : m Std.Format :=
-  match stx with
-  | `(inline| $s:str) => pure <| Format.joinSep (s.getString.splitOn " ") .line
-  | `(inline| line! $_s:str) => pure .line
-  | `(inline| _[ $s:inline* ]) => do
-    let s ← newlinesToSpace s
-    let contents ← s.toList.mapM (preview ∘ TSyntax.raw)
-    pure <| .group <| .nest 2 ("<emph>" ++ .line ++ .fill (.join contents)) ++ .line ++ "</emph>"
-  | `(inline| *[ $s:inline* ]) => do
-    let s ← newlinesToSpace s
-    let contents ← s.toList.mapM (preview ∘ TSyntax.raw)
-    pure <| .fill <| "<bold>" ++ .join contents ++ "</bold>"
-  | `(inline| role{$x $args*}[$inls*]) => do
-    let inls ← newlinesToSpace inls
-    let args ← args.toList.mapM (preview ·.raw)
-    let contents ← inls.toList.mapM (preview ∘ TSyntax.raw)
-    pure <| .fill <| .group (.nest 2 (s!"<{x.getId.toString} {Format.joinSep args " " |>.pretty}>" ++ .line ++ .fill (Format.joinSep contents .line)) ++ .line ++ s!"</{x.getId.toString}>")
-  | `(inline| \math code($s)) =>
-    pure <| s!"<math contents={s.getString.quote}/>"
-  | `(inline| \displaymath code($s)) =>
-    pure <| s!"<displaymath contents={s.getString.quote}/>"
-  | `(inline| link[ $txt:inline* ]( $url:str )) => do
-    let txt ← newlinesToSpace txt
-    let contents ← txt.toList.mapM (preview ∘ TSyntax.raw)
-    pure <| .group <| .nest 2 (s!"<a href=\"{url.getString}\">" ++ .line ++ .fill (.join contents)) ++ .line ++ "</a>"
-  | `(inline| link[ $txt:inline* ][ $tgt:str ]) => do
-    let txt ← newlinesToSpace txt
-    let contents ← txt.toList.mapM (preview ∘ TSyntax.raw)
-    pure <| .fill <| s!"<a href=\"(value of «{tgt.getString}»)\">" ++ .join contents ++ "</a>"
-  | `(inline| image($s)($tgt:str)) => do
-    pure <| .group <| .nest 2 <| "<img" ++ .line ++ s!"src=\"{tgt.getString}\"" ++ .line ++ s!"alt=\"{s.getString}\"/>"
-  | `(inline| image($s)[$tgt:str]) => do
-    pure <| .group <| .nest 2 <| "<img" ++ .line ++ s!"src=\"value of «{tgt.getString}»\"" ++ .line ++ s!"alt=\"{s.getString}\"/>"
-  | `(inline| code( $code:str )) =>
-    pure s!"<code>{code.getString.quote}</code>"
-  | `(block| para[ $i:inline* ]) => do
-    let contents ← i.toList.mapM (preview ∘ TSyntax.raw)
-    pure <| .group <| .nest 2 ("<p>" ++ .line ++ .fill (.join contents)) ++ .line ++ "</p>"
-  | `(block| > $bs*) => do
-    let contents ← bs.toList.mapM (preview ∘ TSyntax.raw)
-    pure <| .group <| .nest 2 ("<blockquote>" ++ .line ++ .fill (Format.joinSep contents .line)) ++ .line ++ "</blockquote>"
-  | `(block| [ $ref:str ]: $url:str) =>
-    pure <| .group <| .nest 2 <| "where" ++ .line ++ .group (.nest 2 (s!"«{ref.getString}» :=" ++ .line ++ url.getString))
-  | `(block| header($n){$inls*}) => do
-    let title ← Format.join <$> inls.toList.mapM (preview ∘ TSyntax.raw)
-    pure <| s!"<h{n.getNat + 1}>" ++ title.fill ++ s!"</h{n.getNat + 1}>" ++ Format.line
-  | `(block| ``` | $s ```) =>
-    pure <| .nest 2 (s!"<codeblock>" ++ .line ++ asCode s.getString ++ .text "") ++ .line ++ s!"</codeblock>"
-  | `(block| ```$x $args* | $s ```) => do
-    let args ← args.toList.mapM (preview ·.raw)
-    pure <| .nest 2 (s!"<{x.getId.toString} {Std.Format.prefixJoin " " args |>.pretty}>" ++ .line ++ asCode s.getString ++ .nil) ++ .line ++ s!"</{x.getId}>"
-  | `(block| ::: $x $args* {$body*}) => do
-    let args ← args.toList.mapM (preview ·.raw)
-    let body ← body.toList.mapM (preview ·.raw)
-    pure <| .group <| .nest 2 (s!"<{x.getId.toString} {Std.Format.prefixJoin " " args |>.pretty}>" ++ .line ++ Format.joinSep body .line) ++ .line ++ s!"</{x.getId.toString}>"
-  | `(block| command{$x $args*}) => do
-    let args ← args.toList.mapM (preview ·.raw)
-    pure s!"<{x.getId.toString} {Std.Format.prefixJoin " " args |>.pretty}/>"
-  | `(doc_arg|($x:ident := $v)) | `(doc_arg|$x:ident := $v) => do
-    pure <| s!"{x.getId.toString}=\"{← preview v.raw}\""
-  | `(doc_arg|$v:arg_val) => preview v.raw
-  | `(arg_val|$v:ident) => pure s!"{v.getId}"
-  | `(arg_val|$v:num) => pure s!"{v.getNat}"
-  | `(arg_val|$v:str) => pure s!"{v.getString.quote}"
-  | `(block| ul{$lis*}) => do
-    let items ← lis.toList.mapM (preview ·.raw)
-    pure <| .group <| .nest 2 ("<ul>" ++ .line ++ Format.joinSep items .line) ++ .line ++ "</ul>"
-  | `(block| ol($_n){$lis*}) => do
-    let items ← lis.toList.mapM (preview ·.raw)
-    pure <| .group <| .nest 2 ("<ol>" ++ .line ++ Format.joinSep items .line) ++ .line ++ "</ol>"
-  | `(block| dl{$descs*}) => do
-    let items ← descs.toList.mapM fun x => (preview x.raw) <&> ("  " ++ · ++ "\n")
-    pure <| .group <| .nest 2 <| ("<dl>" ++ .line ++ Format.joinSep items .line) ++ .line ++ "</dl>"
-  | `(desc| : $dt* => $dd* ) => do
-    let dt ← dt.toList.mapM (preview ·.raw)
-    let dd ← dd.toList.mapM (preview ·.raw)
+mutual
+  partial def previewInline (v : InlineView) : m Std.Format := do
+    match v with
+    | .text t => pure <| Format.joinSep (t.getVersoText.splitOn " ") .line
+    | .linebreak _ => pure .line
+    | .emph e => do
+      let s ← newlinesToSpace e.content
+      let contents ← s.toList.mapM (preview ∘ TSyntax.raw)
+      pure <| .group <| .nest 2 ("<emph>" ++ .line ++ .fill (.join contents)) ++ .line ++ "</emph>"
+    | .bold b => do
+      let s ← newlinesToSpace b.content
+      let contents ← s.toList.mapM (preview ∘ TSyntax.raw)
+      pure <| .fill <| "<bold>" ++ .join contents ++ "</bold>"
+    | .role r => do
+      let inls ← newlinesToSpace r.content
+      let args ← r.args.toList.mapM (preview ·.raw)
+      let contents ← inls.toList.mapM (preview ∘ TSyntax.raw)
+      let name := r.name.getId.toString
+      pure <| .fill <| .group (.nest 2 (s!"<{name} {Format.joinSep args " " |>.pretty}>" ++ .line ++ .fill (Format.joinSep contents .line)) ++ .line ++ s!"</{name}>")
+    | .math mv =>
+      let tag := match mv.mode with | .inline => "math" | .display => "displaymath"
+      pure <| s!"<{tag} contents={mv.getVersoCode.quote}/>"
+    | .link l => do
+      let txt ← newlinesToSpace l.content
+      let contents ← txt.toList.mapM (preview ∘ TSyntax.raw)
+      match l.target with
+      | .url (url := url) .. =>
+        pure <| .group <| .nest 2 (s!"<a href=\"{url.getVersoLinkUrl}\">" ++ .line ++ .fill (.join contents)) ++ .line ++ "</a>"
+      | .ref (name := name) .. =>
+        pure <| .fill <| s!"<a href=\"(value of «{name.getVersoRefName}»)\">" ++ .join contents ++ "</a>"
+    | .image i =>
+      let src := match i.target with
+        | .url (url := url) .. => url.getVersoLinkUrl
+        | .ref (name := name) .. => s!"value of «{name.getVersoRefName}»"
+      pure <| .group <| .nest 2 <| "<img" ++ .line ++ s!"src=\"{src}\"" ++ .line ++ s!"alt=\"{i.getAlt}\"/>"
+    | .code c => pure s!"<code>{c.getVersoCode.quote}</code>"
+    | .footnote f => pure s!"<footnote name=\"{f.getName}\"/>"
+
+  partial def previewBlock (v : BlockView) : m Std.Format := do
+    match v with
+    | .para p => do
+      let contents ← p.content.toList.mapM (preview ∘ TSyntax.raw)
+      pure <| .group <| .nest 2 ("<p>" ++ .line ++ .fill (.join contents)) ++ .line ++ "</p>"
+    | .blockquote b => do
+      let contents ← b.content.toList.mapM (preview ∘ TSyntax.raw)
+      pure <| .group <| .nest 2 ("<blockquote>" ++ .line ++ .fill (Format.joinSep contents .line)) ++ .line ++ "</blockquote>"
+    | .linkRef r =>
+      pure <| .group <| .nest 2 <| "where" ++ .line ++ .group (.nest 2 (s!"«{r.getName}» :=" ++ .line ++ r.getUrl))
+    | .footnoteRef r => do
+      let contents ← r.content.toList.mapM (preview ∘ TSyntax.raw)
+      pure <| .group <| .nest 2 (s!"<footnote name=\"{r.getName}\">" ++ .line ++ .fill (.join contents)) ++ .line ++ "</footnote>"
+    | .header h => do
+      let title ← Format.join <$> h.content.toList.mapM (preview ∘ TSyntax.raw)
+      pure <| s!"<h{h.level + 1}>" ++ title.fill ++ s!"</h{h.level + 1}>" ++ Format.line
+    | .codeblock c => do
+      match c.name? with
+      | none =>
+        pure <| .nest 2 (s!"<codeblock>" ++ .line ++ asCode c.getVersoCodeBlock ++ .text "") ++ .line ++ s!"</codeblock>"
+      | some x =>
+        let args ← c.args.toList.mapM (preview ·.raw)
+        pure <| .nest 2 (s!"<{x.getId.toString} {Std.Format.prefixJoin " " args |>.pretty}>" ++ .line ++ asCode c.getVersoCodeBlock ++ .nil) ++ .line ++ s!"</{x.getId}>"
+    | .directive d => do
+      let args ← d.args.toList.mapM (preview ·.raw)
+      let body ← d.content.toList.mapM (preview ·.raw)
+      let name := d.name.getId.toString
+      pure <| .group <| .nest 2 (s!"<{name} {Std.Format.prefixJoin " " args |>.pretty}>" ++ .line ++ Format.joinSep body .line) ++ .line ++ s!"</{name}>"
+    | .command c => do
+      let args ← c.args.toList.mapM (preview ·.raw)
+      pure s!"<{c.name.getId.toString} {Std.Format.prefixJoin " " args |>.pretty}/>"
+    | .ul l => do
+      let items ← l.items.toList.mapM (previewListItem ·.contents)
+      pure <| .group <| .nest 2 ("<ul>" ++ .line ++ Format.joinSep items .line) ++ .line ++ "</ul>"
+    | .ol l => do
+      let items ← l.items.toList.mapM (previewListItem ·.contents)
+      pure <| .group <| .nest 2 ("<ol>" ++ .line ++ Format.joinSep items .line) ++ .line ++ "</ol>"
+    | .dl l => do
+      let items ← l.items.toList.mapM fun d => previewDescItem d <&> ("  " ++ · ++ "\n")
+      pure <| .group <| .nest 2 <| ("<dl>" ++ .line ++ Format.joinSep items .line) ++ .line ++ "</dl>"
+    | .metadata _ => pure "<metadata/>"
+
+  partial def previewListItem (contents : Array VersoBlock) : m Std.Format := do
+    let content ← contents.toList.mapM (preview ∘ TSyntax.raw)
+    pure <| .group <| .nest 2 ("<li>" ++ .line ++ .join content) ++ .line ++ "</li>"
+
+  partial def previewDescItem (d : DescItemView) : m Std.Format := do
+    let dt ← d.term.toList.mapM (preview ·.raw)
+    let dd ← d.desc.toList.mapM (preview ·.raw)
     pure <|
       .group (.nest 2 ("<dt>" ++ .line ++ .join dt) ++ .line ++ "</dt>") ++ .line ++
       .group (.nest 2 ("<dd>" ++ .line ++ .join dd) ++ .line ++ "</dd>")
-  | `(li| * $content*) => do
-    let content ← content.toList.mapM (preview ∘ TSyntax.raw)
-    pure <| .group <| .nest 2 ("<li>" ++ .line ++ .join content) ++ .line ++ "</li>"
-  | other => do
-    if other.getKind = nullKind then
-      pure <| .joinSep (← other.getArgs.toList.mapM preview) (.line ++ .line)
+
+  partial def previewArg (a : ArgView) : m Std.Format := do
+    match a with
+    | .anon _ v => preview v.raw
+    | .named _ _ x _ v => pure <| s!"{x.getId.toString}=\"{← preview v.raw}\""
+    | .flag _ _ x on => pure <| s!"{if on then "+" else "-"}{x.getId.toString}"
+
+  partial def preview (stx : Syntax) : m Std.Format := do
+    if let some v := InlineView.of ⟨stx⟩ then previewInline v
+    else if let some v := BlockView.of ⟨stx⟩ then previewBlock v
+    else if let some v := ArgView.of ⟨stx⟩ then previewArg v
+    else if let some v := ArgValView.of ⟨stx⟩ then
+      match v with
+      | .name x => pure s!"{x.getId}"
+      | .num _ n => pure s!"{n}"
+      | .str _ s => pure s!"{s.quote}"
+    else if let some v := UnorderedListItemView.of ⟨stx⟩ then previewListItem v.contents
+    else if let some v := OrderedListItemView.of ⟨stx⟩ then previewListItem v.contents
+    else if let some v := DescItemView.of ⟨stx⟩ then previewDescItem v
+    else if stx.getKind = nullKind then
+      pure <| .joinSep (← stx.getArgs.toList.mapM preview) (.line ++ .line)
     else
       throwErrorAt stx "Didn't understand {Verso.SyntaxUtils.ppSyntax stx} for preview"
+end
 end
 
 block_extension MarkupExample (title : String) where
@@ -263,6 +287,7 @@ r#"
 
 section
 open Lean
+open Lean.Doc (CodeBlockView ParaView VersoBlock VersoInline)
 open ArgParse
 open Doc.Elab
 
@@ -279,33 +304,34 @@ private def withNl (s : String) : String := if s.endsWith "\n" then s else s.pus
 
 open Verso Doc Elab in
 open Lean Elab in
+open Lean.Doc (CodeBlockView ParaView VersoBlock VersoInline) in
 open Verso.Parser in
-open Lean.Doc.Syntax in
 @[directive]
 def markupPreview : DirectiveExpanderOf MarkupPreviewConfig
   | {title}, contents => do
     let #[blk1, blk2] := contents.filter nonempty
       | throwError "Expected precisely two code blocks, got {contents.filter nonempty}"
-    let `(block|``` | $contents ```) := blk1
+    let some cb1 := CodeBlockView.of blk1
       | throwErrorAt blk1 "Expected anonymous code block"
-    let `(block|``` | $expected ```) := blk2
-      | throwErrorAt blk1 "Expected anonymous code block"
+    let some cb2 := CodeBlockView.of blk2
+      | throwErrorAt blk2 "Expected anonymous code block"
+    let (contents, expected) := (cb1.content, cb2.content)
 
-    let stx ← blocks {} |>.parseString contents.getString.trimAsciiEnd.copy
+    let stx ← document |>.parseString contents.getVersoCodeBlock.trimAsciiEnd.copy
     let p ← preview stx
     let p := p.pretty (width := 35)
 
     withOptions (verso.code.warnLineLength.set · 35) do
-      warnLongLines none contents
-      warnLongLines none expected
+      warnLongLines contents
+      warnLongLines expected
 
-    unless eq expected.getString p do
+    unless eq expected.getVersoCodeBlock p do
       let hint ← MessageData.hint m!"Replace with actual output" #[withNl p] (ref? := expected)
-      throwErrorAt expected m!"Expected {indentD expected.getString} but got {indentD p}\n{hint}"
+      throwErrorAt expected m!"Expected {indentD expected.getVersoCodeBlock} but got {indentD p}\n{hint}"
 
     Hover.addCustomHover contents s!"```\n{p}\n```"
     ``(Block.other (MarkupExample $(quote title.getString)) #[
-      Block.code $(quote contents.getString),
+      Block.code $(quote contents.getVersoCodeBlock),
       Block.code $(quote <| toString <| p)
     ])
 where
@@ -314,12 +340,16 @@ where
     let lines2 := s2.trimAscii.split (· == '\n') |>.map (·.trimAsciiEnd) |>.toArray
     lines1 == lines2
 
-  nonemptyI : TSyntax `inline → Bool
-  | `(inline|$s:str) | `(inline|line!$s) => !s.getString.isEmpty
-  | _ => true
-  nonempty : TSyntax `block → Bool
-  | `(block|para[$inls*]) => inls.any nonemptyI
-  | _ => true
+  -- A paragraph of only whitespace separates the two code blocks that the directive expects.
+  nonemptyI (inl : VersoInline) : Bool :=
+    match inl.view with
+    | .text t => !t.getVersoText.isEmpty
+    | .linebreak _ => false
+    | _ => true
+  nonempty (blk : VersoBlock) : Bool :=
+    match ParaView.of blk with
+    | some p => p.content.any nonemptyI
+    | none => true
 
 open Lean Verso Doc Elab in
 open Verso.Parser in
@@ -327,11 +357,11 @@ open Verso.Parser in
 def markupPreviewPre : CodeBlockExpanderOf MarkupPreviewConfig
   | {title}, contents => do
 
-    let stx ← blocks {} |>.parseString contents.getString
+    let stx ← document |>.parseString contents.getVersoCodeBlock
     let p ← preview stx
     let p := p.pretty (width := 35)
 
-    let directive := s!":::markupPreview {title.getString.quote}\n```\n{withNl contents.getString}```\n```\n{withNl p}```\n:::"
+    let directive := s!":::markupPreview {title.getString.quote}\n```\n{withNl contents.getVersoCodeBlock}```\n```\n{withNl p}```\n:::"
     let hint ← MessageData.hint m!"Replace with directive:" #[directive]
     throwError m!"Expected a directive.{hint}"
 
@@ -473,7 +503,7 @@ This is a new paragraph.
   <li>
     <p>
       As in Markdown and SGML,
-      lists   are not part of
+      lists are not part of
       paragraphs.
     </p>
   </li>
@@ -587,7 +617,7 @@ Any subsequent blocks whose first character is indented further than the indicat
   <li>
     <p>
       Another list, due to
-      different   indentation
+      different indentation
     </p>
   </li>
 </ul>
@@ -607,7 +637,7 @@ Any subsequent blocks whose first character is indented further than the indicat
 <ul>
   <li>
     <p>
-      A list with one item.   It
+      A list with one item. It
       contains this paragraph
     </p><ul>
       <li>
@@ -683,12 +713,12 @@ A description item is a line that starts with zero or more spaces, followed by a
 ```
 ```
 <dl>
-    <dt>  Item 1 </dt>
+    <dt> Item 1 </dt>
   <dd>
     <p> Description of item 1 </p>
   </dd>
 
-    <dt>  Item 2 </dt>
+    <dt> Item 2 </dt>
   <dd>
     <p> Description of item 2 </p>
   </dd>

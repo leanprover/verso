@@ -18,7 +18,7 @@ namespace Verso.Genre.Manual
 open Lean
 open Verso.Output.Html
 open Verso.Doc.Elab
-open Lean.Doc.Syntax
+open Lean.Doc (CodeBlockView)
 
 /--
 A progress tracker that shows how many symbols are documented.
@@ -68,20 +68,19 @@ public meta def progress : DirectiveExpanderOf Unit
     let mut namespaces : NameSet := {}
     let mut exceptions : NameSet := {}
     for block in blocks do
-      match block with
-      | `(block|```$nameStx:ident $_argsStx* | $contents```) =>
-        let contents := contents.getString
-        match nameStx.getId with
-        | `namespace =>
-          for str in contents.splitToList Char.isWhitespace do
-            if !str.isEmpty then
-              namespaces := namespaces.insert str.toName
-        | `exceptions =>
-          for str in contents.splitToList Char.isWhitespace do
-            if !str.isEmpty then
-              exceptions := exceptions.insert str.toName
-        | _ => throwErrorAt nameStx "Expected 'namespace' or 'exceptions'"
-      | _ => throwErrorAt block "Expected code block named 'namespace' or 'exceptions'"
+      let some { name? := some nameStx, content := code, .. } := CodeBlockView.of block
+        | throwErrorAt block "Expected code block named 'namespace' or 'exceptions'"
+      let contents := code.getVersoCodeBlock
+      match nameStx.getId with
+      | `namespace =>
+        for str in contents.splitToList Char.isWhitespace do
+          if !str.isEmpty then
+            namespaces := namespaces.insert str.toName
+      | `exceptions =>
+        for str in contents.splitToList Char.isWhitespace do
+          if !str.isEmpty then
+            exceptions := exceptions.insert str.toName
+      | _ => throwErrorAt nameStx "Expected 'namespace' or 'exceptions'"
     let mut present : Lean.NameMap NameSet := {}
 
     for ns in namespaces do
