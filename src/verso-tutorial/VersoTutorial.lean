@@ -26,6 +26,7 @@ open Verso.Doc
 open SubVerso.Highlighting
 open Verso.Multi
 open Verso.Genre.Manual
+open Verso.Genre.Manual.Html
 
 namespace Verso.Genre.Tutorial
 
@@ -207,7 +208,7 @@ def EmitM.writeFile (path : System.FilePath) (content : String) : EmitM Unit := 
 def EmitM.writeHtmlFile (path : System.FilePath) (content : Html) : EmitM Unit := do
   if (← readThe EmitContext).config.verbose then
     IO.println s!"Writing {path}"
-  IO.FS.writeFile path <| doctype ++ "\n" ++ content.asString
+  IO.FS.writeFile path <| doctype ++ "\n" ++ (Hoist.postprocess content).asString
 
 def LocalToC.ofPage (path : Path) (text : Part Blog.Page) : EmitM LocalToC := do
   let title := text.titleString
@@ -502,6 +503,7 @@ def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.Trav
     dir := (← read).config.destination,
     config := (← EmitM.blogConfig),
     header := Html.doctype,
+    rewriteHtml := some fun _ html => pure (Hoist.postprocess html),
     components := (← read).components,
     extraParams
   }

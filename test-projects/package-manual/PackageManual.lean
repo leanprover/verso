@@ -165,6 +165,26 @@ Margin notes are numbered sequentially throughout a page, with matching numbers 
 This page has enough notes that the later ones have two-digit numbers:
 two{margin}[Note two] three{margin}[Note three] four{margin}[Note four] five{margin}[Note five] six{margin}[Note six] seven{margin}[Note seven] eight{margin}[Note eight] nine{margin}[Note nine] ten{margin}[Note ten] eleven{margin}[Note eleven] twelve{margin}[Note twelve].
 
+The following consecutive tables exercise structural hoisting while preserving their inline markers:
+
+:::table
+*
+  * First table marker{margin}[Hoisted table note one]
+  * Ordinary cell
+:::
+
+:::table
+*
+  * Second table marker{margin}[Hoisted table note two]
+  * Ordinary cell
+:::
+
+This docstring exercises the same structural hoisting from a documentation box:
+
+:::tactic "rfl"
+A marker inside the documentation box{margin}[Hoisted docstring note].
+:::
+
 # Citations
 
 Cite works using {lean}`citet`, {lean}`citep`, or {lean}`citehere`.

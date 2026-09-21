@@ -18,6 +18,7 @@ public import Std.Data.HashSet
 
 public import VersoManual.Basic
 public import VersoManual.HighlightedCode
+public import VersoManual.Html.Hoist
 public import VersoManual.Index
 public import VersoManual.Markdown
 public meta import VersoManual.Markdown
@@ -55,6 +56,7 @@ open Verso.Doc.Elab.PartElabM
 open Verso.Code
 open Verso.ArgParse
 open Verso.Code.Highlighted.WebAssets
+open Verso.Genre.Manual.Html
 open Lean.Doc.Syntax
 
 open SubVerso.Highlighting
@@ -864,7 +866,7 @@ def docstring.descr : BlockDescr := withHighlighting {
       if label == "" then
         reportError s!"Missing label for '{name}': supply one with 'label := \"LABEL\"'"
 
-      return {{
+      return Hoist.barrier "margin" {{
         <div class="namedocs" {{idAttr}}>
           {{permalink id xref false}}
           <span class="label">{{label}}</span>
@@ -1626,7 +1628,7 @@ def optionDocs.descr : BlockDescr := withHighlighting {
       let xref ← HtmlT.state
       let idAttr := xref.htmlId id
 
-      return {{
+      return Hoist.barrier "margin" {{
         <div class="namedocs" {{idAttr}}>
           {{permalink id xref false}}
           <span class="label">"option"</span>
@@ -1797,7 +1799,7 @@ def tactic.descr : BlockDescr := withHighlighting {
       let xref ← HtmlT.state
       let idAttr := xref.htmlId id
 
-      return {{
+      return Hoist.barrier "margin" {{
         <div class="namedocs" {{idAttr}}>
           {{permalink id xref false}}
           <span class="label">"tactic"</span>
@@ -1949,7 +1951,7 @@ def conv.descr : BlockDescr := withHighlighting {
       let xref ← HtmlT.state
       let idAttr := xref.htmlId id
 
-      return {{
+      return Hoist.barrier "margin" {{
         <div class="namedocs" {{idAttr}}>
           {{permalink id xref false}}
           <span class="label">"conv tactic"</span>
