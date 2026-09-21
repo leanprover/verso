@@ -5,6 +5,7 @@ set_option doc.verso true
 namespace LitConfig.UserExt
 
 open Lean Elab Term Verso.Doc VersoLiterate
+open Lean.Doc (VersoInline VersoBlock)
 
 /-!
 This test checks that handlers for custom data elements in Verso docstrings work as they should in
@@ -48,7 +49,7 @@ warning-and-fallback path is exercised.
 The content of the role is ignored.
 -/
 @[doc_role]
-def unknownRole (_ : TSyntaxArray `inline) : Lean.Doc.DocM (Lean.Doc.Inline ElabInline) := do
+def unknownRole (_ : Array VersoInline) : Lean.Doc.DocM (Lean.Doc.Inline ElabInline) := do
   return .custom
     (FallbackPayload.mk "no-handler-fallback")
     #[.text "THIS IS THE FALLBACK"]
