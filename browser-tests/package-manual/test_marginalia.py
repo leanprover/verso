@@ -95,12 +95,18 @@ class TestDesktopMarginalia:
         assert note.evaluate("el => el.classList.contains('marginalia-highlight')")
         highlighted = note.evaluate("el => getComputedStyle(el).backgroundColor")
         assert highlighted != original
-        assert reference.evaluate("el => getComputedStyle(el).backgroundColor") == highlighted
+        assert (
+            reference.evaluate("el => getComputedStyle(el).backgroundColor")
+            == highlighted
+        )
 
         note.hover()
         assert reference.evaluate("el => el.classList.contains('marginalia-highlight')")
         assert note.evaluate("el => el.classList.contains('marginalia-highlight')")
-        assert reference.evaluate("el => getComputedStyle(el).backgroundColor") == highlighted
+        assert (
+            reference.evaluate("el => getComputedStyle(el).backgroundColor")
+            == highlighted
+        )
 
     def test_hoisted_marker_and_note_share_hover_highlight(
         self, server: str, page: Page, notes_page_path: str
@@ -120,12 +126,18 @@ class TestDesktopMarginalia:
         assert note.evaluate("el => el.classList.contains('marginalia-highlight')")
         highlighted = note.evaluate("el => getComputedStyle(el).backgroundColor")
         assert highlighted != original
-        assert reference.evaluate("el => getComputedStyle(el).backgroundColor") == highlighted
+        assert (
+            reference.evaluate("el => getComputedStyle(el).backgroundColor")
+            == highlighted
+        )
 
         note.hover()
         assert reference.evaluate("el => el.classList.contains('marginalia-highlight')")
         assert note.evaluate("el => el.classList.contains('marginalia-highlight')")
-        assert reference.evaluate("el => getComputedStyle(el).backgroundColor") == highlighted
+        assert (
+            reference.evaluate("el => getComputedStyle(el).backgroundColor")
+            == highlighted
+        )
 
     def test_table_notes_are_hoisted_in_source_order(
         self, server: str, page: Page, notes_page_path: str
@@ -172,7 +184,9 @@ class TestDesktopMarginalia:
         box = page.locator(".namedocs", has=page.locator(".marginalia-reference"))
         assert box.count() == 1
         assert box.locator(".marginalia-note").count() == 0
-        assert note.evaluate("el => el.previousElementSibling.classList.contains('namedocs')")
+        assert note.evaluate(
+            "el => el.previousElementSibling.classList.contains('namedocs')"
+        )
 
     def test_rewrite_annotations_do_not_reach_serialized_html(
         self, request, notes_page_path: str
