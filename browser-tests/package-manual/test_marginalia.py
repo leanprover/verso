@@ -321,7 +321,9 @@ class TestDesktopMarginalia:
 
         goto_notes(page, server, notes_page_path)
         next_button = page.locator(".prev-next-buttons a[rel=next]").first
-        assert next_button.locator(".where").inner_text() == "4. Table Marginalia Stress"
+        assert (
+            next_button.locator(".where").inner_text() == "4. Table Marginalia Stress"
+        )
         assert next_button.get_attribute("title") == "4. Table Marginalia Stress"
 
         next_button.click()
@@ -330,7 +332,9 @@ class TestDesktopMarginalia:
         next_button.click()
         page.wait_for_load_state("networkidle")
         prev_button = page.locator(".prev-next-buttons a[rel=prev]").first
-        assert prev_button.locator(".where").inner_text() == "4. Table Marginalia Stress"
+        assert (
+            prev_button.locator(".where").inner_text() == "4. Table Marginalia Stress"
+        )
         assert prev_button.get_attribute("title") == "4. Table Marginalia Stress"
 
     def test_rewrite_annotations_do_not_reach_serialized_html(
