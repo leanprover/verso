@@ -240,7 +240,7 @@ def OrderedListType.all : List OrderedListType :=
   [.numDot, .parenAfter]
 
 theorem OrderedListType.all_complete : ∀ x : OrderedListType, x ∈ all := by
-  unfold all; intro x; cases x <;> repeat constructor
+  intro x; cases x <;> simp [all]
 
 inductive UnorderedListType where
    /-- Items like * -/
@@ -255,7 +255,7 @@ def UnorderedListType.all : List UnorderedListType :=
   [.asterisk, .dash, .plus]
 
 theorem UnorderedListType.all_complete : ∀ x : UnorderedListType, x ∈ all := by
-  unfold all; intro x; cases x <;> repeat constructor
+  intro x; cases x <;> simp [all]
 
 def unorderedListIndicator (type : UnorderedListType) : ParserFn :=
   asStringFn <|
