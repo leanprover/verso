@@ -14,7 +14,7 @@ jobs:
         name: Build and test
         runs-on: nscloud-ubuntu-22.04-amd64-8x16
         permissions:
-            contents: read
+            contents: write
             checks: write
         env:
             # Used for browser tests. Placing them here allows caching to work right.
