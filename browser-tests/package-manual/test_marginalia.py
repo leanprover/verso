@@ -343,6 +343,8 @@ class TestDesktopMarginalia:
         site_dir = Path(__file__).parent.parent / request.config.getoption("--site-dir")
         html_file = site_dir / (notes_page_path.removeprefix("/") + "index.html")
         contents = html_file.read_text()
+        # Whole attribute names only: the output marks relocated notes with
+        # "data-verso-hoisted", which shares a prefix with the "data-verso-hoist" annotation.
         for attribute in (
             "data-verso-hoist",
             "data-verso-barrier",
@@ -350,8 +352,9 @@ class TestDesktopMarginalia:
             "data-verso-no-barrier",
             "data-verso-suppress",
             "data-verso-suppressible",
+            "data-verso-generated-wrapper",
         ):
-            assert attribute not in contents
+            assert re.search(rf"\b{re.escape(attribute)}(?![\w-])", contents) is None
 
 
 class TestMobileMarginalia:
