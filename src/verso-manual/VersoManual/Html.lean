@@ -10,6 +10,7 @@ public import Verso.Output.Html
 public import MultiVerso.Path
 
 public import VersoManual.Basic
+public import VersoManual.Html.Hoist
 public import VersoSearch.DomainSearch
 import VersoManual.Html.Style
 
@@ -220,7 +221,7 @@ public partial def Toc.html (depth : Option Nat) : Toc → Html
         match sectionNum with
         | none => {{<span class="unnumbered"></span>}}
         | some ns => {{<span class="number">{{sectionNumberString ns}}</span>" "}}
-      {{
+      Hoist.suppress "margin" {{
         <li>
           <a href={{page}}>{{sectionNum}}{{title}}</a>
           {{if children.isEmpty || depth == some 1 then .empty
@@ -258,7 +259,8 @@ where
 
   getTitle (toc : Toc) : Option String := do
     let n := toc.sectionNum.map (sectionNumberString · ++ " ") |>.getD ""
-    return s!"{n}{← getHtmlTitle toc.title}"
+    let title := Hoist.postprocess <| Hoist.suppress "margin" {{<span>{{toc.title}}</span>}}
+    return s!"{n}{← getHtmlTitle title}"
 
   safeTags := ["code", "span", "a"]
 
@@ -303,7 +305,7 @@ where
     let toggleId := s!"--verso-manual-toc-{chapterId}"
     let «class» := if isTop then "split-toc book" else "split-toc"
     let checked := if isOpen then #[("checked", "checked")] else #[]
-    {{
+    Hoist.suppress "margin" {{
       <div class={{«class»}}>
         <div class="title">
           {{if children.isNone then {{
