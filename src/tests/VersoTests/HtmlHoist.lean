@@ -38,20 +38,20 @@ private def note (label : String) : Html :=
 #test_guard compact {{
   <table><tr><td>"text"{{marker "1"}}{{note "A"}}</td></tr></table>
 }} ==
-  "<table><tr><td>text<sup>1</sup></td></tr></table><span class=\"note\">A</span>"
+  "<span class=\"note\">A</span><table><tr><td>text<sup>1</sup></td></tr></table>"
 
 #test_guard compact {{
   <table><tr><td>{{note "A"}}{{note "B"}}{{note "C"}}</td></tr></table>
 }} ==
-  "<table><tr><td></td></tr></table><span class=\"note\">A</span><span class=\"note\">B</span><span class=\"note\">C</span>"
+  "<span class=\"note\">A</span><span class=\"note\">B</span><span class=\"note\">C</span><table><tr><td></td></tr></table>"
 
 #test_guard compact {{
   <table>{{hoist "margin" {{<span>"A"</span><span>"B"</span>}}}}</table>
 }} ==
-  "<table></table><span>A</span><span>B</span>"
+  "<span>A</span><span>B</span><table></table>"
 
 #test_guard compact {{<table>{{hoist "margin" {{"hoisted text"}}}}</table>}} ==
-  "<table></table>hoisted text"
+  "hoisted text<table></table>"
 
 #test_guard compact (hoist "margin" {{"text without a barrier"}}) ==
   "text without a barrier"
@@ -63,13 +63,19 @@ private def note (label : String) : Html :=
 ] (.text true "text")) ==
   "<span class=\"kept\">text</span>"
 
-#test_guard compact (barrier "margin" {{<div>{{note "custom"}}</div>}}) ==
+#test_guard compact (barrier "margin" false {{<div>{{note "custom"}}</div>}}) ==
   "<div></div><span class=\"note\">custom</span>"
+
+#test_guard compact (barrier "margin" true {{<div>{{note "before"}}</div>}}) ==
+  "<span class=\"note\">before</span><div></div>"
+
+#test_guard compact (barrier "margin" false {{<table>{{note "after"}}</table>}}) ==
+  "<table></table><span class=\"note\">after</span>"
 
 #test_guard compact (noBarrier "margin" {{<table>{{note "safe"}}</table>}}) ==
   "<table><span class=\"note\">safe</span></table>"
 
-#test_guard compact (barrier "margin" {{
+#test_guard compact (barrier "margin" false {{
   <div><table>{{note "A"}}{{note "B"}}</table>{{note "C"}}</div>
 }}) ==
   "<div><table></table></div><span class=\"note\">A</span><span class=\"note\">B</span><span class=\"note\">C</span>"
@@ -79,7 +85,7 @@ private def note (label : String) : Html :=
 }}) ==
   "<nav><span>kept</span></nav>"
 
-#test_guard compact (barrier "margin" {{
+#test_guard compact (barrier "margin" false {{
   <div>
     {{note "before"}}
     {{suppress "margin" {{<span>{{note "discarded"}}{{marker "2"}}</span>}}}}
@@ -91,33 +97,34 @@ private def note (label : String) : Html :=
 private def futureNote (label : String) : Html :=
   hoist "future" {{<span class="future">{{label}}</span>}}
 
-#test_guard compact (barrier "margin" {{
+#test_guard compact (barrier "margin" false {{
   <div>
-    {{barrier "future" {{<section>{{note "margin"}}{{futureNote "future"}}</section>}}}}
+    {{barrier "future" false {{<section>{{note "margin"}}{{futureNote "future"}}</section>}}}}
   </div>
 }}) ==
   "<div><section></section><span class=\"future\">future</span></div><span class=\"note\">margin</span>"
 
-#test_guard compact (barrier "outer" {{
+#test_guard compact (barrier "outer" false {{
   <div>
-    {{barrier "inner" {{
+    {{barrier "inner" false {{
       <section>{{hoist "inner" (hoist "outer" {{<span>"both"</span>}})}}</section>
     }}}}
   </div>
 }}) ==
   "<div><section></section></div><span>both</span>"
 
-#test_guard compact (barrier "first" (barrier "second" {{
+#test_guard compact (barrier "first" true (barrier "second" false {{
   <div>
     {{hoist "first" {{<span>"first"</span>}}}}
     {{hoist "second" {{<span>"second"</span>}}}}
   </div>
 }})) ==
-  "<div></div><span>first</span><span>second</span>"
+  "<span>first</span><div></div><span>second</span>"
 
 #test_guard compact (.tag "div" #[
   (hoistAttr, "none"),
   (barrierAttr, "none"),
+  (barrierBeforeAttr, "none"),
   (noBarrierAttr, "none"),
   (suppressAttr, "none"),
   (suppressibleAttr, "none")
@@ -141,7 +148,7 @@ private def tocEntry : Verso.Genre.Manual.Html.Toc where
 inductive HoistNesting where
   | leaf
   | group (children : Array HoistNesting)
-  | barriers (kinds : Array String) (child : HoistNesting)
+  | barriers (kinds : Array String) (before : Bool) (child : HoistNesting)
   | noBarriers (kinds : Array String) (child : HoistNesting)
   | suppresses (kinds : Array String) (child : HoistNesting)
   | hoists (kinds : Array String) (child : HoistNesting)
@@ -166,7 +173,7 @@ partial def hoistNesting (kinds : Array String) (notEmpty : 0 < kinds.size) : Na
     oneOf #[
       pure .leaf,
       .group <$> sizedArrayOf child,
-      .barriers <$> selected <*> child,
+      .barriers <$> selected <*> arbitrary <*> child,
       .noBarriers <$> selected <*> child,
       .suppresses <$> selected <*> child,
       .hoists <$> selected <*> child,
@@ -177,8 +184,8 @@ partial def HoistNesting.toHtml : HoistNesting → Gen Html
   | .leaf => decorativeHtml
   | .group children => do
     decorate <| .seq (← children.mapM HoistNesting.toHtml)
-  | .barriers kinds child => do
-    decorate <| kinds.foldl (fun html kind => barrier kind html) (← child.toHtml)
+  | .barriers kinds before child => do
+    decorate <| kinds.foldl (fun html kind => barrier kind before html) (← child.toHtml)
   | .noBarriers kinds child => do
     decorate <| kinds.foldl (fun html kind => noBarrier kind html) (← child.toHtml)
   | .suppresses kinds child => do

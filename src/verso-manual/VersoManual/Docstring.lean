@@ -866,7 +866,7 @@ def docstring.descr : BlockDescr := withHighlighting {
       if label == "" then
         reportError s!"Missing label for '{name}': supply one with 'label := \"LABEL\"'"
 
-      return Hoist.barrier "margin" {{
+      return Hoist.barrier "margin" true {{
         <div class="namedocs" {{idAttr}}>
           {{permalink id xref false}}
           <span class="label">{{label}}</span>
@@ -1628,7 +1628,7 @@ def optionDocs.descr : BlockDescr := withHighlighting {
       let xref ← HtmlT.state
       let idAttr := xref.htmlId id
 
-      return Hoist.barrier "margin" {{
+      return Hoist.barrier "margin" true {{
         <div class="namedocs" {{idAttr}}>
           {{permalink id xref false}}
           <span class="label">"option"</span>
@@ -1799,7 +1799,7 @@ def tactic.descr : BlockDescr := withHighlighting {
       let xref ← HtmlT.state
       let idAttr := xref.htmlId id
 
-      return Hoist.barrier "margin" {{
+      return Hoist.barrier "margin" true {{
         <div class="namedocs" {{idAttr}}>
           {{permalink id xref false}}
           <span class="label">"tactic"</span>
@@ -1951,7 +1951,7 @@ def conv.descr : BlockDescr := withHighlighting {
       let xref ← HtmlT.state
       let idAttr := xref.htmlId id
 
-      return Hoist.barrier "margin" {{
+      return Hoist.barrier "margin" true {{
         <div class="namedocs" {{idAttr}}>
           {{permalink id xref false}}
           <span class="label">"conv tactic"</span>

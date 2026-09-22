@@ -87,6 +87,12 @@ default ToC width these are the old 1400px and 1500px viewport breakpoints):
     margin: 1rem 0;
     margin-left: 10%;
   }
+
+  /* The first note moved immediately before a barrier starts at the barrier's position. */
+  .marginalia-note:not(.marginalia-note + .marginalia-note):has(
+      + .marginalia-note, + table, + .namedocs) {
+    margin-top: 0;
+  }
 }
 
 /* Left-aligned content: a fixed-size note in the wide area to its right. */
@@ -274,6 +280,7 @@ def Marginalia.html (content : Html) (id : String) : Html :=
       </span>
       <button class="marginalia-marker marginalia-marker-mobile"
               type="button"
+              aria-details={{id}}
               "popovertarget"={{id}}>
         <span class="marginalia-accessible-label">"Show marginal note"</span>
       </button>

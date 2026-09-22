@@ -30,6 +30,18 @@ def notes_page_path(request) -> str:
     return "/" + best.relative_to(site_dir).as_posix().removesuffix("index.html")
 
 
+@pytest.fixture(scope="session")
+def table_stress_page_path(request) -> str:
+    """Return the page containing only the table marginalia stress fixture."""
+    site_dir = Path(__file__).parent.parent / request.config.getoption("--site-dir")
+    matches = []
+    for html_file in site_dir.rglob("*.html"):
+        if "Stress table row ten" in html_file.read_text(errors="ignore"):
+            matches.append(html_file)
+    assert len(matches) == 1
+    return "/" + matches[0].relative_to(site_dir).as_posix().removesuffix("index.html")
+
+
 def goto_notes(page: Page, server: str, notes_page_path: str) -> None:
     page.goto(f"{server}{notes_page_path}")
     page.wait_for_load_state("networkidle")
@@ -86,7 +98,7 @@ class TestDesktopMarginalia:
         goto_notes(page, server, notes_page_path)
 
         reference = page.locator(".marginalia-reference").first
-        marker = reference.locator("[aria-details]")
+        marker = reference.locator("[aria-details]").first
         note = page.locator(f"#{marker.get_attribute('aria-details')}")
         original = note.evaluate("el => getComputedStyle(el).backgroundColor")
 
@@ -149,8 +161,10 @@ class TestDesktopMarginalia:
         second = page.locator(".marginalia-note", has_text="Hoisted table note two")
         assert first.count() == second.count() == 1
         assert page.locator("table .marginalia-reference").count() >= 2
-        assert first.evaluate("el => el.previousElementSibling.tagName") == "TABLE"
-        assert second.evaluate("el => el.previousElementSibling.tagName") == "TABLE"
+        first_table = first.locator("xpath=following-sibling::*[1]")
+        second_table = second.locator("xpath=following-sibling::*[1]")
+        assert first_table.evaluate("el => el.tagName") == "TABLE"
+        assert second_table.evaluate("el => el.tagName") == "TABLE"
         assert first.evaluate(
             "(a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)",
             second.element_handle(),
@@ -173,7 +187,44 @@ class TestDesktopMarginalia:
         ).evaluate(typography)
         assert first.evaluate(typography) == ordinary_typography
 
-    def test_docstring_note_is_hoisted_after_its_box(
+    def test_last_row_notes_extend_the_page_without_overlapping(
+        self, server: str, page: Page, table_stress_page_path: str
+    ):
+        page.set_viewport_size({"width": 1600, "height": 900})
+        goto_notes(page, server, table_stress_page_path)
+
+        table = page.locator("table.tabular", has_text="Stress table row one")
+        notes = page.locator(
+            ".marginalia-note",
+            has_text="Stress table note",
+        )
+        assert page.locator("table.tabular").count() == 1
+        assert table.locator("tr").count() == 10
+        assert table.locator("tr").last.locator(".marginalia-reference").count() == 8
+        assert table.locator(".marginalia-note").count() == 0
+        assert notes.count() == 8
+        assert notes.last.locator("xpath=following-sibling::*[1]").evaluate(
+            "(el, table) => el === table", table.element_handle()
+        )
+
+        table_box = table.bounding_box()
+        note_boxes = notes.evaluate_all(
+            "els => els.map(el => el.getBoundingClientRect().toJSON())"
+        )
+        assert table_box is not None
+        assert abs(note_boxes[0]["top"] - table_box["y"]) <= 1
+        for previous, current in zip(note_boxes, note_boxes[1:]):
+            assert current["top"] >= previous["bottom"] - 0.5
+        assert note_boxes[-1]["bottom"] > table_box["y"] + table_box["height"]
+
+        wrapper_bottom = page.locator(".content-wrapper").evaluate(
+            "el => el.getBoundingClientRect().bottom"
+        )
+        assert wrapper_bottom - note_boxes[-1]["bottom"] >= 16
+        document_bottom = page.evaluate("document.documentElement.scrollHeight")
+        assert document_bottom - note_boxes[-1]["bottom"] >= 16
+
+    def test_docstring_note_is_hoisted_before_its_box(
         self, server: str, page: Page, notes_page_path: str
     ):
         page.set_viewport_size({"width": 1600, "height": 900})
@@ -184,9 +235,28 @@ class TestDesktopMarginalia:
         box = page.locator(".namedocs", has=page.locator(".marginalia-reference"))
         assert box.count() == 1
         assert box.locator(".marginalia-note").count() == 0
-        assert note.evaluate(
-            "el => el.previousElementSibling.classList.contains('namedocs')"
+        assert note.locator("xpath=following-sibling::*[1]").evaluate(
+            "(el, box) => el === box", box.element_handle()
         )
+
+    def test_markers_reference_their_note_details(
+        self, server: str, page: Page, notes_page_path: str
+    ):
+        page.set_viewport_size({"width": 1600, "height": 900})
+        goto_notes(page, server, notes_page_path)
+
+        for marker_class in (
+            ".marginalia-marker-desktop",
+            ".marginalia-marker-mobile",
+        ):
+            markers = page.locator(marker_class)
+            described = markers.evaluate_all(
+                "els => els.map(el => el.getAttribute('aria-details'))"
+            )
+            assert all(note_id for note_id in described)
+            assert all(
+                page.locator(f"#{note_id}").count() == 1 for note_id in described
+            )
 
     def test_rewrite_annotations_do_not_reach_serialized_html(
         self, request, notes_page_path: str
@@ -197,6 +267,7 @@ class TestDesktopMarginalia:
         for attribute in (
             "data-verso-hoist",
             "data-verso-barrier",
+            "data-verso-barrier-before",
             "data-verso-no-barrier",
             "data-verso-suppress",
             "data-verso-suppressible",

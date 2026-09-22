@@ -185,6 +185,41 @@ This docstring exercises the same structural hoisting from a documentation box:
 A marker inside the documentation box{margin}[Hoisted docstring note].
 :::
 
+# Table Marginalia Stress
+
+:::table
+*
+  * Stress table row one
+  * One
+*
+  * Stress table row two
+  * Two
+*
+  * Stress table row three
+  * Three
+*
+  * Stress table row four
+  * Four
+*
+  * Stress table row five
+  * Five
+*
+  * Stress table row six
+  * Six
+*
+  * Stress table row seven
+  * Seven
+*
+  * Stress table row eight
+  * Eight
+*
+  * Stress table row nine
+  * Nine
+*
+  * Stress table row ten{margin}[Stress table note one contains enough text to wrap across multiple lines.]{margin}[Stress table note two contains enough text to wrap across multiple lines.]{margin}[Stress table note three contains enough text to wrap across multiple lines.]{margin}[Stress table note four contains enough text to wrap across multiple lines.]{margin}[Stress table note five contains enough text to wrap across multiple lines.]{margin}[Stress table note six contains enough text to wrap across multiple lines.]{margin}[Stress table note seven contains enough text to wrap across multiple lines.]{margin}[Stress table note eight contains enough text to wrap across multiple lines.]
+  * Ten
+:::
+
 # Citations
 
 Cite works using {lean}`citet`, {lean}`citep`, or {lean}`citehere`.
