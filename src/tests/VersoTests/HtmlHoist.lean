@@ -11,8 +11,6 @@ import VersoManual.Html
 import all VersoTests.SerializationGenerators
 import all VersoManual.Html.Hoist
 public meta import Verso.Output.Html
-public meta import VersoManual.Html.Hoist
-meta import all VersoManual.Html.Hoist
 public meta import VersoManual.Html
 
 namespace Verso.Tests.HtmlHoist
@@ -38,17 +36,17 @@ private def note (label : String) : Html :=
 #test_guard compact {{
   <table><tr><td>"text"{{marker "1"}}{{note "A"}}</td></tr></table>
 }} ==
-  "<span class=\"note\">A</span><table><tr><td>text<sup>1</sup></td></tr></table>"
+  "<span class=\"note\" data-verso-hoisted=\"before\">A</span><table><tr><td>text<sup>1</sup></td></tr></table>"
 
 #test_guard compact {{
   <table><tr><td>{{note "A"}}{{note "B"}}{{note "C"}}</td></tr></table>
 }} ==
-  "<span class=\"note\">A</span><span class=\"note\">B</span><span class=\"note\">C</span><table><tr><td></td></tr></table>"
+  "<span class=\"note\" data-verso-hoisted=\"before\">A</span><span class=\"note\" data-verso-hoisted=\"before\">B</span><span class=\"note\" data-verso-hoisted=\"before\">C</span><table><tr><td></td></tr></table>"
 
 #test_guard compact {{
   <table>{{hoist "margin" {{<span>"A"</span><span>"B"</span>}}}}</table>
 }} ==
-  "<span>A</span><span>B</span><table></table>"
+  "<span data-verso-hoisted=\"before\">A</span><span data-verso-hoisted=\"before\">B</span><table></table>"
 
 #test_guard compact {{<table>{{hoist "margin" {{"hoisted text"}}}}</table>}} ==
   "hoisted text<table></table>"
@@ -64,13 +62,13 @@ private def note (label : String) : Html :=
   "<span class=\"kept\">text</span>"
 
 #test_guard compact (barrier "margin" false {{<div>{{note "custom"}}</div>}}) ==
-  "<div></div><span class=\"note\">custom</span>"
+  "<div></div><span class=\"note\" data-verso-hoisted=\"after\">custom</span>"
 
 #test_guard compact (barrier "margin" true {{<div>{{note "before"}}</div>}}) ==
-  "<span class=\"note\">before</span><div></div>"
+  "<span class=\"note\" data-verso-hoisted=\"before\">before</span><div></div>"
 
 #test_guard compact (barrier "margin" false {{<table>{{note "after"}}</table>}}) ==
-  "<table></table><span class=\"note\">after</span>"
+  "<table></table><span class=\"note\" data-verso-hoisted=\"after\">after</span>"
 
 #test_guard compact (noBarrier "margin" {{<table>{{note "safe"}}</table>}}) ==
   "<table><span class=\"note\">safe</span></table>"
@@ -78,7 +76,7 @@ private def note (label : String) : Html :=
 #test_guard compact (barrier "margin" false {{
   <div><table>{{note "A"}}{{note "B"}}</table>{{note "C"}}</div>
 }}) ==
-  "<div><table></table></div><span class=\"note\">A</span><span class=\"note\">B</span><span class=\"note\">C</span>"
+  "<div><table></table></div><span class=\"note\" data-verso-hoisted=\"after\">A</span><span class=\"note\" data-verso-hoisted=\"after\">B</span><span class=\"note\" data-verso-hoisted=\"after\">C</span>"
 
 #test_guard compact (suppress "margin" {{
   <nav>{{marker "1"}}{{note "hidden"}}<span>"kept"</span></nav>
@@ -92,7 +90,7 @@ private def note (label : String) : Html :=
     {{note "after"}}
   </div>
 }}) ==
-  "<div><span></span></div><span class=\"note\">before</span><span class=\"note\">after</span>"
+  "<div><span></span></div><span class=\"note\" data-verso-hoisted=\"after\">before</span><span class=\"note\" data-verso-hoisted=\"after\">after</span>"
 
 private def futureNote (label : String) : Html :=
   hoist "future" {{<span class="future">{{label}}</span>}}
@@ -102,7 +100,7 @@ private def futureNote (label : String) : Html :=
     {{barrier "future" false {{<section>{{note "margin"}}{{futureNote "future"}}</section>}}}}
   </div>
 }}) ==
-  "<div><section></section><span class=\"future\">future</span></div><span class=\"note\">margin</span>"
+  "<div><section></section><span class=\"future\" data-verso-hoisted=\"after\">future</span></div><span class=\"note\" data-verso-hoisted=\"after\">margin</span>"
 
 #test_guard compact (barrier "outer" false {{
   <div>
@@ -111,7 +109,16 @@ private def futureNote (label : String) : Html :=
     }}}}
   </div>
 }}) ==
-  "<div><section></section></div><span>both</span>"
+  "<div><section></section></div><span data-verso-hoisted=\"after\">both</span>"
+
+#test_guard compact (barrier "outer" false {{
+  <div>
+    {{hoist "outer" (barrier "inner" true {{
+      <section>{{hoist "inner" {{<span>"inner"</span>}}}}</section>
+    }})}}
+  </div>
+}}) ==
+  "<div></div><span data-verso-hoisted=\"before\">inner</span><section data-verso-hoisted=\"after\"></section>"
 
 #test_guard compact (barrier "first" true (barrier "second" false {{
   <div>
@@ -119,7 +126,7 @@ private def futureNote (label : String) : Html :=
     {{hoist "second" {{<span>"second"</span>}}}}
   </div>
 }})) ==
-  "<span>first</span><div></div><span>second</span>"
+  "<span data-verso-hoisted=\"before\">first</span><div></div><span data-verso-hoisted=\"after\">second</span>"
 
 #test_guard compact (.tag "div" #[
   (hoistAttr, "none"),

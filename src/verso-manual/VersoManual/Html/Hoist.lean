@@ -23,6 +23,25 @@ def suppressAttr := "data-verso-suppress"
 def suppressibleAttr := "data-verso-suppressible"
 def generatedWrapperAttr := "data-verso-generated-wrapper"
 
+/-- The side of a barrier on which hoisted content is emitted. -/
+public inductive Direction where
+  | before
+  | after
+deriving DecidableEq, Repr
+
+/--
+The attribute value used to describe this direction in generated HTML.
+-/
+public def Direction.attrValue : Direction → String
+  | .before => "before"
+  | .after => "after"
+
+/--
+Marks a hoisted element with the direction it was relocated. The value is the {name}`Direction`'s
+{name (full := Direction.attrValue)}`attrValue`, namely {lean}`"before"` or {lean}`"after"`.
+-/
+public def hoistedAttr := "data-verso-hoisted"
+
 def rewriteAttributes : Array String := #[
   hoistAttr,
   barrierAttr,
@@ -40,15 +59,23 @@ def attrTokens (attr : String) (attrs : Array (String × String)) : Array String
   attrs.flatMap fun (name, value) =>
     if name == attr then tokens value else #[]
 
-def addTokenAttribute (attr kind : String) : Output.Html → Output.Html
-  | .tag name attrs contents =>
+/--
+Applies {name}`f` to each root element. Bare text becomes the contents of a generated `<span>` that
+is passed to {name}`f`.
+-/
+def mapRootTags
+    (f : (name : String) → (attrs : Array (String × String)) → (contents : Output.Html) → Output.Html) :
+    Output.Html → Output.Html
+  | .tag name attrs contents => f name attrs contents
+  | .seq contents => .seq (contents.map (mapRootTags f))
+  | html@(.text ..) => f "span" #[(generatedWrapperAttr, "")] html
+
+def addTokenAttribute (attr kind : String) : Output.Html → Output.Html :=
+  mapRootTags fun name attrs contents =>
     let old := attrTokens attr attrs
     let kinds := if kind ∈ old then old else old.push kind
     let value := String.intercalate " " kinds.toList
     .tag name (attrs.filter (·.1 != attr) |>.push (attr, value)) contents
-  | .seq contents => .seq (contents.map (addTokenAttribute attr kind))
-  | html@(.text ..) =>
-    .tag "span" #[(attr, kind), (generatedWrapperAttr, "")] html
 
 /--
 Marks the root HTML nodes as auxiliary content that should be moved outside an enclosing barrier
@@ -86,12 +113,12 @@ public def suppress (kind : String) (html : Output.Html) : Output.Html :=
 public def suppressible (kind : String) (html : Output.Html) : Output.Html :=
   addTokenAttribute suppressibleAttr kind html
 
-def defaultBarrier : (kind tag : String) → Option Bool
-  | "margin", "table" => some true
+def defaultBarrier : (kind tag : String) → Option Direction
+  | "margin", "table" => some .before
   | _, _ => none
 
 structure RewriteContext (σ : Type) where
-  hoists : Array (String × ST.Ref σ (Array Output.Html)) := #[]
+  hoists : Array (String × Direction × ST.Ref σ (Array Output.Html)) := #[]
   suppressed : HashSet String := {}
 
 def RewriteContext.suppressKinds
@@ -99,15 +126,15 @@ def RewriteContext.suppressKinds
   { context with suppressed := kinds.foldl (init := context.suppressed) (·.insert ·) }
 
 def effectiveBarriers
-    (tag : String) (attrs : Array (String × String)) : Array (String × Bool) :=
+    (tag : String) (attrs : Array (String × String)) : Array (String × Direction) :=
   let optedOut := attrTokens noBarrierAttr attrs
   let explicit := attrTokens barrierAttr attrs
   let before := attrTokens barrierBeforeAttr attrs
   let defaults :=
     match defaultBarrier "margin" tag with
-    | some wrapper => #[("margin", wrapper)]
+    | some direction => #[("margin", direction)]
     | none => #[]
-  let barriers := (explicit.map fun kind => (kind, decide (kind ∈ before))) ++
+  let barriers := (explicit.map fun kind => (kind, if kind ∈ before then .before else .after)) ++
     defaults.filter (fun (kind, _) => kind ∉ explicit)
   barriers.foldl (init := #[]) fun out barrier =>
     if barrier.1 ∈ optedOut || out.any (·.1 == barrier.1) then out else out.push barrier
@@ -126,12 +153,18 @@ partial def rewrite (html : Output.Html) : ReaderT (RewriteContext σ) (ST σ) O
       return .empty
 
     let rewritten ← rewriteTag name attrs contents
-    if let some (_, destination) := context.hoists.find? fun (kind, _) => kind ∈ hoistKinds then
-      destination.modify (·.push rewritten)
+    if let some (_, direction, destination) := context.hoists.find? fun (kind, _, _) => kind ∈ hoistKinds then
+      destination.modify (·.push (markHoisted direction rewritten))
       return .empty
     else
       return rewritten
 where
+  markHoisted (direction : Direction) : Output.Html → Output.Html :=
+    mapRootTags fun name attrs contents =>
+      if attrs.any fun (attr, _) => attr == generatedWrapperAttr || attr == hoistedAttr then
+        .tag name attrs contents
+      else
+        .tag name (attrs.push (hoistedAttr, direction.attrValue)) contents
   rewriteTag (name : String) (attrs : Array (String × String)) (contents : Output.Html) := do
     let context ← read
     let suppressed := attrTokens suppressAttr attrs
@@ -145,7 +178,10 @@ where
         let afterDestination ← ST.mkRef #[]
         innerContext := { innerContext with
           hoists := newBarriers.foldl (init := innerContext.hoists) fun hoists barrier =>
-            hoists.push (barrier.1, if barrier.2 then beforeDestination else afterDestination)
+            hoists.push (barrier.1, barrier.2,
+              match barrier.2 with
+              | .before => beforeDestination
+              | .after => afterDestination)
         }
         pure (some (beforeDestination, afterDestination))
     let contents' ← withReader (fun _ => innerContext) (rewrite contents)
@@ -177,7 +213,9 @@ content before themselves by default, unless marked with {name}`noBarrier`.
 
 When barriers are nested, the outermost has precedence. When content is marked with multiple kinds, the
 outermost barrier matching any of them wins. Kinds introduced by the same barrier and direction
-share a destination, and multiple hoisted nodes retain their document order.
+share a destination, and multiple hoisted nodes retain their document order. Each relocated element
+is marked with {name}`hoistedAttr`, whose value is the direction it was moved in, so that CSS can
+style hoisted content specially when needed.
 
 Within the descendants of content marked by {name}`suppress`, content marked by either {name}`hoist`
 or {name}`suppressible` with the same kind is removed. Suppression takes precedence over an

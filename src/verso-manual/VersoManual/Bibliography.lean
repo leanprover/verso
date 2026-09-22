@@ -128,11 +128,7 @@ private def slugString : Doc.Inline Manual → String
 def Citable.tag (c : Citable) : Slug :=
   c.authors.map (slugString) |>.foldr (init := s!"-{c.year}") (· ++ ·) |> .ofString
 
-private def Citable.idHint : Citable → String
-  | .inProceedings p => s!"--proceedings-citation-{p.authors.map slugString |>.foldr (init := s!"-{p.year}") (· ++ ·)}"
-  | .thesis p => s!"--thesis-citation-{slugString p.author}-{p.year}"
-  | .arXiv p => s!"--arxiv-citation-{p.id}"
-  | .article p => s!"--article-citation-{p.authors.map slugString |>.foldr (init := s!"-{p.year}") (· ++ ·)}"
+private def Citable.idHint (c : Citable) : String := s!"--citation-{c.tag}"
 
 def Citable.sortKey (c : Citable) := c.authors.map slugString |>.foldr (init := s!" {c.year}") (· ++ ", " ++ ·)
 
@@ -377,14 +373,14 @@ inline_extension Inline.cite (citations : List Citable) (style : Style := .paren
       | .some (.ok citedSet) =>
         if citedSet.binSearchContains v.1 (cmpCite · · == .lt) then pure ()
         else modify (·.set `Manual.Bibliography <| citedSet.binInsert (cmpCite · · == .lt) v.1)
-      match FromJson.fromJson? v.1 with
-      | .error e => reportError s!"Failed to deserialize citation: {e}"
-      | .ok (first :: _ : List Citable) =>
+      if (← get).externalTags[id]?.isNone then
         let path ← (·.path) <$> read
-        let _ ← Verso.Genre.Manual.externalTag id path first.idHint
-      | .ok ([] : List Citable) =>
-        let path ← (·.path) <$> read
-        let _ ← Verso.Genre.Manual.externalTag id path "--citation"
+        match FromJson.fromJson? v.1 with
+        | .error e => reportError s!"Failed to deserialize citation: {e}"
+        | .ok (first :: _ : List Citable) =>
+          let _ ← Verso.Genre.Manual.externalTag id path first.idHint
+        | .ok ([] : List Citable) =>
+          let _ ← Verso.Genre.Manual.externalTag id path "--citation"
       pure none -- TODO disambiguate years
   toTeX :=
     open Verso.Output.TeX in

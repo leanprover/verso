@@ -259,7 +259,8 @@ where
 
   getTitle (toc : Toc) : Option String := do
     let n := toc.sectionNum.map (sectionNumberString · ++ " ") |>.getD ""
-    return s!"{n}{← getHtmlTitle toc.title}"
+    let title := Hoist.postprocess <| Hoist.suppress "margin" {{<span>{{toc.title}}</span>}}
+    return s!"{n}{← getHtmlTitle title}"
 
   safeTags := ["code", "span", "a"]
 

@@ -12,6 +12,8 @@ public import Verso.Code
 public import VersoManual.Basic
 public import VersoManual.Html.Hoist
 public meta import Verso.Doc.Elab.Inline
+meta import Verso.Doc.Elab.InlineString
+meta import MultiVerso.Slug
 
 public section
 
@@ -36,12 +38,15 @@ def Marginalia.css := r#"
   white-space: normal;
 }
 
-/* Neutralize the user-agent popover box when the note is participating in document layout. */
+/* Neutralize the user-agent popover box when the note is participating in document layout.
+   The user agent makes popovers scroll containers, which would clip the number that ::before
+   places to the left of the note. */
 .marginalia-note[popover] {
   border: 0;
   background: transparent;
   color: inherit;
   box-shadow: none;
+  overflow: visible;
 }
 
 /*
@@ -89,8 +94,7 @@ default ToC width these are the old 1400px and 1500px viewport breakpoints):
   }
 
   /* The first note moved immediately before a barrier starts at the barrier's position. */
-  .marginalia-note:not(.marginalia-note + .marginalia-note):has(
-      + .marginalia-note, + table, + .namedocs) {
+  .marginalia-note[data-verso-hoisted="before"]:not(.marginalia-note + .marginalia-note) {
     margin-top: 0;
   }
 }
@@ -304,10 +308,12 @@ open Verso.Output TeX in
 def Marginalia.TeX (content : TeX) : TeX :=
   \TeX{ \footnote{ \Lean{ content } } }
 
-inline_extension Inline.margin where
-  traverse id _ _ := do
+inline_extension Inline.margin (idSlug : String) where
+  data := ToJson.toJson idSlug
+  traverse id data _ := do
     let path ← (·.path) <$> read
-    let _ ← Verso.Genre.Manual.externalTag id path "--marginalia"
+    let hint := s!"--marginalia-{(FromJson.fromJson? data (α := String)).toOption.getD ""}"
+    let _ ← Verso.Genre.Manual.externalTag id path hint
     pure none
   toTeX :=
   open Verso.Output.TeX in
@@ -322,8 +328,36 @@ inline_extension Inline.margin where
         | panic! s!"Untagged marginalia with data {inl}"
       pure <| Marginalia.html (← content.mapM goI) link.htmlId.toString
 
+namespace Marginalia
+open Verso.Multi
+
+/-- The number of characters from a note's text to use in its HTML `id` attribute. -/
+meta def idSlugLength : Nat := 32
+
+/--
+Computes the text that seeds a margin note's HTML id from its plain-text preview: the sluggified
+text, truncated to {name}`idSlugLength` characters, so that ids on a page with many notes stay
+short and distinct.
+-/
+meta def idSlug (preview : String) : String :=
+  preview.sluggify.toString.take idSlugLength |>.copy
+
+end Marginalia
+
+open Marginalia in
 @[role]
 meta def margin : RoleExpanderOf Unit
   | (), inlines => do
+    let slug := idSlug <| inlineToString (← getEnv) <| mkNullNode inlines
     let content ← inlines.mapM elabInline
-    ``(Doc.Inline.other Inline.margin #[$content,*])
+    ``(Doc.Inline.other (Inline.margin $(quote slug)) #[$content,*])
+
+open Lean.Doc.Syntax in
+/--
+Margin notes should be dropped from plain-text previews.
+-/
+@[inline_to_string Lean.Doc.Syntax.role]
+meta def margin.inline_to_string : InlineToString
+  | _, `(inline| role{ $name $_* }[ $_* ]) =>
+    if name.getId ∈ [`margin, ``margin] then some "" else none
+  | _, _ => none

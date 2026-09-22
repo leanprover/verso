@@ -5,10 +5,11 @@ Build the package-manual example with
 ``--site-dir _out/package-manual/html-multi``.
 """
 
+import re
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Browser, Page
+from playwright.sync_api import Browser, Locator, Page
 
 
 NUM_NOTES = 10
@@ -47,6 +48,36 @@ def goto_notes(page: Page, server: str, notes_page_path: str) -> None:
     page.wait_for_load_state("networkidle")
 
 
+def note_with_text(page: Page, text: str) -> Locator:
+    """Return the margin note whose entire text is ``text``."""
+    return page.locator(".marginalia-note").filter(
+        has_text=re.compile(rf"^\s*{re.escape(text)}\s*$")
+    )
+
+
+def hover(page: Page, element: Locator) -> None:
+    """Move the pointer onto ``element``.
+
+    Playwright's own hover aims at the element's content boxes, which leave out CSS generated
+    content. A reference marker's visible content is its ``::after`` counter, so that aim
+    lands on the surrounding paragraph. The bounding rect includes generated content.
+    """
+    center = element.evaluate(
+        """el => {
+            el.scrollIntoView({block: "center"});
+            const box = el.getBoundingClientRect();
+            return {x: box.left + box.width / 2, y: box.top + box.height / 2};
+        }"""
+    )
+    page.mouse.move(center["x"], center["y"])
+
+
+def wait_for_popover_closed(note: Locator) -> None:
+    note.page.wait_for_function(
+        "el => !el.matches(':popover-open')", arg=note.element_handle()
+    )
+
+
 class TestDesktopMarginalia:
     def test_markers_and_bodies_are_visible_and_numbered(
         self, server: str, page: Page, notes_page_path: str
@@ -68,6 +99,29 @@ class TestDesktopMarginalia:
         assert all(width > 0 for width in widths)
         assert widths[9] > widths[0] + 2
         assert max(widths[:9]) - min(widths[:9]) < 0.5
+
+    def test_note_numbers_render_beside_their_notes(
+        self, server: str, page: Page, notes_page_path: str
+    ):
+        page.set_viewport_size({"width": 1600, "height": 900})
+        goto_notes(page, server, notes_page_path)
+
+        # The number is a ::before box positioned beside the note. A point inside that box
+        # hit-tests to the note only while the box is drawn, so a note that clips its own
+        # overflow hides the number and hit-tests to the page behind it instead.
+        numbered = page.locator(".marginalia-note").evaluate_all(
+            """els => els.map(el => {
+                el.scrollIntoView({block: "center"});
+                const box = el.getBoundingClientRect();
+                const note = getComputedStyle(el);
+                const number = getComputedStyle(el, "::before");
+                const x = box.left + parseFloat(number.left) + parseFloat(number.width) / 2;
+                const y = box.top + parseFloat(note.paddingTop) + parseFloat(note.lineHeight) / 2;
+                return document.elementFromPoint(x, y) === el;
+            })"""
+        )
+        assert len(numbered) >= NUM_NOTES
+        assert all(numbered)
 
     def test_notes_clear_one_another(
         self, server: str, page: Page, notes_page_path: str
@@ -102,7 +156,7 @@ class TestDesktopMarginalia:
         note = page.locator(f"#{marker.get_attribute('aria-details')}")
         original = note.evaluate("el => getComputedStyle(el).backgroundColor")
 
-        reference.hover()
+        hover(page, reference)
         assert reference.evaluate("el => el.classList.contains('marginalia-highlight')")
         assert note.evaluate("el => el.classList.contains('marginalia-highlight')")
         highlighted = note.evaluate("el => getComputedStyle(el).backgroundColor")
@@ -112,7 +166,7 @@ class TestDesktopMarginalia:
             == highlighted
         )
 
-        note.hover()
+        hover(page, note)
         assert reference.evaluate("el => el.classList.contains('marginalia-highlight')")
         assert note.evaluate("el => el.classList.contains('marginalia-highlight')")
         assert (
@@ -126,14 +180,14 @@ class TestDesktopMarginalia:
         page.set_viewport_size({"width": 1600, "height": 900})
         goto_notes(page, server, notes_page_path)
 
-        note = page.locator(".marginalia-note", has_text="Hoisted table note one")
+        note = note_with_text(page, "Hoisted table note one")
         note_id = note.get_attribute("id")
         reference = page.locator(
             f'.marginalia-reference:has([aria-details="{note_id}"])'
         )
         original = note.evaluate("el => getComputedStyle(el).backgroundColor")
 
-        reference.hover()
+        hover(page, reference)
         assert reference.evaluate("el => el.classList.contains('marginalia-highlight')")
         assert note.evaluate("el => el.classList.contains('marginalia-highlight')")
         highlighted = note.evaluate("el => getComputedStyle(el).backgroundColor")
@@ -143,7 +197,7 @@ class TestDesktopMarginalia:
             == highlighted
         )
 
-        note.hover()
+        hover(page, note)
         assert reference.evaluate("el => el.classList.contains('marginalia-highlight')")
         assert note.evaluate("el => el.classList.contains('marginalia-highlight')")
         assert (
@@ -157,8 +211,8 @@ class TestDesktopMarginalia:
         page.set_viewport_size({"width": 1600, "height": 900})
         goto_notes(page, server, notes_page_path)
 
-        first = page.locator(".marginalia-note", has_text="Hoisted table note one")
-        second = page.locator(".marginalia-note", has_text="Hoisted table note two")
+        first = note_with_text(page, "Hoisted table note one")
+        second = note_with_text(page, "Hoisted table note two")
         assert first.count() == second.count() == 1
         assert page.locator("table .marginalia-reference").count() >= 2
         first_table = first.locator("xpath=following-sibling::*[1]")
@@ -182,9 +236,7 @@ class TestDesktopMarginalia:
                 whiteSpace: style.whiteSpace,
             };
         }"""
-        ordinary_typography = page.locator(
-            ".marginalia-note", has_text="Note two"
-        ).evaluate(typography)
+        ordinary_typography = note_with_text(page, "Note two").evaluate(typography)
         assert first.evaluate(typography) == ordinary_typography
 
     def test_last_row_notes_extend_the_page_without_overlapping(
@@ -230,7 +282,7 @@ class TestDesktopMarginalia:
         page.set_viewport_size({"width": 1600, "height": 900})
         goto_notes(page, server, notes_page_path)
 
-        note = page.locator(".marginalia-note", has_text="Hoisted docstring note")
+        note = note_with_text(page, "Hoisted docstring note")
         assert note.count() == 1
         box = page.locator(".namedocs", has=page.locator(".marginalia-reference"))
         assert box.count() == 1
@@ -238,6 +290,7 @@ class TestDesktopMarginalia:
         assert note.locator("xpath=following-sibling::*[1]").evaluate(
             "(el, box) => el === box", box.element_handle()
         )
+        assert note.evaluate("el => getComputedStyle(el).marginTop") == "0px"
 
     def test_markers_reference_their_note_details(
         self, server: str, page: Page, notes_page_path: str
@@ -257,6 +310,28 @@ class TestDesktopMarginalia:
             assert all(
                 page.locator(f"#{note_id}").count() == 1 for note_id in described
             )
+
+    def test_nav_buttons_omit_marginalia_from_titles(
+        self, server: str, page: Page, notes_page_path: str, table_stress_page_path: str
+    ):
+        page.set_viewport_size({"width": 1600, "height": 900})
+        goto_notes(page, server, table_stress_page_path)
+        heading = page.locator("main h1").first
+        assert heading.locator(".marginalia-reference").count() == 1
+
+        goto_notes(page, server, notes_page_path)
+        next_button = page.locator(".prev-next-buttons a[rel=next]").first
+        assert next_button.locator(".where").inner_text() == "4. Table Marginalia Stress"
+        assert next_button.get_attribute("title") == "4. Table Marginalia Stress"
+
+        next_button.click()
+        page.wait_for_load_state("networkidle")
+        next_button = page.locator(".prev-next-buttons a[rel=next]").first
+        next_button.click()
+        page.wait_for_load_state("networkidle")
+        prev_button = page.locator(".prev-next-buttons a[rel=prev]").first
+        assert prev_button.locator(".where").inner_text() == "4. Table Marginalia Stress"
+        assert prev_button.get_attribute("title") == "4. Table Marginalia Stress"
 
     def test_rewrite_annotations_do_not_reach_serialized_html(
         self, request, notes_page_path: str
@@ -307,11 +382,11 @@ class TestMobileMarginalia:
         assert center_offset["y"] <= 1
 
         page.keyboard.press("Escape")
-        assert not note.evaluate("el => el.matches(':popover-open')")
+        wait_for_popover_closed(note)
 
         marker.click()
-        page.locator("h1").click(position={"x": 2, "y": 2})
-        assert not note.evaluate("el => el.matches(':popover-open')")
+        page.locator("main h1").first.click(position={"x": 2, "y": 2})
+        wait_for_popover_closed(note)
 
     def test_entering_desktop_closes_an_open_popover(
         self, server: str, page: Page, notes_page_path: str
@@ -325,7 +400,7 @@ class TestMobileMarginalia:
         assert note.evaluate("el => el.matches(':popover-open')")
         page.set_viewport_size({"width": 1200, "height": 800})
 
-        assert not note.evaluate("el => el.matches(':popover-open')")
+        wait_for_popover_closed(note)
         assert note.is_visible()
         assert page.locator(".marginalia-marker-desktop").first.is_visible()
 

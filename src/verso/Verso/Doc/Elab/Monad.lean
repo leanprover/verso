@@ -100,7 +100,7 @@ public meta def app_to_string : InlineToString := fun (env : Environment) => fun
   | _ => none
 
 public def inlinesToString (env : Environment) (inlines : Array Syntax)  : String :=
-  String.intercalate " " (inlines.map (inlineToString env)).toList
+  String.intercalate " " (inlines.map (inlineToString env) |>.filter (!·.isEmpty)).toList
 
 public def inlineSyntaxToString (env : Environment) (inlines : Syntax) : String :=
     if let `<low| ~(.node _ _ args)> := inlines then

@@ -185,7 +185,7 @@ This docstring exercises the same structural hoisting from a documentation box:
 A marker inside the documentation box{margin}[Hoisted docstring note].
 :::
 
-# Table Marginalia Stress
+# Table Marginalia Stress{margin}[A note in a section title]
 
 :::table
 *
