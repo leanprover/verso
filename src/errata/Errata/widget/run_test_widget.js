@@ -180,11 +180,17 @@ function iconButtonStyle(disabled) {
 // The outline of a settings field whose text holds back a run.
 const invalidOutline = "1px solid var(--vscode-inputValidation-errorBorder, #be1100)";
 
-// The problem with an option row that holds back a run, or null. A row with neither a name nor a
-// value is left out of the run.
+// Whether an option row has neither a name nor a value. A blank row is left out of a run, and is
+// removed when a run starts.
+function optionIsBlank(opt) {
+    return opt.name.trim() === "" && opt.value === "";
+}
+
+// The problem with an option row that holds back a run, or null.
 function optionProblem(opt) {
+    if (optionIsBlank(opt)) return null;
     const name = opt.name.trim();
-    if (name === "") return opt.value === "" ? null : "Each option needs a name";
+    if (name === "") return "Each option needs a name";
     if (name.startsWith("-")) return "Write each option's name without its leading dashes";
     return null;
 }
@@ -1321,7 +1327,7 @@ function TestRun(props) {
     const seedHint = "The seed must be a natural number";
     const optionsSent = options
         .filter(function (opt) {
-            return opt.name.trim() !== "" || opt.value !== "";
+            return !optionIsBlank(opt);
         })
         .map(function (opt) {
             return { name: opt.name.trim(), value: opt.value };
@@ -1394,6 +1400,11 @@ function TestRun(props) {
         setEdited(false);
         // Each run's results open as the settings and its failures decide.
         setOpenResults({});
+        setOptions(function (opts) {
+            return opts.filter(function (opt) {
+                return !optionIsBlank(opt);
+            });
+        });
         dispatch({ type: "start", now: Date.now(), runId });
         const request = {
             decl: props.decl,
@@ -1620,9 +1631,40 @@ function TestRun(props) {
     // The buttons that add and remove options are disabled during a run, and look like links only
     // while they can be clicked.
     const iconButtonClass = running ? "codicon" : "link pointer dim codicon";
+    // Each option is laid out as it is written on the command line, `--name=value`, followed by its
+    // remove button and, for an option that the last run never read, a warning. Every row has the
+    // same columns, so the rows and the add button below them line up.
+    const optionRow = {
+        display: "grid",
+        gridTemplateColumns: "2ch 12ch 1ch 14ch 22px 22px",
+        alignItems: "center",
+        marginTop: "4px",
+        fontFamily: monoFont,
+        fontSize: dimSize,
+    };
+    const optionField = {
+        width: "100%",
+        boxSizing: "border-box",
+        margin: 0,
+        fontFamily: monoFont,
+    };
+    const addOptionButton = e("button", {
+        ref: function (el) {
+            if (el && focusOptionKey.current === ADD_OPTION) {
+                focusOptionKey.current = null;
+                el.focus();
+            }
+        },
+        onClick: addOption,
+        disabled: running,
+        title: "Add an option for the test",
+        "aria-label": "Add option",
+        className: iconButtonClass + " codicon-add",
+        style: { ...iconButtonStyle(running), gridColumn: 5, justifySelf: "end" },
+    });
 
     // The settings themselves, in a popup below the gear: the seed for property tests, the reason
-    // for a rejected one, the test options, and how the named results of a run first appear.
+    // for a rejected one, how the named results of a run first appear, and the test options.
     const settingsPopup = settingsOpen
         ? e(
               Popup,
@@ -1652,23 +1694,25 @@ function TestRun(props) {
               ),
               seedValid ? null : e("div", { style: hintStyle }, seedHint),
               e(
+                  "label",
+                  { style: { ...settingRow, marginTop: "4px" } },
+                  e("input", {
+                      type: "checkbox",
+                      checked: expandNamed,
+                      title: "Show what each named result reported, rather than its verdict alone",
+                      onChange: function (ev) {
+                          setNamedResultsOpen(ev.target.checked);
+                      },
+                      style: { margin: 0 },
+                  }),
+                  "Expand named results",
+              ),
+              // With no rows yet, the add button follows the heading.
+              e(
                   "div",
                   { style: { ...settingRow, marginTop: "4px" } },
-                  "Options",
-                  e("button", {
-                      ref: function (el) {
-                          if (el && focusOptionKey.current === ADD_OPTION) {
-                              focusOptionKey.current = null;
-                              el.focus();
-                          }
-                      },
-                      onClick: addOption,
-                      disabled: running,
-                      title: "Add an option for the test",
-                      "aria-label": "Add option",
-                      className: iconButtonClass + " codicon-add",
-                      style: iconButtonStyle(running),
-                  }),
+                  "Options:",
+                  options.length ? null : addOptionButton,
               ),
               options.map(function (opt) {
                   // A row with a problem is marked, and Run waits for it to be fixed.
@@ -1679,7 +1723,7 @@ function TestRun(props) {
                           key: opt.key,
                           role: "group",
                           "aria-label": "Option",
-                          style: { ...settingRow, marginTop: "4px", fontFamily: monoFont },
+                          style: optionRow,
                       },
                       "--",
                       e("input", {
@@ -1699,8 +1743,7 @@ function TestRun(props) {
                               editOption(opt.key, "name", ev.target.value);
                           },
                           style: {
-                              width: "10ch",
-                              fontFamily: monoFont,
+                              ...optionField,
                               outline: nameValid ? undefined : invalidOutline,
                           },
                       }),
@@ -1714,7 +1757,7 @@ function TestRun(props) {
                           onChange: function (ev) {
                               editOption(opt.key, "value", ev.target.value);
                           },
-                          style: { width: "12ch", fontFamily: monoFont },
+                          style: optionField,
                       }),
                       e("button", {
                           onClick: function () {
@@ -1724,7 +1767,7 @@ function TestRun(props) {
                           title: "Remove this option",
                           "aria-label": "Remove option",
                           className: iconButtonClass + " codicon-close",
-                          style: iconButtonStyle(running),
+                          style: { ...iconButtonStyle(running), justifySelf: "end" },
                       }),
                       unreadOptions.includes(opt.name.trim())
                           ? e("span", {
@@ -1732,26 +1775,14 @@ function TestRun(props) {
                                 title: "The test never read this option in the last run",
                                 "aria-label": "Never read",
                                 className: "codicon codicon-warning",
-                                style: { color: warningColor },
+                                style: { color: warningColor, justifySelf: "end" },
                             })
                           : null,
                   );
               }),
+              // Below the rows, the add button sits in the column of their remove buttons.
+              options.length ? e("div", { style: optionRow }, addOptionButton) : null,
               optionsValid ? null : e("div", { style: hintStyle }, optionsHint),
-              e(
-                  "label",
-                  { style: { ...settingRow, marginTop: "4px" } },
-                  e("input", {
-                      type: "checkbox",
-                      checked: expandNamed,
-                      title: "Show what each named result reported, rather than its verdict alone",
-                      onChange: function (ev) {
-                          setNamedResultsOpen(ev.target.checked);
-                      },
-                      style: { margin: 0 },
-                  }),
-                  "Expand named results",
-              ),
           )
         : null;
 

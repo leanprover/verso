@@ -93,6 +93,23 @@ def test_a_removed_option_is_not_passed(editor):
     expect_exact_text(widget.output, "greeting: hello\n")
 
 
+def test_a_run_removes_the_blank_options(editor):
+    editor.show("Passing", "readsOptions")
+    widget = Widget(editor.page)
+    widget.gear.click()
+    widget.add_option("")
+    widget.add_option("greeting", "hello")
+    widget.add_option("")
+    editor.page.keyboard.press("Escape")
+    widget.run_button.click()
+    widget.wait_for_verdict("Passed")
+    widget.gear.click()
+    expect(widget.option_rows).to_have_count(1)
+    expect(widget.option_rows.first.get_by_title("Option name")).to_have_value(
+        "greeting"
+    )
+
+
 def test_removing_an_option_moves_the_focus_to_its_neighbour(editor):
     editor.show("Passing", "readsOptions")
     widget = Widget(editor.page)
@@ -136,10 +153,10 @@ def test_the_settings_scroll_when_they_outgrow_the_window(editor):
     editor.show("Passing", "readsOptions")
     widget = Widget(editor.page)
     widget.gear.click()
+    # Each row is added with the button below the rows, which the popup scrolls to.
     for i in range(12):
         widget.add_option(f"option{i}")
-    widget.expand_named.check()
-    expect(widget.expand_named).to_be_checked()
+    expect(widget.option_rows).to_have_count(12)
 
 
 def test_an_option_the_test_never_read_is_named(editor):
