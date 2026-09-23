@@ -73,6 +73,7 @@ jobs:
                   targets=(
                     test-projects/literate-config/lean-toolchain
                     test-projects/literate-multi-root/lean-toolchain
+                    test-projects/errata-widget/lean-toolchain
                   )
                   for t in "${targets[@]}"; do
                     if [ -L "$t" ]; then
@@ -91,7 +92,8 @@ jobs:
                   git config user.email "github-actions[bot]@users.noreply.github.com"
                   git add -- \
                     test-projects/literate-config/lean-toolchain \
-                    test-projects/literate-multi-root/lean-toolchain
+                    test-projects/literate-multi-root/lean-toolchain \
+                    test-projects/errata-widget/lean-toolchain
                   if git diff --cached --quiet; then
                     echo "No consistency fixes needed"
                     echo "changes=false" >> "$GITHUB_OUTPUT"
