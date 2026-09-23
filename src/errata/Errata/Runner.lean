@@ -80,8 +80,11 @@ def mkContext (updateGolden : Bool := false)
   let log ← IO.mkRef (#[] : Array Result)
   let usedOptions ← IO.mkRef ({} : Std.HashSet String)
   let outputFailed ← IO.mkRef false
+  let watchFailed ← IO.mkRef false
   let insideMs ← IO.mkRef 0
-  return { updateGolden, options, seed, ignorePanics, log, usedOptions, outputFailed, insideMs }
+  return {
+    updateGolden, options, seed, ignorePanics, log, usedOptions, outputFailed, watchFailed, insideMs
+  }
 
 /-- The settings parsed from the runner's command line. -/
 structure Options where
@@ -204,7 +207,7 @@ collected into a multi-map so repeated options accumulate. The {lit}`--name valu
 next token as the value when that token does not begin with {lit}`-`; a value that does uses the
 {lit}`--name=value` form. Any other token is rejected.
 -/
-partial def projectOptions (tokens : List String) : Except String OptionMap :=
+partial def parseTestOptions (tokens : List String) : Except String OptionMap :=
   go {} tokens
 where
   push (acc : OptionMap) (name value : String) : OptionMap :=
@@ -251,7 +254,7 @@ def optionsOfParsed (p : Cli.Parsed) : Except String Options := do
     markdownPath := ← pathFlag p "markdown",
     wfail := p.hasFlag "wfail",
     ignorePanics := p.hasFlag "ignore-panics",
-    options := ← projectOptions (p.variableArgsAs! String).toList
+    options := ← parseTestOptions (p.variableArgsAs! String).toList
   }
 
 /--

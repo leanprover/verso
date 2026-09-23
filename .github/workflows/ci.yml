@@ -91,6 +91,22 @@ jobs:
               run: |
                   lake build
 
+            # Running linters catches forward reference errors in docstrings. Tests are excluded due
+            # to some spurious linter warnings.
+            #
+            # Libraries are linted one at a time to reduce memory issues on CI runners.
+            - name: Lint the libraries
+              run: |
+                  failed=0
+                  for root in VersoUtil Verso MultiVerso VersoSearch VersoBlog VersoManual \
+                      VersoIlluminate VersoTutorial VersoServe VersoLiterate VersoLiterateCode \
+                      UsersGuide Errata; do
+                      echo "::group::lake lint $root"
+                      lake lint --builtin-lint --builtin-only "$root" || failed=1
+                      echo "::endgroup::"
+                  done
+                  exit "$failed"
+
             # RELEASE_NOTES_BASE is what keeps this working against the shallow checkout above:
             # HEAD^1 is the base branch for both pull_request and merge_group runs, and is one
             # of the two commits that are fetched.
@@ -151,6 +167,7 @@ jobs:
                   inkscape --version
 
             - name: Run tests
+              id: tests
               run: |
                   lake test -- --test-options --verbose --wfail --junit=errata-report.xml --markdown=errata-summary.md -- --check-tex
 
@@ -161,10 +178,12 @@ jobs:
 
             # Publishing a check run needs a token with `checks: write`, which pull requests from
             # forks never receive; those runs get their results from the job summary and the
-            # uploaded artifact instead.
+            # uploaded artifact instead. The report exists once the tests have run, whether they
+            # passed or failed, and a build that fails first leaves it unwritten.
             - name: Publish the JUnit test report
               if:
-                  always() && (github.event_name != 'pull_request' ||
+                  always() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure')
+                  && hashFiles('errata-report.xml') != '' && (github.event_name != 'pull_request' ||
                   github.event.pull_request.head.repo.full_name == github.repository)
               uses: dorny/test-reporter@v3
               with:
@@ -241,6 +260,17 @@ jobs:
                   pushd static-web
                   npx tsc --noEmit -p jsconfig.json
                   popd
+
+            # The widget is checked against the React and InfoView declarations that `npm ci`
+            # installs, which are the versions the InfoView runs it with.
+            - name: Type check the run-test widget JS code
+              run: npm run typecheck:widget
+
+            # These tests show the widget in the real InfoView, which `npm ci` installs. pytest runs
+            # them only when `-m errata_widget` selects them.
+            - name: Run the run-test widget's browser tests
+              run: |
+                  uv run --project browser-tests --extra test pytest browser-tests/errata-widget -m errata_widget -v
 
             - name: Check the ToC width storage key stays in sync
               run: |
