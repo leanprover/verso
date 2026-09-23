@@ -139,9 +139,9 @@ def test_the_options_of_a_run_can_be_used_again(editor):
     expect(widget.option_rows).to_have_count(0)
     widget.options_badge.click()
     expect(widget.option_rows).to_have_count(1)
-    expect(widget.option_rows.first.get_by_title("Option value; blank for a flag")).to_have_value(
-        "good day"
-    )
+    expect(
+        widget.option_rows.first.get_by_title("Option value; blank for a flag")
+    ).to_have_value("good day")
     editor.page.keyboard.press("Escape")
     widget.run_button.click()
     widget.wait_for_verdict("Passed")
@@ -169,9 +169,7 @@ def test_an_option_the_test_never_read_is_named(editor):
     editor.page.keyboard.press("Escape")
     widget.run_button.click()
     widget.wait_for_verdict("Passed")
-    expect(
-        widget.text("options never read by this test: colour, size")
-    ).to_be_visible()
+    expect(widget.text("options never read by this test: colour, size")).to_be_visible()
     # The rows of the options that were never read are marked in the settings.
     widget.gear.click()
     marked = widget.option_rows.filter(has=editor.page.get_by_label("Never read"))
