@@ -35,23 +35,27 @@ function cacheResult(declKey, entry) {
 
 // The editor theme's test-result colours, with fallbacks for a page outside VS Code. They are the
 // colours of the theme's test icons, so they carry the verdict on the status glyph while the label
-// beside it keeps the editor's text colour.
+// beside it keeps the editor's text colour. A failure within an `expectFail` is a failure that the
+// test wanted, so it keeps the failure's glyph in the muted colour of a skipped test.
 const STATUS_COLORS = {
     passed: "var(--vscode-testing-iconPassed, #2e7d32)",
     failed: "var(--vscode-testing-iconFailed, #c62828)",
     error: "var(--vscode-testing-iconErrored, #e65100)",
+    expectedFailure: "var(--vscode-testing-iconSkipped, #848484)",
 };
 
 const STATUS_SYMBOLS = {
     passed: "✓",
     failed: "✗",
     error: "⚠",
+    expectedFailure: "✗",
 };
 
 const STATUS_LABELS = {
     passed: "Passed",
     failed: "FAILED",
     error: "ERROR",
+    expectedFailure: "Expected failure",
 };
 
 const preStyle = {
@@ -82,20 +86,27 @@ function errorMessage(err) {
     return (err && err.message) || String(err);
 }
 
-// How often a rejected `awaitOutput` is retried before the run is reported as failed, and the delay
-// before each attempt. The InfoView replaces the RPC session as the cursor moves, which rejects the
-// call in flight, so a rejection is part of the ordinary course of a run.
+// How many rejected calls in a row are retried quietly, the delay that grows with each attempt, and
+// the longest delay between attempts. The InfoView replaces the RPC session as the cursor moves,
+// which rejects the call in flight, so a rejection is part of the ordinary course of a run.
 const AWAIT_RETRIES = 5;
 const AWAIT_RETRY_MS = 200;
+const AWAIT_RETRY_MAX_MS = 2000;
+
+// The JSON-RPC error code of a call that the server refuses for its parameters.
+const INVALID_PARAMS = -32602;
 
 const monoFont = "var(--vscode-editor-font-family, monospace)";
 
 // The editor theme's colour for secondary text: the badges, hints, and the output summary. The
-// theme keeps it legible against the panel's background.
+// theme keeps it legible against the InfoView's background.
 const dimColor = "var(--vscode-descriptionForeground, #717171)";
 
 // The editor theme's colour for errors: a run that could not start, and a rejected seed.
 const errorColor = "var(--vscode-errorForeground, #c62828)";
+
+// The editor theme's colour for warnings: an option that the test never read.
+const warningColor = "var(--vscode-editorWarning-foreground, #bf8803)";
 
 // The size of the text that accompanies a result rather than stating it: the badges, the hints, the
 // durations, and the run settings. It is a fraction of the text around it, so the whole widget
@@ -124,8 +135,13 @@ function Elapsed(props) {
     return e("span", { style: { fontFamily: monoFont } }, formatDuration(elapsed));
 }
 
+// The popup opens below its anchor when this much room is there, and otherwise on the side with
+// more room. It keeps this far from the edge of the window, and scrolls when it would grow past it.
+const POPUP_ROOM = 160;
+const POPUP_MARGIN = 8;
+
 // A fixed position against an element, aligned to its right edge and below it, going above it
-// where the view has no room. The 48 pixels are the room a row of controls takes.
+// where the view has more room there, with a height that stays within the window.
 function placeUnder(anchor) {
     if (!anchor) return { display: "none" };
     const rect = anchor.getBoundingClientRect();
@@ -133,11 +149,66 @@ function placeUnder(anchor) {
         position: "fixed",
         right: Math.max(8, window.innerWidth - rect.right),
         zIndex: 100,
+        overflowY: "auto",
     };
-    if (rect.bottom + 48 > window.innerHeight) style.bottom = window.innerHeight - rect.top + 6;
-    else style.top = rect.bottom + 6;
+    const below = window.innerHeight - rect.bottom - 6 - POPUP_MARGIN;
+    const above = rect.top - 6 - POPUP_MARGIN;
+    if (below >= POPUP_ROOM || below >= above) {
+        style.top = rect.bottom + 6;
+        style.maxHeight = below;
+    } else {
+        style.bottom = window.innerHeight - rect.top + 6;
+        style.maxHeight = above;
+    }
     return style;
 }
+
+// The style of a button that is a codicon alone, dimmed and without the pointer while it is
+// disabled.
+function iconButtonStyle(disabled) {
+    return {
+        background: "none",
+        border: "none",
+        padding: 0,
+        color: disabled
+            ? "var(--vscode-disabledForeground, #888)"
+            : "var(--vscode-textLink-foreground, #0078d4)",
+        cursor: disabled ? "default" : undefined,
+    };
+}
+
+// The outline of a settings field whose text holds back a run.
+const invalidOutline = "1px solid var(--vscode-inputValidation-errorBorder, #be1100)";
+
+// The problem with an option row that holds back a run, or null. A row with neither a name nor a
+// value is left out of the run.
+function optionProblem(opt) {
+    const name = opt.name.trim();
+    if (name === "") return opt.value === "" ? null : "Each option needs a name";
+    if (name.startsWith("-")) return "Write each option's name without its leading dashes";
+    return null;
+}
+
+// A word as a POSIX shell reads it: as it is when the shell passes on all of its characters
+// unchanged, and in double quotes otherwise.
+function shellWord(text) {
+    if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(text)) return text;
+    return '"' + text.replace(/["\\$`]/g, "\\$&") + '"';
+}
+
+// Options as they are written on the test driver's command line.
+function optionsCommandLine(opts) {
+    return opts
+        .map(function (opt) {
+            return (
+                "--" + shellWord(opt.name) + (opt.value === "" ? "" : "=" + shellWord(opt.value))
+            );
+        })
+        .join(" ");
+}
+
+// The value of `focusOptionKey` that gives the focus to the add button.
+const ADD_OPTION = "add";
 
 // A popup anchored to an element, in the style of the InfoView's own menus. It is portalled to the
 // document body, which puts it outside the disclosure summary that holds its anchor, so the
@@ -300,14 +371,151 @@ function outputBlock(cache, chunks, execStartTime, hovered, setHovered) {
     );
 }
 
+// Copying output to the clipboard, for a control that confirms each copy for a moment: `copied` is
+// true for a moment after each copy, and `copy` copies the text of the chunks it is given.
+function useCopy() {
+    const ec = React.useContext(EditorContext);
+    const [copied, setCopied] = React.useState(false);
+    // The timer that ends the confirmation, so another copy restarts it in full.
+    const copiedTimer = React.useRef(null);
+
+    React.useEffect(function () {
+        return function () {
+            if (copiedTimer.current) clearTimeout(copiedTimer.current);
+        };
+    }, []);
+
+    function confirmCopy() {
+        setCopied(true);
+        if (copiedTimer.current) clearTimeout(copiedTimer.current);
+        copiedTimer.current = setTimeout(function () {
+            copiedTimer.current = null;
+            setCopied(false);
+        }, 1500);
+    }
+
+    /** @param chunks {Chunk[]} */
+    function copy(chunks) {
+        const text = chunks
+            .map(function (c) {
+                return c.text;
+            })
+            .join("");
+        // The editor puts the text on the clipboard, and a refused copy leaves the label as it is.
+        ec.api.copyToClipboard(text).then(confirmCopy, function () {});
+    }
+
+    return { copied, copy };
+}
+
+// The copy icon (two overlapping sheets), or a check mark once the output has been copied.
+function copyIcon(copied) {
+    return e(
+        "svg",
+        {
+            width: 13,
+            height: 13,
+            viewBox: "0 0 24 24",
+            fill: "none",
+            stroke: "currentColor",
+            strokeWidth: 2,
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+        },
+        copied
+            ? e("path", { key: "check", d: "M20 6L9 17l-5-5" })
+            : [
+                  e("rect", { key: "sheet", x: 9, y: 9, width: 13, height: 13, rx: 2, ry: 2 }),
+                  e("path", {
+                      key: "back",
+                      d: "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1",
+                  }),
+              ],
+    );
+}
+
+/**
+ * A box of output with a copy button floating over its corner, which copies the output in the box.
+ * The button is revealed while the pointer is over the box or the button has keyboard focus.
+ * @param props {{chunks: Chunk[], children?: React.ReactNode}}
+ */
+function CopyableOutput(props) {
+    const { copied, copy } = useCopy();
+    const [over, setOver] = React.useState(false);
+    const [focused, setFocused] = React.useState(false);
+    const copyButton = e(
+        "button",
+        {
+            onClick: function () {
+                copy(props.chunks);
+            },
+            onFocus: function () {
+                setFocused(true);
+            },
+            onBlur: function () {
+                setFocused(false);
+            },
+            title: copied ? "Copied" : "Copy output to clipboard",
+            "aria-label": "Copy output to clipboard",
+            style: {
+                position: "absolute",
+                top: "4px",
+                right: "4px",
+                zIndex: 1,
+                display: "flex",
+                alignItems: "center",
+                padding: "3px",
+                lineHeight: 0,
+                opacity: over || focused || copied ? 0.95 : 0,
+                transition: "opacity 0.1s",
+            },
+        },
+        copyIcon(copied),
+    );
+    return e(
+        "div",
+        {
+            style: { position: "relative" },
+            onMouseEnter: function () {
+                setOver(true);
+            },
+            onMouseLeave: function () {
+                setOver(false);
+            },
+        },
+        copyButton,
+        props.children,
+    );
+}
+
+/**
+ * The control in the title that copies the whole run's output, in the order the test produced it.
+ * @param props {{chunks: Chunk[]}}
+ */
+function CopyAllButton(props) {
+    const { copied, copy } = useCopy();
+    return e("button", {
+        onClick: function () {
+            copy(props.chunks);
+        },
+        title: copied ? "Copied" : "Copy all output",
+        "aria-label": "Copy all output",
+        className: "link pointer dim mh2 codicon " + (copied ? "codicon-check" : "codicon-copy"),
+        style: {
+            background: "none",
+            border: "none",
+            padding: 0,
+            color: "var(--vscode-textLink-foreground, #0078d4)",
+        },
+    });
+}
+
 // The collapsible output disclosure: a summary naming the hovered chunk's stream and time offset,
-// the interleaved chunks, and a copy button floating over the output, revealed on hover. The button
-// copies `copy` when the caller gives it, which is how the test's own output shows alone while the
-// button still offers the whole run's. Whether it is open belongs to the caller, so a collapse
-// outlasts the output being replaced.
+// and the interleaved chunks in a box of their own. Whether it is open belongs to the caller, so a
+// collapse outlasts the output being replaced.
 const OutputSection = React.memo(
     /**
-     * @param props {{chunks: Chunk[], copy?: Chunk[], execStartTime: number, open: boolean,
+     * @param props {{chunks: Chunk[], length: number, execStartTime: number, open: boolean,
      *                onOpenChange: (open: boolean) => void}}
      */
     function OutputSection(props) {
@@ -320,110 +528,6 @@ const OutputSection = React.memo(
         const spanCache = React.useRef({ spans: [], last: null, execStartTime: 0 });
         // Whether a chunk of the output on show is under the pointer.
         const showing = hovered >= 0 && hovered < chunks.length;
-        // Briefly true after the output is copied, to confirm the copy in the button label.
-        const [copied, setCopied] = React.useState(false);
-        // Whether the cursor is over the output area, revealing the floating copy button.
-        const [over, setOver] = React.useState(false);
-        // Whether the copy button has keyboard focus, which also reveals it.
-        const [focused, setFocused] = React.useState(false);
-        // The timer that ends the copy confirmation, so another copy restarts it in full.
-        const copiedTimer = React.useRef(null);
-
-        React.useEffect(function () {
-            return function () {
-                if (copiedTimer.current) clearTimeout(copiedTimer.current);
-            };
-        }, []);
-
-        // Confirms a copy in the button's label for a moment.
-        function confirmCopy() {
-            setCopied(true);
-            if (copiedTimer.current) clearTimeout(copiedTimer.current);
-            copiedTimer.current = setTimeout(function () {
-                copiedTimer.current = null;
-                setCopied(false);
-            }, 1500);
-        }
-
-        function copyOutput() {
-            const text = (props.copy || chunks)
-                .map(function (c) {
-                    return c.text;
-                })
-                .join("");
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(confirmCopy, function () {});
-                return;
-            }
-            // A page served outside a secure context copies from a selection instead, made in a field
-            // held off the side of the view.
-            const field = document.createElement("textarea");
-            field.value = text;
-            field.style.position = "fixed";
-            field.style.opacity = "0";
-            document.body.appendChild(field);
-            field.select();
-            try {
-                if (document.execCommand("copy")) confirmCopy();
-            } catch (err) {
-                // The copy was refused, and the label stands as it is.
-            } finally {
-                document.body.removeChild(field);
-            }
-        }
-
-        // The copy icon (two overlapping sheets), or a check mark once the output has been copied.
-        const copyIcon = e(
-            "svg",
-            {
-                width: 13,
-                height: 13,
-                viewBox: "0 0 24 24",
-                fill: "none",
-                stroke: "currentColor",
-                strokeWidth: 2,
-                strokeLinecap: "round",
-                strokeLinejoin: "round",
-            },
-            copied
-                ? e("path", { key: "check", d: "M20 6L9 17l-5-5" })
-                : [
-                      e("rect", { key: "sheet", x: 9, y: 9, width: 13, height: 13, rx: 2, ry: 2 }),
-                      e("path", {
-                          key: "back",
-                          d: "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1",
-                      }),
-                  ],
-        );
-
-        // Revealed while the pointer is over the output or the button has keyboard focus.
-        const copyButton = e(
-            "button",
-            {
-                onClick: copyOutput,
-                onFocus: function () {
-                    setFocused(true);
-                },
-                onBlur: function () {
-                    setFocused(false);
-                },
-                title: copied ? "Copied" : "Copy output to clipboard",
-                "aria-label": "Copy output to clipboard",
-                style: {
-                    position: "absolute",
-                    top: "4px",
-                    right: "4px",
-                    zIndex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    padding: "3px",
-                    lineHeight: 0,
-                    opacity: over || focused || copied ? 0.95 : 0,
-                    transition: "opacity 0.1s",
-                },
-            },
-            copyIcon,
-        );
 
         return e(
             "details",
@@ -466,17 +570,8 @@ const OutputSection = React.memo(
                 ),
             ),
             e(
-                "div",
-                {
-                    style: { position: "relative" },
-                    onMouseEnter: function () {
-                        setOver(true);
-                    },
-                    onMouseLeave: function () {
-                        setOver(false);
-                    },
-                },
-                copyButton,
+                CopyableOutput,
+                { chunks },
                 outputBlock(spanCache, chunks, execStartTime, hovered, setHovered),
             ),
         );
@@ -489,7 +584,8 @@ const OutputSection = React.memo(
 function sourceButton(source, reveal) {
     if (!source) return null;
     const file = decodeURIComponent((source.uri || "").split("/").pop() || "");
-    const where = file + ":" + (source.startLine + 1) + ":" + source.startColumn;
+    // Lines and columns counted from one, as the editor's status bar counts them.
+    const where = file + ":" + (source.startLine + 1) + ":" + (source.startColumn + 1);
     return e("button", {
         onClick: function () {
             reveal(source);
@@ -531,8 +627,8 @@ const treeStyle =
     ".errata-leaf::marker { color: transparent }";
 
 // One named result in the tree: its verdict, its name, and how long its own code took. A result
-// that reported something opens to show it, in the order a reader wants it: why it did not pass,
-// what its own code wrote, then the named results inside it. A result that reported nothing beyond
+// that reported something opens to show it, in the order a reader wants it: its failure message and
+// detail, what its own code wrote, then the named results inside it. A result that reported nothing beyond
 // its verdict is a row of its own, with no triangle to open.
 function NamedResult(props) {
     const result = props.results[props.id];
@@ -542,7 +638,7 @@ function NamedResult(props) {
     const inside = props.kids[props.id] || [];
     const reported = !!(result.message || result.detail || result.output.length || inside.length);
     const open = reported && props.isOpen(props.id);
-    // A result reads as the panel's own text, so its rows take the size around them and the tree
+    // A result reads as the InfoView's own text, so its rows take the size around them and the tree
     // stays legible at any editor font. Nesting adds no size of its own, so a result at any depth
     // reads the same.
     const rowStyle = { marginTop: "2px" };
@@ -587,12 +683,16 @@ function NamedResult(props) {
                   result.message ? block(result.message) : null,
                   result.detail ? block(result.detail) : null,
                   result.output.length
-                      ? outputBlock(
-                            spanCache,
-                            result.output,
-                            props.execStartTime,
-                            hovered,
-                            setHovered,
+                      ? e(
+                            CopyableOutput,
+                            { key: "output", chunks: result.output },
+                            outputBlock(
+                                spanCache,
+                                result.output,
+                                props.execStartTime,
+                                hovered,
+                                setHovered,
+                            ),
                         )
                       : null,
                   inside.map(function (id) {
@@ -604,7 +704,8 @@ function NamedResult(props) {
 }
 
 /**
- * @typedef {"passed" | "failed" | "error"} Status the verdict of a result, as Lean reports it
+ * @typedef {"passed" | "failed" | "error" | "expectedFailure"} Status the verdict of a result, as
+ *   Lean reports it
  * @typedef {Status | ""} ShownStatus a verdict, or blank while a result is still running
  * @typedef {{uri: string, startLine: number, startColumn: number, endLine: number,
  *            endColumn: number}} Source the span of a failed check
@@ -614,9 +715,11 @@ function NamedResult(props) {
  *            output: Chunk[]}} ResultNode
  * @typedef {{status: Status, durationMs: number, message?: string, detail?: string,
  *            location?: Source, results?: ResultNode[], description?: string,
- *            seed?: string}} Outcome
+ *            seed?: string, options?: {name: string, value: string}[],
+ *            unreadOptions?: string[]}} Outcome
  * @typedef {{phase: string, chunks: Chunk[], results: ResultNode[], startTime: number,
- *            startedAt: number, buildMs: number, execStartTime: number}} RunFields
+ *            startedAt: number, buildMs: number, execStartTime: number,
+ *            runId: string}} RunFields
  *
  * The run's lifecycle as a single state, so the widget shows exactly one of a spinner, a verdict,
  * an error, or nothing:
@@ -654,6 +757,7 @@ function blankFields() {
         startedAt: 0,
         buildMs: 0,
         execStartTime: 0,
+        runId: "",
     };
 }
 
@@ -676,12 +780,56 @@ function blankResult(id) {
 }
 
 /**
- * The results of a run, updated with the chunks and the reports from named results in one reply.
+ * The chunks of a run, with those of one reply at their positions in the run. A reply holds the run's
+ * chunks from a position on, so a chunk that a replayed reply holds again lands where it already is.
+ * The array grows in place, since a run's output only grows, so a reply costs as much as the chunks
+ * it holds.
  *
- * A report gives a result's identifier, parent, and name when it starts, and its verdict when it
- * finishes. A result's output is the chunks whose `result` field names it. All of one result's
- * chunks in a reply are appended at once, so its output array is rebuilt once per reply. The chunk
- * objects are shared with the run's own output, so a result holds only references to them.
+ * @param chunks {Chunk[]}
+ * @returns {Chunk[]}
+ */
+function placeChunks(chunks, reply) {
+    const added = reply.chunks || [];
+    const start = Math.max(0, (reply.nextSince || 0) - added.length);
+    for (let i = 0; i < added.length && start + i <= chunks.length; i++) {
+        chunks[start + i] = added[i];
+    }
+    return chunks;
+}
+
+/**
+ * The output of each result, by identifier: the chunks whose `result` field names it, in order. The
+ * groups live in `cache` from one render to the next and take in only the chunks that arrived since,
+ * so a run's output is grouped once as it grows. Chunks that replaced the ones grouped, such as those
+ * of another run, start the groups over.
+ *
+ * @param chunks {Chunk[]}
+ * @returns {Map<number, Chunk[]>}
+ */
+function outputsByResult(cache, chunks) {
+    const c = cache.current;
+    if (c.chunks !== chunks || c.count > chunks.length) {
+        c.chunks = chunks;
+        c.count = 0;
+        c.byResult = new Map();
+    }
+    for (; c.count < chunks.length; c.count++) {
+        const chunk = chunks[c.count];
+        const id = chunk.result || 0;
+        let group = c.byResult.get(id);
+        if (!group) {
+            group = [];
+            c.byResult.set(id, group);
+        }
+        group.push(chunk);
+    }
+    return c.byResult;
+}
+
+/**
+ * The results of a run, updated with the reports from named results in one reply. A report gives a
+ * result's identifier, parent, and name when it starts, and its verdict when it finishes. A replayed
+ * report updates a result with what it already holds.
  *
  * @param results {ResultNode[]}
  * @returns {ResultNode[]}
@@ -705,22 +853,15 @@ function mergeResults(results, reply) {
             location: ev.location || shown.location,
         };
     }
-    const arrived = new Map();
-    for (const c of reply.chunks || []) {
-        const id = c.result || 0;
-        if (!arrived.has(id)) arrived.set(id, []);
-        arrived.get(id).push(c);
-    }
-    for (const [id, added] of arrived) {
-        const shown = at(id);
-        next[id] = { ...shown, output: shown.output.concat(added) };
-    }
+    // A chunk can name a result that has yet to be reported, such as the test's own.
+    for (const c of reply.chunks || []) at(c.result || 0);
     return next;
 }
 
 /**
- * The results of a finished run, as the outcome records them, each with the output of its own code.
- * A remounted widget shows these, since the run's chunks are gone by then.
+ * The results of a finished run, as the outcome records them. The runner streams each result's
+ * output as it is written, so these hold none. A widget that has none of the run's live results
+ * shows these.
  * @returns {ResultNode[]}
  */
 function resultsOfOutcome(outcome) {
@@ -768,7 +909,9 @@ function childrenOf(results) {
     });
     for (let i = 1; i < results.length; i++) {
         const parent = results[i].parent;
-        if (parent >= 0 && parent < children.length && parent !== i) children[parent].push(i);
+        // A named result has a higher identifier than the result that holds it, so a parent at or
+        // above a result's own identifier belongs to no tree and its result is left out.
+        if (parent >= 0 && parent < i) children[parent].push(i);
     }
     return children;
 }
@@ -788,7 +931,18 @@ function fieldsOf(st) {
         startedAt: st.startedAt,
         buildMs: st.buildMs,
         execStartTime: st.execStartTime,
+        runId: st.runId,
     };
+}
+
+/**
+ * Whether a reply is about another run than the one shown. Replies name their run by the identifier
+ * that the widget gave it; a run started without one is told apart by its start time.
+ * @param shown {{runId: string, startTime: number}}
+ */
+function isOtherRun(shown, reply) {
+    if (reply.runId && shown.runId) return reply.runId !== shown.runId;
+    return !!(reply.startTime && shown.startTime && reply.startTime !== shown.startTime);
 }
 
 /**
@@ -807,7 +961,7 @@ function doneState(cached) {
  *            server reports the authoritative one
  *   started  the server accepted the run, so it can be cancelled
  *   server   a reply from `awaitOutput`; it may arrive in any state, since the widget reconnects
- *            to runs it did not start
+ *            to runs that another widget started
  *   cancel   the user stopped the run
  *   fail     an RPC call failed, so there is no run to wait for
  *
@@ -818,7 +972,13 @@ function doneState(cached) {
 function step(st, ev) {
     switch (ev.type) {
         case "start":
-            return { tag: "running", ...blankFields(), phase: "starting", startedAt: ev.now };
+            return {
+                tag: "running",
+                ...blankFields(),
+                phase: "starting",
+                startedAt: ev.now,
+                runId: ev.runId,
+            };
         case "started":
             return st.tag === "running" && st.phase === "starting"
                 ? { ...st, phase: "building" }
@@ -829,18 +989,14 @@ function step(st, ev) {
             // for the same test, say) begins from blank fields; otherwise the reply extends the run
             // shown. Zero-valued fields in a reply mean "no news"; the server's values otherwise win.
             const shown = fieldsOf(st);
-            const prev =
-                res.startTime && shown.startTime && res.startTime !== shown.startTime
-                    ? blankFields()
-                    : shown;
+            const prev = isOtherRun(shown, res) ? blankFields() : shown;
             // The run's start on the client's clock is set once, from the first reply about the
             // run: the time the reply arrived, less how long the server says the run had been
             // going. Later replies leave it unchanged.
             const synced = prev.startTime !== 0;
             const merged = {
                 phase: res.phase || prev.phase,
-                chunks:
-                    res.chunks && res.chunks.length ? prev.chunks.concat(res.chunks) : prev.chunks,
+                chunks: placeChunks(prev.chunks, res),
                 results:
                     (res.chunks && res.chunks.length) || (res.results && res.results.length)
                         ? mergeResults(prev.results, res)
@@ -849,8 +1005,12 @@ function step(st, ev) {
                 startedAt: !synced && res.elapsedMs ? ev.now - res.elapsedMs : prev.startedAt,
                 buildMs: res.buildMs || prev.buildMs,
                 execStartTime: res.execStartTime || prev.execStartTime,
+                runId: res.runId || prev.runId,
             };
             if (!res.done) return { tag: "running", ...merged };
+            // A cancel and a refused start are states of the widget's own, which a reply about the
+            // run leaves as they are.
+            if (st.tag === "cancelled" || st.tag === "failed") return st;
             if (res.outcome) return { tag: "done", outcome: res.outcome, ...merged };
             // Done without an outcome: nothing is running server-side. That ends a watched run
             // (stopped from elsewhere, or its process died); in any other state it is no news.
@@ -870,31 +1030,15 @@ function step(st, ev) {
 /**
  * The InfoView reuses one widget instance for whichever test the cursor is on. Keying the inner
  * component on the test and a hash of its source remounts it whenever either changes, so every
- * piece of per-test state starts fresh and an edited test loses its cached or in-progress run.
+ * piece of per-test state starts fresh and an edited test loses its cached or in-progress run. The
+ * server ends the run of an edited test as it elaborates the edit.
  */
 export default function RunTestWidget(props) {
     const version = props.version || "";
-    const declKey = JSON.stringify(props.decl);
-    const rs = useRpcSession();
-
-    // This component outlives the edits that remount the inner one, so an edit to the test is
-    // visible here as one declaration's version changing. The run of the version left behind ends
-    // with it, releasing the build it holds. The version goes with the request, so a run of the
-    // test's current source keeps going, as does the run of a test the cursor has left.
-    const shown = React.useRef({ declKey, version });
-    React.useEffect(
-        function () {
-            const prev = shown.current;
-            shown.current = { declKey, version };
-            if (prev.declKey !== declKey || prev.version === version) return;
-            rs.call("Errata.Widget.dropStaleRun", {
-                decl: props.decl,
-                version: prev.version,
-            }).catch(function () {});
-        },
-        [declKey, version],
-    );
-
+    // The file and the declaration together name the test, since two files can each hold a test of
+    // the same name and source. The InfoView opens the widget's RPC session at this file.
+    const uri = React.useContext(EnvPosContext).uri;
+    const declKey = uri + " " + JSON.stringify(props.decl);
     return e(TestRun, { ...props, key: declKey + "@" + version, declKey, version });
 }
 
@@ -908,16 +1052,26 @@ function TestRun(props) {
         const cached = resultCache.get(declKey);
         return cached && cached.version === version ? doneState(cached) : idleState;
     });
-    // Whether the file has no unsaved changes; the test runs the saved version, so Run is gated on it.
-    const [clean, setClean] = React.useState(true);
+    // Whether the file has no unsaved changes; the test runs the saved version, so Run is gated on
+    // it. It is null until the server has said, which holds Run back until the answer is in.
+    const [clean, setClean] = React.useState(null);
     // Whether the file has changed since the test's run started, as the server last reported it.
     const [edited, setEdited] = React.useState(false);
-    // The seed for property tests as typed, or blank to have one drawn.
+    // The seed for property tests as typed, or blank to generate a random seed.
     const [seed, setSeed] = React.useState("");
-    // Whether the run settings (the seed field) are shown, behind the gear button.
+    // The test options as typed, one row for each, in order. Each row has a key of
+    // its own, so removing a row leaves the text of the rows after it where it was.
+    const [options, setOptions] = React.useState([]);
+    const nextOptionKey = React.useRef(0);
+    // What takes the focus when the rows are next shown: the name field of the row with this key, or
+    // the add button for ADD_OPTION. A row that is added or removed sets it.
+    const focusOptionKey = React.useRef(null);
+    // Whether the run settings are shown, behind the gear button.
     const [settingsOpen, setSettingsOpen] = React.useState(false);
     // The error from the last cancel that failed, shown while the run it was meant to stop goes on.
     const [cancelError, setCancelError] = React.useState(null);
+    // The error from the latest of a run of rejected reports, shown while the widget keeps asking.
+    const [awaitError, setAwaitError] = React.useState(null);
     // Whether the output disclosure is expanded; open by default, collapsible to hide large output.
     const [outputOpen, setOutputOpen] = React.useState(true);
     // Whether a named result starts open, and the ones the reader has since opened or closed, by
@@ -925,7 +1079,7 @@ function TestRun(props) {
     const [expandNamed, setExpandNamed] = React.useState(false);
     const [openResults, setOpenResults] = React.useState({});
     // Whether the widget's own disclosure is expanded, alongside the InfoView's other sections.
-    const [panelOpen, setPanelOpen] = React.useState(true);
+    const [open, setOpen] = React.useState(true);
     // Bumped when the language server restarts, so the widget connects again through its new session.
     const [epoch, setEpoch] = React.useState(0);
 
@@ -952,20 +1106,23 @@ function TestRun(props) {
     const cleanTimer = React.useRef(null);
     // Bumped on each edit and each clean check, so a check begun before an edit reports nothing.
     const cleanGen = React.useRef(0);
-    // The start time of the run being followed, so a reply about another one is recognized.
-    const shownStart = React.useRef(0);
+    // The identifier and start time of the run being followed, so a reply about another is recognized.
+    const shownRun = React.useRef({ runId: "", startTime: 0 });
     // Rejected `awaitOutput` calls since the last reply, and the pending retry of the last of them.
     const awaitFails = React.useRef(0);
     const retryTimer = React.useRef(null);
     // The gear the run settings hang from, and the seed field they hold.
     const gearRef = React.useRef(null);
     const seedRef = React.useRef(null);
-    // The file this widget belongs to, from the InfoView's position context. That context is what
-    // the widget's RPC session is opened at, so it is here for as long as the widget can call the
-    // server at all.
-    const uri = React.useContext(EnvPosContext).uri;
+    // The output of each result, grouped from the run's chunks as they arrive.
+    const outputCache = React.useRef({ chunks: null, count: 0, byResult: new Map() });
 
     const running = st.tag === "running";
+    // Whether a run is in progress, for the replies that arrive after the render that started them.
+    const runningRef = React.useRef(running);
+    React.useEffect(function () {
+        runningRef.current = running;
+    });
     const starting = st.tag === "running" && st.phase === "starting";
 
     // Asks the server about the file: whether it is saved, and whether it has changed since the
@@ -979,11 +1136,13 @@ function TestRun(props) {
         }
         const myGen = cleanGen.current + 1;
         cleanGen.current = myGen;
+        // A reply to a check sent before a run started is about the run before it.
+        const runGen = gen.current;
         rsRef.current.call("Errata.Widget.fileState", { decl: props.decl }).then(
             function (file) {
                 if (!alive.current || cleanGen.current !== myGen) return;
                 setClean(file.clean);
-                setEdited(file.changedSinceRun);
+                if (gen.current === runGen) setEdited(file.changedSinceRun);
                 cleanTimer.current = setTimeout(checkFile, 1500);
             },
             function () {
@@ -1006,21 +1165,21 @@ function TestRun(props) {
                 function (res) {
                     if (gen.current !== myGen) return;
                     awaitFails.current = 0;
+                    setAwaitError(null);
                     // A reply about another run than the one being followed, started from a second
                     // widget instance for the same test: its output is read from the first chunk.
-                    if (
-                        res.startTime &&
-                        shownStart.current &&
-                        res.startTime !== shownStart.current
-                    ) {
-                        shownStart.current = res.startTime;
+                    if (isOtherRun(shownRun.current, res)) {
+                        shownRun.current = { runId: res.runId, startTime: res.startTime };
                         sinceRef.current = 0;
                         sinceResultsRef.current = 0;
                         phaseRef.current = "";
                         loop(myGen);
                         return;
                     }
-                    if (res.startTime) shownStart.current = res.startTime;
+                    shownRun.current = {
+                        runId: res.runId || shownRun.current.runId,
+                        startTime: res.startTime || shownRun.current.startTime,
+                    };
                     if (res.phase) phaseRef.current = res.phase;
                     sinceRef.current = res.nextSince || 0;
                     sinceResultsRef.current = res.nextSinceResults || 0;
@@ -1030,15 +1189,21 @@ function TestRun(props) {
                 function (err) {
                     if (gen.current !== myGen) return;
                     // The session that rejected the call has been replaced by the time the retry
-                    // goes out, so the run is followed on through the new one.
-                    if (awaitFails.current < AWAIT_RETRIES) {
-                        awaitFails.current += 1;
-                        retryTimer.current = setTimeout(function () {
-                            if (gen.current === myGen) loop(myGen);
-                        }, AWAIT_RETRY_MS * awaitFails.current);
-                        return;
+                    // goes out, so the run is followed on through the new one. A run in progress
+                    // is followed for as long as the widget is up: past the first few retries, the
+                    // widget names the error beside the Cancel button and keeps trying at a slower
+                    // pace. A widget with no run in progress stops asking after the first few.
+                    awaitFails.current += 1;
+                    if (awaitFails.current > AWAIT_RETRIES) {
+                        if (!runningRef.current) return;
+                        setAwaitError(errorMessage(err));
                     }
-                    dispatch({ type: "fail", error: errorMessage(err) });
+                    retryTimer.current = setTimeout(
+                        function () {
+                            if (gen.current === myGen) loop(myGen);
+                        },
+                        Math.min(AWAIT_RETRY_MS * awaitFails.current, AWAIT_RETRY_MAX_MS),
+                    );
                 },
             );
     }
@@ -1057,8 +1222,11 @@ function TestRun(props) {
             sinceRef.current = resumed ? resumed.since : 0;
             sinceResultsRef.current = resumed ? resumed.sinceResults : 0;
             phaseRef.current = "";
-            shownStart.current = resumed ? resumed.fields.startTime : 0;
+            shownRun.current = resumed
+                ? { runId: resumed.fields.runId, startTime: resumed.fields.startTime }
+                : { runId: "", startTime: 0 };
             awaitFails.current = 0;
+            setAwaitError(null);
             loop(myGen);
             alive.current = true;
             checkFile();
@@ -1110,9 +1278,6 @@ function TestRun(props) {
         [settingsOpen],
     );
 
-    // A result the reader has opened or closed stays as they left it. Otherwise the settings
-    // decide, except on the way down to a result that did not pass: that path is open, so a failure
-    // and the results it happened in are in view as soon as the run reports them.
     // Has the editor open a file at the check that failed, with the check itself selected.
     function reveal(source) {
         const shown = ec.revealLocation({
@@ -1125,6 +1290,9 @@ function TestRun(props) {
         if (shown && shown.catch) shown.catch(function () {});
     }
 
+    // A result the reader has opened or closed stays as they left it. Otherwise the settings
+    // decide, except on the way down to a result that failed or erred: that path is open, so a failure
+    // and the results it happened in are in view as soon as the run reports them.
     function isResultOpen(id, failing) {
         return id in openResults ? openResults[id] : expandNamed || failing[id];
     }
@@ -1147,9 +1315,68 @@ function TestRun(props) {
 
     const seedText = seed.trim();
     const seedSet = seedText !== "";
-    // A blank seed has one drawn; otherwise it is a natural number, which travels as its digits.
+    // A blank seed means that a random seed is generated; otherwise it is a natural number, which
+    // travels as its digits.
     const seedValid = !seedSet || /^\d+$/.test(seedText);
     const seedHint = "The seed must be a natural number";
+    const optionsSent = options
+        .filter(function (opt) {
+            return opt.name.trim() !== "" || opt.value !== "";
+        })
+        .map(function (opt) {
+            return { name: opt.name.trim(), value: opt.value };
+        });
+    const optionsSet = optionsSent.length > 0;
+    // The names of the options that the shown run gave the test and the test never read.
+    const unreadOptions = (st.tag === "done" && st.outcome.unreadOptions) || [];
+    // The first problem among the rows, which holds back the run until it is fixed.
+    const optionsHint = options.map(optionProblem).find(Boolean) || null;
+    const optionsValid = optionsHint === null;
+    // What the settings hold, named in the gear's tooltip so a run's settings show while the popup
+    // is closed.
+    const settingsSummary = (seedSet ? ["seed " + seedText] : [])
+        .concat(optionsSet ? ["options " + optionsCommandLine(optionsSent)] : [])
+        .join(", ");
+
+    function addOption() {
+        const key = nextOptionKey.current++;
+        focusOptionKey.current = key;
+        setOptions(function (opts) {
+            return opts.concat([{ key, name: "", value: "" }]);
+        });
+    }
+
+    // Fills the rows with the options of an earlier run, so the next run repeats them.
+    function repeatOptions(opts) {
+        setOptions(
+            opts.map(function (opt) {
+                return { key: nextOptionKey.current++, name: opt.name, value: opt.value };
+            }),
+        );
+    }
+
+    function editOption(key, field, text) {
+        setOptions(function (opts) {
+            return opts.map(function (opt) {
+                return opt.key === key ? { ...opt, [field]: text } : opt;
+            });
+        });
+    }
+
+    // Removes a row. The focus moves to the row that takes its place, or to the one before it when
+    // it was the last, or to the add button when no rows are left.
+    function removeOption(key) {
+        const i = options.findIndex(function (opt) {
+            return opt.key === key;
+        });
+        const next = options[i + 1] || options[i - 1];
+        focusOptionKey.current = next ? next.key : ADD_OPTION;
+        setOptions(function (opts) {
+            return opts.filter(function (opt) {
+                return opt.key !== key;
+            });
+        });
+    }
 
     function run() {
         const myGen = gen.current + 1;
@@ -1157,19 +1384,25 @@ function TestRun(props) {
         sinceRef.current = 0;
         sinceResultsRef.current = 0;
         phaseRef.current = "building";
-        shownStart.current = 0;
+        // The server's replies about the run carry this identifier, so the run this click started is
+        // told apart from any other run of the test.
+        const runId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        shownRun.current = { runId, startTime: 0 };
         awaitFails.current = 0;
         setCancelError(null);
+        setAwaitError(null);
         setEdited(false);
         // Each run's results open as the settings and its failures decide.
         setOpenResults({});
-        dispatch({ type: "start", now: Date.now() });
+        dispatch({ type: "start", now: Date.now(), runId });
         const request = {
             decl: props.decl,
             module: props.module,
             version: version,
+            runId: runId,
         };
         if (seedSet) request.seed = seedText;
+        if (optionsSet) request.options = optionsSent;
         rsRef.current.call("Errata.Widget.startTest", request).then(
             function () {
                 if (gen.current !== myGen) return;
@@ -1178,29 +1411,87 @@ function TestRun(props) {
             },
             function (err) {
                 if (gen.current !== myGen) return;
-                dispatch({ type: "fail", error: errorMessage(err) });
-                // A start refused for unsaved changes means the clean state is stale.
-                checkFile();
+                function refused() {
+                    dispatch({ type: "fail", error: errorMessage(err) });
+                    // A start refused for unsaved changes means the clean state is stale.
+                    checkFile();
+                }
+                // The server refuses a start with invalid parameters, such as unsaved changes or a
+                // malformed seed. Any other rejection can come from a session that the InfoView
+                // replaced after the server had started the run, so the server is asked once
+                // whether it holds the run with this click's identifier, and the widget follows
+                // that run.
+                if (err && err.code === INVALID_PARAMS) {
+                    refused();
+                    return;
+                }
+                rsRef.current
+                    .call("Errata.Widget.awaitOutput", {
+                        decl: props.decl,
+                        since: 0,
+                        sinceResults: 0,
+                        version: version,
+                        phase: "",
+                    })
+                    .then(
+                        function (res) {
+                            return res.runId === runId;
+                        },
+                        function () {
+                            return false;
+                        },
+                    )
+                    .then(function (started) {
+                        if (gen.current !== myGen) return;
+                        if (!started) {
+                            refused();
+                            return;
+                        }
+                        dispatch({ type: "started" });
+                        loop(myGen);
+                    });
             },
         );
     }
 
-    // The run is reported as cancelled once the server has ended it, so a cancel that does not
-    // arrive leaves a running test reported as running, with the reason beside the button.
+    // The run is reported as cancelled once the server has ended it. Until then the run is reported
+    // as running, and a cancel that keeps failing shows its reason beside the button.
     function cancel() {
         setCancelError(null);
-        // A reply that arrives after a new run has started is about the run before it.
+        // A reply that arrives after a new run has started is about the run before it. A rejected
+        // call is tried again through the latest session, as a rejected report is.
         const myGen = gen.current;
-        rsRef.current.call("Errata.Widget.cancelTest", { decl: props.decl }).then(
-            function () {
-                if (gen.current !== myGen) return;
-                gen.current += 1;
-                dispatch({ type: "cancel" });
-            },
-            function (err) {
-                setCancelError(errorMessage(err));
-            },
-        );
+        // The run as it stands at the click, so a retry names the run the reader asked to stop even
+        // when a reply has since pointed the widget at another run of the test.
+        const runId = shownRun.current.runId;
+        function attempt(failures) {
+            const request = { decl: props.decl, runId: runId };
+            rsRef.current.call("Errata.Widget.cancelTest", request).then(
+                function (res) {
+                    if (gen.current !== myGen) return;
+                    // A run that had finished by the time the cancel arrived keeps its outcome, so
+                    // the widget goes on reading the run and shows what it reported.
+                    if (res && res.cancelled === false) return;
+                    gen.current += 1;
+                    setAwaitError(null);
+                    dispatch({ type: "cancel" });
+                },
+                function (err) {
+                    if (gen.current !== myGen) return;
+                    if (failures < AWAIT_RETRIES) {
+                        setTimeout(
+                            function () {
+                                if (alive.current && gen.current === myGen) attempt(failures + 1);
+                            },
+                            AWAIT_RETRY_MS * (failures + 1),
+                        );
+                        return;
+                    }
+                    setCancelError(errorMessage(err));
+                },
+            );
+        }
+        attempt(0);
     }
 
     const name = props.name || "test";
@@ -1212,13 +1503,14 @@ function TestRun(props) {
     let fileHint = null;
     if (!running) {
         const stale = edited && st.tag !== "idle";
-        const saveNote = clean
-            ? null
-            : e(
-                  "span",
-                  { key: "save", style: { color: dimColor, fontSize: dimSize } },
-                  stale ? "— save to run" : "unsaved — save to run",
-              );
+        const saveNote =
+            clean !== false
+                ? null
+                : e(
+                      "span",
+                      { key: "save", style: { color: dimColor, fontSize: dimSize } },
+                      stale ? "— save to run" : "unsaved — save to run",
+                  );
         fileHint = stale
             ? e(
                   "span",
@@ -1250,12 +1542,17 @@ function TestRun(props) {
                   {
                       key: "run",
                       onClick: run,
-                      disabled: !clean || !seedValid,
-                      title: !clean
-                          ? "Save the file to run the test"
-                          : !seedValid
-                            ? seedHint
-                            : undefined,
+                      disabled: !clean || !seedValid || !optionsValid,
+                      title:
+                          clean === null
+                              ? "Checking whether the file is saved"
+                              : !clean
+                                ? "Save the file to run the test"
+                                : !seedValid
+                                  ? seedHint
+                                  : !optionsValid
+                                    ? optionsHint
+                                    : undefined,
                   },
                   st.tag === "idle" ? "Run" : "Run again",
               ),
@@ -1266,53 +1563,50 @@ function TestRun(props) {
                   "could not cancel: " + cancelError,
               )
             : null,
-        fileHint,
-        // The seed lives behind the gear, so a rejected one is named here as well, where the
-        // disabled button is.
-        clean && !seedValid && !running
+        running && awaitError
             ? e(
                   "span",
                   { style: { color: errorColor, fontSize: dimSize } },
-                  "invalid seed — see run settings",
+                  "reconnecting: " + awaitError,
+              )
+            : null,
+        fileHint,
+        // The seed and the options live behind the gear, so a rejected one is named here as well,
+        // where the disabled button is.
+        clean && (!seedValid || !optionsValid) && !running
+            ? e(
+                  "span",
+                  { style: { color: errorColor, fontSize: dimSize } },
+                  (!seedValid ? "invalid seed" : "invalid option") + " — see run settings",
               )
             : null,
     );
 
-    // The gear that shows the run settings floats at the right of the title, where the goal
-    // sections keep theirs. A click here is the control's own, so it leaves the disclosure as it
-    // was.
-    const runSettings = e(
-        "span",
-        {
-            className: "fr",
-            onClick: function (ev) {
-                ev.preventDefault();
-            },
+    // The gear that shows the run settings, one of the controls at the right of the title.
+    const gearButton = e("button", {
+        key: "settings",
+        ref: gearRef,
+        onClick: function () {
+            setSettingsOpen(function (open) {
+                return !open;
+            });
         },
-        e("button", {
-            ref: gearRef,
-            onClick: function () {
-                setSettingsOpen(function (open) {
-                    return !open;
-                });
-            },
-            title: settingsOpen
-                ? "Hide run settings"
-                : seedSet
-                  ? "Run settings (seed " + seedText + ")"
-                  : "Run settings",
-            "aria-label": "Run settings",
-            "aria-expanded": settingsOpen,
-            "aria-haspopup": "dialog",
-            className: "link pointer dim mh2 codicon codicon-settings-gear",
-            style: {
-                background: "none",
-                border: "none",
-                padding: 0,
-                color: "var(--vscode-textLink-foreground, #0078d4)",
-            },
-        }),
-    );
+        title: settingsOpen
+            ? "Hide run settings"
+            : settingsSummary
+              ? "Run settings (" + settingsSummary + ")"
+              : "Run settings",
+        "aria-label": "Run settings",
+        "aria-expanded": settingsOpen,
+        "aria-haspopup": "dialog",
+        className: "link pointer dim mh2 codicon codicon-settings-gear",
+        style: {
+            background: "none",
+            border: "none",
+            padding: 0,
+            color: "var(--vscode-textLink-foreground, #0078d4)",
+        },
+    });
 
     const settingRow = {
         display: "flex",
@@ -1322,8 +1616,13 @@ function TestRun(props) {
         fontSize: dimSize,
     };
 
+    const hintStyle = { marginTop: "4px", fontSize: dimSize, color: errorColor };
+    // The buttons that add and remove options are disabled during a run, and look like links only
+    // while they can be clicked.
+    const iconButtonClass = running ? "codicon" : "link pointer dim codicon";
+
     // The settings themselves, in a popup below the gear: the seed for property tests, the reason
-    // for a rejected one, and how the named results of a run first appear.
+    // for a rejected one, the test options, and how the named results of a run first appear.
     const settingsPopup = settingsOpen
         ? e(
               Popup,
@@ -1347,19 +1646,98 @@ function TestRun(props) {
                       style: {
                           width: "12ch",
                           fontFamily: monoFont,
-                          outline: seedValid
-                              ? undefined
-                              : "1px solid var(--vscode-inputValidation-errorBorder, #be1100)",
+                          outline: seedValid ? undefined : invalidOutline,
                       },
                   }),
               ),
-              seedValid
-                  ? null
-                  : e(
-                        "div",
-                        { style: { marginTop: "4px", fontSize: dimSize, color: errorColor } },
-                        seedHint,
-                    ),
+              seedValid ? null : e("div", { style: hintStyle }, seedHint),
+              e(
+                  "div",
+                  { style: { ...settingRow, marginTop: "4px" } },
+                  "Options",
+                  e("button", {
+                      ref: function (el) {
+                          if (el && focusOptionKey.current === ADD_OPTION) {
+                              focusOptionKey.current = null;
+                              el.focus();
+                          }
+                      },
+                      onClick: addOption,
+                      disabled: running,
+                      title: "Add an option for the test",
+                      "aria-label": "Add option",
+                      className: iconButtonClass + " codicon-add",
+                      style: iconButtonStyle(running),
+                  }),
+              ),
+              options.map(function (opt) {
+                  // A row with a problem is marked, and Run waits for it to be fixed.
+                  const nameValid = optionProblem(opt) === null;
+                  return e(
+                      "div",
+                      {
+                          key: opt.key,
+                          role: "group",
+                          "aria-label": "Option",
+                          style: { ...settingRow, marginTop: "4px", fontFamily: monoFont },
+                      },
+                      "--",
+                      e("input", {
+                          ref: function (el) {
+                              if (el && focusOptionKey.current === opt.key) {
+                                  focusOptionKey.current = null;
+                                  el.focus();
+                              }
+                          },
+                          type: "text",
+                          value: opt.name,
+                          placeholder: "name",
+                          disabled: running,
+                          title: "Option name",
+                          "aria-invalid": !nameValid,
+                          onChange: function (ev) {
+                              editOption(opt.key, "name", ev.target.value);
+                          },
+                          style: {
+                              width: "10ch",
+                              fontFamily: monoFont,
+                              outline: nameValid ? undefined : invalidOutline,
+                          },
+                      }),
+                      "=",
+                      e("input", {
+                          type: "text",
+                          value: opt.value,
+                          placeholder: "value",
+                          disabled: running,
+                          title: "Option value; blank for a flag",
+                          onChange: function (ev) {
+                              editOption(opt.key, "value", ev.target.value);
+                          },
+                          style: { width: "12ch", fontFamily: monoFont },
+                      }),
+                      e("button", {
+                          onClick: function () {
+                              removeOption(opt.key);
+                          },
+                          disabled: running,
+                          title: "Remove this option",
+                          "aria-label": "Remove option",
+                          className: iconButtonClass + " codicon-close",
+                          style: iconButtonStyle(running),
+                      }),
+                      unreadOptions.includes(opt.name.trim())
+                          ? e("span", {
+                                role: "img",
+                                title: "The test never read this option in the last run",
+                                "aria-label": "Never read",
+                                className: "codicon codicon-warning",
+                                style: { color: warningColor },
+                            })
+                          : null,
+                  );
+              }),
+              optionsValid ? null : e("div", { style: hintStyle }, optionsHint),
               e(
                   "label",
                   { style: { ...settingRow, marginTop: "4px" } },
@@ -1385,26 +1763,42 @@ function TestRun(props) {
     // times the runner stamped on them. A run that reported no results, such as one whose build
     // failed, has only its outcome's.
     const liveResults = timings ? timings.results : [];
-    const results = liveResults.length ? liveResults : resultsOfOutcome(outcome);
+    // The whole run's output, in the order the test produced it, and the output of each result.
+    const allChunks = timings ? timings.chunks : [];
+    const outputs = outputsByResult(outputCache, allChunks);
+    const results = (liveResults.length ? liveResults : resultsOfOutcome(outcome)).map(
+        function (r) {
+            const output = outputs.get(r.id);
+            return output ? { ...r, output } : r;
+        },
+    );
     const kids = childrenOf(results);
     const failing = failingPaths(results);
     // What the test's own code reported, which is what the verdict line and the summary under it
     // show. The outcome's message is the innermost failure's, and that result reports it in the
-    // tree itself, so taking it here as well would say it twice. A run with no results at all,
-    // such as one whose build failed, has only the outcome to report.
-    const own = results.length ? results[0] : null;
+    // tree itself, so taking it here as well would say it twice. The test's own result has a verdict
+    // once the test has ended. A run that ended before that, such as one whose build failed or whose
+    // runner exited early, has only the outcome to report.
+    const own = results.length && results[0].status ? results[0] : null;
     const ownMessage = own ? own.message : (outcome && outcome.message) || "";
     const ownDetail = own ? own.detail : (outcome && outcome.detail) || "";
     const ownLocation = own ? own.location : (outcome && outcome.location) || null;
     const rootOutput = results.length ? results[0].output : [];
-    // The whole run's output, in the order the test produced it, which the copy button copies.
-    const allChunks = timings ? timings.chunks : [];
+    // When the run's output is shown in more than one box, a control in the title copies all of it.
+    const outputBoxes = results.filter(function (r) {
+        return r.output.length > 0;
+    }).length;
+    const copyAll =
+        outputBoxes > 1 && allChunks.length
+            ? e(CopyAllButton, { key: "copy-all", chunks: allChunks })
+            : null;
     // Keyed so it keeps its state when the message and detail blocks appear ahead of it.
     const outputSection = rootOutput.length
         ? e(OutputSection, {
               key: "output",
               chunks: rootOutput,
-              copy: allChunks,
+              // The output grows in place, so its length is what tells a new render apart.
+              length: rootOutput.length,
               execStartTime,
               open: outputOpen,
               onOpenChange: setOutputOpen,
@@ -1465,7 +1859,8 @@ function TestRun(props) {
         primary = e("span", { style: { color: dimColor } }, "cancelled");
     }
 
-    // Dimmed badges after the status: text, and for the seed, a click that fills the seed field.
+    // Dimmed badges after the status: text, and for the seed and the options, a click that fills
+    // the settings with them.
     const badges = [];
     if (timings && timings.startTime)
         badges.push({ text: "Start " + formatClock(timings.startTime) });
@@ -1481,6 +1876,17 @@ function TestRun(props) {
             title: "Use this seed for the next run",
             onClick: function () {
                 setSeed(seedUsed);
+                setSettingsOpen(true);
+            },
+        });
+    }
+    if (outcome && outcome.options && outcome.options.length) {
+        const optionsUsed = outcome.options;
+        badges.push({
+            text: "Options " + optionsCommandLine(optionsUsed),
+            title: "Use these options for the next run",
+            onClick: function () {
+                repeatOptions(optionsUsed);
                 setSettingsOpen(true);
             },
         });
@@ -1541,6 +1947,17 @@ function TestRun(props) {
     const extras = [];
     if (outcome && ownMessage) extras.push(e("div", { key: "msg" }, block(ownMessage)));
     if (outcome && ownDetail) extras.push(e("div", { key: "detail" }, block(ownDetail)));
+    // An option that the test never read is most often a misspelled name.
+    if (unreadOptions.length)
+        extras.push(
+            e(
+                "div",
+                { key: "unread", style: { color: warningColor, fontSize: dimSize } },
+                (unreadOptions.length === 1 ? "option" : "options") +
+                    " never read by this test: " +
+                    unreadOptions.join(", "),
+            ),
+        );
 
     // The test's docstring, rendered from the Markdown Lean produced for it, alongside its result.
     const descriptionSection =
@@ -1574,14 +1991,13 @@ function TestRun(props) {
     // sections. Its content is dropped while collapsed, as those sections do, so a long-running
     // test's output costs nothing to keep out of sight.
     //
-    // The pointer arriving means Run may be next, so the file's state is checked at once rather
-    // than at the next poll.
+    // The pointer arriving means Run may be next, so the file's state is checked at once.
     return e(
         "details",
         {
-            open: panelOpen,
+            open,
             onToggle: /** @param ev {React.SyntheticEvent<HTMLDetailsElement>} */ function (ev) {
-                setPanelOpen(ev.currentTarget.open);
+                setOpen(ev.currentTarget.open);
             },
             onMouseEnter: checkFile,
         },
@@ -1590,9 +2006,21 @@ function TestRun(props) {
             { className: "mv2 pointer non-selectable" },
             "Errata test: ",
             e("span", { style: { fontFamily: monoFont, fontSize: "0.95em" } }, name),
-            runSettings,
+            // The title's controls float at its right, where the goal sections keep theirs. A click
+            // on one is the control's own, so it leaves the disclosure as it was.
+            e(
+                "span",
+                {
+                    className: "fr",
+                    onClick: function (ev) {
+                        ev.preventDefault();
+                    },
+                },
+                copyAll,
+                gearButton,
+            ),
         ),
         settingsPopup,
-        panelOpen ? e("div", { className: "ml1" }, header, body) : null,
+        open ? e("div", { className: "ml1" }, header, body) : null,
     );
 }

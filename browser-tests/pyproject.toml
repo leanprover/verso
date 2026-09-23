@@ -8,3 +8,9 @@ test = [
     "pytest",
     "pytest-playwright",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "errata_widget: tests of Errata's run-test widget, which need a built Verso and `npm ci`; select them with `-m errata_widget`",
+]
+addopts = "-m 'not errata_widget'"

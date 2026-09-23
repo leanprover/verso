@@ -10,6 +10,7 @@ Tests that exercise Errata using Errata itself.
 module
 
 public import Errata
+public import Errata.WidgetRunner
 public meta import Errata
 import all Errata.FS
 import all ErrataTests.Fixture
@@ -18,6 +19,7 @@ import all ErrataTests.Docstrings
 import all ErrataTests.WidgetInteractive
 
 open Errata
+open Errata.Widget.Runner
 
 /-- A bare boolean is a passing test. -/
 @[test]
@@ -1177,7 +1179,7 @@ def runOneCapturesOutput : Test := do
   let o ← runValue default (do IO.println "trace line"; failHere "nope" : Test)
   assertBEq .failed o.status
   assertBEq 1 o.allOutput.size
-  assertBEq "stdout" o.allOutput[0]!.stream
+  assertBEq .stdout o.allOutput[0]!.stream
   assertContains "trace line" o.allOutput[0]!.text
 
 /--
@@ -1217,7 +1219,10 @@ def runOneNodeOutput : Test := do
   let text (node : ResultNode) : String := node.output.foldl (fun acc c => acc ++ c.text) ""
   assertBEq #["outer\nafter\n", "within\n"] (o.results.map text)
 
-/-- A named result is reported as it starts and again as it finishes, the reports properly nested. -/
+/--
+A named result and the action of an `expectFail` are each reported as they start and again as they
+finish, with reports properly nested.
+-/
 @[test]
 def runOneWatchesResults : Test := do
   let seen ← IO.mkRef (#[] : Array String)
@@ -1226,11 +1231,62 @@ def runOneWatchesResults : Test := do
       match ev with
       | .started path => "start " ++ ".".intercalate path.toList
       | .finished r => "end " ++ ".".intercalate r.resultPath.toList
+      | .expectFailStarted => "expecting"
+      | .expectFailFinished expected => s!"expected {expected}"
     seen.modify (·.push said)
   let _ ← runValue default  (watch := watch) do
     result "a" (result "inner" (pure ()))
     result "b" (pure ())
-  assertBEq #["start a", "start a.inner", "end a.inner", "end a", "start b", "end b"] (← seen.get)
+    expectFail (result "c" (fail "boom"))
+  assertBEq
+    #["start a", "start a.inner", "end a.inner", "end a", "start b", "end b",
+      "expecting", "start c", "end c", "expected true"]
+    (← seen.get)
+
+/-- An outcome includes warnings for unused options. -/
+@[test]
+def runOneUnreadOptions : Test := do
+  let reads : Test := do
+    let _ ← flag "read"
+  let options : OptionMap := ({} : OptionMap)
+    |>.insert "read" #[""] |>.insert "zeta" #["1"] |>.insert "alpha" #["2", "3"]
+  let o ← runEntryOutcome (.of "" "" "" default reads) (options := options)
+  assertBEq #["alpha", "zeta"] o.unreadOptions
+  result "a test given no options has none unread" do
+    let o ← runEntryOutcome (.of "" "" "" default reads)
+    assertBEq #[] o.unreadOptions
+
+/-- An outcome with some optional fields set, used to test its JSON encoding. -/
+private def sampleOutcome : RunOutcome where
+  status := .failed
+  durationMs := 5
+  message? := some "bad"
+  seed? := some "7"
+  options := #[{ name := "a", value := "1" }]
+  unreadOptions := #["a"]
+
+
+/-- Decoding an outcome's JSON gives back the outcome. -/
+@[test]
+def runOutcomeJsonRoundTrips : Test := do
+  let decoded ← IO.ofExcept (Lean.fromJson? (α := RunOutcome) (Lean.toJson sampleOutcome))
+  assertBEq (Lean.toJson sampleOutcome).compress (Lean.toJson decoded).compress
+
+/-- An outcome's JSON has no key for an optional field that is {lean}`none`. -/
+@[test]
+def runOutcomeJsonOmitsNone : Test := do
+  assertTrue ((Lean.toJson sampleOutcome).getObjVal? "detail").toOption.isNone
+
+/-- Decoding JSON that is missing a key gives that field of the outcome its default value. -/
+@[test]
+def runOutcomeJsonDefaults : Test := do
+  let minimal := Lean.Json.mkObj
+    [("status", Lean.toJson ResultNode.Status.passed), ("durationMs", Lean.toJson 1)]
+  let decoded ← IO.ofExcept (Lean.fromJson? (α := RunOutcome) minimal)
+  assertBEq 0 decoded.results.size
+  assertBEq 0 decoded.options.size
+  assertBEq #[] decoded.unreadOptions
+  assertBEq none decoded.seed?
 
 /-- A passing run still surfaces its captured output. -/
 @[test]
@@ -1238,7 +1294,7 @@ def runOnePassOutput : Test := do
   let o ← runValue default (do IO.println "printed"; return true : IO Bool)
   assertBEq .passed o.status
   assertBEq 1 o.allOutput.size
-  assertBEq "stdout" o.allOutput[0]!.stream
+  assertBEq .stdout o.allOutput[0]!.stream
   assertContains "printed" o.allOutput[0]!.text
 
 /-- Captured output keeps stdout and stderr distinct and interleaved in order. -/
@@ -1251,9 +1307,10 @@ def runOneStreams : Test := do
     return true
   assertBEq .passed o.status
   assertBEq 3 o.allOutput.size
-  assertBEq "stdout" o.allOutput[0]!.stream
-  assertBEq "stderr" o.allOutput[1]!.stream
-  assertBEq "stdout" o.allOutput[2]!.stream
+  assertBEq .stdout o.allOutput[0]!.stream
+  assertBEq .stderr o.allOutput[1]!.stream
+  assertBEq .stdout o.allOutput[2]!.stream
+
 /-- `failure` from the `Alternative` instance fails a test. -/
 @[test]
 def alternativeFailure : Test := expectFail failure

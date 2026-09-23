@@ -91,6 +91,15 @@ jobs:
               run: |
                   lake build
 
+            # Running linters catches forward reference errors in docstrings. Tests are exluded due
+            # to some spurious linter warnings.
+            - name: Lint the libraries
+              run: |
+                  lake lint --builtin-lint --builtin-only \
+                      VersoUtil Verso MultiVerso VersoSearch VersoBlog VersoManual \
+                      VersoIlluminate VersoTutorial VersoServe VersoLiterate VersoLiterateCode \
+                      UsersGuide Errata
+
             # RELEASE_NOTES_BASE is what keeps this working against the shallow checkout above:
             # HEAD^1 is the base branch for both pull_request and merge_group runs, and is one
             # of the two commits that are fetched.
@@ -163,11 +172,11 @@ jobs:
             # Publishing a check run needs a token with `checks: write`, which pull requests from
             # forks never receive; those runs get their results from the job summary and the
             # uploaded artifact instead. The report exists once the tests have run, whether they
-            # passed or failed.
+            # passed or failed, and a build that fails first leaves it unwritten.
             - name: Publish the JUnit test report
               if:
                   always() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure')
-                  && (github.event_name != 'pull_request' ||
+                  && hashFiles('errata-report.xml') != '' && (github.event_name != 'pull_request' ||
                   github.event.pull_request.head.repo.full_name == github.repository)
               uses: dorny/test-reporter@v3
               with:
@@ -249,6 +258,12 @@ jobs:
             # installs, which are the versions the InfoView runs it with.
             - name: Type check the run-test widget JS code
               run: npm run typecheck:widget
+
+            # These tests show the widget in the real InfoView, which `npm ci` installs. pytest runs
+            # them only when `-m errata_widget` selects them.
+            - name: Run the run-test widget's browser tests
+              run: |
+                  uv run --project browser-tests --extra test pytest browser-tests/errata-widget -m errata_widget -v
 
             - name: Check the ToC width storage key stays in sync
               run: |

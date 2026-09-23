@@ -68,60 +68,48 @@ meta def rangeSyntax [Monad m] [MonadFileMap m]
   let trailing : Substring.Raw := { str, startPos := stopPos, stopPos }
   return Syntax.atom (.original leading startPos trailing stopPos) ""
 
-/-- The text of line {lean}`i`, trimmed of surrounding whitespace. -/
-private meta def lineText (lines : Array String) (i : Nat) : String :=
-  ((lines[i]?).getD "").trimAscii.copy
-
-/-- The first non-blank line at or above {lean}`i`, or {lean}`none` if all are blank up to the top. -/
-private meta partial def firstNonBlankUp (lines : Array String) (i : Nat) : Option Nat :=
-  if (lineText lines i).isEmpty then
-    if i == 0 then none else firstNonBlankUp lines (i - 1)
-  else some i
-
-/-- Scanning up from {lean}`i`, the line that opens a doc comment, stopping at a non-comment line. -/
-private meta partial def docOpenLine (lines : Array String) (i : Nat) : Option Nat :=
-  if (lineText lines i).startsWith "/--" then some i
-  else if (lineText lines i).startsWith "/-" then none
-  else if i == 0 then none
-  else docOpenLine lines (i - 1)
+/-- How many lines above the marker's line the command around the marker is looked for. -/
+private meta def commandSearchLines : Nat := 20
 
 /--
-The 0-based start line of a doc comment immediately above {lean}`markerLineIdx`, if any. To avoid
-mistaking an unrelated trailing comment for one, the comment must be a single-line doc comment or
-have its closing delimiter on its own line opened by a doc-comment line.
+The range of the command around {name}`pos`, found by parsing a command from the start of each line
+at or above {name}`pos`'s own, up to {name}`commandSearchLines` above it. A parse that succeeds and
+reaches past {name}`pos` is the command that {name}`pos` is in, and a parse from further up that ends
+where that one does is the same command with its doc comment or its attribute list, so it gives the
+range that the command begins at.
 -/
-private meta def docStartLine? (lines : Array String) (markerLineIdx : Nat) : Option Nat := do
-  guard (markerLineIdx > 0)
-  let endLine ← firstNonBlankUp lines (markerLineIdx - 1)
-  let t := lineText lines endLine
-  if t.startsWith "/--" && t.endsWith "-/" then return endLine
-  guard (t == "-/" && endLine > 0)
-  docOpenLine lines (endLine - 1)
-
-/--
-The source range to show the test's widget over: the whole declaration, including a doc comment above
-it. The recorded declaration range is used when available; otherwise the command is re-parsed from the
-start of the marker's line, extending up over an immediately preceding doc comment. Falls back to the
-marker itself.
--/
-meta def widgetRangeSyntax (decl : Name) (attrStx : Syntax) : AttrM Syntax := do
+private meta def commandAround (pos : String.Pos.Raw) : AttrM (Option Lean.Syntax.Range) := do
   let fileMap ← getFileMap
-  if let some ranges ← findDeclarationRanges? decl then
-    let stx ← rangeSyntax (fileMap.ofPosition ranges.range.pos) (fileMap.ofPosition ranges.range.endPos)
-    return stx
-  let some attrPos := attrStx.getPos? | return attrStx
-  let lineStart := fileMap.ofPosition ⟨(fileMap.toPosition attrPos).line, 0⟩
   let inputCtx := Parser.mkInputContext fileMap.source (← getFileName)
   let pmctx : Parser.ParserModuleContext := { env := ← getEnv, options := ← getOptions }
-  let (cmdStx, _, _) := Parser.parseCommand inputCtx pmctx { pos := lineStart } {}
-  match cmdStx.getRange? with
-  | some range =>
-    -- Extend the span up over a doc comment immediately above the marker, when there is one.
-    let lines := (fileMap.source.splitOn "\n").toArray
-    let startPos := match docStartLine? lines ((fileMap.toPosition attrPos).line - 1) with
-      | some docIdx => fileMap.ofPosition ⟨docIdx + 1, 0⟩
-      | none => range.start
-    rangeSyntax startPos range.stop
+  let line := (fileMap.toPosition pos).line
+  let mut found : Option Lean.Syntax.Range := none
+  for back in [0:min commandSearchLines line] do
+    let lineStart := fileMap.ofPosition ⟨line - back, 0⟩
+    let (cmdStx, _, messages) := Parser.parseCommand inputCtx pmctx { pos := lineStart } {}
+    if messages.hasErrors then continue
+    let some range := cmdStx.getRange? | continue
+    unless range.start ≤ pos && pos < range.stop do continue
+    match found with
+    | none => found := some range
+    | some inner =>
+      -- A parse that ends elsewhere is the command around this one, so there is nothing further up
+      -- to find.
+      if range.stop != inner.stop then break
+      found := some range
+  return found
+
+/--
+The source range to show the test's widget over: the whole command that marks the test, including a
+doc comment above it. The command is re-parsed around the marker. Falls back to the marker itself,
+which is also the range for a declaration from another module, marked with {lit}`attribute [test]`.
+-/
+meta def widgetRangeSyntax (decl : Name) (attrStx : Syntax) : AttrM Syntax := do
+  -- The declaration ranges of an imported declaration are positions in its own module's file.
+  if ((← getEnv).getModuleIdxFor? decl).isSome then return attrStx
+  let some attrPos := attrStx.getPos? | return attrStx
+  match ← commandAround attrPos with
+  | some range => rangeSyntax range.start range.stop
   | none => return attrStx
 
 /-- Marks a definition as a test, discovered and run by the Errata test runner. -/
@@ -136,7 +124,10 @@ meta initialize
       Attribute.Builtin.ensureNoArgs stx
       unless kind == AttributeKind.global do throwAttrMustBeGlobal `test kind
       recordTest decl
-      -- Show the widget when the cursor is anywhere on the declaration, not just on the marker.
+      -- The widget reaches the editor through the info tree, which the language server keeps and a
+      -- build leaves out, so a build skips the work of placing the widget.
+      unless (← getInfoState).enabled do return
+      -- The widget is shown while the cursor is anywhere in the declaration, its docstring included.
       let widgetStx ← widgetRangeSyntax decl stx
       -- A hash of the test's source, so a run is invalidated when the test is edited.
       let source := (← getFileMap).source
@@ -145,6 +136,10 @@ meta initialize
           let sub : Substring.Raw := { str := source, startPos := range.start, stopPos := range.stop }
           toString sub.toString.hash
         | none => ""
+      -- In the language server, a run of the test's previous source ends as the edited test is
+      -- elaborated.
+      unless version.isEmpty do
+        Errata.Widget.dropRunsOfOtherVersions decl version
       let props := pure <| json% {
         decl: $(Errata.nameToJson decl),
         module: $(Errata.nameToJson (← getMainModule)),
@@ -204,12 +199,7 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
         -- tests
         let userName := privateToUserName test.name
         let testName := testNameBelow moduleName userName
-        let range ← findDeclarationRanges? test.name
-        let location : Location := {
-          file := test.file
-          startPos := (range.map (·.range.pos)).getD ⟨0, 0⟩
-          endPos := (range.map (·.range.endPos)).getD ⟨0, 0⟩
-        }
+        let location ← testLocation test
         -- The docstring captured when the attribute was applied, so the report and widget can show it.
         let docStx ← match test.docstring? with
           | some doc => `(some $(quote doc))

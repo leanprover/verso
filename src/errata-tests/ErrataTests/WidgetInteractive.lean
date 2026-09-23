@@ -57,7 +57,8 @@ def reverseReverse : Test :=
 /--
 Whether a list is unlucky.
 
-About 20% of lists are unlucky, and the property does not shrink very well.
+About a fifth of the lists with at least six elements are unlucky, and shrinking leaves a
+counterexample about as long as the one found.
 -/
 private def unlucky (l : List Nat) : Bool :=
   let mix (acc : UInt64) (n : Nat) : UInt64 :=

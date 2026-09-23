@@ -17,9 +17,9 @@ namespace Errata
 open Lean
 
 /--
-Encodes a {name}`Lean.Name` structurally, preserving the numeric and hygienic components that the
-standard string form does not round-trip. The widget and the single-test runner exchange test names
-this way.
+Encodes a {name}`Lean.Name` structurally, component by component, so that decoding it with
+{lit}`nameOfJson?` gives back the same name, numeric and hygienic components included. The widget
+and the single-test runner exchange test names this way.
 -/
 def nameToJson : Name → Json
   | .anonymous => .null

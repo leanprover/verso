@@ -85,6 +85,10 @@ structure Context where
   -/
   outputFailed : IO.Ref Bool
   /--
+  Whether a call of the result watcher has failed. If true, further calls are suppressed.
+  -/
+  watchFailed : IO.Ref Bool
+  /--
   The time spent so far in the named results directly inside the current scope, in milliseconds.
   -/
   insideMs : IO.Ref Nat

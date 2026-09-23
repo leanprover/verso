@@ -157,8 +157,8 @@ lean_lib Errata where
   roots := #[`Errata]
   needs := #[errataRunTestWidgetJs]
 
--- Runs one test in a fresh process so the widget can stream its output and kill it on cancel.
-@[default_target]
+-- Runs one test in a fresh process so the widget can stream its output and kill it on cancel. The
+-- widget builds it when it runs a test.
 lean_exe «errata-run-one» where
   srcDir := "src/errata"
   root := `ErrataRunOne
