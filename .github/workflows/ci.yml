@@ -91,14 +91,21 @@ jobs:
               run: |
                   lake build
 
-            # Running linters catches forward reference errors in docstrings. Tests are exluded due
+            # Running linters catches forward reference errors in docstrings. Tests are excluded due
             # to some spurious linter warnings.
+            #
+            # Libraries are linted one at a time to reduce memory issues on CI runners.
             - name: Lint the libraries
               run: |
-                  lake lint --builtin-lint --builtin-only \
-                      VersoUtil Verso MultiVerso VersoSearch VersoBlog VersoManual \
+                  failed=0
+                  for root in VersoUtil Verso MultiVerso VersoSearch VersoBlog VersoManual \
                       VersoIlluminate VersoTutorial VersoServe VersoLiterate VersoLiterateCode \
-                      UsersGuide Errata
+                      UsersGuide Errata; do
+                      echo "::group::lake lint $root"
+                      lake lint --builtin-lint --builtin-only "$root" || failed=1
+                      echo "::endgroup::"
+                  done
+                  exit "$failed"
 
             # RELEASE_NOTES_BASE is what keeps this working against the shallow checkout above:
             # HEAD^1 is the base branch for both pull_request and merge_group runs, and is one
