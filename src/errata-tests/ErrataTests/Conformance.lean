@@ -417,7 +417,7 @@ def defaultFilterAndCommandLine : Test := do
     let r ← runWith #[basic ["pass", "fail", "sleeps"]]
       { filters := #["name(=pass)", "name(=fail)"] } config
     assertBEq #["pass", "fail"] (ran r)
-  result "a filter that does not parse" do
+  result "a filter with a syntax error" do
     let r ← runWith #[basic ["pass"]] { filters := #["name(pass"] }
     assertTrue r.report.results.isEmpty "no test ran"
     let some issue := r.report.issues.find? (·.isError) | fail "no error"

@@ -666,10 +666,12 @@ proceeds, and returns the report. The events file's lines and the human-readable
 to the sinks; the report files are the caller's to write. The {lit}`protocol` line of the events
 file is sent first.
 
-The List phase lists every executable, then checks the configuration against the inventory: a
-setting given a value that no executable declares is an error, as is a filter that does not parse,
-and the filters are evaluated, with a warning for each atom and filter that selects nothing. The
-Run phase runs the selected tests in inventory order.
+A filter with a syntax error, an unknown profile, or a profile's {lit}`jobs` above one ends the run
+before the List phase. The List phase lists every executable, then checks the configuration against
+the inventory: a value that the command line gives to a setting that no executable declares is an
+error, and one that the profile gives is a warning; the filters are evaluated, with a warning for
+each atom and each filter that selects nothing. The Run phase runs the selected tests in inventory
+order.
 -/
 def execute (config : Config) (opts : Options) (sinks : Sinks)
     (registry : Option Registry := none) : IO RunReport := do
@@ -762,7 +764,7 @@ def writeReports (opts : Options) (report : RunReport) : IO Unit := do
 The {lit}`list` subcommand: lists every test executable, then prints one line per test that the
 filters select, in inventory order: the executable, the name, the file and line, and the tags. No
 filter selects every test, and several are joined by union. The result is the exit code: {lit}`1`
-when a filter does not parse or an executable cannot list, and {lit}`0` otherwise.
+when a filter has a syntax error or an executable cannot list, and {lit}`0` otherwise.
 -/
 def listSubcommand (config : Config) (opts : Options) (filters : Array String)
     (registry : Registry) : IO UInt32 := do

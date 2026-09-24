@@ -971,8 +971,8 @@ def driverRunsHelpers : Test := do
 
 /--
 The `list` subcommand discovers the tests of every library and prints those that its filters select,
-one per line with the executable, the name, the file and line, and the tags. A filter that does not
-parse is reported at its place, and the command fails.
+one per line with the executable, the name, the file and line, and the tags. A filter with a syntax
+error is reported at its place, and the command fails.
 -/
 @[test]
 def driverListsTests : Test := do
@@ -992,7 +992,7 @@ def driverListsTests : Test := do
     assertExitCode 0 all
     assertContains "safeTest" all.stdout
     assertContains "failsAsWritten" all.stdout
-  result "a filter that does not parse" do
+  result "a filter with a syntax error" do
     let out ← lakeInFixture fixture #["test", "--", "list", "name(x"]
     assertExitCode 1 out
     assertContains "list filter 1:6: expected ')' to end the matcher" out.stderr
@@ -1016,8 +1016,8 @@ private def withTomlVariant (name : String) (args : Array String) : IO IO.Proces
 /--
 The driver checks `errata.toml` before it builds any test executable, and reports each problem at
 its position in the file: a TOML syntax error, a setting that is neither a string nor
-`{ needs = … }`, an unknown key, profiles that inherit in a cycle, a malformed duration, a target that
-Lake does not know, and a malformed `[[executable]]`.
+`{ needs = … }`, an unknown key, profiles that inherit in a cycle, a malformed duration, an unknown
+target, and a malformed `[[executable]]`.
 -/
 @[test]
 def driverValidatesToml : Test := do

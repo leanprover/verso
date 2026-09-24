@@ -17,7 +17,7 @@ open Errata
 
 namespace VersoTests
 
-/-- Also runs {lit}`lualatex` on the generated TeX, to confirm that it builds. -/
+/-- Also runs `lualatex` on the generated TeX, to confirm that it builds. -/
 @[setting]
 def checkTeX : Setting where
   type := Bool
@@ -27,19 +27,19 @@ def checkTeX : Setting where
     | _ => none
   default? := some "false"
 
-/-- The built {lit}`verso` executable. -/
+/-- The built `verso` executable. -/
 @[setting]
 def versoExe : Setting where
   type := System.FilePath
   fromString s := some s
 
-/-- The built {lit}`verso-literate-html` executable. -/
+/-- The built `verso-literate-html` executable. -/
 @[setting]
 def literateHtmlExe : Setting where
   type := System.FilePath
   fromString s := some s
 
-/-- The built {lit}`verso-literate-plan` executable. -/
+/-- The built `verso-literate-plan` executable. -/
 @[setting]
 def literatePlanExe : Setting where
   type := System.FilePath

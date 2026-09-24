@@ -673,8 +673,8 @@ private def loadErrataToml (ws : Workspace) : IO (Except (Array String) ErrataTo
     | .error log => return .error (← log.toList.toArray.mapM fun m => m.toString)
   let (config, problems) := (tomlConfig ictx.fileMap table).run #[]
   let mut problems := problems
-  -- Each target that a setting needs is resolved now, so that a name that Lake does not know is
-  -- reported before anything is built.
+  -- Each target that a setting needs is resolved now, so that an unknown target is reported before
+  -- anything is built.
   let mut needs : Array (String × BuildSpec) := #[]
   let settingsOf (p : TomlProfile) := p.settings ++ p.overrides.flatMap (·.settings)
   for p in config.profiles do

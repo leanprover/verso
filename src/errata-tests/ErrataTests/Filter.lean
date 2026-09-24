@@ -53,7 +53,7 @@ def filterPrecedence : Test := do
     ("all() \\ tag(browser)", .diff (.all {}) (tg "browser") {}),
     ("none()", .none {})]
   for (text, expected) in cases do
-    result text do
+    result text.quote do
       assertBEq (some expected) (parsed text)
 
 /-- A small inventory for evaluating filters. -/
