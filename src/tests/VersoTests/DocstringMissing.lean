@@ -4,11 +4,13 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
-import Errata
+public import Errata
 public import VersoManual
 
 open Lean Elab Command
 open Verso.Genre.Manual
+
+public section
 
 set_option guard_msgs.diff true
 

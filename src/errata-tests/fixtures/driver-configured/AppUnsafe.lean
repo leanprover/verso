@@ -4,6 +4,8 @@ public import Errata
 
 open Errata
 
+public section
+
 /-- A safe test beside the unsafe one. -/
 @[test]
 def alsoSafe : Bool := true

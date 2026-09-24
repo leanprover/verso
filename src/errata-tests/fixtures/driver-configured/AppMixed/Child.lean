@@ -4,6 +4,8 @@ public import Errata
 
 open Errata
 
-/-- A test private to its module, reachable only through `import all`. -/
+public section
+
+/-- A module-system test, imported by a legacy root. -/
 @[test]
 def childTest : Bool := true

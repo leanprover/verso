@@ -9,6 +9,8 @@ public import Errata
 
 open Errata
 
+public section
+
 /-- A test in a module that fails to build. -/
 @[test]
 def unbuildable : Test := pure ()

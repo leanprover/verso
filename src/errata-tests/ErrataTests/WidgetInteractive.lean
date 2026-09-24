@@ -12,6 +12,8 @@ set_option doc.verso true
 
 open Errata
 
+public section
+
 /--
 How much longer the pauses in these tests are than their shortest version, which keeps the test
 suite fast. Set it to {lean}`100` to watch the output stream into the widget.

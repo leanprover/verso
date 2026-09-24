@@ -13,11 +13,13 @@ module
 
 public import VersoSearch
 public import VersoSearch.DomainSearch
-import Errata
+public import Errata
 
 open Std
 open Verso Search
 open Errata
+
+public section
 
 /-- Whether `needle` occurs in `haystack`. -/
 private def omits (haystack needle : String) : Bool :=

@@ -14,6 +14,8 @@ public import Errata
 
 open Errata
 
+public section
+
 /-- A test in the fixture module. -/
 @[test]
 def fixtureTest : Bool := true

@@ -6,9 +6,11 @@ Author: David Thrane Christiansen
 module
 
 public import Verso
-import Errata
+public import Errata
 
 open Verso Errata
+
+public section
 
 /-!
 Tests for Verso's build log: where a message's location and severity are recorded, how locations

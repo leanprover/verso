@@ -5,13 +5,15 @@ Author: David Thrane Christiansen
 -/
 module
 
-import Errata
+public import Errata
 import Plausible
 import VersoManual.Html
 import all VersoTests.SerializationGenerators
 import all VersoManual.Html.Hoist
 public meta import Verso.Output.Html
 public meta import VersoManual.Html
+
+public section
 
 namespace Verso.Tests.HtmlHoist
 
@@ -152,7 +154,7 @@ private def tocEntry : Verso.Genre.Manual.Html.Toc where
 #test_guard (compact titleWithMarginalia).contains "title note"
 #test_guard (compact titleWithMarginalia).contains "<sup>1</sup>"
 
-inductive HoistNesting where
+private inductive HoistNesting where
   | leaf
   | group (children : Array HoistNesting)
   | barriers (kinds : Array String) (before : Bool) (child : HoistNesting)
@@ -162,17 +164,17 @@ inductive HoistNesting where
   | suppressibles (kinds : Array String) (child : HoistNesting)
 deriving Repr
 
-structure HoistCase where
+private structure HoistCase where
   html : Html
 deriving Repr
 
-def someKinds (kinds : Array String) (notEmpty : 0 < kinds.size) : Gen (Array String) := do
+private def someKinds (kinds : Array String) (notEmpty : 0 < kinds.size) : Gen (Array String) := do
   let selected ← kinds.filterM fun _ => arbitrary
   if !selected.isEmpty then return selected
   let ⟨i, _, _⟩ ← chooseNatLt 0 kinds.size notEmpty
   return #[kinds[i]]
 
-partial def hoistNesting (kinds : Array String) (notEmpty : 0 < kinds.size) : Nat → Gen HoistNesting
+private partial def hoistNesting (kinds : Array String) (notEmpty : 0 < kinds.size) : Nat → Gen HoistNesting
   | 0 => pure .leaf
   | fuel + 1 =>
     let child := hoistNesting kinds notEmpty fuel
@@ -187,7 +189,7 @@ partial def hoistNesting (kinds : Array String) (notEmpty : 0 < kinds.size) : Na
       .suppressibles <$> selected <*> child
     ] (by simp)
 
-partial def HoistNesting.toHtml : HoistNesting → Gen Html
+private partial def HoistNesting.toHtml : HoistNesting → Gen Html
   | .leaf => decorativeHtml
   | .group children => do
     decorate <| .seq (← children.mapM HoistNesting.toHtml)
@@ -212,7 +214,7 @@ where
       (1, pure <| .tag "table" attrs contents)
     ]
 
-instance : ArbitraryFueled HoistCase where
+private instance : ArbitraryFueled HoistCase where
   arbitraryFueled fuel := do
     let extraKindCount := min (← chooseNat) 2
     let baseKinds := #["kind-0"] ++ (Array.range extraKindCount).map fun i => s!"kind-{i + 1}"
@@ -222,7 +224,7 @@ instance : ArbitraryFueled HoistCase where
       cases includeMargin <;> simp [kinds, baseKinds] <;> omega) fuel
     return ⟨← nesting.toHtml⟩
 
-instance : Shrinkable HoistCase where
+private instance : Shrinkable HoistCase where
   shrink test := Shrinkable.shrink test.html |>.map HoistCase.mk
 
 /-- HTML hoisting reaches a fixed point after one complete post-processing pass. -/

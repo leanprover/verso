@@ -9,9 +9,11 @@ Tests for `verso setup-literate`, which scaffolds the GitHub Pages workflow in a
 -/
 module
 
-import Errata
+public import Errata
 
 open Errata
+
+public section
 
 /-- The `verso-literate-pages.yml` workflow path within a project. -/
 private def workflowPath (root : System.FilePath) : System.FilePath :=

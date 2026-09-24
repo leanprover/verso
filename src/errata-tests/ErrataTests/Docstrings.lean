@@ -18,6 +18,8 @@ open Errata
 open Lean Doc Elab
 open scoped Lean.Doc.Syntax
 
+public section
+
 /--
 A Markdown docstring with `code`, _emphasis_ and **strong** text.
 

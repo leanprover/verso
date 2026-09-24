@@ -6,9 +6,11 @@ Author: David Thrane Christiansen
 module
 
 public import VersoSearch.PorterStemmer
-import Errata
+public import Errata
 
 open Verso.Search.Stemmer.Porter Errata
+
+public section
 
 /-!
 Tests the Porter stemmer against the standard vocabulary and its expected output.

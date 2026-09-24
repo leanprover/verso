@@ -4,6 +4,8 @@ public import Errata
 
 open Errata
 
+public section
+
 /-- A test that passes without panicking. -/
 @[test]
 def calm : Bool := true

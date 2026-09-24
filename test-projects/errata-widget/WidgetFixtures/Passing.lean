@@ -9,6 +9,8 @@ public import Errata
 
 open Errata
 
+public section
+
 /-- Writes to both streams. -/
 @[test]
 def bothStreams : Test := do

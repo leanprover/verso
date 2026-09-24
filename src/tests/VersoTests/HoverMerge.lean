@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
-import Errata
+public import Errata
 import all Verso.Code.Highlighted
 meta import Verso.Output.Html
 meta import SubVerso.Highlighting
@@ -12,6 +12,8 @@ meta import SubVerso.Highlighting
 open SubVerso.Highlighting (Highlighted)
 open Verso.Code (takeAttrs)
 open Verso.Output (Html)
+
+public section
 
 namespace Verso.HoverMergeTest
 
@@ -21,8 +23,8 @@ shares the token's extent: `Highlighted.normalize` makes the sole-token shape re
 and `takeAttrs` moves the token's hover attributes up to the span.
 -/
 
-def tok : Html := .tag "span" #[("class", "token"), ("data-verso-hover", "5")] (.text true "x")
-def tokNoHover : Html := .tag "span" #[("class", "token")] (.text true "x")
+private def tok : Html := .tag "span" #[("class", "token"), ("data-verso-hover", "5")] (.text true "x")
+private def tokNoHover : Html := .tag "span" #[("class", "token")] (.text true "x")
 
 -- The attribute is taken from a bare element.
 #test_guard takeAttrs #["data-verso-hover"] tok == (#[("data-verso-hover", "5")], tokNoHover)
@@ -42,7 +44,7 @@ def tokNoHover : Html := .tag "span" #[("class", "token")] (.text true "x")
     (.tag "a" #[("data-verso-links", "[]")] tokNoHover) ==
   (#[("data-verso-links", "[]")], .tag "a" #[] tokNoHover)
 
-def tokLinked : Html :=
+private def tokLinked : Html :=
   .tag "span" #[("class", "token"), ("data-verso-hover", "5"), ("data-verso-links", "[2]")]
     (.text true "x")
 
@@ -81,8 +83,8 @@ def tokLinked : Html :=
 #test_guard takeAttrs #["data-verso-hover"] (.text true "x") == (#[], .text true "x")
 #test_guard takeAttrs #["data-verso-hover"] (.seq #[]) == (#[], .seq #[])
 
-def hlTok : Highlighted := .token ⟨.keyword none none none, "rfl"⟩
-def hlTok' : Highlighted := .token ⟨.keyword none none none, "skip"⟩
+private def hlTok : Highlighted := .token ⟨.keyword none none none, "rfl"⟩
+private def hlTok' : Highlighted := .token ⟨.keyword none none none, "skip"⟩
 
 -- A sequence around a single element becomes that element, through nesting and empty text.
 #test_guard (Highlighted.seq #[hlTok]).normalize == hlTok

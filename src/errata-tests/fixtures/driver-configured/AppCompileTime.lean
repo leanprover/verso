@@ -2,6 +2,8 @@ module
 
 public import Errata.CompileTime
 
+public section
+
 #test_guard true
 
 /-- info: 2 -/

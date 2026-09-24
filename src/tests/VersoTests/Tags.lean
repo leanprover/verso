@@ -4,11 +4,13 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
-import Errata
+public import Errata
 import VersoManual
 meta import VersoManual
 
 set_option doc.verso true
+
+public section
 
 namespace Verso.Tests.Tags
 

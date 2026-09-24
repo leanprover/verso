@@ -9,6 +9,8 @@ public import Errata
 
 open Errata
 
+public section
+
 /-- Fails in its own code, after writing a line. -/
 @[test]
 def ownFailure : Test := do

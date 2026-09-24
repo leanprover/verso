@@ -6,9 +6,11 @@ Author: David Thrane Christiansen
 module
 
 public import VersoUtil.Zip
-import Errata
+public import Errata
 
 open Verso.Zip Errata
+
+public section
 
 /-!
 Tests round-tripping files through the zip writer and the external `unzip` tool.

@@ -6,9 +6,11 @@ Author: David Thrane Christiansen
 module
 
 public import VersoUtil.LzCompress
-import Errata
+public import Errata
 
 open Verso.LzCompress Errata
+
+public section
 
 /-- The LZ compressor produces the expected encoding for a sample Lean snippet. -/
 @[test]

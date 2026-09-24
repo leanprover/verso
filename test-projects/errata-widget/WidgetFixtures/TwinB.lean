@@ -9,6 +9,8 @@ public import Errata
 
 open Errata
 
+public section
+
 /-- What the test in this module writes. -/
 private def greeting : String := "from TwinB"
 

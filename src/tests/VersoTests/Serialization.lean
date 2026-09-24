@@ -11,12 +11,14 @@ they stay module-internal there and are reached here through `import all`.
 -/
 module
 
-import Errata
+public import Errata
 import all VersoTests.SerializationGenerators
 
 open Lean
 open Verso Multi
 open Errata
+
+public section
 
 /-- Internal identifiers round-trip through JSON. -/
 @[test]

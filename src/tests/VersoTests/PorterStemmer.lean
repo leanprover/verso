@@ -5,7 +5,9 @@ Author: David Thrane Christiansen
 -/
 module
 meta import all VersoSearch.PorterStemmer
-import Errata
+public import Errata
+
+public section
 
 namespace Verso.Tests.PorterStemmer
 

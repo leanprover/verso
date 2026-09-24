@@ -4,6 +4,8 @@ public import Errata
 
 open Errata
 
+public section
+
 /-- An instance that outranks Errata's and passes every boolean. -/
 public instance (priority := high) : IsTest Bool where
   toTest _ := pure ()

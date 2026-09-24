@@ -4,11 +4,13 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: Jason Reed
 -/
 module
-import Errata
+public import Errata
 meta import all Verso.Code.HighlightedToTex
 open Verso.Doc.TeX (escapeForVerbatim)
 
 open SubVerso.Highlighting
+
+public section
 
 /-- info: "\\symbol{123}\\symbol{124}\\symbol{125}\\symbol{92}" -/
 #test_msgs in

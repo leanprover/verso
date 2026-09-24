@@ -644,7 +644,7 @@ class Editor:
             "/-\nCopyright (c) 2026 Lean FRO LLC. All rights reserved.\n"
             "Released under Apache 2.0 license as described in the file LICENSE.\n"
             "Author: David Thrane Christiansen\n-/\n"
-            "module\n\npublic import Errata\n\nopen Errata\n\n"
+            "module\n\npublic import Errata\n\nopen Errata\n\npublic section\n\n"
         )
         nonce = f"\n-- written by the test harness at {time.time_ns()}\n"
         self.path("Scratch").write_text(header + body + nonce, encoding="utf-8")
