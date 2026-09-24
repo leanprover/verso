@@ -727,13 +727,41 @@ private def filterJson (f : TomlFilter) : Lean.Json :=
   Lean.Json.mkObj [("text", Lean.Json.str f.text), ("file", Lean.Json.str "errata.toml"),
     ("line", Lean.toJson f.line), ("col", Lean.toJson f.col)]
 
-/-- Settings as JSON, each `{ needs = … }` replaced by the target's result. -/
+/--
+Settings as JSON, each `{ needs = … }` replaced by the target's result. A setting whose target was
+not built for this run is left out.
+-/
 private def settingsJson (needs : Array (String × String)) (s : Array (String × TomlSetting)) :
     Lean.Json :=
-  Lean.Json.mkObj <| s.toList.map fun (k, v) =>
+  Lean.Json.mkObj <| s.toList.filterMap fun (k, v) =>
     match v with
-    | .value s => (k, Lean.Json.str s)
-    | .needs tgt _ => (k, Lean.Json.str ((needs.find? (·.1 == tgt)).map (·.2) |>.getD ""))
+    | .value s => some (k, Lean.Json.str s)
+    | .needs tgt _ => (needs.find? (·.1 == tgt)).map fun (_, path) => (k, Lean.Json.str path)
+
+/-- The targets that a profile's settings and its overrides' settings need. -/
+private def TomlProfile.neededTargets (p : TomlProfile) : Array String :=
+  (p.settings ++ p.overrides.flatMap (·.settings)).filterMap fun (_, s) =>
+    match s with
+    | .needs tgt _ => some tgt
+    | .value _ => none
+
+/--
+The profile that the runner's arguments select with `--profile NAME` or `--profile=NAME`, the last
+one winning, or `default`.
+-/
+private def selectedProfile (runnerArgs : List String) : String := Id.run do
+  let mut profile := "default"
+  let mut rest := runnerArgs
+  repeat
+    match rest with
+    | "--profile" :: name :: more =>
+      profile := name
+      rest := more
+    | arg :: more =>
+      if let some name := arg.dropPrefix? "--profile=" then profile := name.copy
+      rest := more
+    | [] => break
+  return profile
 
 /-- A field that is present only when the value is. -/
 private def optJson [Lean.ToJson α] (key : String) : Option α → List (String × Lean.Json)
@@ -754,11 +782,14 @@ private def profileJson (needs : Array (String × String)) (p : TomlProfile) : L
       ("override", Lean.Json.arr (p.overrides.map overrideJson))] ++
     (match p.defaultFilter? with | some f => [("default-filter", filterJson f)] | none => [])
 
-/-- The configuration that the driver writes for the runner, as JSON. -/
+/--
+The configuration that the driver writes for the runner, as JSON, with the libraries' test
+executables and the executables `tomlExes` that `errata.toml` adds.
+-/
 private def configJson (executables : Array (String × System.FilePath)) (cwd : System.FilePath)
     (errataDir : String) (warnings : Array String) (invocation : String) (toml : ErrataToml)
-    (needs : Array (String × String)) : Lean.Json :=
-  let tomlExes := toml.config.executables.map fun e =>
+    (tomlExes : Array TomlExecutable) (needs : Array (String × String)) : Lean.Json :=
+  let tomlExes := tomlExes.map fun e =>
     Lean.Json.mkObj [("name", Lean.Json.str e.name),
       ("command", Lean.Json.arr (e.command.map Lean.Json.str)),
       ("cwd", Lean.Json.str (match e.cwd? with
@@ -838,9 +869,10 @@ private def usage (run withArgs : String) : String :=
     s!"  {form.pushn ' ' (width + 2 - form.length)}{what}"
   s!"Errata test runner\n\n\
     Usage:\n{"\n".intercalate formLines.toList}\n\n\
-    Tokens before `--test-options` name libraries. A library is a bare `Library` in this package\n\
-    or a `package/Library` reaching into a dependency. Everything after the marker goes to the\n\
-    test runner.\n\n\
+    Tokens before `--test-options` name libraries, or test executables that `errata.toml` adds with\n\
+    [[executable]]. A library is a bare `Library` in this package or a `package/Library` reaching\n\
+    into a dependency. Without names, every library and every added executable runs. Everything\n\
+    after the marker goes to the test runner.\n\n\
     With `list` as the first argument, the driver discovers the tests of every library and prints\n\
     one line per test that the filters select: its executable, name, file and line, and tags. No\n\
     filter selects every test, and several are joined by union. A library is selected with\n\
@@ -895,12 +927,19 @@ script run (args) do
   if verbose then
     IO.println "== Discovery"
     (← IO.getStdout).flush
+  -- A name on the command line may name a test executable that `errata.toml` adds. With no names,
+  -- every such executable runs.
+  let selecting := !libNames.isEmpty
+  let tomlExes :=
+    if selecting then toml.config.executables.filter (libNames.contains ·.name)
+    else toml.config.executables
+  let libNames := libNames.filter fun n => !tomlExes.any (·.name == n)
   -- Search the named libraries, or every library in the package by default. A name may be a bare
   -- `Library` in this package or a `package/Library` reaching into a dependency, following Lake's
   -- target syntax.
   let candidates := ws.root.leanLibs
   let libs ←
-    if libNames.isEmpty then pure candidates
+    if !selecting then pure candidates
     else do
       let mut chosen : Array Lake.LeanLib := #[]
       for spec in libNames do
@@ -983,11 +1022,21 @@ script run (args) do
       IO.eprintln (renderTomlProblem toml.fileMap
         ⟨e.ref, s!"the [[executable]] name '{e.name}' is the name of a library's test executable"⟩)
       return 1
-  -- Build the test executables, the runner, and every target that a setting needs, then the
-  -- runner's configuration. Lake rebuilds the configuration when `errata.toml`, the discovery
-  -- results, the executables, or a needed target change: each needed target's trace flows into the
-  -- continuation that writes the file.
-  let errataDir ← IO.FS.realPath self.dir
+  -- Build the test executables, the runner, and every target that a setting of the selected profile
+  -- needs, then the runner's configuration. Lake rebuilds the configuration when `errata.toml`, the
+  -- discovery results, the executables, or a needed target change: each needed target's trace flows
+  -- into the continuation that writes the file. The `list` subcommand resolves no setting, so it
+  -- builds no needed target.
+  let wanted :=
+    if args.head? == some "list" then #[]
+    else match toml.config.profiles.find? (·.name == selectedProfile runnerArgs) with
+      | some p => p.neededTargets
+      | none => #[]
+  let needed := toml.needs.filter (wanted.contains ·.1)
+  -- Test executables find Errata's shell harness in the directory of Errata's sources.
+  let errataDir ← match self.findLeanLib? `Errata with
+    | some lib => IO.FS.realPath lib.srcDir
+    | none => IO.FS.realPath self.dir
   let rootDir ← IO.FS.realPath ws.root.dir
   let configFile := ws.root.dir / defaultLakeDir / "errata" / "config.json"
   let some runnerExe := self.findLeanExe? `«errata-runner»
@@ -996,17 +1045,17 @@ script run (args) do
   let (configPath, runnerPath) ← runBuild do
     let exeJobs ← testLibs.mapM fun (lib, _) => (lib.facet `errataExe).fetch
     let runnerJob ← runnerExe.exe.fetch
-    let needJobs ← toml.needs.mapM fun (_, spec) => spec.query .text
+    let needJobs ← needed.mapM fun (_, spec) => spec.query .text
     (Job.collectArray needJobs).bindM fun needValues => do
     (Job.collectArray exeJobs).bindM fun exePaths => do
       runnerJob.mapM fun runnerPath => do
         let mut executables := #[]
         for ((lib, _), path) in testLibs.zip exePaths do
           executables := executables.push (exeName lib, ← IO.FS.realPath path)
-        let needs := toml.needs.zipWith (fun (tgt, _) value => (tgt, value)) needValues
+        let needs := needed.zipWith (fun (tgt, _) value => (tgt, value)) needValues
         -- Tests run from the root package's directory, where `lake test` runs.
         let content := (configJson executables rootDir errataDir.toString driverWarnings
-          s!"{withArgs} --test-options" toml needs).pretty ++ "\n"
+          s!"{withArgs} --test-options" toml tomlExes needs).pretty ++ "\n"
         addPureTrace toml.text "errata.toml"
         addPureTrace content "Errata runner configuration"
         buildFileUnlessUpToDate' (text := true) configFile do

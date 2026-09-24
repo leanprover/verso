@@ -1,0 +1,14 @@
+# The stamp is needed only by the `stamped` profile, and a shell script is a test executable of its
+# own, which prints the directory of Errata's sources that the runner gives it.
+[profile.stamped.settings]
+"TomlLib.stampFile" = { needs = "stamp" }
+
+[[executable]]
+name = "extra"
+command = ["bash", "-c", '''
+if [ "$1" = errata-list ]; then
+  printf '%s\n' '{"type":"protocol","version":1}' '{"type":"test","name":"where"}' >> "$2"
+else
+  echo "errata-dir=$ERRATA_DIR"
+fi
+''', "extra"]

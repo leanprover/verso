@@ -1106,6 +1106,46 @@ def driverBuildsNeededTargets : Test :=
     result "the test library is not" do
       assertTrue ((← olean.metadata).modified == oleanBefore) "TomlLib.olean was rebuilt"
 
+/--
+The driver builds only the targets that the selected profile's settings need. A name on the command
+line selects a test executable that `errata.toml` adds, as it selects a library, and such an
+executable receives the directory of Errata's sources.
+-/
+@[test]
+def driverSelectsProfilesAndExecutables : Test :=
+  IO.FS.withTempDir fun dir => do
+    copyFixture tomlFixture dir
+    IO.FS.writeFile (dir / "errata.toml")
+      (← IO.FS.readFile (tomlFixture / "variants" / "profile-needs.toml"))
+    let lake (args : Array String) : IO IO.Process.Output :=
+      IO.Process.output { cmd := "lake", args, cwd := dir }
+    let stamp := dir / ".lake" / "build" / "stamp.txt"
+    let config : TestM Lean.Json := do
+      match Lean.Json.parse (← IO.FS.readFile (dir / ".lake" / "errata" / "config.json")) with
+      | .ok j => pure j
+      | .error e => fail s!"config.json is not JSON: {e}"
+    let exeNames (j : Lean.Json) : Array String :=
+      ((j.getObjValAs? (Array Lean.Json) "executables").toOption.getD #[]).filterMap fun e =>
+        (e.getObjValAs? String "name").toOption
+    result "an added executable alone, with the default profile" do
+      let out ← lake #["test", "--", "extra"]
+      assertExitCode 0 out
+      assertContains "1 passed, 0 failed" out.stdout
+      assertTrue (!(← stamp.pathExists)) "the default profile needs no target, and the stamp was built"
+      let j ← config
+      assertBEq #["extra"] (exeNames j)
+      assertBEq (some (← IO.FS.realPath "src/errata").toString)
+        (j.getObjValAs? String "errataDir").toOption
+    result "a library alone" do
+      discard <| lake #["test", "--", "TomlLib"]
+      assertBEq #["TomlLib"] (exeNames (← config))
+    result "the profile that needs the stamp" do
+      let out ← lake #["test", "--", "--test-options", "--profile", "stamped"]
+      assertExitCode 0 out
+      assertContains "2 passed, 0 failed" out.stdout
+      assertTrue (← stamp.pathExists) "the stamp was not built"
+      assertBEq #["TomlLib", "extra"] (exeNames (← config))
+
 /-- The `list` subcommand takes filters only, and rejects an option instead of ignoring it. -/
 @[test]
 def listRejectsOptions : Test := do
