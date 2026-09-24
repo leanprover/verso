@@ -7,6 +7,7 @@ module
 
 public import Errata.IsTest
 public import Errata.Runner
+public import Errata.Helpers
 public import Errata.TestRegistry
 public import Lean
 public meta import Lean
@@ -54,6 +55,15 @@ meta def runDeclName (env : Environment) (decl : Name) : Name := Id.run do
   return name
 
 /--
+Checks that a test executable can reach {name}`decl` through a plain {lit}`import` of its module:
+in a module, the declaration is public, which a {lit}`public section` arranges.
+-/
+meta def ensureExported (decl : Name) : AttrM Unit := do
+  unless ((← getEnv).setExporting true).contains decl do
+    throwError m!"`{privateToUserName decl}` is private or not exported, so a test executable \
+      cannot reach it. Make it public, for example by declaring it in a `public section`."
+
+/--
 Records a declaration as a test. The action that runs it is compiled, with the {name}`IsTest`
 instance in force here, into an exported definition beside it. A test executable reaches that
 definition through a plain {lit}`import` of the test's module. A test must itself be exported: in a
@@ -63,9 +73,7 @@ live environment, and stored with the test.
 meta def recordTest (decl : Name) : AttrM Unit := do
   if (testExt.getState (← getEnv)).any (·.name == decl) then
     throwError m!"`{privateToUserName decl}` is already marked as a test"
-  unless ((← getEnv).setExporting true).contains decl do
-    throwError m!"`{privateToUserName decl}` is private or not exported, so a test executable \
-      cannot reach it. Make it public, for example by declaring it in a `public section`."
+  ensureExported decl
   let action ← (testAction decl).run'
   let run := runDeclName (← getEnv) decl
   let type := mkApp (mkConst ``TestM) (mkConst ``Unit)
@@ -166,6 +174,52 @@ meta initialize
       Lean.Widget.savePanelWidgetInfo Errata.Widget.runTestWidget.javascriptHash.val props widgetStx
   }
 
+/-- The type of a helper, {lean}`List String → IO UInt32`. -/
+meta def helperType : Expr :=
+  mkForall `args .default (mkApp (mkConst ``List [.zero]) (mkConst ``String))
+    (mkApp (mkConst ``IO) (mkConst ``UInt32))
+
+/--
+Records a declaration as a helper. The declaration must have the type {lean}`List String → IO UInt32`,
+must be exported as a test is, and must not be {lit}`meta` or universe polymorphic. The docstring is
+read here, from the live environment, and stored with the helper.
+-/
+meta def recordHelper (decl : Name) : AttrM Unit := do
+  if (helperExt.getState (← getEnv)).any (·.name == decl) then
+    throwError m!"`{privateToUserName decl}` is already marked as a test helper"
+  if isMarkedMeta (← getEnv) decl then
+    throwError m!"A test helper must not be `meta`"
+  ensureExported decl
+  let info ← getConstInfo decl
+  unless info.levelParams.isEmpty do
+    throwError m!"A test helper must not be universe polymorphic"
+  let fits ← (do isDefEq (← instantiateMVars info.type) helperType : MetaM Bool).run'
+  unless fits do
+    throwError m!"`@[test_helper]` requires the type `List String → IO UInt32`, and \
+      `{privateToUserName decl}` has the type{indentExpr info.type}"
+  let docstring? ← findDocString? (← getEnv) decl
+  modifyEnv (helperExt.addEntry · {
+    name := decl, isUnsafe := info.isUnsafe, file := ← getFileName, docstring?
+  })
+
+/--
+Marks a definition as a test helper: a function that a test runs as a subprocess of its own test
+executable with {name}`runHelper`.
+-/
+meta initialize
+  registerBuiltinAttribute {
+    ref := `Errata.testHelper
+    name := `test_helper
+    descr := "Marks a definition as a test helper, which a test runs as a subprocess of its own \
+      test executable."
+    -- Applied after compilation so the declaration's docstring is in the environment to capture.
+    applicationTime := .afterCompilation
+    add := fun decl stx kind => do
+      Attribute.Builtin.ensureNoArgs stx
+      unless kind == AttributeKind.global do throwAttrMustBeGlobal `test_helper kind
+      recordHelper decl
+  }
+
 /--
 A module to read tests from: the module itself, or, with a trailing {lit}`.*`, the module and every
 imported module below it.
@@ -228,3 +282,25 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
               location := $(← exprToSyntax (toExpr location)),
               docstring? := $docStx, run := $run : Errata.TestEntry })
   elabTerm (← `(#[$entries,*])) expectedType?
+
+/--
+{lit}`getAllHelpers%` reads the helpers recorded by {lit}`@[test_helper]` in every imported module,
+and expands to the array of {name}`Helper` values that run them, each named by its fully qualified
+declaration name. Unsafe helpers are wrapped in {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
+-/
+syntax (name := getAllHelpers) "getAllHelpers%" : term
+
+/-- Expands {lit}`getAllHelpers%` by reading the recorded helpers of the imported modules. -/
+@[term_elab getAllHelpers]
+meta def elabGetAllHelpers : TermElab := fun stx expectedType? => do
+  let `(getAllHelpers%) := stx
+    | throwUnsupportedSyntax
+  let env ← getEnv
+  let mut entries : Array Term := #[]
+  for idx in [0 : env.allImportedModuleNames.size] do
+    for helper in helperExt.getModuleEntries env idx do
+      let ref ← `(@$(mkCIdent helper.name))
+      let run ← if helper.isUnsafe then `(unsafe $ref) else pure ref
+      entries := entries.push <| ←
+        `({ name := $(quote helper.name.toString), run := $run : Errata.Helper })
+  elabTerm (← `((#[$entries,*] : Array Errata.Helper))) expectedType?

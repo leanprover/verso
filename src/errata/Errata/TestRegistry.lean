@@ -5,8 +5,9 @@ Author: David Thrane Christiansen
 -/
 
 /-
-The record of the tests that `@[test]` marks, kept in an environment extension. Discovery reads it
-at elaboration time, and the single-test runner reads it from an imported environment at run time.
+The record of the tests that `@[test]` marks and the helpers that `@[test_helper]` marks, kept in
+environment extensions. Discovery reads them at elaboration time, and the single-test runner reads
+the tests from an imported environment at run time.
 -/
 module
 
@@ -62,6 +63,33 @@ single-test runner reads them from an imported environment at run time.
 initialize testExt : SimplePersistentEnvExtension TestDecl (Array TestDecl) ←
   registerSimplePersistentEnvExtension {
     name := `Errata.test
+    addEntryFn := Array.push
+    addImportedFn := fun _ => #[]
+  }
+
+/--
+A recorded helper: a declaration of type {lean}`List String → IO UInt32` that a test runs as a
+subprocess of its own test executable. The file and the docstring are captured when the attribute is
+applied.
+-/
+structure HelperDecl where
+  /-- The helper declaration's fully qualified name. -/
+  name : Name
+  /-- Whether the helper is unsafe. -/
+  isUnsafe : Bool
+  /-- The source file that defines the helper. -/
+  file : String
+  /-- The helper's docstring, rendered as Markdown, captured when the attribute is applied. -/
+  docstring? : Option String := none
+deriving Inhabited
+
+/--
+The helpers recorded by {lit}`@[test_helper]`, per module. {lit}`getAllHelpers%` reads them back at
+elaboration time to build the table of helpers that a test executable runs by name.
+-/
+initialize helperExt : SimplePersistentEnvExtension HelperDecl (Array HelperDecl) ←
+  registerSimplePersistentEnvExtension {
+    name := `Errata.testHelper
     addEntryFn := Array.push
     addImportedFn := fun _ => #[]
   }

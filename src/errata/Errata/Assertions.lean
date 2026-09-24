@@ -61,6 +61,19 @@ def assertThrowsIO {α} (act : IO α) (acceptable : IO.Error → Bool := fun _ =
     unless acceptable e do
       failAt loc "the action threw an unacceptable IO error" (detail? := some (toString e))
 
+/--
+Asserts that a process ended by aborting: its exit code is {lit}`134`, which is how a process ended
+by {lit}`SIGABRT` is reported. A panic under {lit}`LEAN_ABORT_ON_PANIC=1` ends a process this way.
+The failure shows the exit code and the last lines of standard error.
+-/
+def assertAborted (output : IO.Process.Output)
+    (loc : Location := by exact here%) : TestM Unit :=
+  unless output.exitCode == 134 do
+    let lines := output.stderr.splitOn "\n"
+    let tail := "\n".intercalate (lines.drop (lines.length - 20))
+    failAt loc s!"expected the process to abort (exit code 134), but it exited with code \
+      {output.exitCode}" (detail? := some s!"the last lines of stderr:\n{tail}")
+
 /-- Asserts that a file exists. -/
 def assertFileExists (path : System.FilePath)
     (loc : Location := by exact here%) : TestM Unit := do

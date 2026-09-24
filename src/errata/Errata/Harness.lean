@@ -6,11 +6,13 @@ Author: David Thrane Christiansen
 
 /-
 The Lean harness: the main of a library's test executable, which lists the library's tests and runs
-one of them by name, writing the protocol's records to the file the runner names.
+one of them by name, writing the protocol's records to the file the runner names, and runs the
+helpers that its tests start.
 -/
 module
 
 public import Errata.Runner
+public import Errata.Helpers
 public import Errata.Protocol
 public import Errata.ProcessControl
 public import Std.Data.HashMap
@@ -28,9 +30,10 @@ open Protocol
 def usage : String :=
   "usage:\n  \
     <test-executable> errata-list <out>\n  \
-    <test-executable> errata-run <out> <test-name> [setting:NAME=VALUE]...\n\n\
-    The Errata runner starts test executables. To run the tests, run the Errata driver, \
-    which is usually `lake test`."
+    <test-executable> errata-run <out> <test-name> [setting:NAME=VALUE]...\n  \
+    <test-executable> errata-helper <helper-name> [ARG]...\n\n\
+    The Errata runner starts test executables, and tests start their helpers. To run the tests, \
+    run the Errata driver, which is usually `lake test`."
 
 /--
 The settings among a test executable's arguments: each {lit}`setting:NAME=VALUE`, split at the first
@@ -53,7 +56,8 @@ def harnessSettings : List String := ["seed", "updateGolden"]
 /--
 The context for a test run with the given settings. The harness's own settings configure it, and
 every other setting becomes a test option, read with {name}`option?` and {name}`flag`. Without a
-seed, one is chosen at random.
+seed, one is chosen at random. Helpers are reached through this test executable's
+{lit}`errata-helper` mode.
 -/
 def contextOf (settings : Array (String × String)) : IO (Except String Context) := do
   let lookup (name : String) : Option String := (settings.findRev? (·.1 == name)).map (·.2)
@@ -70,7 +74,7 @@ def contextOf (settings : Array (String × String)) : IO (Except String Context)
     else acc.insert name ((acc.getD name #[]).push value)
   let ctx ← mkContext (updateGolden := lookup "updateGolden" == some "true")
     (options := options) (seed := seed?)
-  return .ok ctx
+  return .ok { ctx with helperCommand := some #[(← IO.appPath).toString, "errata-helper"] }
 
 /-- Writes the inventory: the protocol record, then a test record for each entry. -/
 def writeInventory (entries : Array TestEntry) (out : IO.FS.Handle) : IO Unit := do
@@ -161,13 +165,32 @@ def indexByName (entries : Array TestEntry) : Std.HashMap String Nat := Id.run d
     index := index.insert entries[i].name i
   return index
 
+/-- Each helper, by its name. -/
+def helpersByName (helpers : Array Helper) : Std.HashMap String Helper :=
+  helpers.foldl (init := {}) fun m h => m.insert h.name h
+
+/--
+Runs the helper named {name}`name` from {name}`helpers` with {name}`args`, with the process's own
+standard streams, and returns its exit code. An unknown name is reported on standard error, with the
+exit code {lit}`2`.
+-/
+def runHelperNamed (helpers : Array Helper) (name : String) (args : List String) : IO UInt32 := do
+  match (helpersByName helpers).get? name with
+  | some helper => helper.run args
+  | none =>
+    IO.eprintln s!"no helper is named {name}"
+    return 2
+
 /--
 Carries out one invocation of a test executable, and returns its exit code. {lit}`errata-list`
 writes the inventory; {lit}`errata-run` runs the named test, with the settings that follow its name;
-anything else prints the usage message.
+{lit}`errata-helper` runs the named helper from {name}`helpers` with the arguments that follow its
+name; anything else prints the usage message.
 -/
-def dispatch (entries : Array TestEntry) (args : List String) : IO UInt32 := do
+def dispatch (entries : Array TestEntry) (args : List String) (helpers : Array Helper := #[]) :
+    IO UInt32 := do
   match args with
+  | "errata-helper" :: name :: rest => runHelperNamed helpers name rest
   | ["errata-list", outPath] =>
     let out ← IO.FS.Handle.mk outPath .append
     writeInventory entries out
@@ -225,9 +248,16 @@ read with {name}`option?` and {name}`flag`. When the environment variable {lit}`
 closes, the executable ends its own process group and exits. Otherwise the command runs by hand with
 any standard input, {lit}`/dev/null` included. The test itself reads an empty standard input.
 
+{lit}`errata-helper <name> [ARG]...` runs the helper in {name}`helpers` with that name, passing it the
+arguments that follow, and exits with the helper's exit code. The helper runs with the process's own
+standard input, output, and error. This mode belongs to the Lean harness and is outside the protocol
+between the runner and its test executables: {name (scope := "Errata")}`runHelper` starts it from
+inside a test. An unknown name is reported on standard error, with the exit code {lit}`2`.
+
 With any other arguments, the executable prints its usage and exits with {lit}`2`.
 -/
-def main (entries : Array TestEntry) (args : List String) : IO UInt32 := do
+def main (entries : Array TestEntry) (args : List String) (helpers : Array Helper := #[]) :
+    IO UInt32 := do
   match args with
   | "errata-run" :: _ =>
     -- The read blocks on a thread of its own, which it holds for the length of the run.
@@ -241,4 +271,4 @@ def main (entries : Array TestEntry) (args : List String) : IO UInt32 := do
     -- The thread that reads standard input runs until the pipe closes, and a Lean program that
     -- returns from `main` waits for its threads, so the process is ended here.
     exitNow code.toUInt8
-  | _ => dispatch entries args
+  | _ => dispatch entries args helpers

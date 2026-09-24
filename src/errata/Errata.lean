@@ -11,6 +11,7 @@ public import Errata.Result
 public import Errata.Context
 public import Errata.Here
 public import Errata.TestM
+public import Errata.Helpers
 public import Errata.IsTest
 public import Errata.Assertions
 public import Errata.Process
