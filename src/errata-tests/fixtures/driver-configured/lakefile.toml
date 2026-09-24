@@ -30,6 +30,10 @@ name = "AppStray"
 [[lean_lib]]
 name = "AppPanic"
 
+# A test that runs a helper, which a module without tests defines.
+[[lean_lib]]
+name = "AppHelper"
+
 # Compile-time tests in a module that imports only the compile-time commands.
 [[lean_lib]]
 name = "AppCompileTime"

@@ -796,6 +796,84 @@ def driverReportsUnreachableModules : Test := do
       assertContains "1 passed, 0 failed, 0 errors" out.stdout
       assertContains "<error message=" (← IO.FS.readFile junit)
 
+/-- Indexes past the end of an empty array by the number of its arguments, and so panics. -/
+@[test_helper]
+def panicPlease (args : List String) : IO UInt32 := do
+  let xs : Array Nat := #[]
+  IO.println s!"{xs[args.length]!}"
+  return 0
+
+/--
+A panic under `LEAN_ABORT_ON_PANIC=1` ends the process that panicked, after the runtime prints its
+message on standard error. The helper indexes past the end of an array.
+-/
+@[test]
+def arrayPanics : Test := do
+  let out ← runHelper ``panicPlease ["one"] (env := #[("LEAN_ABORT_ON_PANIC", some "1")])
+  assertAborted out
+  assertContains "Error: index out of bounds" out.stderr
+
+/--
+Copies its standard input to its standard output, followed by the value of `ERRATA_HELPER_NOTE` on
+a line of its own, and exits with the number of its arguments.
+-/
+@[test_helper]
+def echoInput (args : List String) : IO UInt32 := do
+  let stdin ← IO.getStdin
+  repeat
+    let line ← stdin.getLine
+    if line.isEmpty then break
+    IO.print line
+  IO.println ((← IO.getEnv "ERRATA_HELPER_NOTE").getD "")
+  return args.length.toUInt32
+
+/--
+A helper runs in a process of its own with the arguments, the environment, and the standard input
+that the test gives it, and the test receives its exit code and output.
+-/
+@[test]
+def helpersRunInTheirOwnProcess : Test := do
+  let out ← runHelper ``echoInput ["a", "b", "c"] (env := #[("ERRATA_HELPER_NOTE", some "noted")])
+    (stdin := "line one\nline two\n")
+  assertExitCode 3 out
+  assertBEq "line one\nline two\nnoted\n" out.stdout
+  assertBEq "" out.stderr
+
+/-- An `unsafe` helper that exits with 5. -/
+@[test_helper]
+unsafe def unsafeHelper (_ : List String) : IO UInt32 := pure 5
+
+/-- An `unsafe` helper runs like any other. -/
+@[test]
+def unsafeHelperRuns : Test := do
+  assertExitCode 5 (← runHelper ``unsafeHelper [])
+
+/-- A helper name that the test executable does not know ends the helper's process with code 2. -/
+@[test]
+def unknownHelperIsReported : Test := do
+  let out ← runHelper (Lean.Name.mkSimple "noSuchHelper") []
+  assertExitCode 2 out
+  assertContains "no helper is named noSuchHelper" out.stderr
+
+/-- error: `hiddenHelper` is private or not exported, so a test executable cannot reach it. Make it public, for example by declaring it in a `public section`. -/
+#test_msgs in
+@[test_helper] private def hiddenHelper (_ : List String) : IO UInt32 := pure 0
+
+/--
+error: `@[test_helper]` requires the type `List String → IO UInt32`, and `wrongHelper` has the type
+  Nat → IO UInt32
+-/
+#test_msgs in
+@[test_helper] def wrongHelper (_ : Nat) : IO UInt32 := pure 0
+
+/-- error: `panicPlease` is already marked as a test helper -/
+#test_msgs in
+attribute [test_helper] panicPlease
+
+/-- error: A test helper must not be `meta` -/
+#test_msgs in
+@[test_helper] meta def metaHelper (_ : List String) : IO UInt32 := pure 0
+
 /--
 A test that panics ends its test executable's process, which the runner reports as ended by a
 signal with the panic's message in its output, and the rest of the run goes on. The fixture's
@@ -808,6 +886,24 @@ def driverReportsPanics : Test := do
   assertContains "INCONCLUSIVE panics: the test executable was ended by signal 6" out.stdout
   assertContains "Error: index out of bounds" out.stdout
   assertContains "1 passed, 0 failed, 0 errors, 1 inconclusive" out.stdout
+
+/--
+A test executable runs the helpers that its tests start, including one from a module that has no
+tests, and the inventory leaves helpers out. The fixture's `AppHelper` library has a test that runs a
+helper from a module it imports.
+-/
+@[test]
+def driverRunsHelpers : Test := do
+  let fixture := fixturesDir / "driver-configured"
+  result "The test runs its helper" do
+    let out ← lakeInFixture fixture #["test", "--", "AppHelper"]
+    assertExitCode 0 out
+    assertContains "1 passed, 0 failed, 0 errors, 0 inconclusive" out.stdout
+  result "The inventory has no helpers" do
+    let out ← lakeInFixture fixture #["test", "--", "AppHelper", "--test-options", "--list"]
+    assertExitCode 0 out
+    assertContains "runsItsHelper" out.stdout
+    assertNotContains "shout" out.stdout
 
 /--
 The compile-time commands register their verdicts as tests, so a module that imports only
@@ -1048,7 +1144,8 @@ def runnerArgParsing : Test := do
     | .ok _ => assertTrue false "expected an error"
 
 /--
-The Lean harness passes settings other than its own to the tests as options, and reads its own seed.
+The Lean harness passes settings other than its own to the tests as options, reads its own seed, and
+reaches helpers through its own executable.
 -/
 @[test]
 def harnessSettings : Test := do
@@ -1059,11 +1156,12 @@ def harnessSettings : Test := do
   assertBEq 5 ctx.seed
   assertBEq (some #[""]) (ctx.options.get? "check-tex")
   assertBEq none (ctx.options.get? "seed")
+  assertBEq (some "errata-helper") (ctx.helperCommand.bind (·[1]?))
   assertTrue ((← Harness.contextOf #[("seed", "x")]) matches .error _) "a malformed seed is rejected"
 
 /--
-The Lean harness lists its tests with their names, paths, and locations, and runs one by name,
-writing its records and exiting with its verdict.
+The Lean harness lists its tests with their names, paths, and locations, runs one by name, writing
+its records and exiting with its verdict, and runs a helper by name, exiting with its exit code.
 -/
 @[test]
 def harnessListsAndRuns : Test := do
@@ -1118,6 +1216,16 @@ def harnessListsAndRuns : Test := do
       let printed ← captureOutput do code.set (← Harness.dispatch entries [])
       assertBEq 2 (← code.get)
       assertContains "errata-list" printed.stderr
+      assertContains "errata-helper" printed.stderr
+    let helpers : Array Helper := #[{ name := "M.count", run := fun args => pure args.length.toUInt32 }]
+    result "a helper" do
+      assertBEq 2 (← Harness.dispatch entries ["errata-helper", "M.count", "x", "y"] helpers)
+    result "an unknown helper" do
+      let code ← IO.mkRef (0 : UInt32)
+      let printed ← captureOutput do
+        code.set (← Harness.dispatch entries ["errata-helper", "M.other"] helpers)
+      assertBEq 2 (← code.get)
+      assertContains "no helper is named M.other" printed.stderr
 
 /-- A run that discovers nothing fails: a test tool with no tests is a broken setup, not a pass. -/
 @[test]
