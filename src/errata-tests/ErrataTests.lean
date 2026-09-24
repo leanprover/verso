@@ -1790,10 +1790,16 @@ error: `hiddenSetting` is private or not exported, so a test executable cannot r
   fromString s := s.toNat?
 
 /--
-error: `unexposedSetting` must expose its value to the modules that import it, so that a test's parameter has the setting's type there. Mark it `@[expose]`.
+error: `unexposedSetting` must expose its value to the modules that import it, so that a test's parameter has the setting's type there. Mark it `@[expose]`, or declare it with `abbrev`.
 -/
 #test_msgs in
 @[setting] def unexposedSetting : Setting where
+  type := Nat
+  fromString s := s.toNat?
+
+-- An `abbrev` exposes its value, so it is a setting without `@[expose]`.
+#test_msgs in
+@[setting] abbrev abbreviatedSetting : Setting where
   type := Nat
   fromString s := s.toNat?
 

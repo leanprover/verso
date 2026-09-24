@@ -61,7 +61,7 @@ meta def recordSetting (decl : Name) : AttrM Unit := do
   | some (.defnInfo _) => pure ()
   | _ =>
     throwError m!"`{decl}` must expose its value to the modules that import it, so that a test's \
-      parameter has the setting's type there. Mark it `@[expose]`."
+      parameter has the setting's type there. Mark it `@[expose]`, or declare it with `abbrev`."
   let name := settingNameOf decl
   if let some other := known.find? (·.settingName == name) then
     throwError m!"A setting named `{name}` is already declared as `{other.decl}`"
