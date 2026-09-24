@@ -376,8 +376,13 @@ script run (args) do
       IO.eprintln s!"error: {msg}"
       IO.eprintln (usage run withArgs)
       return 1
-  IO.println "== Discovery"
-  (← IO.getStdout).flush
+  -- The phases are named as they begin at a verbosity that shows passes, which these runner flags
+  -- select.
+  let verbose := runnerArgs.any fun a =>
+    ["-v", "--verbose", "-vv", "--verbose-all", "-vvv", "--verbose-docs"].contains a
+  if verbose then
+    IO.println "== Discovery"
+    (← IO.getStdout).flush
   -- Search the named libraries, or every library in the package by default. A name may be a bare
   -- `Library` in this package or a `package/Library` reaching into a dependency, following Lake's
   -- target syntax.

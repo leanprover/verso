@@ -265,7 +265,10 @@ private def Running.addRecord (r : Running) : Protocol.Record → Running
     else { r with verdict? := some info }
   | _ => r
 
-/-- The line with which the human-readable report names a phase as it begins. -/
+/--
+The line with which the human-readable report names a phase as it begins, at a verbosity that shows
+passes.
+-/
 def phaseLine (name : String) : String := s!"== {name}"
 
 /--
@@ -274,8 +277,9 @@ a test that is not running comes from a process that outlived its test, and it i
 -/
 def step (s : State) : Event → State × Array Action
   | .phase name timeMs =>
-    (s, #[.event (Json.mkObj [("type", Json.str "phase"), ("name", Json.str name),
-      ("time_ms", ToJson.toJson timeMs)]), .print (phaseLine name)])
+    let event := Action.event (Json.mkObj [("type", Json.str "phase"), ("name", Json.str name),
+      ("time_ms", ToJson.toJson timeMs)])
+    (s, if s.human.verbosity.showsPasses then #[event, .print (phaseLine name)] else #[event])
   | .issue issue =>
     let issue := if s.wfail then { issue with isError := true } else issue
     ({ s with issues := s.issues.push issue }, #[.event (Json.mkObj
