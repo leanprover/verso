@@ -180,9 +180,10 @@ lean_lib ErrataTests where
 def errataRunnerDir : System.FilePath := defaultLakeDir / "errata-runner"
 
 /--
-The directory of a package's generated test-executable sources, as an executable configuration's
-`srcDir`. Lake joins that onto the package's source directory, which keeps an absolute path as it
-is, so the generated sources are found wherever a package keeps its source directory.
+The directory of a package's generated sources for the test executables, as an executable
+configuration's `srcDir`. Lake joins that onto the package's source directory, which keeps an
+absolute path as it is, so the generated sources are found wherever a package keeps its source
+directory.
 -/
 private def errataRunnerSrcDir (pkg : Package) : System.FilePath :=
   pkg.dir / errataRunnerDir
