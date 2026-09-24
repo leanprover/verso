@@ -12,5 +12,9 @@ test = [
 [tool.pytest.ini_options]
 markers = [
     "errata_widget: tests of Errata's run-test widget, which need a built Verso and `npm ci`; select them with `-m errata_widget`",
+    "browser: a browser test, which Errata's default filter leaves out",
+    "slow: a test that takes more than a few seconds in a process of its own",
+    "hover_media: a test that needs CSS guarded by @media (hover: hover), which Linux headless Firefox disables",
+    "errata_setting(name, optional=False): the test takes the Errata setting with this name",
 ]
 addopts = "-m 'not errata_widget'"

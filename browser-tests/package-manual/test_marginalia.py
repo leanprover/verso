@@ -16,9 +16,8 @@ NUM_NOTES = 10
 
 
 @pytest.fixture(scope="session")
-def notes_page_path(request) -> str:
+def notes_page_path(site_dir: Path) -> str:
     """Return the generated page containing the marginalia stress fixture."""
-    site_dir = Path(__file__).parent.parent / request.config.getoption("--site-dir")
     best, best_count = None, 0
     for html_file in site_dir.rglob("*.html"):
         contents = html_file.read_text(errors="ignore")
@@ -32,9 +31,8 @@ def notes_page_path(request) -> str:
 
 
 @pytest.fixture(scope="session")
-def table_stress_page_path(request) -> str:
+def table_stress_page_path(site_dir: Path) -> str:
     """Return the page containing only the table marginalia stress fixture."""
-    site_dir = Path(__file__).parent.parent / request.config.getoption("--site-dir")
     matches = []
     for html_file in site_dir.rglob("*.html"):
         if "Stress table row ten" in html_file.read_text(errors="ignore"):
@@ -338,9 +336,8 @@ class TestDesktopMarginalia:
         assert prev_button.get_attribute("title") == "4. Table Marginalia Stress"
 
     def test_rewrite_annotations_do_not_reach_serialized_html(
-        self, request, notes_page_path: str
+        self, site_dir: Path, notes_page_path: str
     ):
-        site_dir = Path(__file__).parent.parent / request.config.getoption("--site-dir")
         html_file = site_dir / (notes_page_path.removeprefix("/") + "index.html")
         contents = html_file.read_text()
         # Whole attribute names only: the output marks relocated notes with

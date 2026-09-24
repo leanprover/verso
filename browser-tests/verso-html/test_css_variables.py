@@ -76,6 +76,7 @@ def computed_pseudo(page: Page, selector: str, pseudo: str, prop: str) -> str:
 
 
 class TestSeverityVariables:
+    @pytest.mark.hover_media
     @pytest.mark.parametrize(("cls", "v", "theme"), SEVERITIES)
     def test_affected_code(self, server: str, page: Page, cls: str, v: str, theme: str):
         setup(
@@ -142,6 +143,7 @@ class TestSeverityVariables:
 
 
 class TestNestedSeverityHover:
+    @pytest.mark.hover_media
     def test_nearest_severity_hover_colors_win(self, server: str, page: Page):
         """The hover highlight of a message span comes from its own severity's variables,
         for a span nested inside one of another severity as well as for the outer span.

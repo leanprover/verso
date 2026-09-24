@@ -19,17 +19,26 @@ To add a test case, add two files to `test-cases` directory:
   Then, `test.lean.produced.out` can be copied to
   `test.lean.expected.out` and committed.
 
-## Running individual tests
+## Running the tests
 
-Do `./src/tests/interactive/run_single.sh $test_case` from Verso's
-root directory.
+The cases are Errata tests with the tag `lsp`, one test per case, named
+after the case's file. `lake test` runs them with the rest of Verso's
+tests, and a filter selects them alone:
+
+```
+lake test -- --test-options --filter 'tag(lsp)'
+lake test -- --test-options --filter 'exe(interactive) & name(=math_hover)'
+```
+
+To run one case by hand, run `./src/tests/interactive/test_single.sh
+src/tests/interactive/test-cases/$test_case.lean` from Verso's root
+directory.
 
 ## Runner architecture
 
-The runner architecture lies in a small custom script
-`./run_interactive.sh`. This script will call the upstream runner for
-each file in `test-cases`. The script is called from the `interactive`
-test in `src/tests/VersoTests/Interactive.lean`.
+`tests.sh` is the test executable that `errata.toml` adds under the
+name `interactive`. It sources Errata's shell harness, declares one test
+per file in `test-cases`, and runs a case with the upstream runner.
 
 Files from upstream:
 

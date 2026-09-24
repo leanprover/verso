@@ -5,6 +5,7 @@ these tests check that each one is present in the generated page and that hoveri
 produces the right tooltip theme.
 """
 
+import pytest
 from playwright.sync_api import Page
 
 from hover_media import require_hover_media
@@ -90,6 +91,7 @@ class TestGalleryContents:
         box.wait_for(state="visible")
         assert "declaration uses" in box.inner_text()
 
+    @pytest.mark.hover_media
     def test_warning_hover_highlights_whole_span(self, server: str, page: Page):
         """Hovering warning-carrying code shows the warning hover background across the
         whole span; the token hover highlight is removed so it reads as one region."""
@@ -198,6 +200,7 @@ class TestGalleryContents:
         # The informational region includes the branch after the warning
         assert "succ" in result["outerText"]
 
+    @pytest.mark.hover_media
     def test_hover_highlight_matches_tooltip(self, server: str, page: Page):
         """Hovering a documented token inside a message region shows the token's tooltip,
         so only the token is highlighted: the region and the enclosing tactic label are

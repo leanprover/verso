@@ -7,9 +7,18 @@ import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-# TODO: adjust default path to built site relative to this directory
+# The built site, relative to this directory, when neither the Errata setting `siteDir` nor
+# `--site-dir` names another.
 DEFAULT_SITE_DIR = "../_out/html-multi"
-REDIRECTS_JSON_PATH = DEFAULT_SITE_DIR + "/xref.json"
+
+# The Errata settings that the browser tests take, when Verso's pytest harness runs them: the built
+# site, which `errata.toml` binds per suite, and Errata's seed, from which the redirect tests draw.
+errata_settings_decl = {
+    "siteDir": {
+        "description": "The directory of the built site that the tests serve; --site-dir otherwise."
+    },
+    "Errata.seed": {"description": "The seed that chooses the redirects to test."},
+}
 
 
 def find_free_port():
@@ -19,10 +28,22 @@ def find_free_port():
         return s.getsockname()[1]
 
 
-def load_redirects():
-    """Load redirects from JSON file and return a list of (source, target) tuples."""
-    json_path = Path(__file__).parent / REDIRECTS_JSON_PATH
-    with open(json_path) as f:
+def wait_for_port(port, timeout=10.0):
+    """Wait until a server accepts connections on the local port, for at most `timeout` seconds."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                return
+        except OSError:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(0.02)
+
+
+def load_redirects(site_dir):
+    """Load redirects from the site's JSON file and return a list of (source, target) tuples."""
+    with open(Path(site_dir) / "xref.json") as f:
         data = json.load(f)
 
     sections = data["Verso.Genre.Manual.section"]["contents"]
@@ -31,12 +52,15 @@ def load_redirects():
     ]
 
 
-def get_sample_redirects(n=10):
-    """Get a random sample of n redirects for testing."""
-    redirects = load_redirects()
-    if len(redirects) <= n:
-        return redirects
-    return random.sample(redirects, n)
+def errata_settings_of(request):
+    """
+    The Errata settings that the test received from Verso's pytest harness, or an empty dictionary
+    when pytest runs without the harness.
+    """
+    try:
+        return request.getfixturevalue("errata_settings")
+    except pytest.FixtureLookupError:
+        return {}
 
 
 def pytest_addoption(parser):
@@ -74,25 +98,50 @@ def pytest_addoption(parser):
     )
 
 
-def pytest_configure(config):
-    """Set random seed if provided."""
-    seed = config.getoption("--seed")
-    if seed is not None:
-        random.seed(seed)
-
-
 def pytest_generate_tests(metafunc):
-    """Generate test cases for each sampled redirect."""
-    if "redirect_case" in metafunc.fixturenames:
+    """Generate one test per redirect to check; each test draws its redirect when it runs."""
+    if "redirect_index" in metafunc.fixturenames:
         n = metafunc.config.getoption("--num-redirects")
-        redirects = get_sample_redirects(n)
-        # Create readable test IDs
-        ids = [f"{source}->{target}" for source, target in redirects]
-        metafunc.parametrize("redirect_case", redirects, ids=ids)
+        metafunc.parametrize(
+            "redirect_index", range(n), ids=[f"redirect-{i}" for i in range(n)]
+        )
+
+
+def pytest_collection_modifyitems(config, items):
+    """
+    Marks every browser test with `browser`, the tag that Errata's default filter leaves out, and
+    marks the tests that serve a site or draw redirects as taking the Errata settings they read.
+    """
+    for item in items:
+        item.add_marker(pytest.mark.browser)
+        if "site_dir" in item.fixturenames:
+            item.add_marker(pytest.mark.errata_setting("siteDir", optional=True))
+        if "redirect_case" in item.fixturenames:
+            item.add_marker(pytest.mark.errata_setting("Errata.seed", optional=True))
 
 
 @pytest.fixture(scope="session")
-def server(request):
+def site_dir(request):
+    """The built site: the Errata setting `siteDir` when the test received it, and `--site-dir` otherwise."""
+    site = errata_settings_of(request).get("siteDir") or request.config.getoption("--site-dir")
+    return (Path(__file__).parent / site).resolve()
+
+
+@pytest.fixture
+def redirect_case(request, redirect_index, site_dir):
+    """
+    A redirect to check, as a (source, target) pair, drawn from the site's redirects with the Errata
+    seed or `--seed` when either is given, so that a test with the same seed checks the same redirect.
+    """
+    seed = errata_settings_of(request).get("Errata.seed")
+    if seed is None:
+        seed = request.config.getoption("--seed")
+    rng = random.Random(f"{seed}:{redirect_index}") if seed is not None else random.Random()
+    return rng.choice(load_redirects(site_dir))
+
+
+@pytest.fixture(scope="session")
+def server(request, site_dir):
     """Start a local HTTP server for the built site, or use an existing one."""
     external_url = request.config.getoption("--server-url")
 
@@ -100,8 +149,6 @@ def server(request):
         yield external_url
         return
 
-    site_dir = request.config.getoption("--site-dir")
-    site_dir = Path(__file__).parent / site_dir
     port = request.config.getoption("--port")
 
     if port is None:
@@ -115,7 +162,7 @@ def server(request):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    time.sleep(1)
+    wait_for_port(port)
     yield f"http://127.0.0.1:{port}"
     proc.terminate()
     proc.wait()

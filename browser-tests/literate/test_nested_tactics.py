@@ -1,3 +1,4 @@
+import pytest
 from playwright.sync_api import Page
 
 from hover_media import require_hover_media
@@ -96,6 +97,7 @@ class TestNestedTacticStates:
             }"""
         )
 
+    @pytest.mark.hover_media
     def test_hover_highlights_own_region_label(self, server: str, page: Page):
         """Hovering a region's plain content highlights that region's label."""
         self._load(server, page)
@@ -111,6 +113,7 @@ class TestNestedTacticStates:
             arg=tok.element_handle(),
         )
 
+    @pytest.mark.hover_media
     def test_hover_highlights_most_specific_region(self, server: str, page: Page):
         """Hovering lights up only the innermost tactic region's label, even for a documented
         token: the region's proof state is the tooltip shown there, so the token itself stays

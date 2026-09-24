@@ -1123,6 +1123,29 @@ lean_exe packagedocs where
   root := `PackageManualMain
   supportInterpreter := true
 
+/--
+Runs a manual's executable to write its multi-page HTML into a directory of the build directory, and
+returns the site's directory. The browser tests take such a site as their `siteDir` setting.
+-/
+def buildManualSite (pkg : Package) (exe : Job System.FilePath) (name : String) :
+    FetchM (Job System.FilePath) :=
+  exe.mapM fun exeFile => do
+    let dir := pkg.buildDir / "sites" / name
+    let index := dir / "html-multi" / "index.html"
+    buildFileUnlessUpToDate' index do
+      if ← dir.pathExists then IO.FS.removeDirAll dir
+      proc { cmd := exeFile.toString, args := #["--output", dir.toString, "--without-html-single"] }
+    return dir / "html-multi"
+
+-- The user's guide as a multi-page HTML site, for the browser tests of search, navigation,
+-- redirects, and KaTeX.
+target usersGuideSite pkg : System.FilePath := do
+  buildManualSite pkg (← usersguide.fetch) "usersguide"
+
+-- The package documentation example as a multi-page HTML site, for its browser tests.
+target packageManualSite pkg : System.FilePath := do
+  buildManualSite pkg (← packagedocs.fetch) "package-manual"
+
 -- An example of a minimal nontrivial custom genre
 @[default_target]
 lean_lib SimplePage where

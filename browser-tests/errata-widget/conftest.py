@@ -3,6 +3,8 @@ Fixtures for the Errata widget tests. Within a session, tests share one Lean ser
 gets a fresh page with the InfoView and an editor that connects the page to the server.
 """
 
+from pathlib import Path
+
 import pytest
 from playwright.sync_api import Page, expect
 
@@ -60,6 +62,17 @@ def relay():
     relay = LspRelay()
     yield relay
     relay.close()
+
+
+def pytest_collection_modifyitems(config, items):
+    """
+    Marks the widget tests `slow`: each starts a Lean server of its own when Errata runs it in a
+    process of its own.
+    """
+    here = Path(__file__).parent
+    for item in items:
+        if here in Path(item.path).parents:
+            item.add_marker(pytest.mark.slow)
 
 
 @pytest.hookimpl(wrapper=True)

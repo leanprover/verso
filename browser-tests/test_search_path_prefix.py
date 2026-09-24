@@ -41,16 +41,27 @@ def _find_free_port() -> int:
         return s.getsockname()[1]
 
 
+def _wait_for_port(port: int, timeout: float = 10.0) -> None:
+    """Wait until the server accepts connections on the local port, for at most `timeout` seconds."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                return
+        except OSError:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(0.02)
+
+
 @pytest.fixture(scope="session")
-def prefixed_server(request):
+def prefixed_server(site_dir):
     """Serve the same built site as the `server` fixture, but mounted under `/reference/`.
 
     We create a fresh temporary directory, symlink the built site into
     `<tmp>/reference`, and point `python -m http.server` at the temp dir.
     The site files themselves are unmodified — only the URL space changes.
     """
-    site_dir = request.config.getoption("--site-dir")
-    site_dir = (Path(__file__).parent / site_dir).resolve()
     if not site_dir.is_dir():
         pytest.skip(f"built site not found at {site_dir}; run `lake build` first")
 
@@ -65,7 +76,7 @@ def prefixed_server(request):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    time.sleep(1)
+    _wait_for_port(port)
     try:
         yield f"http://127.0.0.1:{port}"
     finally:

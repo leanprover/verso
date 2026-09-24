@@ -81,6 +81,18 @@ jobs:
               run: |
                   uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
 
+            # The run-test widget's browser tests, which `lake test` runs, show the widget in the
+            # real InfoView, which `npm ci` installs.
+            - uses: actions/setup-node@v7
+              if: steps.check-changes.outputs.changed == 'true'
+              with:
+                  node-version: "lts/*"
+                  cache: npm
+
+            - name: Install the InfoView
+              if: steps.check-changes.outputs.changed == 'true'
+              run: npm ci
+
             - name: Run tests
               if: steps.check-changes.outputs.changed == 'true'
               run: |
