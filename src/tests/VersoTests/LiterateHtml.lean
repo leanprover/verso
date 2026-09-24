@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 import VersoLiterate
 import VersoLiterateCode
 import Errata
+import VersoTests.Settings
 
 set_option maxRecDepth 1024
 
@@ -18,11 +19,27 @@ private def cleanDir (dir : System.FilePath) : IO Unit := do
     IO.FS.removeDirAll dir
   IO.FS.createDirAll dir
 
-/-- Runs a Lake executable via `lake exe`. Throws on non-zero exit. -/
+/--
+The built `verso-literate-html` and `verso-literate-plan` executables, which each test sets from its
+settings before it runs any of them. A test executable runs one test per process.
+-/
+private initialize literateExes : IO.Ref (Option (System.FilePath × System.FilePath)) ←
+  IO.mkRef none
+
+/-- The path of the built executable with the given name, from the test's settings. -/
+private def exePath (name : String) : IO System.FilePath := do
+  let some (html, plan) ← literateExes.get
+    | throw <| IO.userError s!"the path of {name} is not set"
+  match name with
+  | "verso-literate-html" => pure html
+  | "verso-literate-plan" => pure plan
+  | _ => throw <| IO.userError s!"no setting gives the path of {name}"
+
+/-- Runs one of the built executables. Throws on non-zero exit. -/
 private def runLakeExe (name : String) (args : Array String) : IO Unit := do
   let child ← IO.Process.spawn {
-    cmd := "lake"
-    args := #["--quiet", "exe", name] ++ args
+    cmd := (← exePath name).toString
+    args := args
     stdout := .null
     stderr := .inherit
   }
@@ -91,11 +108,11 @@ private def runLiteratePlan (moduleListFile planFile : System.FilePath) (tomlFil
     args := args ++ #[tf.toString]
   runLakeExe "verso-literate-plan" args
 
-/-- Runs a Lake executable capturing stdout and stderr, returning (exitCode, stdout, stderr). -/
+/-- Runs one of the built executables capturing stdout and stderr, returning (exitCode, stdout, stderr). -/
 private def runLakeExeCapture (name : String) (args : Array String) : IO (UInt32 × String × String) := do
   let result ← IO.Process.output {
-    cmd := "lake"
-    args := #["--quiet", "exe", name] ++ args
+    cmd := (← exePath name).toString
+    args := args
   }
   return (result.exitCode, result.stdout, result.stderr)
 
@@ -1209,8 +1226,9 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
 ]
 
 /-- The literate HTML generator produces the expected output for the single-root test project. -/
-@[test]
-def literateHtml : Test := do
+@[test (tags := slow)]
+def literateHtml (htmlExe : literateHtmlExe) (planExe : literatePlanExe) : Test := do
+  literateExes.set (some (← IO.FS.realPath htmlExe, ← IO.FS.realPath planExe))
   let projectDir := "test-projects/literate-config"
   let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings", "LitConfig.Builtins", "LitConfig.UserExt"]
 
@@ -1284,8 +1302,9 @@ private def multiRootHtmlTests (data : TestData) : List (String × Test) := [
 ]
 
 /-- The literate HTML generator produces the expected output for the multi-root test project. -/
-@[test]
-def literateHtmlMultiRoot : Test := do
+@[test (tags := slow)]
+def literateHtmlMultiRoot (htmlExe : literateHtmlExe) (planExe : literatePlanExe) : Test := do
+  literateExes.set (some (← IO.FS.realPath htmlExe, ← IO.FS.realPath planExe))
   let projectDir := "test-projects/literate-multi-root"
   let modules := #["LibA", "LibA.Core", "LibB", "LibB.Utils"]
 

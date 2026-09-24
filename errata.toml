@@ -1,0 +1,15 @@
+# The configuration of Verso's tests, which `lake test` reads. The runner's profiles are named
+# kinds of run: `default` for a developer's machine, and `ci` for continuous integration.
+
+[profile.default.settings]
+checkTeX = "false"
+versoExe = { needs = "verso" }
+literateHtmlExe = { needs = "verso-literate-html" }
+literatePlanExe = { needs = "verso-literate-plan" }
+
+[profile.ci.settings]
+checkTeX = "true"
+
+[[profile.ci.override]]
+filter = "tag(slow)"
+timeout = "30m"

@@ -19,17 +19,19 @@ import VersoTests.Integration.FrontMatter
 import VersoTests.Integration.DiagramDoc
 import VersoTests.Integration.TwoSideDoc
 import Errata
+import VersoTests.Settings
 
 open Verso Genre Manual
 open Verso.Integration
 open Errata
+open VersoTests (checkTeX)
 
 /--
 Renders `doc` to TeX under `integration/<dir>/output`, checks the produced tree against the golden
-`expected` tree, and, under `--check-tex`, confirms `lualatex` builds the result. The extra-file
+`expected` tree, and, when `checkTeX` is true, confirms `lualatex` builds the result. The extra-file
 lists place additional assets alongside the output, matching the document's expectations.
 -/
-def texGolden (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Manual)
+def texGolden (checkTeX : Bool) (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Manual)
     (twoside : Bool := false)
     (extraFiles extraFilesTeX : List (System.FilePath × String) := []) : Test := do
   let base : System.FilePath := "src/tests/integration" / dir
@@ -41,7 +43,7 @@ def texGolden (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Manual)
   let logger ← Verso.Logger.new
   emitTeX config doc.toPart |>.run extension_impls% |>.run logger
   goldenDir (base / "expected") output
-  if ← flag "check-tex" then
+  if checkTeX then
     -- `-shell-escape` lets the `svg` package call Inkscape to rasterize `diagram` attachments.
     let out ← IO.Process.output {
       cwd := output / "tex"
@@ -57,35 +59,39 @@ def texGolden (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Manual)
 
 /-- The sample document renders to its golden TeX. -/
 @[test]
-def sampleDoc : Test := texGolden "sample-doc" SampleDoc.doc
+def sampleDoc (checkTeX : checkTeX) : Test := texGolden checkTeX "sample-doc" SampleDoc.doc
 
 /-- A document using inheritance renders to its golden TeX. -/
 @[test]
-def inheritanceDoc : Test := texGolden "inheritance-doc" InheritanceDoc.doc
+def inheritanceDoc (checkTeX : checkTeX) : Test :=
+  texGolden checkTeX "inheritance-doc" InheritanceDoc.doc
 
 /-- A document exercising code content renders to its golden TeX. -/
 @[test]
-def codeContentDoc : Test := texGolden "code-content-doc" CodeContent.doc
+def codeContentDoc (checkTeX : checkTeX) : Test :=
+  texGolden checkTeX "code-content-doc" CodeContent.doc
 
 /-- A document with extra bundled files renders to its golden TeX. -/
 @[test]
-def extraFilesDoc : Test :=
-  texGolden "extra-files-doc" ExtraFilesDoc.doc
+def extraFilesDoc (checkTeX : checkTeX) : Test :=
+  texGolden checkTeX "extra-files-doc" ExtraFilesDoc.doc
     (extraFiles := [("src/tests/integration/extra-files-doc/test-data/shared", "shared")])
     (extraFilesTeX := [("src/tests/integration/extra-files-doc/test-data/TeX-only", "TeX-only")])
 
 /-- A document exercising escaped `]` in item descriptions renders to its golden TeX. -/
 @[test]
-def escapeDoc : Test := texGolden "escape-doc" Escape.doc
+def escapeDoc (checkTeX : checkTeX) : Test := texGolden checkTeX "escape-doc" Escape.doc
 
 /-- A document with front matter renders to its golden TeX. -/
 @[test]
-def frontMatterDoc : Test := texGolden "front-matter-doc" FrontMatter.doc
+def frontMatterDoc (checkTeX : checkTeX) : Test :=
+  texGolden checkTeX "front-matter-doc" FrontMatter.doc
 
 /-- A document rendered with two-sided layout renders to its golden TeX. -/
 @[test]
-def twoSideDoc : Test := texGolden "twoside-doc" TwoSideDoc.doc (twoside := true)
+def twoSideDoc (checkTeX : checkTeX) : Test :=
+  texGolden checkTeX "twoside-doc" TwoSideDoc.doc (twoside := true)
 
 /-- A document with diagrams renders to its golden TeX. -/
 @[test]
-def diagramDoc : Test := texGolden "diagram-doc" DiagramDoc.doc
+def diagramDoc (checkTeX : checkTeX) : Test := texGolden checkTeX "diagram-doc" DiagramDoc.doc

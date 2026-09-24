@@ -14,7 +14,7 @@ public section
 /--
 Use a shell harness to test the LSP server.
 -/
-@[test]
+@[test (tags := slow)]
 def interactive : Test := do
   -- The script writes its progress per case to the test executable's own standard output. The
   -- runner captures that output as it arrives, and the report shows it, also for a test stopped at

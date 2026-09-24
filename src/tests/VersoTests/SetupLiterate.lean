@@ -10,8 +10,10 @@ Tests for `verso setup-literate`, which scaffolds the GitHub Pages workflow in a
 module
 
 public import Errata
+public import VersoTests.Settings
 
 open Errata
+open VersoTests (versoExe)
 
 public section
 
@@ -24,12 +26,13 @@ private def workflowPath (root : System.FilePath) : System.FilePath :=
 date on a second run, and backs up a hand-edited workflow before rewriting it.
 -/
 @[test]
-def setupLiterate : Test := do
+def setupLiterate (verso : versoExe) : Test := do
   let versoRoot ← IO.FS.realPath "."
+  let verso ← IO.FS.realPath verso
   IO.FS.withTempDir fun tmpDir => do
     let setupLiterate : TestM IO.Process.Output := do
       let out ← IO.Process.output {
-        cmd := "lake", args := #["exe", "verso", "setup-literate"], cwd := some tmpDir.toString }
+        cmd := verso.toString, args := #["setup-literate"], cwd := some tmpDir.toString }
       pure out
 
     -- A project that depends on the Verso under test.
