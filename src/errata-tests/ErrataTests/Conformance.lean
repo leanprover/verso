@@ -390,8 +390,8 @@ def missingCommand : Test := do
   assertContains "absent could not list its tests: it could not be started" issue.message
 
 /--
-A test executable that a signal ends while it lists its tests stops the run, and the message names
-the signal, as a module initializer that panics does.
+A signal that ends a test executable while it lists its tests stops the run with a message that
+names the signal. A module initializer that panics ends the listing this way.
 -/
 @[test]
 def listingSignaled : Test := do

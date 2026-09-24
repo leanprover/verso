@@ -39,8 +39,9 @@ structure Context where
   -/
   seed : Nat
   /--
-  The command that runs a helper, to which the helper's name and arguments are appended: the test
-  executable itself in its {lit}`errata-helper` mode. The Lean harness sets it when it runs a test.
+  The command that runs a helper: the test executable itself in its {lit}`errata-helper` mode.
+  {lit}`runHelper` appends the helper's name and arguments. The Lean harness sets it when it runs a
+  test.
   -/
   helperCommand : Option (Array String) := none
   /-- The running test's name. -/

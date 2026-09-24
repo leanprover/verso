@@ -5,8 +5,8 @@ Author: David Thrane Christiansen
 -/
 
 /-
-Helpers: functions in a test library that a test runs as a subprocess of its own test executable,
-for behavior that only a separate process shows.
+Helpers: public functions in a test library that a test runs as subprocesses of its own test
+executable, for behavior that only a separate process shows.
 -/
 module
 
@@ -41,10 +41,10 @@ The exit code is the helper's result modulo 256, as the operating system reports
 decoded as UTF-8; when it is not valid UTF-8, each byte of {lit}`0x80` or above becomes
 {lit}`U+FFFD`.
 
-The helper is named by a name literal with two backquotes, so a name that refers to no declaration
-is an error at elaboration time. A test that runs a helper must run under the test
-executable that the Lean harness builds, which sets how helpers are reached; elsewhere the test ends
-with an error.
+A test names the helper with a name literal with two backquotes, so a name that refers to no
+declaration is an error at elaboration time. A test that runs a helper must run in its test
+executable, where the Lean harness sets how helpers are reached; elsewhere the test ends with an
+error.
 -/
 def runHelper (helper : Lean.Name) (args : List String)
     (env : Array (String × Option String) := #[]) (stdin : String := "") :
@@ -62,12 +62,13 @@ def runHelper (helper : Lean.Name) (args : List String)
     stdin := .piped, stdout := .piped, stderr := .piped
   }
   let (input, child) ← child.takeStdin
-  -- Both streams are read as bytes on threads of their own, so neither pipe fills while the other is
-  -- read or while standard input is written.
+  -- Two dedicated threads read both streams as bytes, so neither pipe fills while the other is read
+  -- or while standard input is written.
   let outTask ← IO.asTask (prio := .dedicated) child.stdout.readBinToEnd
   let errTask ← IO.asTask (prio := .dedicated) child.stderr.readBinToEnd
-  -- A write to a helper that exits without reading all of its input fails with a broken pipe. The
-  -- failure is dropped, and the helper's exit code and output are returned as for any other helper.
+  -- A write to a helper that exits before it reads all of its input fails with a broken pipe. The
+  -- write is an `IO` action that catches its own failure, so the helper is always waited for and
+  -- its exit code and output are returned as for any other helper.
   let write : IO Unit := do
     unless stdin.isEmpty do
       input.putStr stdin

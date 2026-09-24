@@ -408,8 +408,8 @@ private meta def buildAndRun (source : System.FilePath) (moduleJson declJson opt
     let protocol ← ProcessControl.Tail.open protocolPath
     -- The runner finds the test's module through the `LEAN_PATH` that it inherits. It exits when its
     -- standard input closes, which happens when this file worker exits. Its own process group lets a
-    -- cancel kill the processes that the test starts. A panic ends the runner, as it ends a test
-    -- executable under the batch runner.
+    -- cancel kill the processes that the test starts. A panic in the test ends the runner, as a
+    -- panic ends a test executable under `lake test`.
     let run ← IO.Process.spawn {
       stdin := .piped, stdout := .piped, stderr := .piped, setsid := true
       env := #[("LEAN_ABORT_ON_PANIC", some "1")]

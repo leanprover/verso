@@ -796,7 +796,7 @@ def driverReportsUnreachableModules : Test := do
       assertContains "1 passed, 0 failed, 0 errors" out.stdout
       assertContains "<error message=" (← IO.FS.readFile junit)
 
-/-- Indexes past the end of an empty array by the number of its arguments, and so panics. -/
+/-- Indexes an empty array at the number of its arguments, and so panics. -/
 @[test_helper]
 def panicPlease (args : List String) : IO UInt32 := do
   let xs : Array Nat := #[]
@@ -849,8 +849,8 @@ def unsafeHelperRuns : Test := do
   assertExitCode 5 (← runHelper ``unsafeHelper [])
 
 /--
-A helper name that no helper of the test executable has ends the helper's process with code 2 and a
-message that names it.
+A name that matches no helper of the test executable ends the helper's process with exit code 2 and
+a message that names it.
 -/
 @[test]
 def unknownHelperIsReported : Test := do

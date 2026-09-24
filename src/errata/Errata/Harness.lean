@@ -5,9 +5,9 @@ Author: David Thrane Christiansen
 -/
 
 /-
-The Lean harness: the main of a library's test executable, which lists the library's tests and runs
-one of them by name, writing the protocol's records to the file the runner names, and runs the
-helpers that its tests start.
+The Lean harness: the main of a library's test executable. It lists the library's tests, runs one of
+them by name and writes the protocol's records to the file the runner names, and runs the helpers
+that its tests start.
 -/
 module
 
@@ -56,7 +56,7 @@ def harnessSettings : List String := ["seed", "updateGolden"]
 /--
 The context for a test run with the given settings. The harness's own settings configure it, and
 every other setting becomes a test option, read with {name}`option?` and {name}`flag`. Without a
-seed, one is chosen at random. Helpers are reached through this test executable's
+seed, one is chosen at random. Tests reach their helpers through this test executable's
 {lit}`errata-helper` mode.
 -/
 def contextOf (settings : Array (String × String)) : IO (Except String Context) := do
@@ -165,14 +165,14 @@ def indexByName (entries : Array TestEntry) : Std.HashMap String Nat := Id.run d
     index := index.insert entries[i].name i
   return index
 
-/-- Each helper, by its name. -/
+/-- The helpers, indexed by name. -/
 def helpersByName (helpers : Array Helper) : Std.HashMap String Helper :=
   helpers.foldl (init := {}) fun m h => m.insert h.name h
 
 /--
 Runs the helper named {name}`name` from {name}`helpers` with {name}`args`, with the process's own
-standard streams, and returns its exit code. An unknown name is reported on standard error, with the
-exit code {lit}`2`.
+standard streams, and returns its exit code. For an unknown name, it writes a message to standard
+error and returns {lit}`2`.
 -/
 def runHelperNamed (helpers : Array Helper) (name : String) (args : List String) : IO UInt32 := do
   match (helpersByName helpers).get? name with
@@ -251,9 +251,9 @@ any standard input, {lit}`/dev/null` included. The test itself reads an empty st
 {lit}`errata-helper <name> [ARG]...` runs the helper in {name}`helpers` with that name, passing it the
 arguments that follow, and exits with the helper's exit code, which the process that started it sees
 modulo 256, as the operating system reports it. The helper runs with the process's own standard
-input, output, and error. This mode belongs to the Lean harness and is outside the protocol
-between the runner and its test executables: {name (scope := "Errata")}`runHelper` starts it from
-inside a test. An unknown name is reported on standard error, with the exit code {lit}`2`.
+input, output, and error. This mode belongs to the Lean harness, and
+{name (scope := "Errata")}`runHelper` starts it from inside a test. For an unknown name, the
+executable writes a message to standard error and exits with {lit}`2`.
 
 With any other arguments, the executable prints its usage and exits with {lit}`2`.
 -/

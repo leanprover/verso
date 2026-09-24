@@ -69,7 +69,7 @@ initialize testExt : SimplePersistentEnvExtension TestDecl (Array TestDecl) ←
 
 /--
 A recorded helper: a declaration of type {lean}`List String → IO UInt32` that a test runs as a
-subprocess of its own test executable. The file and the docstring are captured when the attribute is
+subprocess of its own test executable. The attribute captures the file and the docstring when it is
 applied.
 -/
 structure HelperDecl where
@@ -80,8 +80,8 @@ structure HelperDecl where
   /-- The source file that defines the helper. -/
   file : String
   /--
-  The helper's docstring as {lit}`findDocString?` returns it when the attribute is applied: a
-  Markdown docstring as written, and a Verso docstring rendered as Markdown.
+  The helper's docstring in Markdown, if it has one: a Markdown docstring as written, or a Verso
+  docstring rendered as Markdown.
   -/
   docstring? : Option String := none
 deriving Inhabited
