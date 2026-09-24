@@ -126,7 +126,7 @@ Runs one test entry to completion, as the batch runner does, and condenses its r
 {name}`RunOutcome` whose description is the entry's docstring. Without a seed for property tests,
 one is generated.
 
-The test receives the {lit}`seed` setting and every option as a setting, followed by the declared
+The test receives the {lit}`Errata.seed` setting and every option as a setting, followed by the declared
 default of each setting it takes that no option names. The options also reach the deprecated
 {lit}`optionValues`, {lit}`option?`, and {lit}`flag`, and the outcome names the options that the
 test neither read that way nor takes as a setting.
@@ -146,15 +146,16 @@ def runEntryOutcome (entry : TestEntry) (seed? : Option Nat := none)
   let values : Std.HashMap String (Array String) := options.foldl (init := {}) fun acc (k, v) =>
     acc.insert k ((acc.getD k #[]).push v)
   let used ← IO.mkRef ({} : Std.HashSet String)
+  let seedName := settingNameOf ``seed
   let cfg := {
     ← mkContext with
     writeOutput := saveOutput, watchResults := watch
     legacyOptions? := some { values, used }
   }
   let defaults := entry.settings.filterMap fun s =>
-    if s.name == "seed" || options.any (·.1 == s.name) then none
+    if s.name == seedName || options.any (·.1 == s.name) then none
     else s.default?.map (s.name, ·)
-  let settings := #[("seed", toString seed)] ++ options ++ defaults
+  let settings := #[(seedName, toString seed)] ++ options ++ defaults
   let outcome := summarizeResults seed entry.location (← runEntry cfg entry settings) onlyOwnResult
   let read ← used.get
   let unreadOptions := values.keys.filter (fun k => !read.contains k && !entry.settings.any (·.name == k))

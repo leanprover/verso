@@ -37,8 +37,6 @@ meta def ensureExported (decl : Name) : AttrM Unit := do
 Records a declaration as a setting and makes it reducible, so that a test's parameter of its type
 has the setting's type to instance resolution. The declaration must have the type
 {lit}`Errata.Setting`, be exported with its value, and not be {lit}`meta` or universe polymorphic.
-Its name's last component must differ from that of every other setting in the environment, since
-that component is the setting's name.
 -/
 meta def recordSetting (decl : Name) : AttrM Unit := do
   let env ← getEnv
@@ -62,16 +60,13 @@ meta def recordSetting (decl : Name) : AttrM Unit := do
   | _ =>
     throwError m!"`{decl}` must expose its value to the modules that import it, so that a test's \
       parameter has the setting's type there. Mark it `@[expose]`, or declare it with `abbrev`."
-  let name := settingNameOf decl
-  if let some other := known.find? (·.settingName == name) then
-    throwError m!"A setting named `{name}` is already declared as `{other.decl}`"
   setReducibilityStatus decl .reducible
   let docstring? ← findDocString? env decl
   modifyEnv (settingExt.addEntry · { decl, file := ← getFileName, docstring? })
 
 /--
 Marks a definition of type {lit}`Errata.Setting` as a setting, which tests take as parameters and the
-configuration gives values. The last component of the declaration's name is the setting's name.
+configuration gives values. The declaration's fully qualified name is the setting's name.
 -/
 meta initialize
   registerBuiltinAttribute {

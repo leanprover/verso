@@ -53,8 +53,7 @@ meta def testAction (decl : Name) : MetaM (Expr × Array SettingUse) := do
   if isMarkedMeta env decl then
     throwError m!"A test must not be `meta`"
   let info ← getConstInfo decl
-  unless info.levelParams.isEmpty do
-    throwError m!"A test must not be universe polymorphic"
+  let testName := privateToUserName decl
   let pairs := mkApp2 (mkConst ``Prod [.zero, .zero]) (mkConst ``String) (mkConst ``String)
   let settingsType := mkApp (mkConst ``Array [.zero]) pairs
   withLocalDeclD `settings settingsType fun settings => do
@@ -62,12 +61,41 @@ meta def testAction (decl : Name) : MetaM (Expr × Array SettingUse) := do
       let mut uses : Array SettingUse := #[]
       for p in params do
         let ty ← instantiateMVars (← inferType p)
-        match settingOfParameter? env ty with
-        | some use => uses := uses.push use
-        | none =>
-          throwError m!"The parameter `{← p.fvarId!.getUserName}` of `{privateToUserName decl}` has \
-            the type{indentExpr ty}\nwhich is not a setting. A test's parameters are settings: \
-            `S` or `Option S` for a declaration `S` marked `@[setting]`."
+        let localDecl ← p.fvarId!.getDecl
+        match localDecl.binderInfo with
+        | .instImplicit =>
+          throwError m!"`{testName}` has an instance parameter of type{indentExpr ty}\nA test's \
+            parameters are settings: `S` or `Option S` for a declaration `S` marked `@[setting]`."
+        | .implicit | .strictImplicit =>
+          throwError m!"The parameter `{localDecl.userName}` of `{testName}` is implicit. A \
+            test's parameters are explicit settings. A setting named before its declaration \
+            becomes an implicit parameter when `autoImplicit` is on, so declare the setting \
+            before the test."
+        | .default =>
+          match settingOfParameter? env ty with
+          | some use => uses := uses.push use
+          | none =>
+            -- A parameter whose type is a definition that stands for a setting names the setting
+            -- through another name.
+            let named? : Option Name := match ty with
+              | .app (.const ``Errata.Setting.type []) (.const c [])
+              | .app (.const ``Option _) (.app (.const ``Errata.Setting.type []) (.const c [])) =>
+                some c
+              | _ => none
+            let alias? := named?.bind fun c =>
+              match (env.find? c).bind (·.value?) with
+              | some (.const s []) =>
+                if (settingExt.getState env).any (·.decl == s) then some (c, s) else none
+              | _ => none
+            if let some (c, s) := alias? then
+              throwError m!"The parameter `{localDecl.userName}` of `{testName}` has the type \
+                `{c}`, which stands for the setting `{s}`. A test names a setting directly: \
+                write `{s}`."
+            throwError m!"The parameter `{localDecl.userName}` of `{testName}` has the \
+              type{indentExpr ty}\nwhich is not a setting. A test's parameters are settings: \
+              `S` or `Option S` for a declaration `S` marked `@[setting]`."
+      unless info.levelParams.isEmpty do
+        throwError m!"A test must not be universe polymorphic"
       let goal := mkApp (mkConst ``IsTest) body
       let inst ← match ← trySynthInstance goal with
         | .some inst => instantiateMVars inst

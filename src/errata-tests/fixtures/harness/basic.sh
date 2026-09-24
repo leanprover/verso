@@ -17,14 +17,14 @@ record() {
   printf '%s\n' "$1" >> "$out"
 }
 
-# Every test takes the seed, and optionally a marker for the processes it starts and a note. Two tests
+# Every test takes Errata's seed, whose value the runner derives, and optionally a marker for the processes it starts and a note. Two tests
 # take more: `greets` a setting with a default, and `needs-setting` one that nothing gives a value.
-common='{"name":"seed","optional":false},{"name":"marker","optional":true},{"name":"note","optional":true}'
+common='{"name":"Errata.seed","optional":false},{"name":"marker","optional":true},{"name":"note","optional":true}'
 
 case "$mode" in
   errata-list)
     record '{"type":"protocol","version":1}'
-    record '{"type":"setting","name":"seed","description":"The seed."}'
+    record '{"type":"setting","name":"Errata.seed","description":"The seed."}'
     record '{"type":"setting","name":"marker","description":"Names the processes that a test starts."}'
     record '{"type":"setting","name":"note","description":"A note."}'
     record '{"type":"setting","name":"greeting","description":"A greeting.","default":"hello"}'

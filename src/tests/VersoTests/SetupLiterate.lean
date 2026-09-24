@@ -13,7 +13,7 @@ public import Errata
 public import VersoTests.Settings
 
 open Errata
-open VersoTests (versoExe)
+open VersoTests.Settings (versoExe)
 
 public section
 

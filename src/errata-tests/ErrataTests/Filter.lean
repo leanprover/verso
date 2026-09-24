@@ -142,9 +142,14 @@ def filterParseErrors : Test := do
 /-- A parse error names its place in its source. -/
 @[test]
 def filterErrorLocations : Test := do
-  let .error e := Filter.parse "tag(x) & (name(y)" | fail "expected an error"
-  assertBEq "--filter:17: expected ')'" (e.render (.argument "--filter"))
-  assertBEq "errata.toml:12:28: expected ')'" (e.render (.file "errata.toml" 12 11))
+  let text := "tag(x) & (name(y)"
+  let .error e := Filter.parse text | fail "expected an error"
+  assertBEq "--filter:17: expected ')'" (e.render (.argument "--filter") text)
+  assertBEq "errata.toml:12:28: expected ')'" (e.render (.file "errata.toml" 12 11) text)
+  result "a filter over several lines of a file" do
+    let text := "tag(x) &\n  (name(y)"
+    let .error e := Filter.parse text | fail "expected an error"
+    assertBEq "errata.toml:13:10: expected ')'" (e.render (.file "errata.toml" 12 11) text)
 
 /-- Parsing a filter and printing it gives the same text, for filters written in their shortest form. -/
 @[test]
@@ -288,6 +293,18 @@ def globAlternationIsBounded : Test := do
   let many := String.join (List.replicate 20 "{a,b}")
   match Glob.ofString many with
   | .ok _ => fail "expected an error"
-  | .error e => assertContains "expand to more than" e.message
+  | .error e => assertContains "expand to more than 10000 patterns" e.message
+  result "a large expansion of few patterns" do
+    -- 5,000 alternatives followed by 100,000 characters would copy the characters into every pattern.
+    let alternatives := ",".intercalate ((List.range 5000).map toString)
+    let glob := "{" ++ alternatives ++ "}" ++ "".pushn 'x' 100000
+    let start ← IO.monoMsNow
+    match Glob.ofString glob with
+    | .ok _ => fail "expected an error"
+    | .error e =>
+      assertContains "expand to more than 1000000 characters" e.message
+      assertBEq 0 e.offset
+    let elapsed := (← IO.monoMsNow) - start
+    assertTrue (elapsed < 2000) s!"parsing took {elapsed}ms"
 
 end ErrataTests.Filter

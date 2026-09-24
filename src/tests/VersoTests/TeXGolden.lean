@@ -24,7 +24,7 @@ import VersoTests.Settings
 open Verso Genre Manual
 open Verso.Integration
 open Errata
-open VersoTests (checkTeX)
+open VersoTests.Settings (checkTeX)
 
 /--
 Renders `doc` to TeX under `integration/<dir>/output`, checks the produced tree against the golden

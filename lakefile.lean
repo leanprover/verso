@@ -360,8 +360,12 @@ private structure TomlConfig where
   executables : Array TomlExecutable := #[]
   profiles : Array TomlProfile := #[]
 
-/-- A duration, `N` followed by `ms`, `s`, `m`, or `h`, in milliseconds. -/
+/--
+A duration, `N` followed by `ms`, `s`, `m`, or `h`, in milliseconds. Whitespace around it is ignored,
+as the runner ignores it.
+-/
 private def tomlDurationMs? (s : String) : Option Nat :=
+  let s := s.trimAscii.copy
   let num (d : String) (scale : Nat) := d.toNat?.map (· * scale)
   if let some d := s.dropSuffix? "ms" then num d.copy 1
   else if let some d := s.dropSuffix? "s" then num d.copy 1000
@@ -401,48 +405,70 @@ private def tomlBool (key : String) (v : Lake.Toml.Value) : TomlM (Option Bool) 
     tomlProblem other.ref s!"'{key}' must be a boolean, and it is {tomlKind other}"
     return none
 
-/-- A filter string, with the position of its first character after the string's opening quotes. -/
+/--
+A filter string, with the position of its first character after the string's opening quotes. A
+multi-line string whose opening quotes end their line starts on the next line, since TOML drops that
+newline.
+-/
 private def tomlFilterOf (fileMap : Lean.FileMap) (key : String) (v : Lake.Toml.Value) :
     TomlM (Option TomlFilter) := do
   match v with
   | .string ref text =>
     let some pos := ref.getPos? | return some { text, line := 0, col := 0 }
     let p := fileMap.toPosition pos
-    let opening : Substring.Raw :=
-      { str := fileMap.source, startPos := pos, stopPos := ⟨pos.byteIdx + 3⟩ }
-    let quotes := if opening.toString == "\"\"\"" || opening.toString == "'''" then 3 else 1
-    return some { text, line := p.line, col := p.column + quotes }
+    let slice (start len : Nat) : String :=
+      ({ str := fileMap.source, startPos := ⟨pos.byteIdx + start⟩,
+         stopPos := ⟨pos.byteIdx + start + len⟩ } : Substring.Raw).toString
+    let opening := slice 0 3
+    if opening == "\"\"\"" || opening == "'''" then
+      if slice 3 1 == "\n" || slice 3 2 == "\r\n" then
+        return some { text, line := p.line + 1, col := 0 }
+      return some { text, line := p.line, col := p.column + 3 }
+    return some { text, line := p.line, col := p.column + 1 }
   | other =>
     tomlProblem other.ref s!"'{key}' must be a string, and it is {tomlKind other}"
     return none
 
-/-- The settings table: each value a string or `{ needs = "target" }`, with no coercion. -/
-private def tomlSettings (v : Lake.Toml.Value) : TomlM (Array (String × TomlSetting)) := do
+/--
+The settings table. A setting's name is its fully qualified declaration name, written as a quoted
+dotted key (`"A.B.c" = …`), a bare dotted key, or a key in a nested table (`[….settings.A.B]` with
+`c = …`); nested tables are flattened into dotted names. Each value is a string or
+`{ needs = "target" }`, with no coercion: a table with the key `needs` is a needed target, and any other
+table holds more of the name.
+-/
+private partial def tomlSettings (v : Lake.Toml.Value) : TomlM (Array (String × TomlSetting)) := do
   let .table _ t := v
     | tomlProblem v.ref s!"'settings' must be a table, and it is {tomlKind v}"
       return #[]
-  let mut out := #[]
   let shape := "a string or { needs = \"target\" }"
-  for (k, sv) in t.items do
-    let name := tomlKey k
-    match sv with
-    | .string _ s => out := out.push (name, .value s)
-    | .table ref inner =>
-      match inner.items.toList with
-      | [(key, .string r tgt)] =>
-        if tomlKey key == "needs" then out := out.push (name, .needs tgt r)
-        else tomlProblem ref s!"the setting '{name}' must be {shape}, and its table has the key \
-          '{tomlKey key}'"
-      | [(key, other)] =>
-        if tomlKey key == "needs" then
+  let rec go (namePrefix : String) (t : Lake.Toml.Table) (out : Array (String × TomlSetting)) :
+      TomlM (Array (String × TomlSetting)) := do
+    let mut out := out
+    for (k, sv) in t.items do
+      let name := if namePrefix.isEmpty then tomlKey k else s!"{namePrefix}.{tomlKey k}"
+      match sv with
+      | .string ref s =>
+        if out.any (·.1 == name) then tomlProblem ref s!"the setting '{name}' is given twice"
+        else out := out.push (name, .value s)
+      | .table ref inner =>
+        match inner.find? `needs with
+        | some (.string r tgt) =>
+          if inner.items.size != 1 then
+            tomlProblem ref s!"the setting '{name}' must be {shape}, and its table has keys \
+              besides 'needs'"
+          else if out.any (·.1 == name) then tomlProblem ref s!"the setting '{name}' is given twice"
+          else out := out.push (name, .needs tgt r)
+        | some other =>
           tomlProblem other.ref s!"'needs' must name a Lake target as a string, and it is \
             {tomlKind other}"
-        else tomlProblem ref s!"the setting '{name}' must be {shape}, and its table has the key \
-          '{tomlKey key}'"
-      | _ => tomlProblem ref s!"the setting '{name}' must be {shape}, and it is a table with \
-          {inner.items.size} keys"
-    | other => tomlProblem other.ref s!"the setting '{name}' must be {shape}, and it is {tomlKind other}"
-  return out
+        | none =>
+          if inner.items.isEmpty then
+            tomlProblem ref s!"the setting '{name}' must be {shape}, and it is an empty table"
+          else out ← go name inner out
+      | other =>
+        tomlProblem other.ref s!"the setting '{name}' must be {shape}, and it is {tomlKind other}"
+    return out
+  go "" t #[]
 
 /-- The keys of an override. -/
 private def overrideKeys : List String :=
@@ -667,6 +693,8 @@ private def loadErrataToml (ws : Workspace) : IO (Except (Array String) ErrataTo
   let path := ws.root.dir / "errata.toml"
   unless ← path.pathExists do return .ok {}
   let text ← IO.FS.readFile path
+  -- TOML's grammar has no byte-order mark, and some editors write one.
+  let text := (text.dropPrefix? "﻿").map (·.copy) |>.getD text
   let ictx := Lean.Parser.mkInputContext text "errata.toml"
   let table ← match ← (Lake.Toml.loadToml ictx).toBaseIO with
     | .ok t => pure t
@@ -837,7 +865,14 @@ script run (args) do
     return 0
   -- `list` as the first argument lists the tests of every library that the filters after it select.
   let (libNames, runnerArgs) ←
-    if args.head? == some "list" then pure ([], args)
+    if args.head? == some "list" then
+      -- A filter begins with a predicate, a constant, `!`, or `(`, never with `-`.
+      if let some opt := args.tail.find? (·.startsWith "-") then
+        IO.eprintln s!"error: the `list` subcommand takes filters only, and {opt} is an option; \
+          `list` applies exactly the filters it is given"
+        IO.eprintln (usage run withArgs)
+        return 1
+      pure ([], args)
     else match splitArgs withArgs args with
     | .ok result => pure result
     | .error msg =>

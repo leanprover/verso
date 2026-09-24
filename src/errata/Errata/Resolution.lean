@@ -76,10 +76,12 @@ def defaultGracePeriodMs : Nat := 10 * 1000
 /-- How long a test runs before the report marks it slow when nothing sets it: a minute. -/
 def defaultSlowAfterMs : Nat := 60 * 1000
 
-/-- A filter parsed from its text, with where the text came from. -/
+/-- A filter parsed from its text, with the text and where it came from. -/
 structure SourcedFilter where
   /-- The parsed filter. -/
   expr : Filter.Expr
+  /-- The filter's text. -/
+  text : String
   /-- Where its text came from. -/
   source : Filter.Source
 deriving Repr, Inhabited
@@ -87,8 +89,12 @@ deriving Repr, Inhabited
 /-- Parses a filter's text, with an error that names its place. -/
 def SourcedFilter.parse (text : String) (source : Filter.Source) : Except String SourcedFilter :=
   match Filter.parse text with
-  | .ok expr => .ok { expr, source }
-  | .error e => .error (e.render source)
+  | .ok expr => .ok { expr, text, source }
+  | .error e => .error (e.render source text)
+
+/-- The place {name}`offset` characters into the filter's text, as a message's prefix. -/
+def SourcedFilter.at (f : SourcedFilter) (offset : Nat) : String :=
+  f.source.at f.text offset
 
 /-- What the runner resolves a test's configuration from, besides the test itself. -/
 structure ResolutionContext where
@@ -114,6 +120,9 @@ that each test draws from its own stream and adding a test changes no other test
 def testSeed (runSeed : Nat) (exe test : String) : Nat :=
   (mixHash (mixHash (hash runSeed) (hash exe)) (hash test)).toNat
 
+/-- The name of Errata's seed setting, whose value the runner derives for each test. -/
+def seedSetting : String := "Errata.seed"
+
 /-- What a test runs with, as the runner resolved it. -/
 structure Resolved where
   /-- The values of the settings it takes, in the order it takes them. Optional ones without a value are left out. -/
@@ -128,12 +137,14 @@ structure Resolved where
   slowAfterMs : Nat := defaultSlowAfterMs
   /-- Whether its golden checks rewrite their expected files. -/
   updateGolden : Bool := false
+  /-- Whether its seed is the one derived from the run's seed. -/
+  derivedSeed : Bool := false
 deriving Repr, Inhabited, DecidableEq
 
 /--
 Resolves what a test receives. Each setting the test takes comes from the command line, then the
 first override that matches the test and gives it, then the profile, then the setting's declared
-default, and, for {lit}`seed`, the seed derived from the run's seed. The timeout and the grace period
+default, and, for {lit}`Errata.seed`, the seed derived from the run's seed. The timeout and the grace period
 come from the command line, the first matching override, the profile, and the defaults, in that
 order; the slow mark and golden updating from the matching override, the profile, and the defaults,
 with {lit}`--update-golden` over all of them.
@@ -145,18 +156,22 @@ def ResolutionContext.resolve (ctx : ResolutionContext) (exe : String)
   let fromOverrides {α} (field : Override → Option α) : Option α := matching.findSome? field
   let mut settings := #[]
   let mut missing := #[]
+  let mut derivedSeed := false
   for dep in t.settings do
-    let value? :=
+    let given? :=
       ((ctx.sets.findRev? (·.1 == dep.name)).map (·.2))
       <|> fromOverrides (fun o => (o.settings.find? (·.1 == dep.name)).map (·.2))
       <|> (ctx.profile.settings.find? (·.1 == dep.name)).map (·.2)
       <|> (declared.find? (·.name == dep.name)).bind (·.default?)
-      <|> (if dep.name == "seed" then some (toString (testSeed ctx.runSeed exe t.name)) else none)
-    match value? with
+    match given? with
     | some v => settings := settings.push (dep.name, v)
-    | none => unless dep.optional do missing := missing.push dep.name
+    | none =>
+      if dep.name == seedSetting then
+        settings := settings.push (dep.name, toString (testSeed ctx.runSeed exe t.name))
+        derivedSeed := true
+      else unless dep.optional do missing := missing.push dep.name
   return {
-    settings, missing
+    settings, missing, derivedSeed
     timeoutMs := ctx.timeoutMs? <|> fromOverrides (·.timeoutMs?) <|> ctx.profile.timeoutMs?
       |>.getD defaultTimeoutMs
     gracePeriodMs := ctx.gracePeriodMs? <|> fromOverrides (·.gracePeriodMs?) <|>
@@ -192,7 +207,7 @@ def ResolutionContext.undeclared (ctx : ResolutionContext) (declared : Array Str
   for (f, o) in ctx.overrides do
     for (k, _) in o.settings do
       unless declared.contains k do
-        out := out.push { name := k, place := s!"the override at {f.source.at 0}", commandLine := false }
+        out := out.push { name := k, place := s!"the override at {f.at 0}", commandLine := false }
   return out
 
 /--
@@ -210,13 +225,13 @@ def SourcedFilter.warnings (f : SourcedFilter) (records : Array Filter.Record)
     match pred with
     | .tag =>
       unless records.any (·.tags.any m.matches) do
-        out := out.push s!"{f.source.at span.start}: {text} matches no tag of any test"
+        out := out.push s!"{f.at span.start}: {text} matches no tag of any test"
     | .exe =>
       unless exes.any m.matches do
-        out := out.push s!"{f.source.at span.start}: {text} matches no test executable"
+        out := out.push s!"{f.at span.start}: {text} matches no test executable"
     | _ => pure ()
   unless atoms.isEmpty || records.any f.expr.eval do
-    out := out.push s!"{f.source.at f.expr.span.start}: the filter selects no test"
+    out := out.push s!"{f.at f.expr.span.start}: the filter selects no test"
   return out
 
 end Errata.Runner

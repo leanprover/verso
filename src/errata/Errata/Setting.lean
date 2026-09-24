@@ -80,13 +80,12 @@ def Setting.withOptional (S : Setting) (name : String) (settings : Array (String
           parser rejects"
     k (some value)
 
+-- A setting's name is its fully qualified declaration name, here `Errata.seed`. By convention a
+-- setting's declaration begins with a lowercase letter, as a definition's name does.
 /--
 The seed for property tests, a natural number. The runner derives each test's seed from the run's
 seed, the test executable's name, and the test's name, unless the configuration or the command line
 gives one.
-
-A setting's name is the last component of its declaration's name, and by convention it begins with a
-lowercase letter, as a definition's name does.
 -/
 @[setting, expose]
 def seed : Setting where

@@ -284,7 +284,7 @@ def reproductionLine : Test := do
   let r ← runWith #[basic ["fail", "pass"]] { sets := #[("note", "it's")] }
   let some res := r.result? "fail" | fail "no result"
   let some cmd := res.reproduce? | fail "no reproduction line"
-  assertContains "basic.sh errata-run /dev/stderr fail setting:seed=" cmd
+  assertContains "basic.sh errata-run /dev/stderr fail setting:Errata.seed=" cmd
   assertContains "'setting:note=it'\\''s'" cmd
   assertNotContains "  " cmd
   result "a pass has none" do
@@ -362,7 +362,8 @@ def undeclaredSettingRejected : Test := do
     let some issue := r.report.issues.find? (·.isError) | fail "no error"
     assertContains "--set gives the setting nonsense a value, and no test executable of this run \
       declares it" issue.message
-    assertContains "the declared settings are seed, marker, note, greeting, needed" issue.message
+    assertContains "the declared settings are Errata.seed, marker, note, greeting, needed"
+      issue.message
   result "in a profile" do
     let config : Config := { profiles := #[{ name := "default", settings := #[("other", "x")] }] }
     let r ← runWith #[basic ["pass"]] {} config
@@ -382,13 +383,19 @@ def declaredDefaultReachesTest : Test := do
   let r ← runWith #[basic ["greets"]] { seed := some 7 }
   let some res := r.result? "greets" | fail "no result"
   let seed := toString (testSeed 7 "basic" "greets")
-  assertBEq s!"received setting:seed={seed}\nreceived setting:greeting=hello\n" res.output.stdout
-  assertBEq #[("seed", seed), ("greeting", "hello")] res.settings
+  assertBEq s!"received setting:Errata.seed={seed}\nreceived setting:greeting=hello\n"
+    res.output.stdout
+  assertBEq #[("Errata.seed", seed), ("greeting", "hello")] res.settings
   result "--list shows it" do
     let r ← runWith #[basic ["greets"]] { list := true, seed := some 7 }
     assertTrue (r.lines.contains "  greeting (default \"hello\")") s!"{r.lines}"
     assertTrue (r.lines.contains "        greeting = \"hello\"") s!"{r.lines}"
+    assertTrue (r.lines.contains s!"        Errata.seed = \"{seed}\"") s!"{r.lines}"
     assertTrue r.report.results.isEmpty "nothing ran"
+    assertTrue (!r.lines.any (·.endsWith "inconclusive")) "a listing has no summary line"
+  result "--list without a run seed" do
+    let r ← runWith #[basic ["greets"]] { list := true }
+    assertTrue (r.lines.contains "        Errata.seed: derived from the run's seed") s!"{r.lines}"
   result "the command line wins over the default" do
     let r ← runWith #[basic ["greets"]] { sets := #[("greeting", "hi")] }
     let some res := r.result? "greets" | fail "no result"
@@ -461,7 +468,7 @@ def overridesApply : Test := do
 
 /--
 Resolution takes each setting from the command line, then the first matching override that gives it,
-then the profile, then the declared default, and for `seed` the derived seed; the timeout and grace
+then the profile, then the declared default, and for `Errata.seed` the derived seed; the timeout and grace
 period from the command line, the first matching override, the profile, and the defaults; and the
 slow mark and golden updating from the override, the profile, and the defaults.
 -/
@@ -484,16 +491,18 @@ def resolutionPrecedence : Test := do
   let declared : Array SettingInfo :=
     #[{ name := "w", default? := some "default" }, { name := "z", default? := some "default" }]
   let deps : Array Protocol.SettingDep :=
-    #[{ name := "x" }, { name := "y" }, { name := "z" }, { name := "w" }, { name := "seed" },
+    #[{ name := "x" }, { name := "y" }, { name := "z" }, { name := "w" }, { name := seedSetting },
       { name := "v", optional := true }, { name := "u" }]
   let tagged : InventoryTest := { exeIdx := 0, name := "t", tags := #["a"], settings := deps }
   let plain : InventoryTest := { tagged with tags := #[] }
   let seed := toString (testSeed 3 "e" "t")
   result "the first matching override" do
     let r := ctx.resolve "e" declared tagged
-    assertBEq #[("x", "first"), ("y", "second"), ("z", "profile"), ("w", "default"), ("seed", seed)]
+    assertBEq
+      #[("x", "first"), ("y", "second"), ("z", "profile"), ("w", "default"), (seedSetting, seed)]
       r.settings
     assertBEq #["u"] r.missing
+    assertBEq true r.derivedSeed
     assertBEq 5 r.timeoutMs
     assertBEq 8 r.gracePeriodMs
     assertBEq 7 r.slowAfterMs
@@ -504,11 +513,12 @@ def resolutionPrecedence : Test := do
     assertBEq 6 r.timeoutMs
   result "the command line" do
     let ctx := { ctx with
-      sets := #[("x", "cli"), ("seed", "12"), ("v", "given")], timeoutMs? := some 1
+      sets := #[("x", "cli"), (seedSetting, "12"), ("v", "given")], timeoutMs? := some 1
       gracePeriodMs? := some 2 }
     let r := ctx.resolve "e" declared tagged
     assertBEq (some "cli") ((r.settings.find? (·.1 == "x")).map (·.2))
-    assertBEq (some "12") ((r.settings.find? (·.1 == "seed")).map (·.2))
+    assertBEq (some "12") ((r.settings.find? (·.1 == seedSetting)).map (·.2))
+    assertBEq false r.derivedSeed
     assertBEq (some "given") ((r.settings.find? (·.1 == "v")).map (·.2))
     assertBEq 1 r.timeoutMs
     assertBEq 2 r.gracePeriodMs

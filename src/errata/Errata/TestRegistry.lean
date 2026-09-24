@@ -24,11 +24,9 @@ set_option doc.verso true
 
 namespace Errata
 
-/-- The name of the setting that a declaration declares: the last component of its name. -/
+/-- The name of the setting that a declaration declares: its fully qualified name. -/
 def settingNameOf (decl : Name) : String :=
-  match decl with
-  | .str _ s => s
-  | other => other.toString
+  decl.toString (escape := false)
 
 /-- A setting that a test takes as a parameter. -/
 structure SettingUse where
@@ -109,8 +107,8 @@ deriving Inhabited
 
 /--
 A recorded setting: a declaration of type {lit}`Errata.Setting` that {lit}`@[setting]` marks. The
-setting's name, in the configuration and on the command line, is the last component of the
-declaration's name.
+setting's name, in the configuration and on the command line, is the declaration's fully qualified
+name.
 -/
 structure SettingDecl where
   /-- The setting's declaration name. -/
@@ -121,7 +119,7 @@ structure SettingDecl where
   docstring? : Option String := none
 deriving Inhabited
 
-/-- The name of a setting: the last component of its declaration name. -/
+/-- The name of a setting: its fully qualified declaration name. -/
 def SettingDecl.settingName (s : SettingDecl) : String :=
   settingNameOf s.decl
 

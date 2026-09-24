@@ -1000,36 +1000,60 @@ def driverListsTests : Test := do
 /-- The workspace for the driver's tests of `errata.toml`, and the variants of the file it tries. -/
 private def tomlFixture : System.FilePath := fixturesDir / "driver-toml"
 
+/-- Copies a directory tree, leaving out Lake's build directory and manifest. -/
+private partial def copyTree (src dst : System.FilePath) : IO Unit := do
+  IO.FS.createDirAll dst
+  for entry in ← src.readDir do
+    if entry.fileName == ".lake" || entry.fileName == "lake-manifest.json" then continue
+    if ← entry.path.isDir then copyTree entry.path (dst / entry.fileName)
+    else IO.FS.writeBinFile (dst / entry.fileName) (← IO.FS.readBinFile entry.path)
+
 /--
-Runs Lake in the `driver-toml` fixture with its `errata.toml` replaced by the variant `name`, and
-restores the file afterwards.
+Copies a fixture workspace into {name}`dir`, so that a test changes and builds its own copy. The
+lakefile's relative paths to Verso and to Verso's packages become absolute, so the copy builds
+wherever it is.
 -/
-private def withTomlVariant (name : String) (args : Array String) : IO IO.Process.Output := do
-  let toml := tomlFixture / "errata.toml"
-  let original ← IO.FS.readFile toml
-  try
-    IO.FS.writeFile toml (← IO.FS.readFile (tomlFixture / "variants" / s!"{name}.toml"))
-    lakeInFixture tomlFixture args
-  finally
-    IO.FS.writeFile toml original
+private def copyFixture (fixture dir : System.FilePath) : IO Unit := do
+  let root ← IO.FS.realPath "."
+  copyTree fixture dir
+  for name in ["lakefile.lean", "lakefile.toml"] do
+    let file := dir / name
+    if ← file.pathExists then
+      let text ← IO.FS.readFile file
+      -- The packages' path begins with Verso's, so it is replaced first.
+      let text := text.replace "\"../../../../.lake/packages\"" (root / ".lake" / "packages").toString.quote
+        |>.replace "\"../../../..\"" root.toString.quote
+      IO.FS.writeFile file text
+
+/--
+Runs Lake with {name}`args` in a copy of the `driver-toml` fixture whose `errata.toml` is the variant
+{name}`name`.
+-/
+private def withTomlVariant (name : String) (args : Array String) : IO IO.Process.Output :=
+  IO.FS.withTempDir fun dir => do
+    copyFixture tomlFixture dir
+    IO.FS.writeFile (dir / "errata.toml") (← IO.FS.readFile (tomlFixture / "variants" / s!"{name}.toml"))
+    IO.Process.output { cmd := "lake", args, cwd := dir }
 
 /--
 The driver checks `errata.toml` before it builds any test executable, and reports each problem at
 its position in the file: a TOML syntax error, a setting that is neither a string nor
-`{ needs = … }`, an unknown key, profiles that inherit in a cycle, a malformed duration, an unknown
-target, and a malformed `[[executable]]`.
+`{ needs = … }` whether its name is a quoted key or nested tables, an unknown key, profiles that
+inherit in a cycle, a malformed duration, an unknown target, and a malformed `[[executable]]`.
 -/
 @[test]
 def driverValidatesToml : Test := do
   let cases : List (String × List String) := [
     ("syntax", ["errata.toml:1:16:"]),
-    ("wrong-type", ["errata.toml:2:12: the setting 'stampFile' must be a string or \
+    ("wrong-type", ["errata.toml:2:22: the setting 'TomlLib.stampFile' must be a string or \
       { needs = \"target\" }, and it is an integer"]),
+    ("nested-wrong-type", ["errata.toml:2:20: the setting 'TomlLib.stampFile' must be a string or \
+      { needs = \"target\" }, and it is a boolean"]),
     ("unknown-key", ["errata.toml:3:9: unknown key 'flavor' in the profile 'default'"]),
     ("cycle", ["errata.toml:2:11: the profiles inherit in a cycle: a → b → a",
       "errata.toml:5:11: the profiles inherit in a cycle: b → a → b"]),
     ("bad-duration", ["errata.toml:2:10: 'timeout' must be a duration"]),
-    ("unknown-target", ["errata.toml:2:22: the target 'nonexistent' cannot be built:"]),
+    ("unknown-target", ["errata.toml:2:32: the target 'nonexistent' cannot be built:"]),
     ("bad-executable", ["errata.toml:3:10: 'command' must have at least one word"])]
   for (variant, messages) in cases do
     result variant do
@@ -1040,31 +1064,56 @@ def driverValidatesToml : Test := do
       assertNotContains "errataExe" out.stdout
 
 /--
+A setting's name may be written as nested tables as well as a quoted dotted key, and the driver
+reads a file that begins with a byte-order mark and durations with spaces around them. A filter in a
+multi-line string is reported at its line and column in the file.
+-/
+@[test]
+def driverReadsTomlForms : Test := do
+  result "nested tables, a byte-order mark, and a duration with spaces" do
+    for variant in ["nested", "bom"] do
+      let out ← withTomlVariant variant #["test"]
+      assertExitCode 0 out
+      assertContains "1 passed, 0 failed, 0 errors, 0 inconclusive" out.stdout
+  result "a multi-line filter" do
+    let out ← withTomlVariant "multiline-filter" #["test"]
+    assertExitCode 1 out
+    assertContains "errata.toml:4:8: expected ')' to end the matcher" out.stderr
+
+/--
 A setting bound to a target with `{ needs = … }` receives the target's result. Editing the target's
 input rebuilds the runner's configuration, and leaves the test library alone.
 -/
 @[test]
-def driverBuildsNeededTargets : Test := do
-  let input := tomlFixture / "stamp-input.txt"
-  let config := tomlFixture / ".lake" / "errata" / "config.json"
-  let olean := tomlFixture / ".lake" / "build" / "lib" / "lean" / "TomlLib.olean"
-  let original ← IO.FS.readFile input
-  try
-    let out ← lakeInFixture tomlFixture #["test"]
+def driverBuildsNeededTargets : Test :=
+  IO.FS.withTempDir fun dir => do
+    copyFixture tomlFixture dir
+    let lake (args : Array String) : IO IO.Process.Output :=
+      IO.Process.output { cmd := "lake", args, cwd := dir }
+    let config := dir / ".lake" / "errata" / "config.json"
+    let olean := dir / ".lake" / "build" / "lib" / "lean" / "TomlLib.olean"
+    let out ← lake #["test"]
     assertExitCode 0 out
     assertContains "1 passed, 0 failed, 0 errors, 0 inconclusive" out.stdout
     assertContains "stamp.txt" (← IO.FS.readFile config)
     let configBefore := (← config.metadata).modified
     let oleanBefore := (← olean.metadata).modified
-    IO.FS.writeFile input "stamp 2\n"
-    let again ← lakeInFixture tomlFixture #["test"]
+    IO.FS.writeFile (dir / "stamp-input.txt") "stamp 2\n"
+    let again ← lake #["test"]
     assertExitCode 0 again
     result "the configuration is rebuilt" do
       assertTrue ((← config.metadata).modified != configBefore) "config.json was not rewritten"
     result "the test library is not" do
       assertTrue ((← olean.metadata).modified == oleanBefore) "TomlLib.olean was rebuilt"
-  finally
-    IO.FS.writeFile input original
+
+/-- The `list` subcommand takes filters only, and rejects an option instead of ignoring it. -/
+@[test]
+def listRejectsOptions : Test := do
+  for opt in ["--profile", "--set", "--test-options", "-v"] do
+    result opt do
+      let out ← withTomlVariant "nested" #["test", "--", "list", "tag(x)", opt]
+      assertExitCode 1 out
+      assertContains s!"the `list` subcommand takes filters only, and {opt} is an option" out.stderr
 
 /--
 The compile-time commands register their verdicts as tests, so a module that imports only
@@ -1306,6 +1355,11 @@ def runnerArgParsing : Test := do
     let opts := (parse ["list", "name(a)", "exe(B)"]).toOption
     assertBEq (some (some #["name(a)", "exe(B)"])) (opts.map (·.listFilters?))
     assertBEq (some none) ((parse []).toOption.map (·.listFilters?))
+  result "the list subcommand with an option" do
+    for opts in [["--profile", "ci"], ["--set", "a=b"], ["--filter", "tag(x)"], ["-v"]] do
+      match parse (["list", "tag(x)"] ++ opts) with
+      | .error m => assertContains "the `list` subcommand takes filters only" m
+      | .ok _ => fail s!"{opts} was accepted"
   result "options after -- rejected" do
     assertTrue ((parse ["--", "--golden", "on"]) matches .error _)
   result "unknown flag rejected" do
@@ -1699,6 +1753,11 @@ def alternativeFailure : Test := expectFail failure
 @[test]
 def alternativeOrElse : Test := failure <|> assertBEq 1 1
 
+/-- The names of the settings in the settings fixture module: their fully qualified names. -/
+private def greetingName : String := "ErrataTests.Settings.greeting"
+@[inherit_doc greetingName] private def repeatsName : String := "ErrataTests.Settings.repeats"
+@[inherit_doc greetingName] private def quietName : String := "ErrataTests.Settings.quiet"
+
 /-- The test in the settings fixture module that takes settings. -/
 private def greetsEntry : TestM TestEntry := do
   let some e := (getAllTests% "verso" ErrataTests.Settings).find? (·.name == "ErrataTests.Settings.greets")
@@ -1713,7 +1772,7 @@ its description and its declared default.
 def testsCarryTagsAndSettings : Test := do
   let e ← greetsEntry
   assertBEq #["slow", "chatty"] e.tags
-  assertBEq #["greeting", "repeats", "quiet"] (e.settings.map (·.name))
+  assertBEq #[greetingName, repeatsName, quietName] (e.settings.map (·.name))
   assertBEq #[false, false, true] (e.settings.map (·.optional))
   assertBEq #[some "hello", some "2", none] (e.settings.map (·.default?))
   assertBEq (some "The word that a test greets with.")
@@ -1736,24 +1795,28 @@ def settingsAreParsed : Test := do
     let some r := rs[0]? | fail "the test has no result"
     return r
   result "values reach the test" do
-    let r ← run #[("greeting", "hi"), ("repeats", "1"), ("repeats", "3")]
+    let r ← run #[(greetingName, "hi"), (repeatsName, "1"), (repeatsName, "3")]
     assertTrue r.status.isSuccess
     assertBEq "hi\nhi\nhi\n" r.output.stdout
   result "an optional setting" do
-    let r ← run #[("greeting", "hi"), ("repeats", "3"), ("quiet", "true")]
+    let r ← run #[(greetingName, "hi"), (repeatsName, "3"), (quietName, "true")]
     assertTrue r.status.isSuccess
     assertBEq "" r.output.stdout
   result "a missing mandatory setting" do
-    match (← run #[("greeting", "hi")]).status with
-    | .error m => assertContains "the mandatory setting repeats has no value" m
+    match (← run #[(greetingName, "hi")]).status with
+    | .error m => assertContains s!"the mandatory setting {repeatsName} has no value" m
     | s => fail s!"expected an error, got {repr s}"
   result "a value that the parser rejects" do
-    match (← run #[("greeting", "hi"), ("repeats", "many")]).status with
-    | .error m => assertContains "the setting repeats has the value \"many\"" m
+    match (← run #[(greetingName, "hi"), (repeatsName, "many")]).status with
+    | .error m => assertContains s!"the setting {repeatsName} has the value \"many\"" m
     | s => fail s!"expected an error, got {repr s}"
   result "an optional value that the parser rejects" do
-    match (← run #[("greeting", "hi"), ("repeats", "1"), ("quiet", "maybe")]).status with
-    | .error m => assertContains "the setting quiet has the value \"maybe\"" m
+    match (← run #[(greetingName, "hi"), (repeatsName, "1"), (quietName, "maybe")]).status with
+    | .error m => assertContains s!"the setting {quietName} has the value \"maybe\"" m
+    | s => fail s!"expected an error, got {repr s}"
+  result "a setting's last name component is not its name" do
+    match (← run #[("greeting", "hi"), ("repeats", "1")]).status with
+    | .error m => assertContains s!"the mandatory setting {greetingName} has no value" m
     | s => fail s!"expected an error, got {repr s}"
 
 /--
@@ -1773,11 +1836,13 @@ def harnessListsSettings : Test := do
       | .ok (some (_, r)) => some r
       | _ => none
     match records with
-    | [.protocol _, .setting (some "greeting") (some d) (some "hello"),
-        .setting (some "repeats") _ (some "2"), .setting (some "quiet") _ none, .test info, .test _] =>
+    | [.protocol _, .setting (some g) (some d) (some "hello"), .setting (some r) _ (some "2"),
+        .setting (some q) _ none, .test info, .test _] =>
+      assertBEq #[greetingName, repeatsName, quietName] #[g, r, q]
       assertContains "greets with" d
       assertBEq (some #["slow", "chatty"]) info.tags?
-      assertBEq (some #[{ name := "greeting" }, { name := "repeats" }, { name := "quiet", optional := true }])
+      assertBEq
+        (some #[{ name := greetingName }, { name := repeatsName }, { name := quietName, optional := true }])
         info.settings?
     | _ => fail s!"unexpected records: {lines}"
 
@@ -1810,11 +1875,41 @@ error: `@[setting]` requires the type `Errata.Setting`, and `notASetting` has th
 #test_msgs in
 @[setting, expose] def notASetting : Nat := 3
 
-/-- error: A setting named `greeting` is already declared as `ErrataTests.Settings.greeting` -/
+-- A setting's name is its fully qualified name, so settings whose names end alike are distinct.
 #test_msgs in
 @[setting, expose] def greeting : Setting where
   type := String
   fromString s := some s
+
+/--
+error: `instanceParameter` has an instance parameter of type
+  Inhabited Nat
+A test's parameters are settings: `S` or `Option S` for a declaration `S` marked `@[setting]`.
+-/
+#test_msgs in
+@[test] def instanceParameter [Inhabited Nat] : Bool := true
+
+/--
+error: The parameter `n` of `implicitParameter` is implicit. A test's parameters are explicit settings. A setting named before its declaration becomes an implicit parameter when `autoImplicit` is on, so declare the setting before the test.
+-/
+#test_msgs in
+@[test] def implicitParameter {n : seed} : Bool := n == n
+
+/-- Another name for the seed setting. -/
+abbrev SeedAlias := seed
+
+/--
+error: The parameter `n` of `aliasParameter` has the type `SeedAlias`, which stands for the setting `Errata.seed`. A test names a setting directly: write `Errata.seed`.
+-/
+#test_msgs in
+@[test] def aliasParameter (n : SeedAlias) : Bool := n == n
+
+/--
+error: The parameter `laterSetting` of `usedBeforeDeclaration` is implicit. A test's parameters are explicit settings. A setting named before its declaration becomes an implicit parameter when `autoImplicit` is on, so declare the setting before the test.
+-/
+#test_msgs in
+set_option autoImplicit true in
+@[test] def usedBeforeDeclaration (_x : laterSetting) : Bool := true
 
 /--
 error: The parameter `n` of `takesNat` has the type

@@ -6,6 +6,8 @@ open Errata
 
 public section
 
+namespace TomlLib
+
 /-- The file that the fixture's `stamp` target builds. -/
 @[setting, expose]
 def stampFile : Setting where
@@ -17,3 +19,5 @@ def stampFile : Setting where
 def readsStamp (stamp : stampFile) : Test := do
   assertTrue (← stamp.pathExists) s!"{stamp} does not exist"
   assertContains "stamp" (← IO.FS.readFile stamp)
+
+end TomlLib

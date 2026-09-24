@@ -15,7 +15,7 @@ open Errata
 
 @[expose] public section
 
-namespace VersoTests
+namespace VersoTests.Settings
 
 /-- Also runs `lualatex` on the generated TeX, to confirm that it builds. -/
 @[setting]
@@ -45,4 +45,4 @@ def literatePlanExe : Setting where
   type := System.FilePath
   fromString s := some s
 
-end VersoTests
+end VersoTests.Settings

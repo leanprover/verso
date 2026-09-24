@@ -184,7 +184,13 @@ def optionsOfParsed (p : Cli.Parsed) (sets filters : Array String := #[]) : Exce
   let gracePeriodMs? ← p.flag? "grace-period" |>.mapM (parseDuration ·.value)
   let listFilters? ← match (p.variableArgsAs! String).toList with
     | [] => pure none
-    | "list" :: filters => pure (some filters.toArray)
+    | "list" :: listed =>
+      -- The subcommand applies exactly its filters, so an option would be silently ignored.
+      let given := (p.flags.map (s!"--{·.flag.longName}")) ++
+        (if sets.isEmpty then #[] else #["--set"]) ++ (if filters.isEmpty then #[] else #["--filter"])
+      if let some opt := given[0]? then
+        throw s!"the `list` subcommand takes filters only, and {opt} is an option of a run"
+      pure (some listed.toArray)
     | arg :: _ =>
       throw s!"unexpected argument '{arg}': the runner's one subcommand is `list`, and a test's \
         settings are given with --set NAME=VALUE"
@@ -477,7 +483,7 @@ def RunContext.planned (ctx : RunContext) (exe : ExecutableConfig) (t : Inventor
     (r : Resolved) : Planned :=
   let settings := r.arguments
   { exe := exe.name, test := t.name, path := t.path, description? := t.description?
-    seed? := (r.settings.find? (·.1 == "seed")).map (·.2), settings
+    seed? := (r.settings.find? (·.1 == seedSetting)).map (·.2), settings
     reproduce := ctx.reproduce exe t.name settings, slowAfterMs := r.slowAfterMs }
 
 /--
@@ -573,7 +579,7 @@ private def showValue (v : String) : String := v.quote
 Prints what {lit}`--list` shows: every setting the test executables declare, with its description
 and its default; the tests that the filters select, each with its file and line, its tags, and the
 values it receives; and the mandatory settings that nothing gives a value, with the tests that need
-them.
+them. A seed derived from a run seed that the command line leaves to chance is shown as derived.
 -/
 def printInventory (ctx : RunContext) (listings : Array Listing)
     (selected : Array (InventoryTest × Resolved)) : IO Unit := do
@@ -604,7 +610,11 @@ def printInventory (ctx : RunContext) (listings : Array Listing)
     if let some d := t.description? then
       line ("\n".intercalate ((d.trimAscii.copy.splitOn "\n").map ("        " ++ ·)))
     for (k, v) in r.settings do
-      line s!"        {k} = {showValue v}"
+      -- A seed derived from a random run seed differs in every run, so its value says nothing.
+      if k == seedSetting && r.derivedSeed && ctx.opts.seed.isNone then
+        line s!"        {k}: derived from the run's seed"
+      else
+        line s!"        {k} = {showValue v}"
     for m in r.missing do
       line s!"        {m}: no value"
       missing := missing.push (m, t.name)
@@ -687,7 +697,8 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
     | none => Registry.new
   let d := dispatcher
   let finish : IO RunReport := do
-    d.dispatch (.ended (← Protocol.nowMs))
+    -- A listing runs nothing, so it has no counts to sum up.
+    d.dispatch (.ended (← Protocol.nowMs) (summary := !opts.list))
     let s ← d.get
     return { results := s.results, issues := s.issues, seed := runSeed }
   for w in config.warnings do

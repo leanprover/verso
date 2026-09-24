@@ -13,6 +13,7 @@ set_option maxRecDepth 1024
 namespace VersoTests.LiterateHtml
 
 open Errata
+open VersoTests.Settings (literateHtmlExe literatePlanExe)
 
 private def cleanDir (dir : System.FilePath) : IO Unit := do
   if ← dir.pathExists then

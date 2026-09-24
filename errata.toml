@@ -1,13 +1,15 @@
 # The configuration of Verso's tests, which `lake test` reads. The runner's profiles are named
-# kinds of run: `default` for a developer's machine, and `ci` for continuous integration.
+# kinds of run: `default` for a developer's machine, and `ci` for continuous integration. A setting is
+# named by its fully qualified declaration name; the settings of `VersoTests.Settings` are given in a
+# table of their namespace.
 
-[profile.default.settings]
+[profile.default.settings.VersoTests.Settings]
 checkTeX = "false"
 versoExe = { needs = "verso" }
 literateHtmlExe = { needs = "verso-literate-html" }
 literatePlanExe = { needs = "verso-literate-plan" }
 
-[profile.ci.settings]
+[profile.ci.settings.VersoTests.Settings]
 checkTeX = "true"
 
 [[profile.ci.override]]

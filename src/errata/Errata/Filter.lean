@@ -30,11 +30,20 @@ inductive Source where
   | file (path : String) (line col : Nat)
 deriving Repr, Inhabited, DecidableEq
 
-/-- The place {name}`offset` characters into the text, as a message's prefix. -/
-def Source.at (s : Source) (offset : Nat) : String :=
+/--
+The place {name}`offset` characters into {name}`text`, as a message's prefix. In a file, a newline in
+the text before the offset advances the line and starts the column again from zero.
+-/
+def Source.at (s : Source) (text : String) (offset : Nat) : String :=
   match s with
   | .argument label => s!"{label}:{offset}"
-  | .file path line col => s!"{path}:{line}:{col + offset}"
+  | .file path line col =>
+    let before := text.toList.take offset
+    let newlines := before.count '\n'
+    if newlines == 0 then s!"{path}:{line}:{col + offset}"
+    else
+      let sinceNewline := (before.reverse.takeWhile (· != '\n')).length
+      s!"{path}:{line + newlines}:{sinceNewline}"
 
 /-- A span of a filter's text: the offsets, in characters, of its first character and past its last. -/
 structure Span where
@@ -52,9 +61,9 @@ structure ParseError where
   message : String
 deriving Repr, Inhabited, DecidableEq
 
-/-- The error as a message that names its place in the source. -/
-def ParseError.render (e : ParseError) (source : Source) : String :=
-  s!"{source.at e.offset}: {e.message}"
+/-- The error in the filter {name}`text` as a message that names its place in the source. -/
+def ParseError.render (e : ParseError) (source : Source) (text : String) : String :=
+  s!"{source.at text e.offset}: {e.message}"
 
 /-! # Globs -/
 
@@ -85,6 +94,9 @@ deriving Repr, Inhabited, DecidableEq
 
 /-- How many patterns the alternation of one glob may expand to. -/
 def maxAlternatives : Nat := 10000
+
+/-- How many steps, summed over its expanded patterns, the alternation of one glob may expand to. -/
+def maxExpandedSize : Nat := 1000000
 
 /-- How deeply braces may nest in a glob, and parentheses and {lit}`!` in a filter. -/
 def maxDepth : Nat := 100
@@ -196,23 +208,39 @@ private partial def parseGlobSeq (g : GlobInput) (i : Nat) (depth : Nat) (inBrac
 private def pushPart (p : Array GlobPart) (x : GlobPart) : Array GlobPart :=
   if x == .star && p.back? == some .star then p else p.push x
 
+/-- The number of steps in all of the patterns. -/
+private def expandedSize (patterns : Array (Array GlobPart)) : Nat :=
+  patterns.foldl (· + ·.size) 0
+
 /--
 The patterns that a sequence of glob nodes expands to, each appended to every pattern in
-{name}`prefixes`. Fails once the patterns number more than {name}`maxAlternatives`.
+{name}`prefixes`. Fails once the patterns number more than {name}`maxAlternatives`, or their steps
+more than {name}`maxExpandedSize`, checking each bound before the patterns that exceed it are made.
 -/
 private partial def expandGlob (prefixes : Array (Array GlobPart)) (nodes : Array GlobNode) :
     Except String (Array (Array GlobPart)) := do
+  let tooLarge := s!"the glob's alternatives expand to more than {maxExpandedSize} characters"
   let mut acc := prefixes
+  let mut size := expandedSize prefixes
   for n in nodes do
     match n with
-    | .part p => acc := acc.map (pushPart · p)
+    | .part p =>
+      -- Each pattern grows by one step at most.
+      if size + acc.size > maxExpandedSize then throw tooLarge
+      acc := acc.map (pushPart · p)
+      size := expandedSize acc
     | .alt alternatives =>
       let mut next := #[]
+      let mut nextSize := 0
       for a in alternatives do
-        next := next ++ (← expandGlob acc a)
+        let expanded ← expandGlob acc a
+        next := next ++ expanded
+        nextSize := nextSize + expandedSize expanded
         if next.size > maxAlternatives then
           throw s!"the glob's alternatives expand to more than {maxAlternatives} patterns"
+        if nextSize > maxExpandedSize then throw tooLarge
       acc := next
+      size := nextSize
   return acc
 
 /--

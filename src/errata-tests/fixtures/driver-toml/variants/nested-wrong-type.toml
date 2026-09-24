@@ -1,2 +1,2 @@
 [profile.default.settings]
-"TomlLib.stampFile" = 3
+TomlLib.stampFile = true

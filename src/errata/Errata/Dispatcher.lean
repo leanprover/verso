@@ -72,8 +72,8 @@ inductive Event where
   | unreadable (exe test : String) (message : String)
   /-- A test executable's process has ended, after {name}`durationMs` milliseconds. -/
   | testEnded (exe test : String) (exit : Exit) (durationMs : Nat)
-  /-- The run is over. -/
-  | ended (timeMs : Nat)
+  /-- The run is over. The human report prints its summary when {name}`summary` is true. -/
+  | ended (timeMs : Nat) (summary : Bool)
 deriving Inhabited
 
 /-- What the dispatcher asks of the reporters. -/
@@ -322,9 +322,9 @@ def step (s : State) : Event → State × Array Action
       let s := { s with
         running := s.running.eraseIdx! i, results := s.results ++ results, human }
       (s, #[.event (outcomeEvent r.planned outcome durationMs)] ++ lines.map .print)
-  | .ended timeMs =>
+  | .ended timeMs summary =>
     let t := s.human.tally
-    (s, #[.print t.summary, .event (Json.mkObj [("type", Json.str "end"),
+    (s, (if summary then #[.print t.summary] else #[]) ++ #[.event (Json.mkObj [("type", Json.str "end"),
       ("time_ms", ToJson.toJson timeMs), ("passed", ToJson.toJson t.passed),
       ("failed", ToJson.toJson t.failed), ("errors", ToJson.toJson t.errors),
       ("inconclusive", ToJson.toJson t.inconclusive)])])
