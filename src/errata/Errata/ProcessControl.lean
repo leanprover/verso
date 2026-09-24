@@ -26,12 +26,11 @@ abbrev PipedConfig : IO.Process.StdioConfig :=
   { stdin := .piped, stdout := .piped, stderr := .piped }
 
 /--
-A process started in a session and process group of its own, so that a signal to the group reaches
-everything the process started. Its standard input is a pipe that is never written to: a process that
-watches its standard input learns that the process which started it has ended when the pipe closes.
+A process started in a session and process group of its own. A signal to the group reaches
+everything the process started. Its standard input is a lifeline: when the pipe closes, a process
+that watches its standard input learns that the process which started it has ended.
 
-The group's identifier is the process's own, which the system may reuse once the process has been
-waited for and its group is empty. The group is therefore signaled only while it is armed, and it is
+The group's identifier is the process's own. The group is signaled only while it is armed. It is
 disarmed when {lit}`Group.tryWait` or {lit}`Group.wait` reports the exit.
 -/
 structure Group where
@@ -39,7 +38,7 @@ structure Group where
   child : IO.Process.Child PipedConfig
   /-- The process's identifier, which is also its group's. -/
   pid : UInt32
-  /-- Whether the process has not yet been waited for. -/
+  /-- Whether the process is still to be waited for. -/
   armed : IO.Ref Bool
   /-- The exit code, once the process has been waited for. -/
   exitCode : IO.Ref (Option UInt32)
@@ -47,7 +46,7 @@ structure Group where
 /--
 Whether a command can be found from the directory {name}`cwd`: a command with a directory in it
 names a file relative to that directory, and any other command is looked for on {name}`path?`, or on
-this process's {lit}`PATH` when that is {lean}`none`. Whether the file may be executed is not checked.
+this process's {lit}`PATH` when that is {lean}`none`. The check looks only for the file.
 -/
 def commandExists (cmd : String) (cwd : Option System.FilePath := none)
     (path? : Option String := none) : IO Bool := do
@@ -123,8 +122,8 @@ def signalGroup (signal : String) (pgid : UInt32) : IO Bool := do
     return false
 
 /--
-Asks the group to terminate, with {lit}`SIGTERM`, while the process is armed. The signal is sent by
-the system's {lit}`kill`, since {name}`IO.Process.Child.kill` sends {lit}`SIGKILL`.
+Asks the group to terminate, with {lit}`SIGTERM` sent by the system's {lit}`kill`, while the process
+is armed.
 -/
 def Group.terminate (g : Group) : IO Unit := do
   if ← g.armed.get then discard <| signalGroup "TERM" g.pid
@@ -132,7 +131,8 @@ def Group.terminate (g : Group) : IO Unit := do
 /-- Kills the group, with {lit}`SIGKILL`, while the process is armed. -/
 def Group.kill (g : Group) : IO Unit := do
   if ← g.armed.get then
-    -- The signal fails when the process has not yet made its group, which it does as it starts.
+    -- `Child.kill` fails while the process is still making its group. The system's `kill` is the
+    -- second attempt.
     try g.child.kill catch _ => discard <| signalGroup "KILL" g.pid
 
 /-- How long to wait between checks on a process, in milliseconds. -/
@@ -160,11 +160,11 @@ def Group.terminateGraceKill (g : Group) (graceMs : Nat) : IO Bool := do
   return true
 
 /--
-Asks the group to terminate once its first process has been waited for, gives it {name}`graceMs`
-milliseconds, and then kills it. It is meant for a group whose members still hold the first
-process's output pipes open, which shows that the group still has members. On Windows it does
-nothing, since there a process's identifier can name an unrelated process once it has been waited
-for.
+Ends what remains of the group after its first process has been waited for. It asks the group to
+terminate, and returns if the group has no member to receive the signal. Otherwise it checks the
+group every {name}`pollMs` milliseconds, returns once the group is empty, and kills the group if it
+still has members after {name}`graceMs` milliseconds. It is meant for a group whose members still
+hold the first process's output pipes open. On Windows it returns at once.
 -/
 partial def Group.sweep (g : Group) (graceMs : Nat) : IO Unit := do
   if System.Platform.isWindows then return
@@ -192,7 +192,7 @@ Bytes that arrive in pieces, split into lines at newline bytes. A piece may end 
 within a character, and the bytes wait for the piece that completes the line.
 -/
 structure LineBuffer where
-  /-- The bytes of the line that is not yet complete. -/
+  /-- The bytes of the incomplete line. -/
   pending : ByteArray := .empty
 
 /-- Adds bytes, returning the lines that they complete, without their newlines. -/
@@ -206,7 +206,10 @@ def LineBuffer.push (buf : LineBuffer) (bytes : ByteArray) : Array ByteArray × 
       start := i + 1
   return (lines, { pending := all.extract start all.size })
 
-/-- Decodes the bytes of a line as UTF-8, replacing what does not decode with {lit}`U+FFFD`. -/
+/--
+Decodes the bytes of a line as UTF-8. When the line is not valid UTF-8, each byte of {lit}`0x80` or
+above becomes {lit}`U+FFFD`.
+-/
 def decodeLine (bytes : ByteArray) : String :=
   match String.fromUTF8? bytes with
   | some s => s

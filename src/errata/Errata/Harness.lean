@@ -29,7 +29,7 @@ def usage : String :=
   "usage:\n  \
     <test-executable> errata-list <out>\n  \
     <test-executable> errata-run <out> <test-name> [setting:NAME=VALUE]...\n\n\
-    A test executable is started by the Errata runner. To run the tests, run the Errata driver, \
+    The Errata runner starts test executables. To run the tests, run the Errata driver, \
     which is usually `lake test`."
 
 /--
@@ -47,7 +47,7 @@ def settingsOf (args : List String) : Array (String × String) :=
 /--
 The settings that the Lean harness itself reads: {lit}`seed`, the seed for property tests;
 {lit}`updateGolden`, which rewrites golden files when it is {lit}`true`; and {lit}`ignorePanics`,
-which leaves a check's status alone when it panics, when it is {lit}`true`.
+which keeps a check's status unchanged when the check panics, when it is {lit}`true`.
 -/
 def harnessSettings : List String := ["seed", "updateGolden", "ignorePanics"]
 
@@ -197,9 +197,9 @@ def exitNow (code : UInt8) : IO α := do
   IO.Process.forceExit code
 
 /--
-Ends the process group of this test executable once its standard input reaches its end. The process
-that starts a test executable holds the other end of that pipe, which closes when that process
-exits, however it exits.
+Ends the process group of this test executable, and exits with {lit}`1`, once its lifeline closes.
+The lifeline is the executable's standard input. The process that started the executable holds the
+other end of that pipe, which closes when that process exits, however it exits.
 -/
 def exitWhenStdinCloses (parentIn : IO.FS.Stream) : IO Unit := do
   -- Each read blocks until a line arrives or the pipe closes, so the thread sleeps for the length of
@@ -221,11 +221,11 @@ its file, line, and column, and its docstring as its description.
 records to {lit}`out`. It exits with {lit}`0` when the test passes and {lit}`1` otherwise. The runner
 passes its own options to the test as settings: {lit}`setting:seed=N` is the seed for property tests,
 {lit}`setting:updateGolden=true` rewrites golden files, and {lit}`setting:ignorePanics=true` leaves
-a check's status alone when it panics. Every other setting is a test option, read with
+a check's status unchanged when the check panics. Every other setting is a test option, read with
 {name}`option?` and {name}`flag`. When the environment variable {lit}`ERRATA_LIFELINE` is {lit}`1`,
-as the runner sets it, the executable watches its standard input while the test runs, and when it
-closes, it ends its own process group and exits. Without the variable, standard input is left alone,
-so the command runs by hand with any standard input, {lit}`/dev/null` included.
+as the runner sets it, the executable's standard input is its lifeline: when the pipe closes, the
+executable ends its own process group and exits. Otherwise the command runs by hand with any
+standard input, {lit}`/dev/null` included. The test itself reads an empty standard input.
 
 With any other arguments, the executable prints its usage and exits with {lit}`2`.
 -/

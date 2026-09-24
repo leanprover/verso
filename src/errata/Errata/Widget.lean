@@ -434,16 +434,15 @@ private meta def buildAndRun (source : System.FilePath) (moduleJson declJson opt
         state.kill.set (pure ())
       code.set c?
       return c?
-    -- The file is read as bytes, with each line decoded once all of it has arrived, so a read that
-    -- ends within a character leaves the character intact. Once the runner has exited, the file is
-    -- read to its end.
+    -- The file is read as bytes, and each line is decoded once all of it has arrived. Once
+    -- `errata-run-one` has exited, the file is read to its end.
     protocol.follow (return (← exitCode).isSome) (handleLineBytes state)
     -- Processes that the test started can hold the runner's output pipes open after the runner has
     -- exited. They get a grace period, then are killed, and what they wrote is still read.
     unless ← ProcessControl.waitAtMost pipeGraceMs [runOutTask, runErrTask] do
       try run.kill catch _ => pure ()
       discard <| ProcessControl.waitAtMost pipeGraceMs [runOutTask, runErrTask]
-    -- `followProtocol` returns only after the runner has exited, so the code is set.
+    -- `Tail.follow` returns only after `errata-run-one` has exited, so the code is set.
     let code := (← code.get).getD 0
     finishWith state (runnerFailure code)
 

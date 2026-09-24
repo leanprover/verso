@@ -126,7 +126,7 @@ where cmd := `[Cli|
       v, verbose;              "Also report passes, truncating each test's results."
       vv, "verbose-all";       "Report every result, without truncation."
       vvv, "verbose-docs";     "Report every result and every test's docstring."
-      "update-golden";         "Rewrite golden expected files instead of comparing."
+      "update-golden";         "Rewrite the expected files of golden checks."
       seed : Nat;              "The run's seed, from which each test's seed is derived."
       junit : String;          "Write a JUnit XML report to the given path."
       json : String;           "Write a JSON report to the given path."
@@ -265,9 +265,9 @@ def Dispatcher.get (d : Dispatcher) : IO State :=
   d.state.atomically MonadState.get
 
 /--
-The processes of a run that are running, and whether the run has been cancelled. A process is
-started only under the lock, after a check that the run has not been cancelled, so that no process
-starts after a cancellation.
+The processes of a run that are running, and whether the run has been cancelled. Every process
+starts under the lock, after a check of the cancellation. Once the run is cancelled, every later
+start is refused.
 -/
 structure Registry where
   /-- Whether the run has been cancelled, and the groups that are running. -/
@@ -278,8 +278,8 @@ def Registry.new : BaseIO Registry := do
   return { state := ← Std.Mutex.new (false, #[]) }
 
 /--
-Starts a process with {name}`start` and records it, unless the run has been cancelled, in which case
-the result is {lean}`none` and nothing starts.
+Starts a process with {name}`start` and records it. When the run has been cancelled, the result is
+{lean}`none` and {name}`start` is skipped.
 -/
 def Registry.start (r : Registry) (start : IO Group) : IO (Option Group) :=
   r.state.atomically do
@@ -298,9 +298,9 @@ def Registry.cancelled (r : Registry) : IO Bool :=
   r.state.atomically (return (← get).1)
 
 /--
-Cancels the run: no process starts from here on, every running group is asked to terminate, and the
-groups whose first process is still running after {name}`graceMs` milliseconds are killed. The
-processes are waited for by the parts of the run that started them.
+Cancels the run: every later start is refused, every running group is asked to terminate, and the
+groups whose first process is still running after {name}`graceMs` milliseconds are killed. The parts
+of the run that started the processes wait for them.
 -/
 def Registry.cancel (r : Registry) (graceMs : Nat) : IO Unit := do
   let groups ← r.state.atomically do
@@ -330,7 +330,10 @@ structure RunContext where
   /-- The processes that are running, and whether the run has been cancelled. -/
   registry : Registry
 
-/-- The environment variable that asks a test executable to end when its standard input closes. -/
+/--
+The environment variable that asks a process to treat its standard input as its lifeline, and to
+end when it closes.
+-/
 def lifelineVariable : String := "ERRATA_LIFELINE"
 
 /-- The environment variables that every test executable receives. -/
@@ -340,13 +343,16 @@ def RunContext.env (ctx : RunContext) (exe : ExecutableConfig) : Array (String �
     (ctx.config.errataDir?.map fun d => #[("ERRATA_DIR", some d)]).getD #[] ++
     exe.env.map fun (k, v) => (k, some v)
 
-/-- How long the processes that a test started may hold its output pipes after it exits. -/
+/--
+The pipe grace, in milliseconds: how long the processes that a test executable started may hold its
+output pipes after it exits.
+-/
 def pipeGraceMs : Nat := 500
 
 /--
 Waits for the readers of a process's output pipes once the process has exited. When processes that
-it started still hold the pipes after {name}`pipeGraceMs`, its group is asked to terminate and then
-killed, and the readers get another {name}`pipeGraceMs`.
+it started still hold the pipes after the pipe grace, {name}`Group.sweep` ends its group with the
+pipe grace as the sweep's grace period, and the readers then get one more pipe grace.
 -/
 def releasePipes (g : Group) (readers : List (Task (Except IO.Error Unit))) : IO Unit := do
   unless ← waitAtMost pipeGraceMs readers do
@@ -423,7 +429,7 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
       | .test info =>
         unless sawProtocol do return fail "its list file does not begin with a protocol record"
         let some name := info.name? | return fail "its list file has a test without a name"
-        -- A benchmark runs only on request.
+        -- The inventory leaves out benchmarks.
         if info.kind? == some "benchmark" then continue
         if names.contains name then return fail s!"it lists the test {name} more than once"
         names := names.insert name
@@ -464,13 +470,12 @@ def RunContext.reproduce (ctx : RunContext) (exe : ExecutableConfig) (name : Str
 
 /--
 Runs one test in a process of its own. Records from its result file and lines from its standard
-output and standard error go to the dispatcher as they arrive; before a line of output is handed on,
+output and standard error go to the dispatcher as they arrive. Before a line of output is handed on,
 the result file is read up to its end, so the records that the test wrote before that output precede
-it. The test is terminated at its timeout and killed after the grace period; the file is checked
-against the clock after every bounded read, so a test that writes quickly cannot hold off its
-timeout. Once its process has exited, the processes that it started get a moment to release its
-output pipes, after which its group is ended. The result is {lean}`false` when the run has been
-cancelled and the test was not started.
+it. The test is terminated at its timeout and killed after the grace period. The run loop checks the
+clock after every bounded read of the result file. Once the test executable has exited, the
+processes that it started have the pipe grace to release its output pipes, and then its group is
+swept. The result is {lean}`false` when the run has been cancelled and the test was not started.
 -/
 def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) : IO Bool := do
   let exe := ctx.config.executables[t.exeIdx]!
@@ -622,7 +627,8 @@ def writeReports (opts : Options) (report : RunReport) : IO Unit := do
 /--
 Runs the tests as {name}`execute` does, with the human-readable report on standard output and the
 events in the file that the options name, then writes the report files and prints the run's issues.
-The result is the exit code: {lit}`0` when every test passed and no issue is an error.
+The result is the exit code: {lit}`0` when every test passed and no issue is an error. A cancelled
+run writes no report files and returns {lit}`1`.
 -/
 def executeAndWrite (config : Config) (opts : Options)
     (registry : Option Registry := none) : IO UInt32 := do
@@ -650,10 +656,11 @@ def executeAndWrite (config : Config) (opts : Options)
   return if report.succeeded then 0 else 1
 
 /--
-Cancels the run once the runner's standard input reaches its end: no test starts from then on, the
-running processes are terminated and, after the grace period, killed, and the run ends without
-writing reports. The driver holds the other end of that pipe, which closes when the driver exits,
-however it exits. When the run has not ended some time after that, the runner exits anyway.
+Cancels the run once the runner's lifeline, its standard input, closes: every later start is
+refused, and the running processes are terminated and, after the grace period, killed. The driver
+holds the other end of that pipe, which closes when the driver exits, however it exits. After the
+cancellation, the run loop has the grace period, four pipe graces, and two more seconds to end, and
+then the runner exits with {lit}`1`.
 -/
 def exitWhenStdinCloses (parentIn : IO.FS.Stream) (registry : Registry) (graceMs : Nat) :
     IO Unit := do

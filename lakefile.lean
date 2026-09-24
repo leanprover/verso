@@ -143,9 +143,8 @@ lean_lib VersoTests where
   roots := #[`VersoTests]
   globs := #[Glob.andSubmodules `VersoTests]
 
--- Everything below is Errata's own implementation: its library, the runner, the single-test runner
--- that supports the widget, its self-tests, the generated test executables, and the `lake test`
--- driver.
+-- Everything below is Errata's own implementation: its library, the runner, the widget's
+-- single-test program, its self-tests, the generated test executables, and the `lake test` driver.
 namespace Errata
 
 input_file errataRunTestWidgetJs where
@@ -267,8 +266,9 @@ private def unreachableModules (lib : Lake.LeanLib) (known : Lean.NameSet) :
   found.get
 
 /--
-Generates the main of a library's test executable. It is a non-module file, so that it can import
-both module-system and legacy test modules, and it hands their tests to the Lean harness.
+Generates the main of a library's test executable. The main is a file without a `module` header. It
+imports the library's test modules, with or without a `module` header, and hands their tests to the
+Lean harness.
 -/
 private def mainSource (pkg : String) (mods : Array Lean.Name) : String :=
   let imports := "\n".intercalate <| "import Errata" :: mods.toList.map (s!"import {·}")
@@ -483,10 +483,9 @@ script run (args) do
           if let some parent := configFile.parent then IO.FS.createDirAll parent
           IO.FS.writeFile configFile content
         return (configFile, runnerPath)
-  -- The runner gets a standard input that the driver holds and never writes to, and
-  -- `ERRATA_LIFELINE` asks it to end its tests when that pipe closes. `LEAN_ABORT_ON_PANIC` is removed from its environment rather than
-  -- inherited, because some CI systems set it; the runner sets it for the tests under
-  -- `--exit-on-panic`.
+  -- The runner's standard input is a lifeline that the driver holds, and `ERRATA_LIFELINE` asks the
+  -- runner to end its tests when that pipe closes. The runner's environment has no
+  -- `LEAN_ABORT_ON_PANIC`; the runner sets it for the tests under `--exit-on-panic`.
   let child ← IO.Process.spawn {
     cmd := runnerPath.toString, args := #[configPath.toString] ++ runnerArgs.toArray
     stdin := .piped

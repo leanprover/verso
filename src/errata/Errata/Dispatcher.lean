@@ -6,9 +6,8 @@ Author: David Thrane Christiansen
 
 /-
 The runner's dispatcher: every event of a run passes through one function, which updates the run's
-state and says what the reporters and the events file receive. Because the function is pure and
-every event passes through it, the human report, the events file, and the final reports all see one
-order of events.
+state and says what the reporters and the events file receive. The human report, the events file,
+and the final reports all see the events in the order that the function receives them.
 -/
 module
 
@@ -127,7 +126,10 @@ deriving Inhabited
 def tagged (exe test : String) (j : Json) : Json :=
   (j.setObjVal! "exe" (.str exe)).setObjVal! "test" (.str test)
 
-/-- The verdict that a record's status and message stand for, if they stand for one. -/
+/--
+The verdict that a record's status, message, detail, and location stand for. An expected failure
+stands for a pass.
+-/
 def verdictOfInfo (status : Protocol.Status) (message? detail? : Option String)
     (location? : Option Protocol.Span) : Verdict :=
   match status with
@@ -138,9 +140,8 @@ def verdictOfInfo (status : Protocol.Status) (message? detail? : Option String)
   | .error => .error (message?.getD "error")
 
 /--
-The exit codes that mean a signal ended a process: the system reports one as {lit}`128` plus the
-signal's number. A process that exits with such a code by itself is indistinguishable from one that a
-signal ended.
+The number of the signal that an exit code reports, if it reports one. The system reports a signal
+as {lit}`128` plus the signal's number, and the codes {lit}`129` to {lit}`192` are read as signals.
 -/
 def signalOfExitCode? (code : UInt32) : Option Nat :=
   if code > 128 && code ≤ 128 + 64 then some (code.toNat - 128) else none
@@ -268,8 +269,8 @@ private def Running.addRecord (r : Running) : Protocol.Record → Running
 def phaseLine (name : String) : String := s!"== {name}"
 
 /--
-Handles one event: the new state, and what the reporters and the events file receive. Events about
-a test that is not running are ignored, since they belong to a process that outlived its test.
+Handles one event: the new state, and what the reporters and the events file receive. An event about
+a test that is not running comes from a process that outlived its test, and it is ignored.
 -/
 def step (s : State) : Event → State × Array Action
   | .phase name timeMs =>

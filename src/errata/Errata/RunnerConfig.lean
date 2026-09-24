@@ -29,7 +29,7 @@ def configVersion : Nat := 1
 structure ExecutableConfig where
   /-- The executable's name, unique in the run: a library's name for a Lean harness. -/
   name : String
-  /-- The command that starts the executable, followed by the protocol's arguments. -/
+  /-- The command that starts the executable. The runner appends the protocol's arguments. -/
   command : Array String
   /-- The directory to start the executable in; the runner's own when absent. -/
   cwd? : Option String := none

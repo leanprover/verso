@@ -54,12 +54,11 @@ meta def runDeclName (env : Environment) (decl : Name) : Name := Id.run do
   return name
 
 /--
-Records a declaration as a test. The action that runs it is compiled into an exported definition
-beside it, so the {name}`IsTest` instance in force here is the one that runs it wherever it is run,
-and the test executable reaches it through a plain {lit}`import` of the test's module. A test must
-itself be exported: in a module, it is public, which a {lit}`public section` arranges.
-The docstring is read here, while it is still in the live environment, since a downstream build does
-not load the imported docstrings.
+Records a declaration as a test. The action that runs it is compiled, with the {name}`IsTest`
+instance in force here, into an exported definition beside it. A test executable reaches that
+definition through a plain {lit}`import` of the test's module. A test must itself be exported: in a
+module, it is public, which a {lit}`public section` arranges. The docstring is read here, from the
+live environment, and stored with the test.
 -/
 meta def recordTest (decl : Name) : AttrM Unit := do
   if (testExt.getState (← getEnv)).any (·.name == decl) then

@@ -366,8 +366,8 @@ def listingTimesOut : Test := do
   assertContains "listing slowly" issue.message
 
 /--
-A test executable that exits after listing, leaving a process in a session of its own that holds
-its output pipes, does not hold up the run.
+A test executable exits after listing and leaves a process, in a session of its own, that holds its
+output pipes. The run goes on within the pipe grace.
 -/
 @[test]
 def listingPipesHeld : Test := do
@@ -397,9 +397,9 @@ def processesWith (text : String) : IO String := do
   return (← IO.Process.output { cmd := "pgrep", args := #["-f", text] }).stdout.trimAscii.copy
 
 /--
-When the standard input of the built runner closes, it stops the test that is running, including a
-process that the test started that ignores the request to terminate, and exits non-zero without
-writing reports.
+When the lifeline of the built runner closes, the runner ends the test that is running, including a
+process that the test started and that ignores the request to terminate. The runner then exits
+non-zero, with no reports written.
 -/
 @[test]
 def runnerLifeline : Test := do
@@ -448,8 +448,8 @@ def runnerLifeline : Test := do
     assertTrue (!(← json.pathExists)) "no report was written"
 
 /--
-The Lean harness leaves its standard input alone unless the runner asks it to watch it, so a test
-executable run by hand with {lit}`/dev/null` as its standard input runs the test.
+A test executable of the Lean harness, run by hand without {lit}`ERRATA_LIFELINE` and with
+{lit}`/dev/null` as its standard input, runs the test.
 -/
 @[test]
 def harnessRunsWithoutLifeline : Test := do

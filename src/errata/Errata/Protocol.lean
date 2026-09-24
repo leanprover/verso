@@ -5,9 +5,9 @@ Author: David Thrane Christiansen
 -/
 
 /-
-The records that a test executable writes to its output file, one JSON object per line. Every record
-has a `type`, and every other field is optional. A reader ignores the records whose type it does not
-know and the fields it does not know, so a newer test executable can add both.
+The records that a test executable writes to its list file or its result file, one JSON object per
+line. Every record has a `type`, and every other field is optional. A reader skips the records of an
+unknown type and the unknown fields of a record.
 -/
 module
 
@@ -146,7 +146,7 @@ structure VerdictInfo where
   durationMs? : Option Nat := none
 deriving Repr, Inhabited, DecidableEq
 
-/-- One line of a test executable's output file. -/
+/-- One line of a test executable's list file or result file. -/
 inductive Record where
   /-- The protocol version, the first record of every file. -/
   | protocol (version? : Option Nat)
@@ -242,9 +242,9 @@ private def statusField (j : Json) : Except String (Option Status) := do
     | none => .error s!"field status: unknown status {s}"
 
 /--
-Decodes one record. A record of a type that this reader does not know is {lean}`none`, and so are
-the fields it does not know. A value that is not an object with a string {lit}`type`, or a known
-field of the wrong shape, is an error.
+Decodes one record. A record of an unknown type decodes to {lean}`none`, and unknown fields are
+skipped. A value that is not an object with a string {lit}`type`, or a known field of the wrong
+shape, is an error.
 -/
 def Record.decode? (j : Json) : Except String (Option Record) := do
   let .ok (ty : String) := j.getObjValAs? String "type"
@@ -278,14 +278,17 @@ def Record.decode? (j : Json) : Except String (Option Record) := do
   | "value" => return some (.value (← field j "text"))
   | _ => return none
 
-/-- Decodes one line of an output file, as {name}`Record.decode?` does, with the parsed JSON. -/
+/--
+Decodes one line of a list file or a result file, as {name}`Record.decode?` does, with the parsed
+JSON.
+-/
 def Record.parseLine (line : String) : Except String (Option (Json × Record)) := do
   let j ← Json.parse line |>.mapError (s!"not JSON: {·}")
   match ← Record.decode? j with
   | some r => return some (j, r)
   | none => return none
 
-/-- Appends one record to an output file as a line of JSON, and flushes it. -/
+/-- Appends one record to a list file or a result file as a line of JSON, and flushes it. -/
 def writeRecord (out : IO.FS.Handle) (r : Record) : IO Unit := do
   out.putStr (r.toJson.compress ++ "\n")
   out.flush

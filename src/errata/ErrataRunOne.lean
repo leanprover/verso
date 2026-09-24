@@ -18,8 +18,7 @@ Evaluates the test named by {lean}`declName`, defined in {lean}`module`, to a te
 discovery builds one.
 
 The entry's action is the definition that {lit}`@[test]` compiled beside the test, reached through
-{lit}`import all` of its module. The runner has no package name to give the entry, so that field is
-empty.
+{lit}`import all` of its module. The entry's package name is empty.
 -/
 unsafe def evalTestEntry (module declName : Name) : CoreM Errata.TestEntry :=
   MetaM.run' do

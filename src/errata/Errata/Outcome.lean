@@ -72,7 +72,7 @@ def Verdict.isPass : Verdict → Bool
   | .pass => true
   | .fail _ | .error _ => false
 
-/-- The reasons that a test ends without a verdict. -/
+/-- The reasons that a test ends without a verdict that the runner can trust. -/
 inductive Inconclusive where
   /-- A fixture that the test needs failed in the given phase, so the test was not run. -/
   | fixtureFailed (fixture : String) (phase : FixturePhase)

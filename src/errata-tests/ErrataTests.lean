@@ -878,7 +878,8 @@ def dependencyTestsHaveTheirOwnExecutable : Test := do
     assertContains "dep/.lake/build/bin/errata-test-DepLib" config
 
 /--
-A legacy root that imports a module-system child, each with a test, has each test discovered once.
+A root without a `module` header that imports a module-system child, each with a test, has each
+test discovered once.
 The fixture's `AppMixed` library has that shape.
 -/
 @[test]
@@ -1107,7 +1108,7 @@ def harnessListsAndRuns : Test := do
     TestEntry.of "p" "M" "M.good" loc (do IO.println "hello"; result "inner" (pure ()) : Test)
       (docstring? := some "Good."),
     TestEntry.of "p" "M" "M.bad" loc (fail "nope" : Test)]
-  -- The records of the output file, decoded.
+  -- The records of a list file or a result file, decoded.
   let records (path : System.FilePath) : TestM (Array Protocol.Record) := do
     let lines := (← IO.FS.readFile path).splitOn "\n" |>.filter (!·.isEmpty)
     let mut out := #[]
