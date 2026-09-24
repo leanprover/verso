@@ -389,6 +389,17 @@ def missingCommand : Test := do
   let some issue := r.report.issues.find? (·.isError) | fail "no error"
   assertContains "absent could not list its tests: it could not be started" issue.message
 
+/--
+A test executable that a signal ends while it lists its tests stops the run, and the message names
+the signal, as a module initializer that panics does.
+-/
+@[test]
+def listingSignaled : Test := do
+  let r ← runWith #[{ name := "aborts", command := #["bash", "-c", "kill -ABRT $$", "aborts"] }]
+  let some issue := r.report.issues.find? (·.isError) | fail "no error"
+  assertContains "aborts could not list its tests: it was ended by signal 6 (exit code 134)"
+    issue.message
+
 /-- The runner built for this workspace. -/
 def runnerExe : System.FilePath := ".lake/build/bin/errata-runner"
 

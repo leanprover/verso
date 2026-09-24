@@ -848,7 +848,10 @@ unsafe def unsafeHelper (_ : List String) : IO UInt32 := pure 5
 def unsafeHelperRuns : Test := do
   assertExitCode 5 (← runHelper ``unsafeHelper [])
 
-/-- A helper name that the test executable does not know ends the helper's process with code 2. -/
+/--
+A helper name that no helper of the test executable has ends the helper's process with code 2 and a
+message that names it.
+-/
 @[test]
 def unknownHelperIsReported : Test := do
   let out ← runHelper (Lean.Name.mkSimple "noSuchHelper") []
@@ -873,6 +876,65 @@ attribute [test_helper] panicPlease
 /-- error: A test helper must not be `meta` -/
 #test_msgs in
 @[test_helper] meta def metaHelper (_ : List String) : IO UInt32 := pure 0
+
+/-- error: A test helper must not be `noncomputable` -/
+#test_msgs in
+@[test_helper] noncomputable def noncomputableHelper (_ : List String) : IO UInt32 :=
+  pure (Classical.choice ⟨0⟩)
+
+/-- error: A test helper must not be universe polymorphic -/
+#test_msgs in
+@[test_helper] def polymorphicHelper.{u} (_ : List String) : IO UInt32 :=
+  pure (ULift.down.{u} (ULift.up 0))
+
+/-- The type of a helper, under another name. -/
+abbrev HelperFunction := List String → IO UInt32
+
+-- A declaration whose type unfolds to the type of a helper is accepted.
+#test_msgs in
+@[test_helper] def abbreviatedHelper : HelperFunction := fun _ => pure 0
+
+/-- Panics with `panic!`. -/
+@[test_helper]
+def panicExplicitly (_ : List String) : IO UInt32 :=
+  panic! "on purpose"
+
+/-- A panic from `panic!` prints a line that begins with `PANIC at` before the abort. -/
+@[test]
+def explicitPanics : Test := do
+  let out ← runHelper ``panicExplicitly [] (env := #[("LEAN_ABORT_ON_PANIC", some "1")])
+  assertAborted out
+  assertContains "PANIC at" out.stderr
+  assertContains "on purpose" out.stderr
+
+/-- Writes a line to standard output and exits with 4, without reading its standard input. -/
+@[test_helper]
+def ignoresInput (_ : List String) : IO UInt32 := do
+  IO.println "done"
+  return 4
+
+/--
+A helper that exits without reading the standard input it is given still has its exit code and
+output returned.
+-/
+@[test]
+def unreadInputIsDropped : Test := do
+  let out ← runHelper ``ignoresInput [] (stdin := "".pushn 'x' (1024 * 1024))
+  assertExitCode 4 out
+  assertBEq "done\n" out.stdout
+
+/-- Writes the byte `0xFF`, which is not valid UTF-8, to standard output. -/
+@[test_helper]
+def writesInvalidUtf8 (_ : List String) : IO UInt32 := do
+  (← IO.getStdout).write (ByteArray.mk #[0xFF])
+  return 0
+
+/-- Output that is not valid UTF-8 comes back with a replacement character for each invalid byte. -/
+@[test]
+def invalidOutputIsReplaced : Test := do
+  let out ← runHelper ``writesInvalidUtf8 []
+  assertExitCode 0 out
+  assertBEq "�" out.stdout
 
 /--
 A test that panics ends its test executable's process, which the runner reports as ended by a
