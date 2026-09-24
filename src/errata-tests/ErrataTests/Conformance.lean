@@ -99,7 +99,7 @@ structure Product where
   name : String
   /-- The test executable. -/
   exe : ExecutableConfig
-  /-- Why the product cannot run here, when it cannot. -/
+  /-- The reason that the product is unavailable here, when it is. -/
   unavailable : IO (Option String) := pure none
   /-- A test that passes. -/
   passes : Role
@@ -185,7 +185,7 @@ def products : Array Product := #[basicProduct, errataShProduct, pytestProduct, 
 /-- The products whose tests stage the scripted behaviors. -/
 def scriptedProducts : Array Product := products.filter (·.scripted)
 
-/-- Fails with an error when the product cannot run here. -/
+/-- Throws an error that gives the reason when the product is unavailable here. -/
 def Product.check (p : Product) : IO Unit := do
   if let some why ← p.unavailable then
     throw <| IO.userError s!"the product {p.name} cannot run: {why}"
@@ -876,8 +876,8 @@ def readRecords (path : System.FilePath) : TestM (Array Json) := do
 /--
 Errata's shell harness runs a chain of invocations in order in one process and stops at the first
 that exits non-zero, exiting with its status. It writes names and descriptions with any character
-as JSON strings, rejects `errata-fixture` and anything it does not know with exit code 2, and
-reports a test that the script does not declare as an error.
+as JSON strings, rejects `errata-fixture` and unknown modes with exit code 2, and reports an
+undeclared test as an error.
 -/
 @[test]
 def shellHarness : Test := do

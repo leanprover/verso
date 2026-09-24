@@ -121,13 +121,19 @@ class ListPlugin:
     """Collects the inventory once pytest has collected the tests."""
 
     def __init__(self):
+        """Starts with no records and no problems."""
         self.records = []
         self.problems = []
 
     def pytest_configure(self, config):
+        """Registers the marker through which a test takes a setting."""
         config.addinivalue_line("markers", ERRATA_SETTING_MARKER)
 
     def pytest_collection_finish(self, session):
+        """
+        Makes the inventory's records: the settings that the collected tests take, in the order the
+        conftest.py files declare them, then a test record per collected item.
+        """
         declared, problems = declared_settings(session.config)
         self.problems.extend(problems)
         used = set()
@@ -174,6 +180,7 @@ class RunPlugin:
     """Runs one item, collects its reports, and gives the tests their settings."""
 
     def __init__(self, nodeid, settings, out):
+        """Runs the item with the node id, giving it the settings and writing records to `out`."""
         self.nodeid = nodeid
         self.settings = settings
         self.out = out
@@ -182,6 +189,7 @@ class RunPlugin:
         self.reports = {}
 
     def pytest_configure(self, config):
+        """Registers the marker through which a test takes a setting."""
         config.addinivalue_line("markers", ERRATA_SETTING_MARKER)
 
     @pytest.fixture(scope="session")
@@ -191,6 +199,7 @@ class RunPlugin:
 
     @pytest.hookimpl(trylast=True)
     def pytest_collection_modifyitems(self, config, items):
+        """Keeps the one item with the node id, after every other plugin has selected its items."""
         selected = [i for i in items if i.nodeid == self.nodeid]
         others = [i for i in items if i.nodeid != self.nodeid]
         self.found = bool(selected)
@@ -199,13 +208,16 @@ class RunPlugin:
         items[:] = selected
 
     def pytest_collectreport(self, report):
+        """Keeps the reports of the collectors that failed."""
         if report.failed:
             self.collect_errors.append(report)
 
     def pytest_runtest_logstart(self, nodeid, location):
+        """Writes the `start` record as the item's setup begins."""
         write_record(self.out, {"type": "start", "time_ms": int(time.time() * 1000)})
 
     def pytest_runtest_logreport(self, report):
+        """Keeps the report of each phase of the item: setup, call, and teardown."""
         self.reports[report.when] = report
 
     def verdict(self):
@@ -255,8 +267,8 @@ def failure_verdict(status, report, fallback):
 
 def skipped_verdict(report):
     """
-    The verdict of a skipped report. An expected failure passes, and any other skip is an error, since
-    a test whose precondition does not hold has not shown anything.
+    The verdict of a skipped report. An expected failure passes, and any other skip is an error: a
+    test whose precondition fails has shown nothing.
     """
     reason = ""
     if isinstance(report.longrepr, tuple) and len(report.longrepr) == 3:

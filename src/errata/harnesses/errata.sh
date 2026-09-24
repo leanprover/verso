@@ -44,6 +44,7 @@ _errata_control_chars=()
 _errata_control_escapes=()
 for _errata_code in 1 2 3 4 5 6 7 8 11 12 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 127; do
   printf -v _errata_octal '%03o' "$_errata_code"
+  # shellcheck disable=SC2059 # The format is the octal escape of the character.
   printf -v _errata_char "\\$_errata_octal"
   _errata_control_chars+=("$_errata_char")
   printf -v _errata_char '\\u%04x' "$_errata_code"
@@ -139,7 +140,8 @@ errata_setting_decl() {
   done
   case "$_errata_mode" in
     list)
-      local record="{\"type\":\"setting\",\"name\":$(_errata_json_string "$name")"
+      local record
+      record="{\"type\":\"setting\",\"name\":$(_errata_json_string "$name")"
       record+=",\"description\":$(_errata_json_string "$description")"
       [ -n "$has_default" ] && record+=",\"default\":$(_errata_json_string "$default")"
       errata_record "$record}"
@@ -160,7 +162,8 @@ errata_test() {
   [ $# -ge 1 ] || _errata_misuse "errata_test takes a name"
   local name=$1
   shift
-  local record="{\"type\":\"test\",\"name\":$(_errata_json_string "$name")"
+  local record
+  record="{\"type\":\"test\",\"name\":$(_errata_json_string "$name")"
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || _errata_misuse "$1 takes a value"
     case "$1" in
@@ -215,7 +218,8 @@ errata_threads() {
 # Fails the test: `errata_fail MESSAGE [DETAIL]` writes a verdict with the message and the detail,
 # and returns 1.
 errata_fail() {
-  local record="{\"type\":\"verdict\",\"status\":\"fail\",\"message\":$(_errata_json_string "$1")"
+  local record
+  record="{\"type\":\"verdict\",\"status\":\"fail\",\"message\":$(_errata_json_string "$1")"
   [ $# -ge 2 ] && record+=",\"detail\":$(_errata_json_string "$2")"
   errata_record "$record}"
   return 1
