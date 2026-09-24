@@ -7,7 +7,7 @@ mode="$1"
 out="$2"
 
 tests=(pass fail verdict-fail silent unknown-records mismatch-pass mismatch-fail exits sleeps
-       stubborn spawns panics garbled records)
+       stubborn spawns panics garbled records twice flood lingers)
 # A suite that needs only some of the tests names them here, separated by spaces.
 if [ -n "$BASIC_TESTS" ]; then
   read -r -a tests <<< "$BASIC_TESTS"
@@ -112,6 +112,29 @@ case "$mode" in
         record '{"type":"result","id":1,"parent":0,"name":"step"}'
         record '{"type":"result","id":1,"parent":0,"name":"step","status":"pass","duration_ms":1}'
         record '{"type":"verdict","status":"pass"}'
+        exit 0
+        ;;
+      twice)
+        record '{"type":"protocol","version":1}'
+        record '{"type":"verdict","status":"fail","message":"first"}'
+        record '{"type":"verdict","status":"pass"}'
+        exit 0
+        ;;
+      flood)
+        # Writes records far faster than they can be read, then sleeps past the timeout.
+        record '{"type":"protocol","version":1}'
+        yes '{"type":"mystery"}' | head -c 200000000 >> "$out"
+        sleep 30
+        exit 0
+        ;;
+      lingers)
+        # A background process that ignores the request to terminate and holds this test's output
+        # pipes, beside a foreground process that ends when asked.
+        (trap '' TERM; exec bash -c 'sleep 60; :' "errata-conformance-$marker") &
+        trap 'exit 0' TERM
+        echo "lingering"
+        sleep 60 &
+        wait
         exit 0
         ;;
       *)

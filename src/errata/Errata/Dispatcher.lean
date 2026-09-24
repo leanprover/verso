@@ -258,7 +258,10 @@ private def Running.addRecord (r : Running) : Protocol.Record → Running
         { r with nodes := r.nodes.push {
             id, parent := info.parent?.getD 0, name := info.name?.getD ""
             finish? := if info.status?.isSome then some info else none } }
-  | .verdict info => { r with verdict? := some info }
+  | .verdict info =>
+    if r.verdict?.isSome then
+      { r with unreadable? := r.unreadable? <|> some "the result file holds two verdict records" }
+    else { r with verdict? := some info }
   | _ => r
 
 /-- The line with which the human-readable report names a phase as it begins. -/

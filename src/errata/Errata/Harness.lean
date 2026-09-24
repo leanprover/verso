@@ -222,8 +222,10 @@ records to {lit}`out`. It exits with {lit}`0` when the test passes and {lit}`1` 
 passes its own options to the test as settings: {lit}`setting:seed=N` is the seed for property tests,
 {lit}`setting:updateGolden=true` rewrites golden files, and {lit}`setting:ignorePanics=true` leaves
 a check's status alone when it panics. Every other setting is a test option, read with
-{name}`option?` and {name}`flag`. While the test runs, the executable watches its standard input,
-and when it closes, it ends its own process group and exits.
+{name}`option?` and {name}`flag`. When the environment variable {lit}`ERRATA_LIFELINE` is {lit}`1`,
+as the runner sets it, the executable watches its standard input while the test runs, and when it
+closes, it ends its own process group and exits. Without the variable, standard input is left alone,
+so the command runs by hand with any standard input, {lit}`/dev/null` included.
 
 With any other arguments, the executable prints its usage and exits with {lit}`2`.
 -/
@@ -231,7 +233,8 @@ def main (entries : Array TestEntry) (args : List String) : IO UInt32 := do
   match args with
   | "errata-run" :: _ =>
     -- The read blocks on a thread of its own, which it holds for the length of the run.
-    let _ ← IO.asTask (prio := .dedicated) (exitWhenStdinCloses (← IO.getStdin))
+    if (← IO.getEnv "ERRATA_LIFELINE") == some "1" then
+      let _ ← IO.asTask (prio := .dedicated) (exitWhenStdinCloses (← IO.getStdin))
     -- The main thread, where the test runs, reads an empty standard input from here on.
     discard <| IO.setStdin (IO.FS.Stream.ofBuffer (← IO.mkRef {}))
     let code ← try dispatch entries args catch e => do

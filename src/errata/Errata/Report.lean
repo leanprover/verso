@@ -20,6 +20,10 @@ namespace Errata
 private def indentLines (text : String) (indent : String := "    ") : String :=
   "\n".intercalate ((text.splitOn "\n").map (fun l => indent ++ l))
 
+/-- Text without its last newline, if it ends with one, for printing as lines. -/
+private def dropFinalNewline (s : String) : String :=
+  if s.endsWith "\n" then (s.dropEnd 1).copy else s
+
 /-- A source location rendered as the clickable {lit}`file:line:col` of the span's start. -/
 def Location.text (l : Location) : String :=
   s!"{l.file}:{l.startPos.line}:{l.startPos.column}"
@@ -107,7 +111,8 @@ private def resultLines (verbosity : Verbosity) (r : Result) (lead label : Strin
     out := out.push (indentLines s!"reported: {m}" detail)
   | _ => pure ()
   unless r.outcome.isPass do
-    unless r.output.isEmpty do out := out.push (indentLines s!"output:\n{r.output.all}" detail)
+    unless r.output.isEmpty do
+      out := out.push (indentLines s!"output:\n{dropFinalNewline r.output.all}" detail)
     if let some cmd := r.reproduce? then out := out.push (indentLines s!"reproduce: {cmd}" detail)
   return out
 
@@ -474,7 +479,7 @@ def markdownReport (report : RunReport) : String := Id.run do
         if let some l := f.location? then s := s ++ s!"`{l.text}`\n\n"
       if let some d := detail? then s := s ++ s!"{fencedBlock d}\n\n"
       unless r.output.isEmpty do
-        s := s ++ s!"<details><summary>output</summary>\n\n{fencedBlock r.output.all}\n\n</details>\n\n"
+        s := s ++ s!"<details><summary>output</summary>\n\n{fencedBlock (dropFinalNewline r.output.all)}\n\n</details>\n\n"
       if let some cmd := r.reproduce? then
         s := s ++ s!"Reproduce with:\n\n{fencedBlock cmd}\n\n"
       return s ++ "</details>\n\n"

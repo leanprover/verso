@@ -167,11 +167,13 @@ def optionsOfParsed (p : Cli.Parsed) : Except String Options := do
     else if p.hasFlag "verbose" then .quiet
     else .silent
   let jobs := (p.flag? "jobs" |>.map (·.as! Nat)).getD 1
+  if jobs == 0 then throw "--jobs 0 is invalid: at least one test must be able to run"
   unless jobs == 1 do
-    throw s!"--jobs {jobs}: running more than one test at a time is not supported yet"
+    throw s!"--jobs {jobs}: only --jobs 1 is supported"
   let timeoutMs ← match p.flag? "timeout" with
     | some f => parseDuration f.value
     | none => pure (10 * 60 * 1000)
+  if timeoutMs == 0 then throw "--timeout must be longer than zero"
   let gracePeriodMs ← match p.flag? "grace-period" with
     | some f => parseDuration f.value
     | none => pure (10 * 1000)
@@ -262,6 +264,57 @@ def Dispatcher.dispatch (d : Dispatcher) (ev : Event) : IO Unit :=
 def Dispatcher.get (d : Dispatcher) : IO State :=
   d.state.atomically MonadState.get
 
+/--
+The processes of a run that are running, and whether the run has been cancelled. A process is
+started only under the lock, after a check that the run has not been cancelled, so that no process
+starts after a cancellation.
+-/
+structure Registry where
+  /-- Whether the run has been cancelled, and the groups that are running. -/
+  state : Std.Mutex (Bool × Array Group)
+
+/-- A registry with nothing running. -/
+def Registry.new : BaseIO Registry := do
+  return { state := ← Std.Mutex.new (false, #[]) }
+
+/--
+Starts a process with {name}`start` and records it, unless the run has been cancelled, in which case
+the result is {lean}`none` and nothing starts.
+-/
+def Registry.start (r : Registry) (start : IO Group) : IO (Option Group) :=
+  r.state.atomically do
+    let (cancelled, groups) ← get
+    if cancelled then return none
+    let g ← start
+    set (cancelled, groups.push g)
+    return some g
+
+/-- Forgets a process that the run has finished with. -/
+def Registry.release (r : Registry) (g : Group) : IO Unit :=
+  r.state.atomically (modify fun (c, gs) => (c, gs.filter (·.pid != g.pid)))
+
+/-- Whether the run has been cancelled. -/
+def Registry.cancelled (r : Registry) : IO Bool :=
+  r.state.atomically (return (← get).1)
+
+/--
+Cancels the run: no process starts from here on, every running group is asked to terminate, and the
+groups whose first process is still running after {name}`graceMs` milliseconds are killed. The
+processes are waited for by the parts of the run that started them.
+-/
+def Registry.cancel (r : Registry) (graceMs : Nat) : IO Unit := do
+  let groups ← r.state.atomically do
+    let (_, gs) ← get
+    set (true, gs)
+    return gs
+  for g in groups do g.terminate
+  let deadline := (← IO.monoMsNow) + graceMs
+  repeat
+    let live ← (← r.state.atomically (return (← get).2)).filterM (·.armed.get)
+    if live.isEmpty || (← IO.monoMsNow) ≥ deadline then break
+    IO.sleep pollMs
+  for g in (← r.state.atomically (return (← get).2)) do g.kill
+
 /-- What the parts of a run share. -/
 structure RunContext where
   /-- The configuration. -/
@@ -274,12 +327,16 @@ structure RunContext where
   dir : System.FilePath
   /-- The dispatcher. -/
   dispatcher : Dispatcher
-  /-- The processes that are running, to be ended if the run is cancelled. -/
-  running : IO.Ref (Array Group)
+  /-- The processes that are running, and whether the run has been cancelled. -/
+  registry : Registry
+
+/-- The environment variable that asks a test executable to end when its standard input closes. -/
+def lifelineVariable : String := "ERRATA_LIFELINE"
 
 /-- The environment variables that every test executable receives. -/
 def RunContext.env (ctx : RunContext) (exe : ExecutableConfig) : Array (String × Option String) :=
-  #[("LEAN_ABORT_ON_PANIC", if ctx.opts.exitOnPanic then some "1" else none)] ++
+  #[("LEAN_ABORT_ON_PANIC", if ctx.opts.exitOnPanic then some "1" else none),
+    (lifelineVariable, some "1")] ++
     (ctx.config.errataDir?.map fun d => #[("ERRATA_DIR", some d)]).getD #[] ++
     exe.env.map fun (k, v) => (k, some v)
 
@@ -287,24 +344,38 @@ def RunContext.env (ctx : RunContext) (exe : ExecutableConfig) : Array (String �
 def pipeGraceMs : Nat := 500
 
 /--
-Runs a command in a process group of its own, with a timeout, and returns its exit code with its
-standard output and standard error. The result is {lean}`none` when it timed out.
+Waits for the readers of a process's output pipes once the process has exited. When processes that
+it started still hold the pipes after {name}`pipeGraceMs`, its group is asked to terminate and then
+killed, and the readers get another {name}`pipeGraceMs`.
+-/
+def releasePipes (g : Group) (readers : List (Task (Except IO.Error Unit))) : IO Unit := do
+  unless ← waitAtMost pipeGraceMs readers do
+    g.sweep pipeGraceMs
+    discard <| waitAtMost pipeGraceMs readers
+
+/--
+Runs a command in a process group of its own, with the run's timeout and grace period, and returns
+its exit code with what it wrote to standard output and standard error. The exit code is
+{lean}`none` when it timed out. The whole result is {lean}`none` when the run has been cancelled.
 -/
 def runListing (ctx : RunContext) (exe : ExecutableConfig) (args : Array String) :
-    IO (Option UInt32 × String × String) := do
+    IO (Option (Option UInt32 × String × String)) := do
   let some cmd := exe.command[0]? | throw <| .userError "the command is empty"
-  let g ← spawnGroup cmd (exe.command.extract 1 exe.command.size ++ args) exe.cwd? (ctx.env exe)
-  ctx.running.modify (·.push g)
-  let outTask ← IO.asTask (prio := .dedicated) g.child.stdout.readToEnd
-  let errTask ← IO.asTask (prio := .dedicated) g.child.stderr.readToEnd
+  let some g ← ctx.registry.start
+      (spawnGroup cmd (exe.command.extract 1 exe.command.size ++ args) exe.cwd? (ctx.env exe))
+    | return none
+  let out ← IO.mkRef ""
+  let err ← IO.mkRef ""
+  let outTask ← IO.asTask (prio := .dedicated)
+    (forwardLines g.child.stdout fun l => out.modify (· ++ l))
+  let errTask ← IO.asTask (prio := .dedicated)
+    (forwardLines g.child.stderr fun l => err.modify (· ++ l))
   let finished ← g.waitAtMost ctx.opts.timeoutMs
   unless finished do discard <| g.terminateGraceKill ctx.opts.gracePeriodMs
   let code ← g.wait
-  g.sweep pipeGraceMs
-  ctx.running.modify (·.filter (·.pid != g.pid))
-  let out := (← IO.wait outTask).toOption.getD ""
-  let err := (← IO.wait errTask).toOption.getD ""
-  return (if finished then some code else none, out, err)
+  releasePipes g [outTask, errTask]
+  ctx.registry.release g
+  return some (if finished then some code else none, ← out.get, ← err.get)
 
 /-- The report of a test executable that could not list its tests. -/
 private def listFailure (exe : ExecutableConfig) (why stdout stderr : String) : String :=
@@ -322,9 +393,11 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
     IO (Except String (Array InventoryTest)) := do
   let file := ctx.dir / s!"list-{idx}.jsonl"
   IO.FS.writeFile file ""
-  let (code?, stdout, stderr) ←
+  let listing ←
     try runListing ctx exe #["errata-list", file.toString]
     catch e => return .error (listFailure exe s!"it could not be started: {e}" "" "")
+  let some (code?, stdout, stderr) := listing
+    | return .error (listFailure exe "the run was cancelled" "" "")
   let fail (why : String) := Except.error (listFailure exe why stdout stderr)
   let some code := code?
     | return fail s!"it did not finish within {ctx.opts.timeoutMs}ms"
@@ -381,20 +454,25 @@ error.
 -/
 def RunContext.reproduce (ctx : RunContext) (exe : ExecutableConfig) (name : String)
     (settings : Array (String × String)) : String :=
-  let words := exe.command ++ runArgs "/dev/stderr" name settings
-  let env := (if ctx.opts.exitOnPanic then "LEAN_ABORT_ON_PANIC=1 " else "") ++
-    " ".intercalate (exe.env.toList.map fun (k, v) => s!"{k}={shellQuote v} ")
+  let env : Array (String × String) :=
+    (if ctx.opts.exitOnPanic then #[("LEAN_ABORT_ON_PANIC", "1")] else #[]) ++
+    ((ctx.config.errataDir?.map fun d => #[("ERRATA_DIR", d)]).getD #[]) ++ exe.env
+  let words := env.map (fun (k, v) => s!"{k}={shellQuote v}") ++
+    (exe.command ++ runArgs "/dev/stderr" name settings).map shellQuote
   let cd := match exe.cwd? with | some d => s!"cd {shellQuote d} && " | none => ""
-  cd ++ env ++ " ".intercalate (words.toList.map shellQuote)
+  cd ++ " ".intercalate words.toList
 
 /--
 Runs one test in a process of its own. Records from its result file and lines from its standard
 output and standard error go to the dispatcher as they arrive; before a line of output is handed on,
 the result file is read up to its end, so the records that the test wrote before that output precede
-it. The test is terminated at its timeout and killed after the grace period. Once its process has
-exited, the processes that it started get a moment to release its output pipes and are then ended.
+it. The test is terminated at its timeout and killed after the grace period; the file is checked
+against the clock after every bounded read, so a test that writes quickly cannot hold off its
+timeout. Once its process has exited, the processes that it started get a moment to release its
+output pipes, after which its group is ended. The result is {lean}`false` when the run has been
+cancelled and the test was not started.
 -/
-def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) : IO Unit := do
+def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) : IO Bool := do
   let exe := ctx.config.executables[t.exeIdx]!
   let (seed, settings) := ctx.settingsFor exe t
   let planned : Planned := {
@@ -402,22 +480,28 @@ def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) : IO Unit := do
     reproduce := ctx.reproduce exe t.name settings
   }
   let d := ctx.dispatcher
-  d.dispatch (.testStarted planned)
   let file := ctx.dir / s!"run-{n}.jsonl"
   IO.FS.writeFile file ""
   let start ← IO.monoMsNow
   let ended (exit : Exit) : IO Unit := do
     d.dispatch (.testEnded exe.name t.name exit ((← IO.monoMsNow) - start))
-  let some cmd := exe.command[0]?
-    | ended (.spawnFailed "the command is empty")
-  let g ←
+  let spawned ←
     try
-      spawnGroup cmd (exe.command.extract 1 exe.command.size ++ runArgs file.toString t.name settings)
-        exe.cwd? (ctx.env exe)
-    catch e =>
-      ended (.spawnFailed (toString e))
-      return
-  ctx.running.modify (·.push g)
+      let some cmd := exe.command[0]? | throw <| .userError "the command is empty"
+      let g? ← ctx.registry.start <|
+        spawnGroup cmd (exe.command.extract 1 exe.command.size ++ runArgs file.toString t.name settings)
+          exe.cwd? (ctx.env exe)
+      pure (Except.ok g?)
+    catch e => pure (.error (toString e))
+  let g ← match spawned with
+    | .ok none => return false
+    | .ok (some g) =>
+      d.dispatch (.testStarted planned)
+      pure g
+    | .error e =>
+      d.dispatch (.testStarted planned)
+      ended (.spawnFailed e)
+      return true
   let tail ← Tail.open file
   let onFileLine (bytes : ByteArray) : IO Unit := do
     let line := decodeLine bytes
@@ -427,35 +511,40 @@ def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) : IO Unit := do
     | .ok none => pure ()
     | .error e => d.dispatch (.unreadable exe.name t.name e)
   let fileLock ← Std.Mutex.new ()
-  let pollFile : IO Unit := fileLock.atomically (discard <| tail.poll onFileLine)
+  let pollFile : IO Bool := fileLock.atomically (tail.poll onFileLine)
   let forward (stream : String) (line : String) : IO Unit :=
     fileLock.atomically do
-      discard <| tail.poll onFileLine
+      -- The file is read to its end, a bounded read at a time, so that the records written before
+      -- this line precede it. Reading stops at the test's timeout, which the run loop enforces.
+      repeat
+        if (← IO.monoMsNow) ≥ start + ctx.opts.timeoutMs then break
+        unless ← tail.poll onFileLine do break
       d.dispatch (.captured exe.name t.name stream line (← Protocol.nowMs))
   let outTask ← IO.asTask (prio := .dedicated) (forwardLines g.child.stdout (forward "stdout"))
   let errTask ← IO.asTask (prio := .dedicated) (forwardLines g.child.stderr (forward "stderr"))
   let mut timedOut : Option (Nat × Bool) := none
   repeat
-    pollFile
+    let read ← pollFile
     if (← g.tryWait).isSome then break
     let elapsed := (← IO.monoMsNow) - start
     if elapsed ≥ ctx.opts.timeoutMs then
       let killed ← g.terminateGraceKill ctx.opts.gracePeriodMs
       timedOut := some (elapsed, killed)
       break
-    IO.sleep pollMs
+    unless read do IO.sleep pollMs
   let code ← g.wait
-  fileLock.atomically (tail.finish onFileLine)
-  -- Processes that the test started can hold its output pipes open after it has exited. They get a
-  -- grace period, then are ended, and what they wrote is still read.
-  discard <| waitAtMost pipeGraceMs [outTask, errTask]
-  g.sweep pipeGraceMs
-  discard <| waitAtMost pipeGraceMs [outTask, errTask]
-  ctx.running.modify (·.filter (·.pid != g.pid))
+  -- What a test that timed out wrote is read for at most the grace period more.
+  let deadline? ← if timedOut.isSome then
+      pure (some ((← IO.monoMsNow) + ctx.opts.gracePeriodMs))
+    else pure none
+  fileLock.atomically (tail.finish onFileLine deadline?)
+  releasePipes g [outTask, errTask]
+  ctx.registry.release g
   let exit := match timedOut with
     | some (ms, killed) => Exit.timedOut ms killed
     | none => .exited code
   ended exit
+  return true
 
 /-- Prints the inventory, for {lit}`--list`. -/
 def printInventory (ctx : RunContext) (tests : Array InventoryTest) : IO Unit := do
@@ -479,7 +568,7 @@ to the sinks; the report files are the caller's to write. The {lit}`protocol` li
 file is sent first.
 -/
 def execute (config : Config) (opts : Options) (sinks : Sinks)
-    (running : Option (IO.Ref (Array Group)) := none) : IO RunReport := do
+    (registry : Option Registry := none) : IO RunReport := do
   let runSeed ← match opts.seed with
     | some s => pure s
     | none => IO.rand 0 (2 ^ 32 - 1)
@@ -487,11 +576,11 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
     { state := ← Std.Mutex.new { human := { verbosity := opts.verbosity }, wfail := opts.wfail }
       sinks }
   sinks.event (Json.mkObj [("type", Json.str "protocol"), ("version", ToJson.toJson Protocol.version)])
-  let running ← match running with
+  let registry ← match registry with
     | some r => pure r
-    | none => IO.mkRef #[]
+    | none => Registry.new
   IO.FS.withTempDir fun dir => do
-    let ctx : RunContext := { config, opts, runSeed, dir, dispatcher, running }
+    let ctx : RunContext := { config, opts, runSeed, dir, dispatcher, registry }
     let d := dispatcher
     for w in config.warnings do
       d.dispatch (.issue { isError := false, message := w })
@@ -517,7 +606,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
       else
         d.dispatch (.phase "Run" (← Protocol.nowMs))
         for h : i in [0 : inventory.size] do
-          runOne ctx i inventory[i]
+          unless ← runOne ctx i inventory[i] do break
     d.dispatch (.ended (← Protocol.nowMs))
     let s ← d.get
     return { results := s.results, issues := s.issues, seed := runSeed }
@@ -536,10 +625,13 @@ events in the file that the options name, then writes the report files and print
 The result is the exit code: {lit}`0` when every test passed and no issue is an error.
 -/
 def executeAndWrite (config : Config) (opts : Options)
-    (running : Option (IO.Ref (Array Group)) := none) : IO UInt32 := do
+    (registry : Option Registry := none) : IO UInt32 := do
+  let registry ← match registry with
+    | some r => pure r
+    | none => Registry.new
   let events? ← opts.eventsPath.mapM fun p => do
     if let some parent := (p : System.FilePath).parent then IO.FS.createDirAll parent
-    IO.FS.Handle.mk p .write
+    IO.FS.Handle.mk p .append
   let sinks : Sinks := {
     event := fun j => do
       if let some h := events? then
@@ -549,31 +641,37 @@ def executeAndWrite (config : Config) (opts : Options)
       IO.println l
       (← IO.getStdout).flush
   }
-  let report ← execute config opts sinks running
+  let report ← execute config opts sinks registry
+  -- A cancelled run writes no reports.
+  if ← registry.cancelled then return 1
   writeReports opts report
   for issue in report.issues do
     IO.eprintln s!"{issue.level}: {issue.message}"
   return if report.succeeded then 0 else 1
 
 /--
-Ends the run once the runner's standard input reaches its end: the processes that are running are
-terminated, killed after a moment, and the runner exits. The driver holds the other end of that pipe,
-which closes when the driver exits, however it exits.
+Cancels the run once the runner's standard input reaches its end: no test starts from then on, the
+running processes are terminated and, after the grace period, killed, and the run ends without
+writing reports. The driver holds the other end of that pipe, which closes when the driver exits,
+however it exits. When the run has not ended some time after that, the runner exits anyway.
 -/
-def exitWhenStdinCloses (parentIn : IO.FS.Stream) (running : IO.Ref (Array Group)) : IO Unit := do
+def exitWhenStdinCloses (parentIn : IO.FS.Stream) (registry : Registry) (graceMs : Nat) :
+    IO Unit := do
   repeat
     if (← parentIn.getLine).isEmpty then break
-  let groups ← running.get
-  for g in groups do g.terminate
-  for g in groups do
-    unless ← g.waitAtMost 1000 do g.kill
   try IO.eprintln "errata-runner: standard input closed, so the run ends" catch _ => pure ()
+  registry.cancel graceMs
+  -- The run loop reaps the processes and ends what they left holding their pipes; this bounds how
+  -- long that may take.
+  IO.sleep (graceMs + 4 * pipeGraceMs + 2000).toUInt32
   try (← IO.getStdout).flush catch _ => pure ()
   IO.Process.forceExit 1
 
 /--
 The runner's entry point: {lit}`errata-runner <config.json> [options] [-- test options]`. The
-configuration's {lit}`invocation`, when it has one, names the command in the usage message.
+configuration's {lit}`invocation`, when it has one, names the command in the usage message. When
+{lit}`ERRATA_LIFELINE` is {lit}`1` in its environment, the runner watches its standard input and
+cancels the run when it closes.
 -/
 def main (args : List String) : IO UInt32 := do
   let invocation ← do
@@ -596,9 +694,12 @@ def main (args : List String) : IO UInt32 := do
       catch e =>
         IO.eprintln s!"error: {e}"
         return 1
-    let running ← IO.mkRef #[]
-    let _ ← IO.asTask (prio := .dedicated) (exitWhenStdinCloses (← IO.getStdin) running)
-    let code ← executeAndWrite config opts (some running)
+    let registry ← Registry.new
+    -- The driver sets the variable when it gives the runner a standard input to watch.
+    if (← IO.getEnv lifelineVariable) == some "1" then
+      let _ ← IO.asTask (prio := .dedicated)
+        (exitWhenStdinCloses (← IO.getStdin) registry opts.gracePeriodMs)
+    let code ← executeAndWrite config opts (some registry)
     try (← IO.getStdout).flush catch _ => pure ()
     try (← IO.getStderr).flush catch _ => pure ()
     -- The thread that reads standard input runs until the pipe closes, and a Lean program that

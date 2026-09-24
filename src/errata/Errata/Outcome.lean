@@ -127,7 +127,7 @@ def Inconclusive.describe : Inconclusive → String
   | .spawnFailed m => s!"the test executable could not be started: {m}"
   | .timedOut ms killed =>
     s!"timed out after {ms}ms and was {if killed then "killed" else "terminated"}"
-  | .signaled s => s!"the test executable was ended by signal {s}"
+  | .signaled s => s!"the test executable was ended by signal {s} (exit code {128 + s})"
   | .exitedWithoutVerdict c => s!"the test executable exited with code {c} without a verdict"
   | .verdictMismatch c v =>
     s!"the test executable exited with code {c} after reporting the verdict {v.statusName}"

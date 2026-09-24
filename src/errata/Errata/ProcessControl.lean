@@ -45,17 +45,22 @@ structure Group where
   exitCode : IO.Ref (Option UInt32)
 
 /--
-Whether a command can be started from the directory {name}`cwd`: a command with a directory in it
-names a file relative to that directory, and any other command is looked for on the {lit}`PATH`.
+Whether a command can be found from the directory {name}`cwd`: a command with a directory in it
+names a file relative to that directory, and any other command is looked for on {name}`path?`, or on
+this process's {lit}`PATH` when that is {lean}`none`. Whether the file may be executed is not checked.
 -/
-def commandExists (cmd : String) (cwd : Option System.FilePath := none) : IO Bool := do
+def commandExists (cmd : String) (cwd : Option System.FilePath := none)
+    (path? : Option String := none) : IO Bool := do
   let isFile (p : System.FilePath) : IO Bool := do
     try return (← p.metadata).type != .dir catch _ => return false
   if cmd.contains '/' || (System.Platform.isWindows && cmd.contains '\\') then
     let path : System.FilePath := cmd
     isFile (if path.isAbsolute then path else (cwd.getD ".") / path)
   else
-    let dirs := ((← IO.getEnv "PATH").getD "").splitOn System.SearchPath.separator.toString
+    let searchPath ← match path? with
+      | some p => pure p
+      | none => pure ((← IO.getEnv "PATH").getD "")
+    let dirs := searchPath.splitOn System.SearchPath.separator.toString
     for dir in dirs do
       unless dir.isEmpty do
         if ← isFile (dir / cmd) then return true
@@ -65,14 +70,16 @@ def commandExists (cmd : String) (cwd : Option System.FilePath := none) : IO Boo
 
 /--
 Starts a process in a group of its own. The command and the working directory are checked first,
-and a missing one is an error here.
+and a missing one is an error here. A command without a directory is looked for on the
+{lit}`PATH` that {name}`env` sets, when it sets one.
 -/
 def spawnGroup (cmd : String) (args : Array String) (cwd : Option System.FilePath := none)
     (env : Array (String × Option String) := #[]) : IO Group := do
   if let some dir := cwd then
     unless ← dir.isDir do
       throw <| .userError s!"the working directory {dir} does not exist"
-  unless ← commandExists cmd cwd do
+  let path? := (env.findRev? (·.1 == "PATH")).map (·.2.getD "")
+  unless ← commandExists cmd cwd path? do
     throw <| .userError s!"the command {cmd} was not found"
   let child ← IO.Process.spawn {
     cmd, args, cwd, env, setsid := true
@@ -153,14 +160,14 @@ def Group.terminateGraceKill (g : Group) (graceMs : Nat) : IO Bool := do
   return true
 
 /--
-Ends what is left of the group once its first process has exited: the processes that it started and
-that are still running. They are asked to terminate, given {name}`graceMs` milliseconds, and then
-killed.
-
-The group's identifier stays reserved while the group has members, so it names these processes even
-though the first one has been waited for.
+Asks the group to terminate once its first process has been waited for, gives it {name}`graceMs`
+milliseconds, and then kills it. It is meant for a group whose members still hold the first
+process's output pipes open, which shows that the group still has members. On Windows it does
+nothing, since there a process's identifier can name an unrelated process once it has been waited
+for.
 -/
 partial def Group.sweep (g : Group) (graceMs : Nat) : IO Unit := do
+  if System.Platform.isWindows then return
   unless ← signalGroup "TERM" g.pid do return
   let deadline := (← IO.monoMsNow) + graceMs
   let rec loop : IO Unit := do
@@ -220,19 +227,32 @@ structure Tail where
 def Tail.open (path : System.FilePath) : IO Tail := do
   return { handle := ← IO.FS.Handle.mk path .read, buffer := ← IO.mkRef {} }
 
-/-- Reads what has arrived and hands on each complete line. Returns whether anything arrived. -/
-partial def Tail.poll (t : Tail) (onLine : ByteArray → IO Unit) : IO Bool := do
-  let bytes ← t.handle.read 65536
-  if bytes.isEmpty then return false
-  let (lines, buf) := (← t.buffer.get).push bytes
-  t.buffer.set buf
-  for l in lines do onLine l
-  discard <| t.poll onLine
-  return true
+/--
+Reads what has arrived, in at most {name}`maxReads` reads, and hands on each complete line. Returns
+whether anything arrived. A caller that must also watch the clock calls it again while it returns
+{lean}`true`.
+-/
+def Tail.poll (t : Tail) (onLine : ByteArray → IO Unit) (maxReads : Nat := 16) : IO Bool := do
+  let mut any := false
+  for _ in [0 : maxReads] do
+    let bytes ← t.handle.read 65536
+    if bytes.isEmpty then break
+    any := true
+    let (lines, buf) := (← t.buffer.get).push bytes
+    t.buffer.set buf
+    for l in lines do onLine l
+  return any
 
-/-- Reads the rest of the file and hands on its last line, which may lack a newline. -/
-def Tail.finish (t : Tail) (onLine : ByteArray → IO Unit) : IO Unit := do
-  discard <| t.poll onLine
+/--
+Reads the rest of the file and hands on its last line, which may lack a newline. With a deadline, in
+milliseconds of {name}`IO.monoMsNow`, reading stops there and the rest of the file is left unread.
+-/
+def Tail.finish (t : Tail) (onLine : ByteArray → IO Unit) (deadline? : Option Nat := none) :
+    IO Unit := do
+  repeat
+    if let some d := deadline? then
+      if (← IO.monoMsNow) ≥ d then return
+    unless ← t.poll onLine do break
   let rest := (← t.buffer.get).pending
   t.buffer.set {}
   unless rest.isEmpty do onLine rest
@@ -241,12 +261,12 @@ def Tail.finish (t : Tail) (onLine : ByteArray → IO Unit) : IO Unit := do
 Follows the file until {name}`exited` says that its writer has exited, then reads what is left.
 The file is checked again every {name}`pollMs` milliseconds when nothing new has arrived.
 -/
-partial def Tail.follow (t : Tail) (exited : IO Bool) (onLine : ByteArray → IO Unit) : IO Unit := do
-  if ← t.poll onLine then t.follow exited onLine
-  else if ← exited then t.finish onLine
-  else
+def Tail.follow (t : Tail) (exited : IO Bool) (onLine : ByteArray → IO Unit) : IO Unit := do
+  repeat
+    if ← t.poll onLine then continue
+    if ← exited then break
     IO.sleep pollMs
-    t.follow exited onLine
+  t.finish onLine
 
 /-- Hands on each line read from {name}`handle` until it closes, keeping each line's newline. -/
 partial def forwardLines (handle : IO.FS.Handle) (onLine : String → IO Unit) : IO Unit := do

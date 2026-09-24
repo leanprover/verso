@@ -278,13 +278,14 @@ private def mainSource (pkg : String) (mods : Array Lean.Name) : String :=
       args\n"
 
 /-- The configuration that the driver writes for the runner, as JSON. -/
-private def configJson (executables : Array (String × System.FilePath)) (errataDir : String)
-    (warnings : Array String) (invocation : String) : Lean.Json :=
+private def configJson (executables : Array (String × System.FilePath)) (cwd : System.FilePath)
+    (errataDir : String) (warnings : Array String) (invocation : String) : Lean.Json :=
   Lean.Json.mkObj [
     ("protocol", Lean.toJson (1 : Nat)),
     ("executables", Lean.Json.arr <| executables.map fun (name, path) =>
       Lean.Json.mkObj [("name", Lean.Json.str name),
-        ("command", Lean.Json.arr #[Lean.Json.str path.toString])]),
+        ("command", Lean.Json.arr #[Lean.Json.str path.toString]),
+        ("cwd", Lean.Json.str cwd.toString)]),
     ("errataDir", Lean.Json.str errataDir),
     ("warnings", Lean.toJson warnings),
     ("invocation", Lean.Json.str invocation)
@@ -461,6 +462,7 @@ script run (args) do
   -- Build the test executables and the runner, then the runner's configuration, which Lake rebuilds
   -- when the discovery results or the executables change.
   let errataDir ← IO.FS.realPath self.dir
+  let rootDir ← IO.FS.realPath ws.root.dir
   let configFile := ws.root.dir / defaultLakeDir / "errata" / "config.json"
   let some runnerExe := self.findLeanExe? `«errata-runner»
     | IO.eprintln "error: the package that defines the Errata driver has no errata-runner"
@@ -473,21 +475,22 @@ script run (args) do
         let mut executables := #[]
         for ((lib, _), path) in testLibs.zip exePaths do
           executables := executables.push (exeName lib, ← IO.FS.realPath path)
-        let content := (configJson executables errataDir.toString driverWarnings
+        -- Tests run from the root package's directory, where `lake test` runs.
+        let content := (configJson executables rootDir errataDir.toString driverWarnings
           s!"{withArgs} --test-options").pretty ++ "\n"
         addPureTrace content "Errata runner configuration"
         buildFileUnlessUpToDate' (text := true) configFile do
           if let some parent := configFile.parent then IO.FS.createDirAll parent
           IO.FS.writeFile configFile content
         return (configFile, runnerPath)
-  -- The runner gets a standard input that the driver holds and never writes to, and it ends its
-  -- tests when that pipe closes. `LEAN_ABORT_ON_PANIC` is removed from its environment rather than
+  -- The runner gets a standard input that the driver holds and never writes to, and
+  -- `ERRATA_LIFELINE` asks it to end its tests when that pipe closes. `LEAN_ABORT_ON_PANIC` is removed from its environment rather than
   -- inherited, because some CI systems set it; the runner sets it for the tests under
   -- `--exit-on-panic`.
   let child ← IO.Process.spawn {
     cmd := runnerPath.toString, args := #[configPath.toString] ++ runnerArgs.toArray
     stdin := .piped
-    env := #[("LEAN_ABORT_ON_PANIC", none)]
+    env := #[("LEAN_ABORT_ON_PANIC", none), ("ERRATA_LIFELINE", some "1")]
   }
   child.wait
 

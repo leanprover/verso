@@ -967,7 +967,8 @@ def reportShowsTestOutputAboveFailedNamedResult : Test := do
     "    SomeFile.lean:42:23\n    output:\n    setup\n"
   assertContains own out.stdout
   -- The named result follows the test's own result.
-  assertContains "\n  FAIL  check: " ((out.stdout.splitOn own)[1]?.getD "")
+  assertTrue (((out.stdout.splitOn own)[1]?.getD "").startsWith "  FAIL  check: ")
+    "the named result's line follows the test's output"
   assertContains "0 passed, 2 failed, 0 errors, 0 inconclusive" out.stdout
   assertBEq 2 (← failures.get)
 
@@ -1062,6 +1063,10 @@ def runnerArgParsing : Test := do
     assertBEq (some 1) ((parse ["--jobs", "1"]).toOption.map (·.jobs))
   result "more jobs rejected" do
     assertTrue ((parse ["--jobs", "2"]) matches .error _)
+  result "no jobs rejected" do
+    assertTrue ((parse ["--jobs", "0"]) matches .error _)
+  result "zero timeout rejected" do
+    assertTrue ((parse ["--timeout", "0s"]) matches .error _)
   result "test options after --" do
     let opts := (parse ["--", "--golden", "on", "--flag=v=1", "--golden", "two"]).toOption
     assertBEq (some #[("golden", "on"), ("flag", "v=1"), ("golden", "two")])

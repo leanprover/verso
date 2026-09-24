@@ -282,6 +282,7 @@ def reproductionLine : Test := do
   let some cmd := res.reproduce? | fail "no reproduction line"
   assertContains "basic.sh errata-run /dev/stderr fail setting:seed=" cmd
   assertContains "'setting:note=it'\\''s'" cmd
+  assertNotContains "  " cmd
   result "a pass has none" do
     assertTrue ((r.result? "pass").bind (·.reproduce?)).isNone
 
@@ -327,5 +328,141 @@ def seedsAreDerived : Test := do
   let some outcome := r.events.find? (isEvent "outcome") | fail "no outcome"
   assertBEq (some (toString (testSeed 7 "basic" "pass"))) (strField outcome "seed")
   assertBEq 7 r.report.seed
+
+/--
+A test that writes records faster than the runner reads them is still stopped at its timeout, and
+what it wrote after that is read for at most the grace period.
+-/
+@[test]
+def fastWriterTimesOut : Test := do
+  let start ← IO.monoMsNow
+  let r ← runWith #[basic ["flood"]] { timeoutMs := 1000, gracePeriodMs := 1000 }
+  let wall := (← IO.monoMsNow) - start
+  match r.outcome? "flood" with
+  | some (.inconclusive (.timedOut ms _)) =>
+    assertTrue (ms < 1000 + 1000 + 2000) s!"stopped only after {ms}ms"
+  | o => fail s!"expected a timeout, got {repr o}"
+  assertTrue (wall < 10000) s!"the run took {wall}ms"
+
+/-- A second verdict record makes the result file unreadable, whatever the first one said. -/
+@[test]
+def twoVerdictsUnreadable : Test := do
+  let r ← runWith #[basic ["twice"]]
+  match r.outcome? "twice" with
+  | some (.inconclusive (.resultStreamUnreadable m)) => assertContains "two verdict records" m
+  | o => fail s!"expected resultStreamUnreadable, got {repr o}"
+
+/-- A test executable that takes longer than the timeout to list its tests stops the run. -/
+@[test]
+def listingTimesOut : Test := do
+  let exe : ExecutableConfig :=
+    { name := "slow", command := #["bash", (harnessDir / "slow-list.sh").toString] }
+  let start ← IO.monoMsNow
+  let r ← runWith #[exe] { timeoutMs := 500, gracePeriodMs := 300 }
+  assertTrue ((← IO.monoMsNow) - start < 5000) "the listing was stopped"
+  let some issue := r.report.issues.find? (·.isError) | fail "no error"
+  assertContains "slow" issue.message
+  assertContains "did not finish within 500ms" issue.message
+  assertContains "listing slowly" issue.message
+
+/--
+A test executable that exits after listing, leaving a process in a session of its own that holds
+its output pipes, does not hold up the run.
+-/
+@[test]
+def listingPipesHeld : Test := do
+  let marker := toString (← IO.rand 0 (2 ^ 30))
+  let exe : ExecutableConfig :=
+    { name := "escaping", command := #["bash", (harnessDir / "escaping-list.sh").toString]
+      env := #[("MARKER", marker)] }
+  let start ← IO.monoMsNow
+  let r ← try runWith #[exe] { timeoutMs := 10000 }
+    finally
+      discard <| IO.Process.output { cmd := "pkill", args := #["-f", s!"errata-conformance-{marker}"] }
+  assertTrue ((← IO.monoMsNow) - start < 5000) "the listing held up the run"
+  expectOutcome r "listed" (· matches .reported .pass) "a pass"
+
+/-- A test executable whose command does not exist stops the run, which names it. -/
+@[test]
+def missingCommand : Test := do
+  let r ← runWith #[{ name := "absent", command := #["./no-such-test-executable"] }]
+  let some issue := r.report.issues.find? (·.isError) | fail "no error"
+  assertContains "absent could not list its tests: it could not be started" issue.message
+
+/-- The runner built for this workspace. -/
+def runnerExe : System.FilePath := ".lake/build/bin/errata-runner"
+
+/-- Whether any process's command line contains {name}`text`. -/
+def processesWith (text : String) : IO String := do
+  return (← IO.Process.output { cmd := "pgrep", args := #["-f", text] }).stdout.trimAscii.copy
+
+/--
+When the standard input of the built runner closes, it stops the test that is running, including a
+process that the test started that ignores the request to terminate, and exits non-zero without
+writing reports.
+-/
+@[test]
+def runnerLifeline : Test := do
+  unless ← runnerExe.pathExists do fail s!"the runner is not built at {runnerExe}"
+  let marker := toString (← IO.rand 0 (2 ^ 30))
+  let script ← IO.FS.realPath (harnessDir / "basic.sh")
+  IO.FS.withTempDir fun dir => do
+    let config := dir / "config.json"
+    let json := dir / "report.json"
+    let exe : ExecutableConfig :=
+      { name := "basic", command := #["bash", script.toString], env := #[("BASIC_TESTS", "lingers pass")] }
+    IO.FS.writeFile config (Lean.toJson ({ executables := #[exe] } : Config)).compress
+    let child ← IO.Process.spawn {
+      cmd := runnerExe.toString
+      args := #[config.toString, "--json", json.toString, "--grace-period", "500ms", "--",
+        "--marker", marker]
+      stdin := .piped, stdout := .piped, stderr := .piped
+      env := #[("ERRATA_LIFELINE", some "1")]
+    }
+    let outTask ← IO.asTask (prio := .dedicated) child.stdout.readToEnd
+    let errTask ← IO.asTask (prio := .dedicated) child.stderr.readToEnd
+    let mut started := false
+    for _ in [0 : 200] do
+      if !(← processesWith s!"errata-conformance-{marker}").isEmpty then
+        started := true
+        break
+      IO.sleep 50
+    -- The standard input closes when its handle is dropped here.
+    let (_, child) ← child.takeStdin
+    let mut code? : Option UInt32 := none
+    for _ in [0 : 300] do
+      code? ← child.tryWait
+      if code?.isSome then break
+      IO.sleep 50
+    let left ← processesWith s!"errata-conformance-{marker}"
+    unless left.isEmpty do
+      discard <| IO.Process.output { cmd := "pkill", args := #["-9", "-f", s!"errata-conformance-{marker}"] }
+    if code?.isNone then child.kill
+    discard <| IO.wait outTask
+    let err := (← IO.wait errTask).toOption.getD ""
+    assertTrue started "the test started its background process"
+    let some code := code? | fail "the runner did not exit"
+    assertTrue (code != 0) "the runner exited non-zero"
+    assertContains "standard input closed" err
+    assertTrue left.isEmpty s!"processes survived: {left}"
+    assertTrue (!(← json.pathExists)) "no report was written"
+
+/--
+The Lean harness leaves its standard input alone unless the runner asks it to watch it, so a test
+executable run by hand with {lit}`/dev/null` as its standard input runs the test.
+-/
+@[test]
+def harnessRunsWithoutLifeline : Test := do
+  let exe : System.FilePath := ".lake/build/bin/errata-test-ErrataTests"
+  unless ← exe.pathExists do fail s!"the test executable is not built at {exe}"
+  IO.FS.withTempDir fun dir => do
+    let out := dir / "out.jsonl"
+    IO.FS.writeFile out ""
+    let r ← IO.Process.output {
+      cmd := exe.toString, args := #["errata-run", out.toString, "onePlusOne"]
+      stdin := .null, env := #[("ERRATA_LIFELINE", none)]
+    }
+    assertExitCode 0 r
+    assertContains "\"status\":\"pass\"" (← IO.FS.readFile out)
 
 end ErrataTests.Conformance
