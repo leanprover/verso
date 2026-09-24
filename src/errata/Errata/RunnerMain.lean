@@ -5,13 +5,14 @@ Author: David Thrane Christiansen
 -/
 
 /-
-The runner: it lists the tests of every test executable in its configuration, runs each test in a
-process of its own under a timeout, merges what the test executable reported with what it observed
-from outside, and writes the reports.
+The runner: it lists the tests of every test executable in its configuration, selects the tests that
+the filters name, resolves what each receives, runs each in a process of its own under a timeout,
+merges what the test executable reported with what it observed from outside, and writes the reports.
 -/
 module
 
 public import Errata.RunnerConfig
+public import Errata.Resolution
 public import Errata.Dispatcher
 public import Errata.ProcessControl
 public import Cli
@@ -51,59 +52,40 @@ structure Options where
   wfail : Bool := false
   /-- How many tests may run at once. -/
   jobs : Nat := 1
-  /-- Lists the tests without running them. -/
+  /-- Lists the settings and the tests that would run, without running them. -/
   list : Bool := false
-  /-- How long a test may run before it is terminated, in milliseconds. -/
-  timeoutMs : Nat := 10 * 60 * 1000
-  /-- How long a terminated test has before it is killed, in milliseconds. -/
-  gracePeriodMs : Nat := 10 * 1000
-  /-- Options for the tests themselves, passed to every test as settings, in order. -/
-  testOptions : Array (String × String) := #[]
+  /-- How long a test may run before it is terminated, in milliseconds, over the configuration's. -/
+  timeoutMs? : Option Nat := none
+  /-- How long a terminated test has before it is killed, in milliseconds, over the configuration's. -/
+  gracePeriodMs? : Option Nat := none
+  /-- Values of settings, in order, from {lit}`--set NAME=VALUE`. -/
+  sets : Array (String × String) := #[]
+  /-- The profile of the configuration to run with. -/
+  profile : String := "default"
+  /-- The filters from {lit}`--filter`, joined by union. -/
+  filters : Array String := #[]
+  /--
+  The filters of the {lit}`list` subcommand, when the runner was invoked with it: the runner lists
+  the tests that they select and runs nothing.
+  -/
+  listFilters? : Option (Array String) := none
 deriving Repr, Inhabited
 
 /--
-Parses a duration: a natural number followed by {lit}`ms`, {lit}`s`, or {lit}`m`. The result is in
-milliseconds.
+Parses a duration: a natural number followed by {lit}`ms`, {lit}`s`, {lit}`m`, or {lit}`h`. The
+result is in milliseconds.
 -/
 def parseDuration (s : String) : Except String Nat :=
   let s := s.trimAscii.copy
   let num (digits : String) (scale : Nat) : Except String Nat :=
     match digits.toNat? with
     | some n => .ok (n * scale)
-    | none => .error s!"invalid duration '{s}': expected a number followed by ms, s, or m"
+    | none => .error s!"invalid duration '{s}': expected a number followed by ms, s, m, or h"
   if let some d := s.dropSuffix? "ms" then num d.copy 1
   else if let some d := s.dropSuffix? "s" then num d.copy 1000
   else if let some d := s.dropSuffix? "m" then num d.copy 60000
-  else .error s!"invalid duration '{s}': expected a number followed by ms, s, or m"
-
-/--
-Parses the options passed through to the tests: {lit}`--name value` and {lit}`--name=value` pairs,
-in order. The {lit}`--name value` form takes the next token as the value when that token does not
-begin with {lit}`-`; a value that does uses the {lit}`--name=value` form. A name alone has the empty
-value. Any other token is rejected.
--/
-partial def parseTestOptions (tokens : List String) : Except String (Array (String × String)) :=
-  go #[] tokens
-where
-  go (acc : Array (String × String)) : List String → Except String (Array (String × String))
-    | [] => .ok acc
-    | tok :: rest =>
-      match tok.dropPrefix? "--" with
-      | none =>
-        .error s!"unexpected argument '{tok}': test options are `--name value` or `--name=value`"
-      | some name =>
-        match name.copy.splitOn "=" with
-        | [] => unreachable! -- `splitOn` always returns at least one element
-        | [n] =>
-          if n.isEmpty then .error s!"unexpected argument: {tok}"
-          else match rest with
-            | value :: rest' =>
-              if value.startsWith "-" then go (acc.push (n, "")) rest
-              else go (acc.push (n, value)) rest'
-            | [] => .ok (acc.push (n, ""))
-        | n :: valueParts =>
-          if n.isEmpty then .error s!"unexpected argument: {tok}"
-          else go (acc.push (n, "=".intercalate valueParts)) rest
+  else if let some d := s.dropSuffix? "h" then num d.copy 3600000
+  else .error s!"invalid duration '{s}': expected a number followed by ms, s, m, or h"
 
 open Cli in
 /--
@@ -130,18 +112,21 @@ where cmd := `[Cli|
       events : String;         "Write the run's events to the given path as JSON lines."
       wfail;                   "Fail the run if warnings are logged."
       jobs : Nat;              "How many tests may run at once (1)."
-      list;                    "List the tests without running them."
+      list;                    "List the settings and the tests that would run, and run nothing."
       timeout : String;        "How long a test may run before it is stopped, such as 90s or 10m (10m)."
       "grace-period" : String; "How long a stopped test has before it is killed (10s)."
+      set : String;            "Give a setting a value, as NAME=VALUE. Repeatable."
+      profile : String;        "The profile of the configuration file to run with (default)."
+      filter : String;         "Run only the tests the filter selects. Repeatable; the filters are joined by union."
 
     ARGS:
       config : String;         "The configuration file that the driver writes."
-      ...testOption : String;  "Options for the tests themselves; see below."
+      ...argument : String;    "The `list` subcommand and its filters; see below."
 
     EXTENSIONS:
-      longDescription "Options for the tests themselves go after a `--` separator, as \
-        `--name value` or `--name=value`. Write a value that begins with `-` as `--name=value`. \
-        Each test receives them as settings."
+      longDescription "With `list FILTER...` after the configuration file, the runner lists the \
+        tests that the filters select, one per line, and runs nothing. No filter selects every \
+        test, and the profile's default filter plays no part."
   ]
 
 /-- The value of a path-valued flag, when it is present; a present but empty path is an error. -/
@@ -150,11 +135,41 @@ private def pathFlag (p : Cli.Parsed) (name : String) : Except String (Option St
   | none => .ok none
   | some f => if f.value.isEmpty then .error s!"--{name} expects a path" else .ok (some f.value)
 
-/-- The settings that the runner passes to the Lean harness for its own options. -/
-private def reservedTestOptions : List String := ["seed", "updateGolden"]
+/--
+Takes the repeatable options {lit}`--set` and {lit}`--filter` out of the arguments, in either the
+{lit}`--name value` or the {lit}`--name=value` form, and returns their values with the other
+arguments. Arguments after a {lit}`--` stay where they are.
+-/
+partial def takeRepeatable (args : List String) :
+    Except String (Array String × Array String × List String) :=
+  go #[] #[] #[] args
+where
+  go (sets filters : Array String) (rest : Array String) :
+      List String → Except String (Array String × Array String × List String)
+    | [] => .ok (sets, filters, rest.toList)
+    | "--" :: after => .ok (sets, filters, (rest.push "--").toList ++ after)
+    | "--set" :: v :: more => go (sets.push v) filters rest more
+    | ["--set"] => .error "--set expects NAME=VALUE"
+    | "--filter" :: v :: more => go sets (filters.push v) rest more
+    | ["--filter"] => .error "--filter expects a filter"
+    | arg :: more =>
+      if let some v := arg.dropPrefix? "--set=" then go (sets.push v.copy) filters rest more
+      else if let some v := arg.dropPrefix? "--filter=" then go sets (filters.push v.copy) rest more
+      else go sets filters (rest.push arg) more
 
-/-- Interprets a parsed command line as runner settings. -/
-def optionsOfParsed (p : Cli.Parsed) : Except String Options := do
+/-- Splits a {lit}`--set` value at its first {lit}`=`. The value is everything after it, taken verbatim. -/
+def parseSet (s : String) : Except String (String × String) :=
+  match s.splitOn "=" with
+  | name :: value@(_ :: _) =>
+    if name.isEmpty then .error s!"--set {s}: the setting's name is empty"
+    else .ok (name, "=".intercalate value)
+  | _ => .error s!"--set {s}: expected NAME=VALUE"
+
+/--
+Interprets a parsed command line as runner settings, with the values of the repeatable options that
+{name}`takeRepeatable` took out.
+-/
+def optionsOfParsed (p : Cli.Parsed) (sets filters : Array String := #[]) : Except String Options := do
   let verbosity : Verbosity :=
     if p.hasFlag "verbose-docs" then .superVerbose
     else if p.hasFlag "verbose-all" then .verbose
@@ -164,16 +179,15 @@ def optionsOfParsed (p : Cli.Parsed) : Except String Options := do
   if jobs == 0 then throw "--jobs 0 is invalid: at least one test must be able to run"
   unless jobs == 1 do
     throw s!"--jobs {jobs}: only --jobs 1 is supported"
-  let timeoutMs ← match p.flag? "timeout" with
-    | some f => parseDuration f.value
-    | none => pure (10 * 60 * 1000)
-  if timeoutMs == 0 then throw "--timeout must be longer than zero"
-  let gracePeriodMs ← match p.flag? "grace-period" with
-    | some f => parseDuration f.value
-    | none => pure (10 * 1000)
-  let testOptions ← parseTestOptions (p.variableArgsAs! String).toList
-  if let some (name, _) := testOptions.find? (reservedTestOptions.contains ·.1) then
-    throw s!"the test option --{name} is reserved for the runner's own options"
+  let timeoutMs? ← p.flag? "timeout" |>.mapM (parseDuration ·.value)
+  if timeoutMs? == some 0 then throw "--timeout must be longer than zero"
+  let gracePeriodMs? ← p.flag? "grace-period" |>.mapM (parseDuration ·.value)
+  let listFilters? ← match (p.variableArgsAs! String).toList with
+    | [] => pure none
+    | "list" :: filters => pure (some filters.toArray)
+    | arg :: _ =>
+      throw s!"unexpected argument '{arg}': the runner's one subcommand is `list`, and a test's \
+        settings are given with --set NAME=VALUE"
   return {
     configPath := (p.positionalArg? "config").map (·.value) |>.getD "",
     verbosity,
@@ -184,17 +198,21 @@ def optionsOfParsed (p : Cli.Parsed) : Except String Options := do
     markdownPath := ← pathFlag p "markdown",
     eventsPath := ← pathFlag p "events",
     wfail := p.hasFlag "wfail",
-    jobs, list := p.hasFlag "list", timeoutMs, gracePeriodMs, testOptions
+    jobs, list := p.hasFlag "list", timeoutMs?, gracePeriodMs?
+    sets := ← sets.mapM parseSet
+    profile := (p.flag? "profile" |>.map (·.value)).getD "default"
+    filters, listFilters?
   }
 
 /--
-Parses the runner's command line into settings: the configuration file, the declared flags, then
-any options for the tests themselves after a {lit}`--` separator.
+Parses the runner's command line into settings: the configuration file, the declared flags, the
+repeatable {lit}`--set` and {lit}`--filter`, and the {lit}`list` subcommand with its filters.
 -/
-def parseOptions (args : List String) : Except String Options :=
-  match (runnerCmd "" fun _ => pure 0).parse args with
+def parseOptions (args : List String) : Except String Options := do
+  let (sets, filters, rest) ← takeRepeatable args
+  match (runnerCmd "" fun _ => pure 0).parse rest with
   | .error e => .error e.kind.msg
-  | .ok (_, parsed) => optionsOfParsed parsed
+  | .ok (_, parsed) => optionsOfParsed parsed sets filters
 
 /-- Whether a character can appear unquoted in a word for a POSIX shell. -/
 private def shellSafe (c : Char) : Bool :=
@@ -204,29 +222,6 @@ private def shellSafe (c : Char) : Bool :=
 def shellQuote (s : String) : String :=
   if !s.isEmpty && s.all shellSafe then s
   else "'" ++ s.replace "'" "'\\''" ++ "'"
-
-/--
-The seed that a test receives: the run's seed mixed with the executable's and the test's names, so
-that each test draws from its own stream and adding a test changes no other test's seed.
--/
-def testSeed (runSeed : Nat) (exe test : String) : Nat :=
-  (mixHash (mixHash (hash runSeed) (hash exe)) (hash test)).toNat
-
-/-- A test in the inventory. -/
-structure InventoryTest where
-  /-- The position of the test's executable in the configuration. -/
-  exeIdx : Nat
-  /-- The test's name. -/
-  name : String
-  /-- The components of the test's name. -/
-  path : Array String := #[]
-  /-- The file that defines the test. -/
-  file? : Option String := none
-  /-- The line of its declaration. -/
-  line? : Option Nat := none
-  /-- The test's description. -/
-  description? : Option String := none
-deriving Repr, Inhabited
 
 /-- Where a run's reporters send their output. -/
 structure Sinks where
@@ -321,6 +316,10 @@ structure RunContext where
   dispatcher : Dispatcher
   /-- The processes that are running, and whether the run has been cancelled. -/
   registry : Registry
+  /-- How long a test executable may take to list its tests, in milliseconds. -/
+  listTimeoutMs : Nat := defaultTimeoutMs
+  /-- How long a listing that ran past its timeout has before it is killed, in milliseconds. -/
+  listGracePeriodMs : Nat := defaultGracePeriodMs
 
 /--
 The environment variable that asks a process to treat its standard input as its lifeline, and to
@@ -354,8 +353,8 @@ def releasePipes (g : Group) (readers : List (Task (Except IO.Error Unit))) : IO
     discard <| waitAtMost pipeGraceMs readers
 
 /--
-Runs a command in a process group of its own, with the run's timeout and grace period, and returns
-its exit code with what it wrote to standard output and standard error. The exit code is
+Runs a command in a process group of its own, with the listing's timeout and grace period, and
+returns its exit code with what it wrote to standard output and standard error. The exit code is
 {lean}`none` when it timed out. The whole result is {lean}`none` when the run has been cancelled.
 -/
 def runListing (ctx : RunContext) (exe : ExecutableConfig) (args : Array String) :
@@ -370,8 +369,8 @@ def runListing (ctx : RunContext) (exe : ExecutableConfig) (args : Array String)
     (forwardLines g.child.stdout fun l => out.modify (· ++ l))
   let errTask ← IO.asTask (prio := .dedicated)
     (forwardLines g.child.stderr fun l => err.modify (· ++ l))
-  let finished ← g.waitAtMost ctx.opts.timeoutMs
-  unless finished do discard <| g.terminateGraceKill ctx.opts.gracePeriodMs
+  let finished ← g.waitAtMost ctx.listTimeoutMs
+  unless finished do discard <| g.terminateGraceKill ctx.listGracePeriodMs
   let code ← g.wait
   releasePipes g [outTask, errTask]
   ctx.registry.release g
@@ -386,11 +385,11 @@ private def listFailure (exe : ExecutableConfig) (why stdout stderr : String) : 
     command: {" ".intercalate (exe.command.toList.map shellQuote)} errata-list <out>{streams}"
 
 /--
-Asks one test executable for its inventory. The result is its tests, or the message that says why
-it could not list them.
+Asks one test executable for its inventory. The result is its settings and its tests, or the message
+that says why it could not list them.
 -/
 def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
-    IO (Except String (Array InventoryTest)) := do
+    IO (Except String Listing) := do
   let file := ctx.dir / s!"list-{idx}.jsonl"
   IO.FS.writeFile file ""
   let listing ←
@@ -400,7 +399,7 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
     | return .error (listFailure exe "the run was cancelled" "" "")
   let fail (why : String) := Except.error (listFailure exe why stdout stderr)
   let some code := code?
-    | return fail s!"it did not finish within {ctx.opts.timeoutMs}ms"
+    | return fail s!"it did not finish within {ctx.listTimeoutMs}ms"
   unless code == 0 do
     return match signalOfExitCode? code with
       | some s => fail s!"it was ended by signal {s} (exit code {code})"
@@ -409,6 +408,7 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
   let lines := text.splitOn "\n" |>.filter (!·.trimAscii.isEmpty)
   if lines.isEmpty then return fail "it wrote nothing to its list file"
   let mut sawProtocol := false
+  let mut settings : Array SettingInfo := #[]
   let mut tests : Array InventoryTest := #[]
   let mut names : Std.HashSet String := {}
   for line in lines do
@@ -423,6 +423,12 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
           return fail s!"it speaks protocol version {v}, and this runner accepts versions \
             {Protocol.minVersion} to {Protocol.maxVersion}"
         sawProtocol := true
+      | .setting name? description? default? =>
+        unless sawProtocol do return fail "its list file does not begin with a protocol record"
+        let some name := name? | return fail "its list file has a setting without a name"
+        if settings.any (·.name == name) then
+          return fail s!"it declares the setting {name} more than once"
+        settings := settings.push { name, description?, default? }
       | .test info =>
         unless sawProtocol do return fail "its list file does not begin with a protocol record"
         let some name := info.name? | return fail "its list file has a test without a name"
@@ -432,19 +438,13 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
         names := names.insert name
         tests := tests.push {
           exeIdx := idx, name, path := info.path?.getD #[], file? := info.file?,
-          line? := info.line?, description? := info.description?
+          line? := info.line?, description? := info.description?, tags := info.tags?.getD #[]
+          settings := info.settings?.getD #[]
         }
       | _ => unless sawProtocol do
           return fail "its list file does not begin with a protocol record"
   unless sawProtocol do return fail "its list file has no protocol record"
-  return .ok tests
-
-/-- The settings that a test receives: its seed, the runner's own options, and the test options. -/
-def RunContext.settingsFor (ctx : RunContext) (exe : ExecutableConfig) (t : InventoryTest) :
-    Nat × Array (String × String) :=
-  let seed := testSeed ctx.runSeed exe.name t.name
-  let flags := if ctx.opts.updateGolden then #[("updateGolden", "true")] else #[]
-  (seed, #[("seed", toString seed)] ++ flags ++ ctx.opts.testOptions)
+  return .ok { settings, tests }
 
 /-- The arguments of a test executable that runs one test. -/
 def runArgs (out name : String) (settings : Array (String × String)) : Array String :=
@@ -465,22 +465,40 @@ def RunContext.reproduce (ctx : RunContext) (exe : ExecutableConfig) (name : Str
   cd ++ " ".intercalate words.toList
 
 /--
-Runs one test in a process of its own. Records from its result file and lines from its standard
-output and standard error go to the dispatcher as they arrive. Before a line of output is handed on,
-the result file is read up to its end, so the records that the test wrote before that output precede
-it. The test is terminated at its timeout and killed after the grace period. The run loop checks the
-clock after every bounded read of the result file. Once the test executable has exited, the
-processes that it started have the pipe grace to release its output pipes, and then its group is
-swept. The result is {lean}`false` when the run has been cancelled and the test was not started.
+The settings that a test executable receives for a test: the resolved values of the settings the
+test takes, in the order it takes them, and {lit}`updateGolden` when golden checks rewrite their
+expected files.
 -/
-def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) : IO Bool := do
+def Resolved.arguments (r : Resolved) : Array (String × String) :=
+  r.settings ++ (if r.updateGolden then #[("updateGolden", "true")] else #[])
+
+/-- The test as the dispatcher plans it, with what it receives. -/
+def RunContext.planned (ctx : RunContext) (exe : ExecutableConfig) (t : InventoryTest)
+    (r : Resolved) : Planned :=
+  let settings := r.arguments
+  { exe := exe.name, test := t.name, path := t.path, description? := t.description?
+    seed? := (r.settings.find? (·.1 == "seed")).map (·.2), settings
+    reproduce := ctx.reproduce exe t.name settings, slowAfterMs := r.slowAfterMs }
+
+/--
+Runs one test in a process of its own, with the settings and limits resolved for it. Records from its
+result file and lines from its standard output and standard error go to the dispatcher as they
+arrive. Before a line of output is handed on, the result file is read up to its end, so the records
+that the test wrote before that output precede it. The test is terminated at its timeout and killed
+after the grace period. The run loop checks the clock after every bounded read of the result file.
+Once the test executable has exited, the processes that it started have the pipe grace to release
+its output pipes, and then its group is swept. A test whose mandatory setting has no value is
+reported without being started. The result is {lean}`false` when the run has been cancelled and the
+test was not started.
+-/
+def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) (r : Resolved) : IO Bool := do
   let exe := ctx.config.executables[t.exeIdx]!
-  let (seed, settings) := ctx.settingsFor exe t
-  let planned : Planned := {
-    exe := exe.name, test := t.name, path := t.path, description? := t.description?, seed, settings
-    reproduce := ctx.reproduce exe t.name settings
-  }
+  let planned := ctx.planned exe t r
   let d := ctx.dispatcher
+  if let some missing := r.missing[0]? then
+    d.dispatch (.testStarted planned)
+    d.dispatch (.testEnded exe.name t.name (.settingMissing missing) 0)
+    return true
   let file := ctx.dir / s!"run-{n}.jsonl"
   IO.FS.writeFile file ""
   let start ← IO.monoMsNow
@@ -490,7 +508,8 @@ def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) : IO Bool := do
     try
       let some cmd := exe.command[0]? | throw <| .userError "the command is empty"
       let g? ← ctx.registry.start <|
-        spawnGroup cmd (exe.command.extract 1 exe.command.size ++ runArgs file.toString t.name settings)
+        spawnGroup cmd
+          (exe.command.extract 1 exe.command.size ++ runArgs file.toString t.name planned.settings)
           exe.cwd? (ctx.env exe)
       pure (Except.ok g?)
     catch e => pure (.error (toString e))
@@ -518,7 +537,7 @@ def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) : IO Bool := do
       -- The file is read to its end, a bounded read at a time, so that the records written before
       -- this line precede it. Reading stops at the test's timeout, which the run loop enforces.
       repeat
-        if (← IO.monoMsNow) ≥ start + ctx.opts.timeoutMs then break
+        if (← IO.monoMsNow) ≥ start + r.timeoutMs then break
         unless ← tail.poll onFileLine do break
       d.dispatch (.captured exe.name t.name stream line (← Protocol.nowMs))
   let outTask ← IO.asTask (prio := .dedicated) (forwardLines g.child.stdout (forward "stdout"))
@@ -528,15 +547,15 @@ def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) : IO Bool := do
     let read ← pollFile
     if (← g.tryWait).isSome then break
     let elapsed := (← IO.monoMsNow) - start
-    if elapsed ≥ ctx.opts.timeoutMs then
-      let killed ← g.terminateGraceKill ctx.opts.gracePeriodMs
+    if elapsed ≥ r.timeoutMs then
+      let killed ← g.terminateGraceKill r.gracePeriodMs
       timedOut := some (elapsed, killed)
       break
     unless read do IO.sleep pollMs
   let code ← g.wait
   -- What a test that timed out wrote is read for at most the grace period more.
   let deadline? ← if timedOut.isSome then
-      pure (some ((← IO.monoMsNow) + ctx.opts.gracePeriodMs))
+      pure (some ((← IO.monoMsNow) + r.gracePeriodMs))
     else pure none
   fileLock.atomically (tail.finish onFileLine deadline?)
   releasePipes g [outTask, errTask]
@@ -547,26 +566,110 @@ def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) : IO Bool := do
   ended exit
   return true
 
-/-- Prints the inventory, for {lit}`--list`. -/
-def printInventory (ctx : RunContext) (tests : Array InventoryTest) : IO Unit := do
+/-- A value as {lit}`--list` shows it, quoted so that an empty value shows. -/
+private def showValue (v : String) : String := v.quote
+
+/--
+Prints what {lit}`--list` shows: every setting the test executables declare, with its description
+and its default; the tests that the filters select, each with its file and line, its tags, and the
+values it receives; and the mandatory settings that nothing gives a value, with the tests that need
+them.
+-/
+def printInventory (ctx : RunContext) (listings : Array Listing)
+    (selected : Array (InventoryTest × Resolved)) : IO Unit := do
+  let line := ctx.dispatcher.sinks.line
+  line "Settings:"
+  let mut shown : Std.HashSet String := {}
+  for l in listings do
+    for s in l.settings do
+      if shown.contains s.name then continue
+      shown := shown.insert s.name
+      let dflt := match s.default? with | some d => s!" (default {showValue d})" | none => ""
+      line s!"  {s.name}{dflt}"
+      if let some d := s.description? then
+        line ("\n".intercalate ((d.trimAscii.copy.splitOn "\n").map ("      " ++ ·)))
+  line "Tests:"
   let mut exe? : Option Nat := none
-  for t in tests do
+  let mut missing : Array (String × String) := #[]
+  for (t, r) in selected do
     if exe? != some t.exeIdx then
       exe? := some t.exeIdx
-      ctx.dispatcher.sinks.line (ctx.config.executables[t.exeIdx]!.name)
+      line s!"  {ctx.config.executables[t.exeIdx]!.name}"
     let loc := match t.file?, t.line? with
       | some f, some l => s!"  ({f}:{l})"
       | some f, none => s!"  ({f})"
       | _, _ => ""
-    ctx.dispatcher.sinks.line s!"  {t.name}{loc}"
+    let tags := if t.tags.isEmpty then "" else s!"  [{", ".intercalate t.tags.toList}]"
+    line s!"    {t.name}{loc}{tags}"
     if let some d := t.description? then
-      ctx.dispatcher.sinks.line ("\n".intercalate ((d.splitOn "\n").map ("      " ++ ·)))
+      line ("\n".intercalate ((d.trimAscii.copy.splitOn "\n").map ("        " ++ ·)))
+    for (k, v) in r.settings do
+      line s!"        {k} = {showValue v}"
+    for m in r.missing do
+      line s!"        {m}: no value"
+      missing := missing.push (m, t.name)
+  unless missing.isEmpty do
+    line "Mandatory settings without a value:"
+    for (m, t) in missing do
+      line s!"  {m}, which {t} needs"
+
+/--
+The configuration's filters, parsed: the ones that select the tests to run, and each override's.
+The command line's filters select when there are any, and otherwise the profile's default filter, or
+the configuration's. The result is the messages of the filters that do not parse.
+-/
+def parseFilters (config : Config) (opts : Options) (profile : Profile) :
+    Except (Array String) (Array SourcedFilter × Array (SourcedFilter × Override)) := do
+  let mut errors := #[]
+  let mut selecting := #[]
+  if opts.filters.isEmpty then
+    if let some f := profile.defaultFilter? <|> config.defaultFilter? then
+      match SourcedFilter.parse f.text f.source with
+      | .ok sf => selecting := selecting.push sf
+      | .error e => errors := errors.push e
+  else
+    for f in opts.filters do
+      match SourcedFilter.parse f (.argument "--filter") with
+      | .ok sf => selecting := selecting.push sf
+      | .error e => errors := errors.push e
+  let mut overrides := #[]
+  for o in profile.overrides do
+    match SourcedFilter.parse o.filter.text o.filter.source with
+    | .ok sf => overrides := overrides.push (sf, o)
+    | .error e => errors := errors.push e
+  if errors.isEmpty then return (selecting, overrides) else throw errors
+
+/--
+Asks every test executable for its inventory, in parallel. The result is each executable's listing,
+or {lean}`none` when one could not list, which the dispatcher has been told.
+-/
+def listAll (ctx : RunContext) : IO (Option (Array Listing)) := do
+  let d := ctx.dispatcher
+  let listings ← ctx.config.executables.mapIdxM fun i exe =>
+    IO.asTask (prio := .dedicated) (listExecutable ctx i exe)
+  let mut out := #[]
+  let mut listed := true
+  for task in listings do
+    match ← IO.wait task with
+    | .ok (.ok l) => out := out.push l
+    | .ok (.error msg) =>
+      listed := false
+      d.dispatch (.issue { isError := true, message := msg })
+    | .error e =>
+      listed := false
+      d.dispatch (.issue { isError := true, message := s!"a test executable could not list: {e}" })
+  return if listed then some out else none
 
 /--
 Runs the tests of every test executable in the configuration, reporting to {name}`sinks` as the run
 proceeds, and returns the report. The events file's lines and the human-readable report's lines go
 to the sinks; the report files are the caller's to write. The {lit}`protocol` line of the events
 file is sent first.
+
+The List phase lists every executable, then checks the configuration against the inventory: a
+setting given a value that no executable declares is an error, as is a filter that does not parse,
+and the filters are evaluated, with a warning for each atom and filter that selects nothing. The
+Run phase runs the selected tests in inventory order.
 -/
 def execute (config : Config) (opts : Options) (sinks : Sinks)
     (registry : Option Registry := none) : IO RunReport := do
@@ -580,37 +683,72 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
   let registry ← match registry with
     | some r => pure r
     | none => Registry.new
-  IO.FS.withTempDir fun dir => do
-    let ctx : RunContext := { config, opts, runSeed, dir, dispatcher, registry }
-    let d := dispatcher
-    for w in config.warnings do
-      d.dispatch (.issue { isError := false, message := w })
-    d.dispatch (.phase "List" (← Protocol.nowMs))
-    let listings ← config.executables.mapIdxM fun i exe =>
-      IO.asTask (prio := .dedicated) (listExecutable ctx i exe)
-    let mut inventory : Array InventoryTest := #[]
-    let mut listed := true
-    for task in listings do
-      match ← IO.wait task with
-      | .ok (.ok tests) => inventory := inventory ++ tests
-      | .ok (.error msg) =>
-        listed := false
-        d.dispatch (.issue { isError := true, message := msg })
-      | .error e =>
-        listed := false
-        d.dispatch (.issue { isError := true, message := s!"a test executable could not list: {e}" })
-    if listed then
-      if inventory.isEmpty then
-        d.dispatch (.issue { isError := true, message := "no tests were discovered" })
-      if opts.list then
-        printInventory ctx inventory
-      else
-        d.dispatch (.phase "Run" (← Protocol.nowMs))
-        for h : i in [0 : inventory.size] do
-          unless ← runOne ctx i inventory[i] do break
+  let d := dispatcher
+  let finish : IO RunReport := do
     d.dispatch (.ended (← Protocol.nowMs))
     let s ← d.get
     return { results := s.results, issues := s.issues, seed := runSeed }
+  for w in config.warnings do
+    d.dispatch (.issue { isError := false, message := w })
+  let some profile := config.profile? opts.profile
+    | d.dispatch (.issue { isError := true, message := s!"the configuration has no profile named \
+        {opts.profile}; its profiles are {", ".intercalate config.profileNames.toList}" })
+      finish
+  if let some jobs := profile.jobs? then
+    unless jobs == 1 do
+      d.dispatch (.issue { isError := true, message := s!"the profile {profile.name} sets jobs to \
+        {jobs}: only 1 is supported" })
+      return ← finish
+  let (selecting, overrides) ← match parseFilters config opts profile with
+    | .ok fs => pure fs
+    | .error errors =>
+      for e in errors do d.dispatch (.issue { isError := true, message := e })
+      return ← finish
+  IO.FS.withTempDir fun dir => do
+    let ctx : RunContext := {
+      config, opts, runSeed, dir, dispatcher, registry
+      listTimeoutMs := opts.timeoutMs? <|> profile.timeoutMs? |>.getD defaultTimeoutMs
+      listGracePeriodMs := opts.gracePeriodMs? <|> profile.gracePeriodMs? |>.getD defaultGracePeriodMs
+    }
+    d.dispatch (.phase "List" (← Protocol.nowMs))
+    let some listings ← listAll ctx | finish
+    let inventory := listings.flatMap (·.tests)
+    if inventory.isEmpty then
+      d.dispatch (.issue { isError := true, message := "no tests were discovered" })
+    let exeName (t : InventoryTest) : String := config.executables[t.exeIdx]!.name
+    let resolution : ResolutionContext := {
+      sets := opts.sets, profile, overrides, timeoutMs? := opts.timeoutMs?
+      gracePeriodMs? := opts.gracePeriodMs?, updateGolden := opts.updateGolden, runSeed
+    }
+    -- A value that the command line gives to a setting that nothing declares stops the run. One that
+    -- the configuration gives is a warning, since a profile serves the executables of every library
+    -- and a run may select some of them.
+    let declared := listings.flatMap (·.settings.map (·.name))
+    let undeclared := resolution.undeclared declared
+    let names := declared.foldl (init := #[]) fun acc n => if acc.contains n then acc else acc.push n
+    for u in undeclared do
+      d.dispatch (.issue { isError := u.commandLine, message := s!"{u.place} gives the setting \
+        {u.name} a value, and no test executable of this run declares it; the declared settings are \
+        {if names.isEmpty then "none" else ", ".intercalate names.toList}" })
+    if undeclared.any (·.commandLine) then return ← finish
+    let records := inventory.map fun t => t.record (exeName t)
+    let exes := config.executables.map (·.name)
+    for f in selecting ++ overrides.map (·.1) do
+      for w in f.warnings records exes do
+        d.dispatch (.issue { isError := false, message := w })
+    let chosen := Filter.unionOf (selecting.map (·.expr))
+    let selected := inventory.filterMap fun t =>
+      if chosen.eval (t.record (exeName t)) then
+        some (t, resolution.resolve (exeName t) listings[t.exeIdx]!.settings t)
+      else none
+    if opts.list then
+      printInventory ctx listings selected
+    else
+      d.dispatch (.phase "Run" (← Protocol.nowMs))
+      for h : i in [0 : selected.size] do
+        let (t, r) := selected[i]
+        unless ← runOne ctx i t r do break
+    finish
 
 /-- Writes the report files that the options ask for. -/
 def writeReports (opts : Options) (report : RunReport) : IO Unit := do
@@ -619,6 +757,54 @@ def writeReports (opts : Options) (report : RunReport) : IO Unit := do
   write opts.junitPath junitReport
   write opts.jsonPath jsonReport
   write opts.markdownPath markdownReport
+
+/--
+The {lit}`list` subcommand: lists every test executable, then prints one line per test that the
+filters select, in inventory order: the executable, the name, the file and line, and the tags. No
+filter selects every test, and several are joined by union. The result is the exit code: {lit}`1`
+when a filter does not parse or an executable cannot list, and {lit}`0` otherwise.
+-/
+def listSubcommand (config : Config) (opts : Options) (filters : Array String)
+    (registry : Registry) : IO UInt32 := do
+  let mut parsed := #[]
+  for (f, i) in filters.zipIdx do
+    match SourcedFilter.parse f (.argument s!"list filter {i + 1}") with
+    | .ok sf => parsed := parsed.push sf
+    | .error e =>
+      IO.eprintln s!"error: {e}"
+      return 1
+  let dispatcher : Dispatcher := {
+    state := ← Std.Mutex.new { human := { verbosity := .silent } }
+    sinks := {}
+  }
+  IO.FS.withTempDir fun dir => do
+    let ctx : RunContext := {
+      config, opts, runSeed := 0, dir, dispatcher, registry
+      listTimeoutMs := opts.timeoutMs?.getD defaultTimeoutMs
+      listGracePeriodMs := opts.gracePeriodMs?.getD defaultGracePeriodMs
+    }
+    let some listings ← listAll ctx
+      | for issue in (← dispatcher.get).issues do IO.eprintln s!"error: {issue.message}"
+        return 1
+    let chosen := Filter.unionOf (parsed.map (·.expr))
+    let tests := listings.flatMap (·.tests)
+    let rows := tests.filterMap fun t =>
+      let exe := config.executables[t.exeIdx]!.name
+      if chosen.eval (t.record exe) then
+        let loc := match t.file?, t.line? with
+          | some f, some l => s!"{f}:{l}"
+          | some f, none => f
+          | _, _ => "-"
+        let tags := if t.tags.isEmpty then "" else s!"[{", ".intercalate t.tags.toList}]"
+        some #[exe, t.name, loc, tags]
+      else none
+    -- The columns are padded to their widest entry, with two spaces between them.
+    let width (i : Nat) : Nat := rows.foldl (fun w r => max w (r[i]!.length)) 0
+    let widths := #[width 0, width 1, width 2]
+    for r in rows do
+      let cols := (List.range 3).map fun i => r[i]!.pushn ' ' (widths[i]! - r[i]!.length)
+      IO.println ("  ".intercalate (cols ++ [r[3]!]) |>.trimAsciiEnd.copy)
+    return 0
 
 /--
 Runs the tests as {name}`execute` does, with the human-readable report on standard output and the
@@ -671,10 +857,10 @@ def exitWhenStdinCloses (parentIn : IO.FS.Stream) (registry : Registry) (graceMs
   IO.Process.forceExit 1
 
 /--
-The runner's entry point: {lit}`errata-runner <config.json> [options] [-- test options]`. The
-configuration's {lit}`invocation`, when it has one, names the command in the usage message. When
-{lit}`ERRATA_LIFELINE` is {lit}`1` in its environment, the runner watches its standard input and
-cancels the run when it closes.
+The runner's entry point: {lit}`errata-runner <config.json> [options]`, or
+{lit}`errata-runner <config.json> list [FILTER]...`. The configuration's {lit}`invocation`, when it
+has one, names the command in the usage message. When {lit}`ERRATA_LIFELINE` is {lit}`1` in its
+environment, the runner watches its standard input and cancels the run when it closes.
 -/
 def main (args : List String) : IO UInt32 := do
   let invocation ← do
@@ -685,9 +871,14 @@ def main (args : List String) : IO UInt32 := do
         try pure (← Config.load path).invocation?
         catch _ => pure none
     | [] => pure none
+  let (sets, filters, rest) ← match takeRepeatable args with
+    | .ok r => pure r
+    | .error msg =>
+      IO.eprintln s!"error: {msg}"
+      return 1
   let cmd := runnerCmd (invocation.getD "errata-runner CONFIG") fun parsed => do
     let opts ←
-      match optionsOfParsed parsed with
+      match optionsOfParsed parsed sets filters with
       | .ok opts => pure opts
       | .error msg =>
         IO.eprintln s!"error: {msg}"
@@ -698,14 +889,16 @@ def main (args : List String) : IO UInt32 := do
         IO.eprintln s!"error: {e}"
         return 1
     let registry ← Registry.new
+    let grace := opts.gracePeriodMs?.getD defaultGracePeriodMs
     -- The driver sets the variable when it gives the runner a standard input to watch.
     if (← IO.getEnv lifelineVariable) == some "1" then
-      let _ ← IO.asTask (prio := .dedicated)
-        (exitWhenStdinCloses (← IO.getStdin) registry opts.gracePeriodMs)
-    let code ← executeAndWrite config opts (some registry)
+      let _ ← IO.asTask (prio := .dedicated) (exitWhenStdinCloses (← IO.getStdin) registry grace)
+    let code ← match opts.listFilters? with
+      | some fs => listSubcommand config opts fs registry
+      | none => executeAndWrite config opts (some registry)
     try (← IO.getStdout).flush catch _ => pure ()
     try (← IO.getStderr).flush catch _ => pure ()
     -- The thread that reads standard input runs until the pipe closes, and a Lean program that
     -- returns from `main` waits for its threads, so the runner ends the process itself.
     IO.Process.forceExit code.toUInt8
-  cmd.validate args
+  cmd.validate rest

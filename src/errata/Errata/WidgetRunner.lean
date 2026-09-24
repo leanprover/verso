@@ -124,8 +124,12 @@ def summarizeResults (seed : Nat) (testLocation : Location) (results : Array Res
 /--
 Runs one test entry to completion, as the batch runner does, and condenses its results into a
 {name}`RunOutcome` whose description is the entry's docstring. Without a seed for property tests,
-one is generated. {name}`options` are the options that the test reads, and the outcome names those
-that it never read.
+one is generated.
+
+The test receives the {lit}`seed` setting and every option as a setting, followed by the declared
+default of each setting it takes that no option names. The options also reach the deprecated
+{lit}`optionValues`, {lit}`option?`, and {lit}`flag`, and the outcome names the options that the
+test neither read that way nor takes as a setting.
 
 The test's output is passed to {name}`saveOutput` as it is written, and {name}`watch` is told as each
 named result starts and finishes. A caller that wishes to monitor the run through them passes
@@ -135,14 +139,26 @@ Otherwise, the outcome holds every result, each with its own output.
 def runEntryOutcome (entry : TestEntry) (seed? : Option Nat := none)
     (saveOutput : Output → IO Unit := fun _ => pure ())
     (watch : ResultEvent → IO Unit := fun _ => pure ()) (onlyOwnResult : Bool := false)
-    (options : OptionMap := {}) : IO RunOutcome := do
+    (options : Array (String × String) := #[]) : IO RunOutcome := do
+  let seed ← match seed? with
+    | some s => pure s
+    | none => IO.rand 0 (2 ^ 32 - 1)
+  let values : Std.HashMap String (Array String) := options.foldl (init := {}) fun acc (k, v) =>
+    acc.insert k ((acc.getD k #[]).push v)
+  let used ← IO.mkRef ({} : Std.HashSet String)
   let cfg := {
-    ← mkContext (options := options) (seed := seed?) with
+    ← mkContext with
     writeOutput := saveOutput, watchResults := watch
+    legacyOptions? := some { values, used }
   }
-  let outcome := summarizeResults cfg.seed entry.location (← runEntry cfg entry) onlyOwnResult
-  let read ← cfg.usedOptions.get
-  let unreadOptions := options.keys.filter (!read.contains ·) |>.toArray.qsort (· < ·)
+  let defaults := entry.settings.filterMap fun s =>
+    if s.name == "seed" || options.any (·.1 == s.name) then none
+    else s.default?.map (s.name, ·)
+  let settings := #[("seed", toString seed)] ++ options ++ defaults
+  let outcome := summarizeResults seed entry.location (← runEntry cfg entry settings) onlyOwnResult
+  let read ← used.get
+  let unreadOptions := values.keys.filter (fun k => !read.contains k && !entry.settings.any (·.name == k))
+    |>.toArray.qsort (· < ·)
   return { outcome with description? := entry.docstring?, unreadOptions }
 
 /-- Runs one testable value as {name}`runEntryOutcome` does, as a test with an empty name. -/

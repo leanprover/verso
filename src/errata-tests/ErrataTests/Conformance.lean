@@ -43,11 +43,15 @@ structure Run where
   /-- The lines of the human-readable report. -/
   lines : Array String
 
-/-- Runs the given test executables with the runner, collecting what it reports. -/
-def runWith (exes : Array ExecutableConfig) (opts : Options := {}) : IO Run := do
+/--
+Runs the given test executables with the runner, collecting what it reports. {name}`config` gives
+the rest of the configuration.
+-/
+def runWith (exes : Array ExecutableConfig) (opts : Options := {}) (config : Config := {}) :
+    IO Run := do
   let events ← IO.mkRef #[]
   let lines ← IO.mkRef #[]
-  let report ← execute { executables := exes } opts
+  let report ← execute { config with executables := exes } opts
     { event := fun j => events.modify (·.push j), line := fun l => lines.modify (·.push l) }
   return { report, events := ← events.get, lines := ← lines.get }
 
@@ -135,7 +139,7 @@ def timeoutEndsTests : Test := do
   IO.FS.withTempDir fun dir => do
     let junit := dir / "report.xml"
     let opts : Options :=
-      { timeoutMs := 300, gracePeriodMs := 300, junitPath := some junit.toString }
+      { timeoutMs? := some 300, gracePeriodMs? := some 300, junitPath := some junit.toString }
     let code ← IO.mkRef (0 : UInt32)
     discard <| captureOutput do
       code.set (← executeAndWrite { executables := #[basic ["sleeps", "stubborn", "pass"]] } opts)
@@ -147,7 +151,7 @@ def timeoutEndsTests : Test := do
       assertContains "going to sleep" xml
     result "the run goes on" do
       assertContains "<testcase name=\"pass\"" xml
-  let r ← runWith #[basic ["sleeps", "stubborn"]] { timeoutMs := 300, gracePeriodMs := 300 }
+  let r ← runWith #[basic ["sleeps", "stubborn"]] { timeoutMs? := some 300, gracePeriodMs? := some 300 }
   result "a terminated test was not killed" do
     expectOutcome r "sleeps" (· matches .inconclusive (.timedOut _ false)) "timedOut, terminated"
   result "a test that ignores the request is killed" do
@@ -157,7 +161,7 @@ def timeoutEndsTests : Test := do
 @[test]
 def childProcessesEnded : Test := do
   let marker := toString (← IO.rand 0 (2 ^ 30))
-  let r ← runWith #[basic ["spawns"]] { testOptions := #[("marker", marker)] }
+  let r ← runWith #[basic ["spawns"]] { sets := #[("marker", marker)] }
   expectOutcome r "spawns" (· matches .reported .pass) "a pass"
   let left ← IO.Process.output { cmd := "pgrep", args := #["-f", s!"errata-conformance-{marker}"] }
   assertTrue left.stdout.trimAscii.isEmpty s!"processes are left running: {left.stdout}"
@@ -277,7 +281,7 @@ name, and its settings, quoted for a POSIX shell.
 -/
 @[test]
 def reproductionLine : Test := do
-  let r ← runWith #[basic ["fail", "pass"]] { testOptions := #[("note", "it's")] }
+  let r ← runWith #[basic ["fail", "pass"]] { sets := #[("note", "it's")] }
   let some res := r.result? "fail" | fail "no result"
   let some cmd := res.reproduce? | fail "no reproduction line"
   assertContains "basic.sh errata-run /dev/stderr fail setting:seed=" cmd
@@ -330,13 +334,208 @@ def seedsAreDerived : Test := do
   assertBEq 7 r.report.seed
 
 /--
+A test whose mandatory setting has no value is inconclusive, naming the setting, and its process is
+never started. The rest of the run goes on.
+-/
+@[test]
+def settingMissing : Test := do
+  let r ← runWith #[basic ["needs-setting", "pass"]]
+  expectOutcome r "needs-setting" (· matches .inconclusive (.settingMissing "needed"))
+    "settingMissing needed"
+  let some res := r.result? "needs-setting" | fail "no result"
+  assertNotContains "ran without its setting" res.output.all
+  expectOutcome r "pass" (· matches .reported .pass) "a pass"
+  result "a value from the command line lets it run" do
+    let r ← runWith #[basic ["needs-setting"]] { sets := #[("needed", "yes")] }
+    expectOutcome r "needs-setting" (· matches .reported .pass) "a pass"
+
+/--
+A value that the command line gives to a setting that no test executable declares stops the run
+before anything runs, with the declared settings in the message. One that the profile gives is a
+warning, since a profile serves every library's executable and a run may select some of them.
+-/
+@[test]
+def undeclaredSettingRejected : Test := do
+  result "on the command line" do
+    let r ← runWith #[basic ["pass"]] { sets := #[("nonsense", "1")] }
+    assertTrue r.report.results.isEmpty "no test ran"
+    let some issue := r.report.issues.find? (·.isError) | fail "no error"
+    assertContains "--set gives the setting nonsense a value, and no test executable of this run \
+      declares it" issue.message
+    assertContains "the declared settings are seed, marker, note, greeting, needed" issue.message
+  result "in a profile" do
+    let config : Config := { profiles := #[{ name := "default", settings := #[("other", "x")] }] }
+    let r ← runWith #[basic ["pass"]] {} config
+    expectOutcome r "pass" (· matches .reported .pass) "a pass"
+    let some issue := r.report.issues.find? (!·.isError) | fail "no warning"
+    assertContains "the profile default gives the setting other a value" issue.message
+    let r ← runWith #[basic ["pass"]] { wfail := true } config
+    assertTrue r.report.failsRun "--wfail makes it an error"
+
+/--
+A setting's declared default reaches a test that takes it, as an argument, when nothing else gives a
+value. The test receives its settings in the order it takes them, and an optional setting without a
+value is left out. `--list` shows the default and what the test receives.
+-/
+@[test]
+def declaredDefaultReachesTest : Test := do
+  let r ← runWith #[basic ["greets"]] { seed := some 7 }
+  let some res := r.result? "greets" | fail "no result"
+  let seed := toString (testSeed 7 "basic" "greets")
+  assertBEq s!"received setting:seed={seed}\nreceived setting:greeting=hello\n" res.output.stdout
+  assertBEq #[("seed", seed), ("greeting", "hello")] res.settings
+  result "--list shows it" do
+    let r ← runWith #[basic ["greets"]] { list := true, seed := some 7 }
+    assertTrue (r.lines.contains "  greeting (default \"hello\")") s!"{r.lines}"
+    assertTrue (r.lines.contains "        greeting = \"hello\"") s!"{r.lines}"
+    assertTrue r.report.results.isEmpty "nothing ran"
+  result "the command line wins over the default" do
+    let r ← runWith #[basic ["greets"]] { sets := #[("greeting", "hi")] }
+    let some res := r.result? "greets" | fail "no result"
+    assertContains "received setting:greeting=hi\n" res.output.stdout
+
+/-- An unknown profile stops the run, with the profiles in the message. -/
+@[test]
+def unknownProfile : Test := do
+  let r ← runWith #[basic ["pass"]] { profile := "nightly" } { profiles := #[{ name := "ci" }] }
+  assertTrue r.report.results.isEmpty "no test ran"
+  let some issue := r.report.issues.find? (·.isError) | fail "no error"
+  assertContains "no profile named nightly; its profiles are default, ci" issue.message
+
+/--
+The profile's default filter selects the tests to run unless the command line gives filters, which
+are joined by union.
+-/
+@[test]
+def defaultFilterAndCommandLine : Test := do
+  let config : Config := { profiles := #[{ name := "default", defaultFilter? := some { text := "tag(slow)" } }] }
+  let ran (r : Run) : Array String := r.report.results.map (·.test)
+  result "the default filter" do
+    let r ← runWith #[basic ["pass", "sleeps"]] { timeoutMs? := some 300, gracePeriodMs? := some 100 } config
+    assertBEq #["sleeps"] (ran r)
+  result "the command line's filters" do
+    let r ← runWith #[basic ["pass", "fail", "sleeps"]]
+      { filters := #["name(=pass)", "name(=fail)"] } config
+    assertBEq #["pass", "fail"] (ran r)
+  result "a filter that does not parse" do
+    let r ← runWith #[basic ["pass"]] { filters := #["name(pass"] }
+    assertTrue r.report.results.isEmpty "no test ran"
+    let some issue := r.report.issues.find? (·.isError) | fail "no error"
+    assertBEq "--filter:9: expected ')' to end the matcher" issue.message
+
+/--
+Once the inventory is known, a `tag(…)` that no test carries, an `exe(…)` that names no test
+executable, and a filter that selects no test are warnings at their places, which `--wfail` makes
+errors.
+-/
+@[test]
+def filterWarnings : Test := do
+  let r ← runWith #[basic ["pass"]] { filters := #["tag(fast) | exe(other)", "name(pass)"] }
+  let warnings := r.report.issues.filter (!·.isError) |>.map (·.message)
+  assertBEq #["--filter:0: tag(fast) matches no tag of any test",
+    "--filter:12: exe(other) matches no test executable",
+    "--filter:0: the filter selects no test"] warnings
+  expectOutcome r "pass" (· matches .reported .pass) "a pass"
+  result "a filter from the configuration names its place in the file" do
+    let text : FilterText := { text := "name(pass) | tag(fast)", source := .file "errata.toml" 3 17 }
+    let config : Config := { profiles := #[{ name := "default", defaultFilter? := some text }] }
+    let r ← runWith #[basic ["pass"]] {} config
+    assertBEq #["errata.toml:3:30: tag(fast) matches no tag of any test"]
+      (r.report.issues.map (·.message))
+  result "--wfail" do
+    let r ← runWith #[basic ["pass"]] { filters := #["tag(fast) | name(pass)"], wfail := true }
+    assertTrue r.report.failsRun
+
+/-- An override's values apply to the tests its filter matches; the first match wins per value. -/
+@[test]
+def overridesApply : Test := do
+  let overrides : Array Override := #[
+    { filter := { text := "name(=greets)" }, settings := #[("greeting", "first")] },
+    { filter := { text := "tag(shell)" }, settings := #[("greeting", "second"), ("note", "override")] }]
+  let profile : Profile := { name := "default", settings := #[("note", "profile")], overrides }
+  let config : Config := { profiles := #[profile] }
+  let r ← runWith #[basic ["greets"]] {} config
+  let some res := r.result? "greets" | fail "no result"
+  assertContains "received setting:greeting=first\n" res.output.stdout
+  assertContains "received setting:note=override\n" res.output.stdout
+
+/--
+Resolution takes each setting from the command line, then the first matching override that gives it,
+then the profile, then the declared default, and for `seed` the derived seed; the timeout and grace
+period from the command line, the first matching override, the profile, and the defaults; and the
+slow mark and golden updating from the override, the profile, and the defaults.
+-/
+@[test]
+def resolutionPrecedence : Test := do
+  let parse (text : String) : TestM SourcedFilter :=
+    match SourcedFilter.parse text (.argument "test") with
+    | .ok f => pure f
+    | .error e => fail e
+  let first : Override :=
+    { filter := { text := "tag(a)" }, settings := #[("x", "first")], timeoutMs? := some 5 }
+  let second : Override := {
+    filter := { text := "all()" }, settings := #[("x", "second"), ("y", "second")]
+    slowAfterMs? := some 7, timeoutMs? := some 6, updateGolden? := some true }
+  let profile : Profile := {
+    name := "p", settings := #[("x", "profile"), ("y", "profile"), ("z", "profile")]
+    timeoutMs? := some 9, gracePeriodMs? := some 8, slowAfterMs? := some 11 }
+  let ctx : ResolutionContext := {
+    profile, overrides := #[(← parse "tag(a)", first), (← parse "all()", second)], runSeed := 3 }
+  let declared : Array SettingInfo :=
+    #[{ name := "w", default? := some "default" }, { name := "z", default? := some "default" }]
+  let deps : Array Protocol.SettingDep :=
+    #[{ name := "x" }, { name := "y" }, { name := "z" }, { name := "w" }, { name := "seed" },
+      { name := "v", optional := true }, { name := "u" }]
+  let tagged : InventoryTest := { exeIdx := 0, name := "t", tags := #["a"], settings := deps }
+  let plain : InventoryTest := { tagged with tags := #[] }
+  let seed := toString (testSeed 3 "e" "t")
+  result "the first matching override" do
+    let r := ctx.resolve "e" declared tagged
+    assertBEq #[("x", "first"), ("y", "second"), ("z", "profile"), ("w", "default"), ("seed", seed)]
+      r.settings
+    assertBEq #["u"] r.missing
+    assertBEq 5 r.timeoutMs
+    assertBEq 8 r.gracePeriodMs
+    assertBEq 7 r.slowAfterMs
+    assertBEq true r.updateGolden
+  result "an override that matches another test" do
+    let r := ctx.resolve "e" declared plain
+    assertBEq (some "second") ((r.settings.find? (·.1 == "x")).map (·.2))
+    assertBEq 6 r.timeoutMs
+  result "the command line" do
+    let ctx := { ctx with
+      sets := #[("x", "cli"), ("seed", "12"), ("v", "given")], timeoutMs? := some 1
+      gracePeriodMs? := some 2 }
+    let r := ctx.resolve "e" declared tagged
+    assertBEq (some "cli") ((r.settings.find? (·.1 == "x")).map (·.2))
+    assertBEq (some "12") ((r.settings.find? (·.1 == "seed")).map (·.2))
+    assertBEq (some "given") ((r.settings.find? (·.1 == "v")).map (·.2))
+    assertBEq 1 r.timeoutMs
+    assertBEq 2 r.gracePeriodMs
+  result "the defaults" do
+    let r := ({} : ResolutionContext).resolve "e" #[] { exeIdx := 0, name := "t" }
+    assertBEq defaultTimeoutMs r.timeoutMs
+    assertBEq defaultGracePeriodMs r.gracePeriodMs
+    assertBEq defaultSlowAfterMs r.slowAfterMs
+    assertBEq false r.updateGolden
+
+/-- A test that runs longer than `slow-after` is marked slow in the human report, and its outcome stands. -/
+@[test]
+def slowTestsAreMarked : Test := do
+  let config : Config := { profiles := #[{ name := "default", slowAfterMs? := some 0 }] }
+  let r ← runWith #[basic ["pass"]] { verbosity := .verbose } config
+  expectOutcome r "pass" (· matches .reported .pass) "a pass"
+  assertTrue (r.lines.any fun l => l.endsWith "[slow]") s!"no line is marked slow: {r.lines}"
+  assertTrue ((r.result? "pass").map (·.slow) == some true) "the result is slow"
+
+/--
 A test that writes records faster than the runner reads them is still stopped at its timeout, and
 what it wrote after that is read for at most the grace period.
 -/
 @[test]
 def fastWriterTimesOut : Test := do
   let start ← IO.monoMsNow
-  let r ← runWith #[basic ["flood"]] { timeoutMs := 1000, gracePeriodMs := 1000 }
+  let r ← runWith #[basic ["flood"]] { timeoutMs? := some 1000, gracePeriodMs? := some 1000 }
   let wall := (← IO.monoMsNow) - start
   match r.outcome? "flood" with
   | some (.inconclusive (.timedOut ms _)) =>
@@ -358,7 +557,7 @@ def listingTimesOut : Test := do
   let exe : ExecutableConfig :=
     { name := "slow", command := #["bash", (harnessDir / "slow-list.sh").toString] }
   let start ← IO.monoMsNow
-  let r ← runWith #[exe] { timeoutMs := 500, gracePeriodMs := 300 }
+  let r ← runWith #[exe] { timeoutMs? := some 500, gracePeriodMs? := some 300 }
   assertTrue ((← IO.monoMsNow) - start < 5000) "the listing was stopped"
   let some issue := r.report.issues.find? (·.isError) | fail "no error"
   assertContains "slow" issue.message
@@ -376,7 +575,7 @@ def listingPipesHeld : Test := do
     { name := "escaping", command := #["bash", (harnessDir / "escaping-list.sh").toString]
       env := #[("MARKER", marker)] }
   let start ← IO.monoMsNow
-  let r ← try runWith #[exe] { timeoutMs := 10000 }
+  let r ← try runWith #[exe] { timeoutMs? := some 10000 }
     finally
       discard <| IO.Process.output { cmd := "pkill", args := #["-f", s!"errata-conformance-{marker}"] }
   assertTrue ((← IO.monoMsNow) - start < 5000) "the listing held up the run"
@@ -425,8 +624,8 @@ def runnerLifeline : Test := do
     IO.FS.writeFile config (Lean.toJson ({ executables := #[exe] } : Config)).compress
     let child ← IO.Process.spawn {
       cmd := runnerExe.toString
-      args := #[config.toString, "--json", json.toString, "--grace-period", "500ms", "--",
-        "--marker", marker]
+      args := #[config.toString, "--json", json.toString, "--grace-period", "500ms",
+        "--set", s!"marker={marker}"]
       stdin := .piped, stdout := .piped, stderr := .piped
       env := #[("ERRATA_LIFELINE", some "1")]
     }

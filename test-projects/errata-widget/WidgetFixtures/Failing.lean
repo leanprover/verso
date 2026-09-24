@@ -59,5 +59,5 @@ def nestedAssertTrue : Test := do
 
 /-- A property that fails, with a counterexample that depends on the seed. -/
 @[test]
-def unluckyLists : Test :=
+def unluckyLists : seed → Test :=
   property (∀ l : List Nat, unlucky l = false)

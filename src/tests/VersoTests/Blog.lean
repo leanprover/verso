@@ -43,15 +43,15 @@ def freshIdSecondIsHintWith1 (hint : LetterString) (path : Path) : Bool := Id.ru
 
 /-- Identifiers freshly generated within a path are unique. -/
 @[test]
-def freshIdsAreUnique : Test := property (∀ h p n, freshIdOk h p n)
+def freshIdsAreUnique : seed → Test := property (∀ h p n, freshIdOk h p n)
 
 /-- The first identifier generated for a hint is the hint itself. -/
 @[test]
-def freshIdFirst : Test := property (∀ h p, freshIdFirstIsHint h p)
+def freshIdFirst : seed → Test := property (∀ h p, freshIdFirstIsHint h p)
 
 /-- The second identifier generated for a hint is the hint with `1` appended. -/
 @[test]
-def freshIdSecond : Test := property (∀ h p, freshIdSecondIsHintWith1 h p)
+def freshIdSecond : seed → Test := property (∀ h p, freshIdSecondIsHintWith1 h p)
 
 /-! ## Compile-time regression tests for the blog genre -/
 

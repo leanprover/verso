@@ -22,62 +22,62 @@ public section
 
 /-- Internal identifiers round-trip through JSON. -/
 @[test]
-def internalId : Test := property (∀ id : InternalId, roundTripOk id)
+def internalId : seed → Test := property (∀ id : InternalId, roundTripOk id)
 
 /-- Objects round-trip through JSON. -/
 @[test]
-def object : Test := property (∀ obj : Object, roundTripOk obj)
+def object : seed → Test := property (∀ obj : Object, roundTripOk obj)
 
 /-- Domains round-trip through JSON. -/
 @[test]
-def domain : Test := property (∀ dom : Domain, roundTripOk dom)
+def domain : seed → Test := property (∀ dom : Domain, roundTripOk dom)
 
 /-- Reference domains round-trip through JSON. -/
 @[test]
-def refDomain : Test := property (∀ dom : RefDomain, roundTripOk dom)
+def refDomain : seed → Test := property (∀ dom : RefDomain, roundTripOk dom)
 
 /-- Reference objects round-trip through JSON. -/
 @[test]
-def refObject : Test := property (∀ obj : RefObject, roundTripOk obj)
+def refObject : seed → Test := property (∀ obj : RefObject, roundTripOk obj)
 
 /-- Remote information round-trips through JSON. -/
 @[test]
-def remoteInfo : Test := property (∀ info : RemoteInfo, roundTripOk info)
+def remoteInfo : seed → Test := property (∀ info : RemoteInfo, roundTripOk info)
 
 /-- The collection of remotes round-trips through JSON. -/
 @[test]
-def allRemotes : Test := property (∀ remotes : AllRemotes, roundTripOk remotes)
+def allRemotes : seed → Test := property (∀ remotes : AllRemotes, roundTripOk remotes)
 
 /-- Manual traverse state round-trips through JSON. -/
 @[test]
-def traverseState : Test :=
+def traverseState : seed → Test :=
   property (∀ st : Verso.Genre.Manual.TraverseState, roundTripOk st)
 
 /-- HTML round-trips through JSON. -/
 @[test]
-def html : Test := property (∀ html : Verso.Output.Html, roundTripOk html)
+def html : seed → Test := property (∀ html : Verso.Output.Html, roundTripOk html)
 
 /-- Manual data files round-trip through JSON. -/
 @[test]
-def dataFile : Test := property (∀ f : Verso.Genre.Manual.DataFile, roundTripOk f)
+def dataFile : seed → Test := property (∀ f : Verso.Genre.Manual.DataFile, roundTripOk f)
 
 /-- Manual numbering round-trips through JSON. -/
 @[test]
-def numbering : Test := property (∀ n : Verso.Genre.Manual.Numbering, roundTripOk n)
+def numbering : seed → Test := property (∀ n : Verso.Genre.Manual.Numbering, roundTripOk n)
 
 /-- Cross-reference sources round-trip through JSON. -/
 @[test]
-def xrefSource : Test :=
+def xrefSource : seed → Test :=
   property (∀ src : XrefSource, isEqOk (XrefSource.fromJson? src.toJson) src)
 
 /-- Remotes round-trip through JSON. -/
 @[test]
-def remote : Test :=
+def remote : seed → Test :=
   property (∀ r : Remote, isEqOk (Remote.fromJson? "" r.toJson) r)
 
 /-- Search domain mappers and search priorities round-trip through JSON. -/
 @[test]
-def searchPriorities : Test :=
+def searchPriorities : seed → Test :=
   property <| ∀ (semantic fullText : Fin 100) (domains : Verso.NameMap (Fin 100)),
     let mapper : Search.DomainMapper :=
       { displayName := "d", className := "c", dataToSearchables := "x => []" }
@@ -90,7 +90,7 @@ doc's {name}`IndexDoc.id` and {name}`IndexDoc.priority`, and every input doc wit
 priority has its id present. Documents with no priority or the neutral value `50` are omitted.
 -/
 @[test]
-def priorityMapJson : Test :=
+def priorityMapJson : seed → Test :=
   property <| ∀ docs : Array Search.IndexDoc,
     let j : Json := Search.priorityMapJson docs
     let entries : Array (String × Json) :=

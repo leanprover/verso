@@ -7,6 +7,7 @@ Author: David Thrane Christiansen
 module
 
 public import Errata.TestM
+public import Errata.Setting
 public import Plausible
 public import Plausible.ArbitraryFueled
 
@@ -20,11 +21,15 @@ namespace Errata
 open Plausible
 
 open scoped Plausible.Decorations in
-/-- Checks a property with Plausible, failing with the counterexample if it is falsified. -/
+/--
+Checks a property with Plausible, failing with the counterexample if it is falsified. The seed comes
+last, so {lit}`property (∀ …)` is itself a test that takes the {name}`seed` setting. A seed in
+{name}`cfg` takes precedence over it.
+-/
 def property (p : Prop) (cfg : Configuration := {}) (loc : Location := by exact here%)
-    (p' : Decorations.DecorationsOf p := by mk_decorations) [Testable p'] : TestM Unit := do
-  let ctx ← read
-  let seed := cfg.randomSeed.getD ctx.seed
+    (p' : Decorations.DecorationsOf p := by mk_decorations) [Testable p'] (seed : seed) :
+    TestM Unit := do
+  let seed := cfg.randomSeed.getD seed
   let cfg := { cfg with quiet := true, randomSeed := some seed }
   match ← Testable.checkIO p' (cfg := cfg) with
   | .success _ => pure ()

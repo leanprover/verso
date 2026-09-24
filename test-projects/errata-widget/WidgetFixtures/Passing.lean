@@ -88,7 +88,7 @@ def nestedExpectFail : Test := do
 
 /-- A property that holds. -/
 @[test]
-def reverseReverse : Test :=
+def reverseReverse : seed → Test :=
   property (∀ l : List Nat, l.reverse.reverse = l)
 
 /-- A named result that fails within `expectFail`, beside a named result that passes. -/

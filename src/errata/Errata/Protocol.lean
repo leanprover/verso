@@ -94,6 +94,25 @@ def Status.ofName? : String → Option Status
   | "expectedFailure" => some .expectedFailure
   | _ => none
 
+/-- A setting that a test depends on, as its inventory record names it. -/
+structure SettingDep where
+  /-- The setting's name. -/
+  name : String
+  /-- Whether the test runs without a value for the setting. -/
+  optional : Bool := false
+deriving Repr, Inhabited, DecidableEq
+
+instance : ToJson SettingDep where
+  toJson d := Json.mkObj [("name", Json.str d.name), ("optional", Json.bool d.optional)]
+
+instance : FromJson SettingDep where
+  fromJson? j := do
+    let name ← j.getObjValAs? String "name"
+    let optional ← match j.getObjVal? "optional" with
+      | .ok v => FromJson.fromJson? v
+      | .error _ => pure false
+    return { name, optional }
+
 /-- An inventory entry for a test. Only the name is required of a test executable. -/
 structure TestInfo where
   /-- The test's name, unique within the inventory. -/
@@ -110,6 +129,10 @@ structure TestInfo where
   description? : Option String := none
   /-- {lit}`test` or {lit}`benchmark`; a test when absent. -/
   kind? : Option String := none
+  /-- The test's tags. -/
+  tags? : Option (Array String) := none
+  /-- The settings that the test depends on, each mandatory or optional. -/
+  settings? : Option (Array SettingDep) := none
 deriving Repr, Inhabited, DecidableEq
 
 /-- A named result's report, when it starts (without a status) and when it finishes. -/
@@ -190,7 +213,8 @@ def Record.toJson : Record → Json
   | .test i =>
     Json.mkObj <| ("type", Json.str "test") :: opt "name" i.name? ++ opt "path" i.path? ++
       opt "file" i.file? ++ opt "line" i.line? ++ opt "col" i.col? ++
-      opt "description" i.description? ++ opt "kind" i.kind?
+      opt "description" i.description? ++ opt "kind" i.kind? ++ opt "tags" i.tags? ++
+      opt "settings" i.settings?
   | .start t => Json.mkObj <| ("type", Json.str "start") :: opt "time_ms" t
   | .output s t time r =>
     Json.mkObj <| ("type", Json.str "output") :: opt "stream" s ++ opt "text" t ++ opt "time_ms" time ++
@@ -258,7 +282,8 @@ def Record.decode? (j : Json) : Except String (Option Record) := do
     return some (.test {
       name? := ← field j "name", path? := ← field j "path", file? := ← field j "file",
       line? := ← field j "line", col? := ← field j "col",
-      description? := ← field j "description", kind? := ← field j "kind"
+      description? := ← field j "description", kind? := ← field j "kind",
+      tags? := ← field j "tags", settings? := ← field j "settings"
     })
   | "start" => return some (.start (← field j "time_ms"))
   | "output" =>

@@ -18,7 +18,8 @@ Evaluates the test named by {lean}`declName`, defined in {lean}`module`, to a te
 discovery builds one.
 
 The entry's action is the definition that {lit}`@[test]` compiled beside the test, reached through
-{lit}`import all` of its module. The entry's package name is empty.
+{lit}`import all` of its module. The entry's settings carry their declared defaults, read from the
+settings' values. The entry's package name is empty.
 -/
 unsafe def evalTestEntry (module declName : Name) : CoreM Errata.TestEntry :=
   MetaM.run' do
@@ -30,15 +31,24 @@ unsafe def evalTestEntry (module declName : Name) : CoreM Errata.TestEntry :=
     let some test := (Errata.testExt.getModuleEntries env idx).find? fun t =>
         t.name == declName || privateToUserName t.name == declName
       | throwError "`{declName}` is not a test in `{module}`"
-    let ty := mkApp (mkConst ``Errata.TestM) (mkConst ``Unit)
-    let act ← evalExpr (Errata.TestM Unit) ty (mkConst test.run) (safety := .unsafe)
+    let pairs := mkApp2 (mkConst ``Prod [.zero, .zero]) (mkConst ``String) (mkConst ``String)
+    let ty ← mkArrow (mkApp (mkConst ``Array [.zero]) pairs)
+      (mkApp (mkConst ``Errata.TestM) (mkConst ``Unit))
+    let act ← evalExpr (Array (String × String) → Errata.TestM Unit) ty (mkConst test.run)
+      (safety := .unsafe)
+    -- Each setting's declared default is read from the setting's value.
+    let settings ← test.settings.mapM fun use => do
+      let default? ← evalExpr (Option String) (mkApp (mkConst ``Option [.zero]) (mkConst ``String))
+        (mkApp (mkConst ``Errata.Setting.default?) (mkConst use.decl)) (safety := .unsafe)
+      return { name := Errata.settingNameOf use.decl, optional := use.optional, default? :
+        Errata.SettingRef }
     let location ← Errata.testLocation test
     let userName := privateToUserName test.name
     return {
       package := "", moduleName := module.toString
       name := userName.toString
       path := userName.components.map (·.toString (escape := false)) |>.toArray
-      location, docstring? := test.docstring?, run := act
+      location, docstring? := test.docstring?, tags := test.tags, settings, run := act
     }
 
 /-- Writes one JSON protocol line to the protocol file and flushes it for prompt streaming. -/
@@ -93,8 +103,7 @@ unsafe def runImpl (args : List String) : IO UInt32 := do
     | .error e =>
       IO.eprintln s!"errata-run-one: the options could not be read: {e}"
       return 2
-  let options : Errata.OptionMap := optionList.foldl (init := {}) fun acc opt =>
-    acc.insert opt.name ((acc.getD opt.name #[]).push opt.value)
+  let options := optionList.map fun opt => (opt.name, opt.value)
   -- The read blocks on a thread of its own, which it holds for the length of the run.
   let _ ← IO.asTask (prio := .dedicated) (exitWhenStdinCloses (← IO.getStdin))
   -- The main thread, where the test runs, reads an empty standard input from here on.

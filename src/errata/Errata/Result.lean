@@ -125,6 +125,10 @@ structure Result where
   description? : Option String := none
   /-- A command line that runs the test again by hand, for a test that did not pass. -/
   reproduce? : Option String := none
+  /-- The settings that the test received, in the order it received them, on the test's own result. -/
+  settings : Array (String × String) := #[]
+  /-- Whether the test ran for longer than the configuration's {lit}`slow-after`. -/
+  slow : Bool := false
 deriving Repr, Inhabited, DecidableEq
 
 /--

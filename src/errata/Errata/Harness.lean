@@ -48,42 +48,51 @@ def settingsOf (args : List String) : Array (String × String) :=
     | name :: value => some (name, "=".intercalate value)
 
 /--
-The settings that the Lean harness itself reads: {lit}`seed`, the seed for property tests, and
-{lit}`updateGolden`, which rewrites golden files when it is {lit}`true`.
+The setting that the Lean harness reads itself, which no test declares: {lit}`updateGolden`, which
+rewrites golden files when it is {lit}`true`. The runner passes it for {lit}`--update-golden`.
 -/
-def harnessSettings : List String := ["seed", "updateGolden"]
+def harnessSettings : List String := ["updateGolden"]
 
 /--
-The context for a test run with the given settings. The harness's own settings configure it, and
-every other setting becomes a test option, read with {name}`option?` and {name}`flag`. Without a
-seed, one is chosen at random. Tests reach their helpers through this test executable's
-{lit}`errata-helper` mode.
+The context for a test run with the given settings. The harness's own setting configures it. Tests
+reach their helpers through this test executable's {lit}`errata-helper` mode.
 -/
-def contextOf (settings : Array (String × String)) : IO (Except String Context) := do
+def contextOf (settings : Array (String × String)) : IO TestContext := do
   let lookup (name : String) : Option String := (settings.findRev? (·.1 == name)).map (·.2)
-  let seed? ← match lookup "seed" with
-    | none => pure (Except.ok none)
-    | some s => match s.toNat? with
-      | some n => pure (.ok (some n))
-      | none => pure (.error s!"the setting seed={s} is not a natural number")
-  let seed? ← match seed? with
-    | .ok s => pure s
-    | .error e => return .error e
-  let options : OptionMap := settings.foldl (init := {}) fun acc (name, value) =>
-    if harnessSettings.contains name then acc
-    else acc.insert name ((acc.getD name #[]).push value)
   let ctx ← mkContext (updateGolden := lookup "updateGolden" == some "true")
-    (options := options) (seed := seed?)
-  return .ok { ctx with helperCommand := some #[(← IO.appPath).toString, "errata-helper"] }
+  return { ctx with helperCommand := some #[(← IO.appPath).toString, "errata-helper"] }
 
-/-- Writes the inventory: the protocol record, then a test record for each entry. -/
+/--
+The settings that the tests in {name}`entries` take, each once, in the order in which the entries
+first name them.
+-/
+def reachedSettings (entries : Array TestEntry) : Array SettingRef := Id.run do
+  let mut seen : Std.HashSet String := {}
+  let mut out := #[]
+  for e in entries do
+    for s in e.settings do
+      unless seen.contains s.name do
+        seen := seen.insert s.name
+        out := out.push s
+  return out
+
+/--
+Writes the inventory: the protocol record, a setting record for each setting that the tests take,
+with its description and its declared default, and then a test record for each entry, with its
+tags and the settings it takes.
+-/
 def writeInventory (entries : Array TestEntry) (out : IO.FS.Handle) : IO Unit := do
   writeRecord out (.protocol (some version))
+  for s in reachedSettings entries do
+    writeRecord out (.setting (some s.name) s.description? s.default?)
   for e in entries do
     writeRecord out <| .test {
       name? := some e.name, path? := some e.path, file? := some e.location.file
       line? := some e.location.startPos.line, col? := some e.location.startPos.column
       description? := e.docstring?
+      tags? := if e.tags.isEmpty then none else some e.tags
+      settings? := if e.settings.isEmpty then none
+        else some (e.settings.map fun s => { name := s.name, optional := s.optional })
     }
 
 /-- The record fields for the status of a finished check. -/
@@ -98,10 +107,11 @@ Runs one test, writing its records to {name}`out`: {lit}`start` as its body begi
 and again as it finishes, and a {lit}`verdict` at the end. Each output record names the named result
 that was open when the fragment was written, {lit}`0` for the test itself. A named result that failed
 within an {name (scope := "Errata.TestM")}`expectFail` that expected it is reported again with the
-status {lit}`expectedFailure`. The result is the exit code: {lit}`0` for a pass and {lit}`1`
-otherwise.
+status {lit}`expectedFailure`. The test receives {name}`settings`. The result is the exit code:
+{lit}`0` for a pass and {lit}`1` otherwise.
 -/
-def runTest (entry : TestEntry) (ctx : Context) (out : IO.FS.Handle) : IO UInt32 := do
+def runTest (entry : TestEntry) (ctx : TestContext) (settings : Array (String × String))
+    (out : IO.FS.Handle) : IO UInt32 := do
   writeRecord out (.start (some (← nowMs)))
   -- The results that are open, innermost last, and the identifier of the next one. Output and
   -- result events arrive in the order the test produced them, so the result that wrote a fragment
@@ -150,7 +160,7 @@ def runTest (entry : TestEntry) (ctx : Context) (out : IO.FS.Handle) : IO UInt32
           if frames.isEmpty then frames else frames.modify (frames.size - 1) (· ++ failed)
   let ctx := { ctx with writeOutput := some saveOutput, watchResults := some watch }
   let start ← IO.monoMsNow
-  let results ← runEntry ctx entry
+  let results ← runEntry ctx entry settings
   let durationMs := (← IO.monoMsNow) - start
   let status := (results[0]?.map (·.status)).getD .pass
   let (st, message?, detail?, location?) := statusInfo status
@@ -201,11 +211,9 @@ def dispatch (entries : Array TestEntry) (args : List String) (helpers : Array H
     let some entry := (indexByName entries).get? name |>.bind (entries[·]?)
       | writeRecord out (.verdict { status? := some .error, message? := some s!"no test is named {name}" })
         return 1
-    match ← contextOf (settingsOf rest) with
-    | .error msg =>
-      writeRecord out (.verdict { status? := some .error, message? := some msg })
-      return 1
-    | .ok ctx => runTest entry ctx out
+    let settings := settingsOf rest
+    let ctx ← contextOf settings
+    runTest entry ctx (settings.filter (!harnessSettings.contains ·.1)) out
   | _ =>
     IO.eprintln usage
     return 2
@@ -236,14 +244,17 @@ def exitWhenStdinCloses (parentIn : IO.FS.Stream) : IO Unit := do
 The main of a test executable made by the Lean harness, over the tests in {name}`entries`.
 
 {lit}`errata-list <out>` writes the inventory to the file {lit}`out`: the {lit}`protocol` record,
-then a {lit}`test` record per test with its fully qualified name, the name's components as its path,
-its file, line, and column, and its docstring as its description.
+then a {lit}`setting` record for each setting that the tests take, with its docstring as its
+description and its declared default, then a {lit}`test` record per test with its fully qualified
+name, the name's components as its path, its file, line, and column, its docstring as its
+description, its tags, and the settings it takes.
 
 {lit}`errata-run <out> <name> [setting:NAME=VALUE]...` runs the test with that name and writes its
-records to {lit}`out`. It exits with {lit}`0` when the test passes and {lit}`1` otherwise. The runner
-passes its own options to the test as settings: {lit}`setting:seed=N` is the seed for property tests,
-and {lit}`setting:updateGolden=true` rewrites golden files. Every other setting is a test option,
-read with {name}`option?` and {name}`flag`. When the environment variable {lit}`ERRATA_LIFELINE` is
+records to {lit}`out`. It exits with {lit}`0` when the test passes and {lit}`1` otherwise. The test
+receives the settings, and parses the values of those it takes; a missing mandatory setting or a
+value that a setting's parser rejects ends the test with an error. The runner passes
+{lit}`setting:updateGolden=true` for {lit}`--update-golden`, which the harness reads itself, with no
+declaration, to rewrite golden files. When the environment variable {lit}`ERRATA_LIFELINE` is
 {lit}`1`, as the runner sets it, the executable's standard input is its lifeline: when the pipe
 closes, the executable ends its own process group and exits. Otherwise the command runs by hand with
 any standard input, {lit}`/dev/null` included. The test itself reads an empty standard input.

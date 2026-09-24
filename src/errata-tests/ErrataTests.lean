@@ -18,6 +18,8 @@ import ErrataTests.Fixture.Sub
 import ErrataTests.Docstrings
 import ErrataTests.WidgetInteractive
 import ErrataTests.Conformance
+import ErrataTests.Settings
+import ErrataTests.Filter
 
 open Errata
 open Errata.Widget.Runner
@@ -223,9 +225,9 @@ def markdownReportShowsDocstring : Test := do
   assertContains "u: boom</summary>\n\nChecks `x` and **y**.\n\n"
     (markdownReport { results := #[fail], seed := 0 })
 
-/-- A property test. -/
+/-- A property test: a partial application of `property`, which takes the seed. -/
 @[test]
-def addComm : Test :=
+def addComm : seed → Test :=
   property (∀ a b : Nat, a + b = b + a)
 
 open Lean (toJson fromJson?)
@@ -244,7 +246,7 @@ deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Result
 
 /-- The JSON encoding of a result round-trips: decoding the encoding recovers the result. -/
 @[test]
-def jsonRoundTrips : Test :=
+def jsonRoundTrips : seed → Test :=
   property (∀ r : Result, (fromJson? (toJson r)).toOption = some r)
 
 /-- A temp-directory fixture with a golden file. -/
@@ -480,10 +482,10 @@ private def failDetail? (r : Result) : Option String :=
   | .fail f => f.detail?
   | _ => none
 
-/-- Runs a test with the given seed, or a fresh one, returning the seed used and the results. -/
-private def seededResults (seed? : Option Nat) (act : Test) : TestM (Nat × Array Result) := do
-  let cfg ← mkContext (seed := seed?)
-  return (cfg.seed, ← runEntry cfg (TestEntry.of "p" "M" "t" default act))
+/-- Runs a test that takes the seed with the given one, returning the seed and the results. -/
+private def seededResults (seed : Nat) (act : Errata.seed → Test) : TestM (Nat × Array Result) := do
+  let cfg ← mkContext
+  return (seed, ← runEntry cfg (TestEntry.of "p" "M" "t" default (act seed)))
 
 /--
 A failed property's detail names the seed that produced its counterexample, and running again with
@@ -491,18 +493,18 @@ that seed produces the same counterexample. Another seed produces another counte
 -/
 @[test]
 def propertySeedReplays : Test := do
-  let wide : Test := property (∀ x : Wide, x.n ≠ x.n)
-  let (seed, first) ← seededResults none wide
+  let wide : Errata.seed → Test := property (∀ x : Wide, x.n ≠ x.n)
+  let (seed, first) ← seededResults (← IO.rand 0 (2 ^ 32 - 1)) wide
   let some detail := failDetail? first[0]! | fail "expected the property to fail"
   -- The counterexample is the detail's first paragraph.
   let counterexample (detail : String) : String := (detail.splitOn "\n\n").headD detail
   result "the detail names the seed" do
     assertContains s!"seed {seed}" detail
   result "the seed replays the counterexample" do
-    let (_, again) ← seededResults (some seed) wide
+    let (_, again) ← seededResults seed wide
     assertBEq (some (counterexample detail)) ((failDetail? again[0]!).map counterexample)
   result "another seed gives another counterexample" do
-    let (_, other) ← seededResults (some (seed + 1)) wide
+    let (_, other) ← seededResults (seed + 1) wide
     assertTrue (((failDetail? other[0]!).map counterexample) != some (counterexample detail))
       "the counterexample did not change with the seed"
 
@@ -968,6 +970,103 @@ def driverRunsHelpers : Test := do
     assertNotContains "shout" out.stdout
 
 /--
+The `list` subcommand discovers the tests of every library and prints those that its filters select,
+one per line with the executable, the name, the file and line, and the tags. A filter that does not
+parse is reported at its place, and the command fails.
+-/
+@[test]
+def driverListsTests : Test := do
+  let fixture := fixturesDir / "driver-configured"
+  result "a filter" do
+    let out ← lakeInFixture fixture #["test", "--", "list", "name(#*[Pp]anic*)"]
+    assertExitCode 0 out
+    let lines := out.stdout.splitOn "\n" |>.filter (·.startsWith "AppPanic")
+    assertBEq 1 lines.length
+    assertContains "panics" (lines.headD "")
+    assertContains "AppPanic.lean:" (lines.headD "")
+  result "several filters and none" do
+    let two ← lakeInFixture fixture #["test", "--", "list", "exe(App)", "exe(AppUnsafe)"]
+    assertExitCode 0 two
+    assertBEq 3 (two.stdout.splitOn "\n" |>.filter (·.startsWith "App")).length
+    let all ← lakeInFixture fixture #["test", "--", "list"]
+    assertExitCode 0 all
+    assertContains "safeTest" all.stdout
+    assertContains "failsAsWritten" all.stdout
+  result "a filter that does not parse" do
+    let out ← lakeInFixture fixture #["test", "--", "list", "name(x"]
+    assertExitCode 1 out
+    assertContains "list filter 1:6: expected ')' to end the matcher" out.stderr
+
+/-- The workspace for the driver's tests of `errata.toml`, and the variants of the file it tries. -/
+private def tomlFixture : System.FilePath := fixturesDir / "driver-toml"
+
+/--
+Runs Lake in the `driver-toml` fixture with its `errata.toml` replaced by the variant `name`, and
+restores the file afterwards.
+-/
+private def withTomlVariant (name : String) (args : Array String) : IO IO.Process.Output := do
+  let toml := tomlFixture / "errata.toml"
+  let original ← IO.FS.readFile toml
+  try
+    IO.FS.writeFile toml (← IO.FS.readFile (tomlFixture / "variants" / s!"{name}.toml"))
+    lakeInFixture tomlFixture args
+  finally
+    IO.FS.writeFile toml original
+
+/--
+The driver checks `errata.toml` before it builds any test executable, and reports each problem at
+its position in the file: a TOML syntax error, a setting that is neither a string nor
+`{ needs = … }`, an unknown key, profiles that inherit in a cycle, a malformed duration, a target that
+Lake does not know, and a malformed `[[executable]]`.
+-/
+@[test]
+def driverValidatesToml : Test := do
+  let cases : List (String × List String) := [
+    ("syntax", ["errata.toml:1:16:"]),
+    ("wrong-type", ["errata.toml:2:12: the setting 'stampFile' must be a string or \
+      { needs = \"target\" }, and it is an integer"]),
+    ("unknown-key", ["errata.toml:3:9: unknown key 'flavor' in the profile 'default'"]),
+    ("cycle", ["errata.toml:2:11: the profiles inherit in a cycle: a → b → a",
+      "errata.toml:5:11: the profiles inherit in a cycle: b → a → b"]),
+    ("bad-duration", ["errata.toml:2:10: 'timeout' must be a duration"]),
+    ("unknown-target", ["errata.toml:2:22: the target 'nonexistent' cannot be built:"]),
+    ("bad-executable", ["errata.toml:3:10: 'command' must have at least one word"])]
+  for (variant, messages) in cases do
+    result variant do
+      let out ← withTomlVariant variant #["test"]
+      assertExitCode 1 out
+      for m in messages do
+        assertContains m out.stderr
+      assertNotContains "errataExe" out.stdout
+
+/--
+A setting bound to a target with `{ needs = … }` receives the target's result. Editing the target's
+input rebuilds the runner's configuration, and leaves the test library alone.
+-/
+@[test]
+def driverBuildsNeededTargets : Test := do
+  let input := tomlFixture / "stamp-input.txt"
+  let config := tomlFixture / ".lake" / "errata" / "config.json"
+  let olean := tomlFixture / ".lake" / "build" / "lib" / "lean" / "TomlLib.olean"
+  let original ← IO.FS.readFile input
+  try
+    let out ← lakeInFixture tomlFixture #["test"]
+    assertExitCode 0 out
+    assertContains "1 passed, 0 failed, 0 errors, 0 inconclusive" out.stdout
+    assertContains "stamp.txt" (← IO.FS.readFile config)
+    let configBefore := (← config.metadata).modified
+    let oleanBefore := (← olean.metadata).modified
+    IO.FS.writeFile input "stamp 2\n"
+    let again ← lakeInFixture tomlFixture #["test"]
+    assertExitCode 0 again
+    result "the configuration is rebuilt" do
+      assertTrue ((← config.metadata).modified != configBefore) "config.json was not rewritten"
+    result "the test library is not" do
+      assertTrue ((← olean.metadata).modified == oleanBefore) "TomlLib.olean was rebuilt"
+  finally
+    IO.FS.writeFile input original
+
+/--
 The compile-time commands register their verdicts as tests, so a module that imports only
 `Errata.CompileTime` builds and its tests are discovered. The fixture's `AppCompileTime` library has
 one `#test_guard` and one `#test_msgs`.
@@ -1140,7 +1239,7 @@ def runnerHelpNamesInvocation : Test := do
 
 /--
 The runner's command line: the configuration file first, the `-v` forms select the verbosity,
-declared flags parse, and options for the tests go after `--`.
+declared flags parse, `--set` and `--filter` repeat, and `list` begins the subcommand.
 -/
 @[test]
 def runnerArgParsing : Test := do
@@ -1173,10 +1272,12 @@ def runnerArgParsing : Test := do
     assertBEq (some true) ((parse ["--list"]).toOption.map (·.list))
   result "timeout and grace period" do
     let opts := (parse ["--timeout", "90s", "--grace-period", "250ms"]).toOption
-    assertBEq (some 90000) (opts.map (·.timeoutMs))
-    assertBEq (some 250) (opts.map (·.gracePeriodMs))
-  result "default timeout" do
-    assertBEq (some 600000) ((parse []).toOption.map (·.timeoutMs))
+    assertBEq (some (some 90000)) (opts.map (·.timeoutMs?))
+    assertBEq (some (some 250)) (opts.map (·.gracePeriodMs?))
+  result "hours" do
+    assertBEq (some (some 7200000)) ((parse ["--timeout", "2h"]).toOption.map (·.timeoutMs?))
+  result "no timeout given" do
+    assertBEq (some none) ((parse []).toOption.map (·.timeoutMs?))
   result "malformed timeout rejected" do
     assertTrue ((parse ["--timeout", "soon"]) matches .error _)
   result "one job" do
@@ -1187,14 +1288,26 @@ def runnerArgParsing : Test := do
     assertTrue ((parse ["--jobs", "0"]) matches .error _)
   result "zero timeout rejected" do
     assertTrue ((parse ["--timeout", "0s"]) matches .error _)
-  result "test options after --" do
-    let opts := (parse ["--", "--golden", "on", "--flag=v=1", "--golden", "two"]).toOption
-    assertBEq (some #[("golden", "on"), ("flag", "v=1"), ("golden", "two")])
-      (opts.map (·.testOptions))
-  result "valueless test option" do
-    assertBEq (some #[("fast", "")]) ((parse ["--", "--fast"]).toOption.map (·.testOptions))
-  result "reserved test option rejected" do
-    assertTrue ((parse ["--", "--seed=3"]) matches .error _)
+  result "settings" do
+    let opts := (parse ["--set", "golden=on", "--set=flag=v=1", "-v", "--set", "empty="]).toOption
+    assertBEq (some #[("golden", "on"), ("flag", "v=1"), ("empty", "")]) (opts.map (·.sets))
+    assertBEq (some Verbosity.quiet) (opts.map (·.verbosity))
+  result "a setting without = rejected" do
+    assertTrue ((parse ["--set", "golden"]) matches .error _)
+  result "a setting without a value rejected" do
+    assertTrue ((parse ["--set"]) matches .error _)
+  result "profile" do
+    assertBEq (some "default") ((parse []).toOption.map (·.profile))
+    assertBEq (some "ci") ((parse ["--profile", "ci"]).toOption.map (·.profile))
+  result "filters" do
+    let opts := (parse ["--filter", "name(a)", "--filter=tag(slow)"]).toOption
+    assertBEq (some #["name(a)", "tag(slow)"]) (opts.map (·.filters))
+  result "the list subcommand" do
+    let opts := (parse ["list", "name(a)", "exe(B)"]).toOption
+    assertBEq (some (some #["name(a)", "exe(B)"])) (opts.map (·.listFilters?))
+    assertBEq (some none) ((parse []).toOption.map (·.listFilters?))
+  result "options after -- rejected" do
+    assertTrue ((parse ["--", "--golden", "on"]) matches .error _)
   result "unknown flag rejected" do
     assertTrue ((parse ["--golden", "on"]) matches .error _)
   result "panic flags rejected" do
@@ -1206,20 +1319,19 @@ def runnerArgParsing : Test := do
     | .ok _ => assertTrue false "expected an error"
 
 /--
-The Lean harness passes settings other than its own to the tests as options, reads its own seed, and
-reaches helpers through its own executable.
+The Lean harness reads the settings among its arguments, reads its own `updateGolden`, and reaches
+helpers through its own executable.
 -/
 @[test]
 def harnessSettings : Test := do
   let settings := Harness.settingsOf
     ["setting:seed=5", "setting:check-tex=", "setting:note=a=b", "fixture:x=y", "threads:2"]
   assertBEq #[("seed", "5"), ("check-tex", ""), ("note", "a=b")] settings
-  let .ok ctx ← Harness.contextOf settings | fail "the settings were rejected"
-  assertBEq 5 ctx.seed
-  assertBEq (some #[""]) (ctx.options.get? "check-tex")
-  assertBEq none (ctx.options.get? "seed")
+  let ctx ← Harness.contextOf settings
+  assertBEq false ctx.updateGolden
+  assertTrue (← Harness.contextOf #[("updateGolden", "true")]).updateGolden
   assertBEq (some "errata-helper") (ctx.helperCommand.bind (·[1]?))
-  assertTrue ((← Harness.contextOf #[("seed", "x")]) matches .error _) "a malformed seed is rejected"
+  assertTrue ctx.legacyOptions?.isNone "a test executable passes no free-form options"
 
 /--
 The Lean harness lists its tests with their names, paths, and locations, runs one by name, writing
@@ -1517,8 +1629,7 @@ def runOneWatchesResults : Test := do
 def runOneUnreadOptions : Test := do
   let reads : Test := do
     let _ ← flag "read"
-  let options : OptionMap := ({} : OptionMap)
-    |>.insert "read" #[""] |>.insert "zeta" #["1"] |>.insert "alpha" #["2", "3"]
+  let options := #[("read", ""), ("zeta", "1"), ("alpha", "2"), ("alpha", "3")]
   let o ← runEntryOutcome (.of "" "" "" default reads) (options := options)
   assertBEq #["alpha", "zeta"] o.unreadOptions
   result "a test given no options has none unread" do
@@ -1587,6 +1698,133 @@ def alternativeFailure : Test := expectFail failure
 /-- `<|>` recovers from an assertion failure by running the alternative. -/
 @[test]
 def alternativeOrElse : Test := failure <|> assertBEq 1 1
+
+/-- The test in the settings fixture module that takes settings. -/
+private def greetsEntry : TestM TestEntry := do
+  let some e := (getAllTests% "verso" ErrataTests.Settings).find? (·.name == "ErrataTests.Settings.greets")
+    | fail "the test that takes settings is missing"
+  return e
+
+/--
+A test's entry carries its tags and the settings it takes, in the order of its parameters, each with
+its description and its declared default.
+-/
+@[test]
+def testsCarryTagsAndSettings : Test := do
+  let e ← greetsEntry
+  assertBEq #["slow", "chatty"] e.tags
+  assertBEq #["greeting", "repeats", "quiet"] (e.settings.map (·.name))
+  assertBEq #[false, false, true] (e.settings.map (·.optional))
+  assertBEq #[some "hello", some "2", none] (e.settings.map (·.default?))
+  assertBEq (some "The word that a test greets with.")
+    (e.settings[0]?.bind (·.description?) |>.map (·.trimAscii.copy))
+  let some plain := (getAllTests% "verso" ErrataTests.Settings).find? (·.name == "ErrataTests.Settings.plain")
+    | fail "the plain test is missing"
+  assertBEq #[] plain.tags
+  assertBEq 0 plain.settings.size
+
+/--
+A test's action parses the values of the settings it takes and applies the test to them. The last
+value given for a setting counts, an optional setting without a value is `none`, and a missing
+mandatory setting or a value its parser rejects ends the test with an error that names the setting.
+-/
+@[test]
+def settingsAreParsed : Test := do
+  let e ← greetsEntry
+  let run (settings : Array (String × String)) : TestM Result := do
+    let rs ← runEntry (← mkContext) e settings
+    let some r := rs[0]? | fail "the test has no result"
+    return r
+  result "values reach the test" do
+    let r ← run #[("greeting", "hi"), ("repeats", "1"), ("repeats", "3")]
+    assertTrue r.status.isSuccess
+    assertBEq "hi\nhi\nhi\n" r.output.stdout
+  result "an optional setting" do
+    let r ← run #[("greeting", "hi"), ("repeats", "3"), ("quiet", "true")]
+    assertTrue r.status.isSuccess
+    assertBEq "" r.output.stdout
+  result "a missing mandatory setting" do
+    match (← run #[("greeting", "hi")]).status with
+    | .error m => assertContains "the mandatory setting repeats has no value" m
+    | s => fail s!"expected an error, got {repr s}"
+  result "a value that the parser rejects" do
+    match (← run #[("greeting", "hi"), ("repeats", "many")]).status with
+    | .error m => assertContains "the setting repeats has the value \"many\"" m
+    | s => fail s!"expected an error, got {repr s}"
+  result "an optional value that the parser rejects" do
+    match (← run #[("greeting", "hi"), ("repeats", "1"), ("quiet", "maybe")]).status with
+    | .error m => assertContains "the setting quiet has the value \"maybe\"" m
+    | s => fail s!"expected an error, got {repr s}"
+
+/--
+The Lean harness lists the settings that its tests take before the tests, each once, with its
+description and its default, and each test with its tags and the settings it takes.
+-/
+@[test]
+def harnessListsSettings : Test := do
+  let e ← greetsEntry
+  IO.FS.withTempDir fun dir => do
+    let out := dir / "out.jsonl"
+    IO.FS.writeFile out ""
+    assertBEq 0 (← Harness.dispatch #[e, e] ["errata-list", out.toString])
+    let lines := (← IO.FS.readFile out).splitOn "\n" |>.filter (!·.isEmpty)
+    let records := lines.filterMap fun l =>
+      match Protocol.Record.parseLine l with
+      | .ok (some (_, r)) => some r
+      | _ => none
+    match records with
+    | [.protocol _, .setting (some "greeting") (some d) (some "hello"),
+        .setting (some "repeats") _ (some "2"), .setting (some "quiet") _ none, .test info, .test _] =>
+      assertContains "greets with" d
+      assertBEq (some #["slow", "chatty"]) info.tags?
+      assertBEq (some #[{ name := "greeting" }, { name := "repeats" }, { name := "quiet", optional := true }])
+        info.settings?
+    | _ => fail s!"unexpected records: {lines}"
+
+/--
+error: `hiddenSetting` is private or not exported, so a test executable cannot reach it. Make it public, for example by declaring it in a `public section`.
+-/
+#test_msgs in
+@[setting] private def hiddenSetting : Setting where
+  type := Nat
+  fromString s := s.toNat?
+
+/--
+error: `unexposedSetting` must expose its value to the modules that import it, so that a test's parameter has the setting's type there. Mark it `@[expose]`.
+-/
+#test_msgs in
+@[setting] def unexposedSetting : Setting where
+  type := Nat
+  fromString s := s.toNat?
+
+/--
+error: `@[setting]` requires the type `Errata.Setting`, and `notASetting` has the type
+  Nat
+-/
+#test_msgs in
+@[setting, expose] def notASetting : Nat := 3
+
+/-- error: A setting named `greeting` is already declared as `ErrataTests.Settings.greeting` -/
+#test_msgs in
+@[setting, expose] def greeting : Setting where
+  type := String
+  fromString s := some s
+
+/--
+error: The parameter `n` of `takesNat` has the type
+  Nat
+which is not a setting. A test's parameters are settings: `S` or `Option S` for a declaration `S` marked `@[setting]`.
+-/
+#test_msgs in
+@[test] def takesNat (n : Nat) : Bool := n == n
+
+/-- error: `@[test]` has no argument `flavor`; its one argument is `tags` -/
+#test_msgs in
+@[test (flavor := sweet)] def flavored : Bool := true
+
+-- A partial application of `property` is a test that takes the seed.
+#test_msgs in
+@[test] def partialProperty : seed → Test := property (∀ n : Nat, n + 0 = n)
 
 -- Two guards whose first source line is identical must get distinct generated names.
 #test_guard 1 + 1 == 2

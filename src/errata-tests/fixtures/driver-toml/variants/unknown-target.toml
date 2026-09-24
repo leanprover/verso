@@ -1,0 +1,2 @@
+[profile.default.settings]
+stampFile = { needs = "nonexistent" }

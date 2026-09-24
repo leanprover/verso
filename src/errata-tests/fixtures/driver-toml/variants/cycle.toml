@@ -1,0 +1,5 @@
+[profile.a]
+inherits = "b"
+
+[profile.b]
+inherits = "a"

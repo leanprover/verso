@@ -229,5 +229,5 @@ private instance : Shrinkable HoistCase where
 
 /-- HTML hoisting reaches a fixed point after one complete post-processing pass. -/
 @[test]
-def postprocessIdempotent : Test := property <| ∀ test : HoistCase,
+def postprocessIdempotent : seed → Test := property <| ∀ test : HoistCase,
   postprocess (postprocess test.html) == postprocess test.html

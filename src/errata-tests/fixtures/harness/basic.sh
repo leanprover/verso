@@ -7,7 +7,7 @@ mode="$1"
 out="$2"
 
 tests=(pass fail verdict-fail silent unknown-records mismatch-pass mismatch-fail exits sleeps
-       stubborn spawns panics garbled records twice flood lingers)
+       stubborn spawns panics garbled records twice flood lingers greets needs-setting)
 # A suite that needs only some of the tests names them here, separated by spaces.
 if [ -n "$BASIC_TESTS" ]; then
   read -r -a tests <<< "$BASIC_TESTS"
@@ -17,11 +17,29 @@ record() {
   printf '%s\n' "$1" >> "$out"
 }
 
+# Every test takes the seed, and optionally a marker for the processes it starts and a note. Two tests
+# take more: `greets` a setting with a default, and `needs-setting` one that nothing gives a value.
+common='{"name":"seed","optional":false},{"name":"marker","optional":true},{"name":"note","optional":true}'
+
 case "$mode" in
   errata-list)
     record '{"type":"protocol","version":1}'
+    record '{"type":"setting","name":"seed","description":"The seed."}'
+    record '{"type":"setting","name":"marker","description":"Names the processes that a test starts."}'
+    record '{"type":"setting","name":"note","description":"A note."}'
+    record '{"type":"setting","name":"greeting","description":"A greeting.","default":"hello"}'
+    record '{"type":"setting","name":"needed","description":"A setting without a default."}'
     for t in "${tests[@]}"; do
-      record "{\"type\":\"test\",\"name\":\"$t\",\"path\":[\"basic\",\"$t\"],\"file\":\"basic.sh\"}"
+      settings="$common"
+      case "$t" in
+        greets) settings="$settings,{\"name\":\"greeting\",\"optional\":false}" ;;
+        needs-setting) settings="$settings,{\"name\":\"needed\",\"optional\":false}" ;;
+      esac
+      tags='["shell"]'
+      case "$t" in
+        sleeps|stubborn|flood|lingers) tags='["shell","slow"]' ;;
+      esac
+      record "{\"type\":\"test\",\"name\":\"$t\",\"path\":[\"basic\",\"$t\"],\"file\":\"basic.sh\",\"tags\":$tags,\"settings\":[$settings]}"
     done
     exit 0
     ;;
@@ -135,6 +153,17 @@ case "$mode" in
         echo "lingering"
         sleep 60 &
         wait
+        exit 0
+        ;;
+      greets)
+        # The settings arrive as arguments, which the test echoes.
+        for arg in "$@"; do
+          echo "received $arg"
+        done
+        exit 0
+        ;;
+      needs-setting)
+        echo "ran without its setting"
         exit 0
         ;;
       *)

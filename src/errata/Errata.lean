@@ -12,6 +12,8 @@ public import Errata.Context
 public import Errata.Here
 public import Errata.TestM
 public import Errata.Helpers
+public import Errata.SettingAttribute
+public import Errata.Setting
 public import Errata.IsTest
 public import Errata.Assertions
 public import Errata.Process
@@ -28,7 +30,9 @@ public import Errata.Property
 public import Errata.Protocol
 public import Errata.ProcessControl
 public import Errata.Harness
+public import Errata.Filter
 public import Errata.RunnerConfig
+public import Errata.Resolution
 public import Errata.Dispatcher
 public import Errata.RunnerMain
 

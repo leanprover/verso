@@ -1,0 +1,3 @@
+[profile.default]
+timeout = "10m"
+flavor = "sweet"

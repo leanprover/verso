@@ -7,6 +7,7 @@ module
 
 public import Errata.TestM
 public import Errata.IsTest
+public import Errata.Setting
 
 public section
 
@@ -15,7 +16,7 @@ set_option doc.verso true
 
 namespace Errata
 
-/-- A test to run: its identity and the action that produces its results. -/
+/-- A test to run: its identity, what it depends on, and the action that produces its results. -/
 structure TestEntry where
   /-- The package that defines the test. -/
   package : String
@@ -29,11 +30,19 @@ structure TestEntry where
   location : Location
   /-- The test's docstring, rendered as Markdown, when it has one. -/
   docstring? : Option String := none
-  /-- The action to run. -/
-  run : TestM Unit
+  /-- The test's tags. -/
+  tags : Array String := #[]
+  /-- The settings that the test takes as parameters, in the order of its parameters. -/
+  settings : Array SettingRef := #[]
+  /--
+  The action to run, given the settings as name and value pairs. It parses the values of the
+  settings that the test takes and applies the test to them.
+  -/
+  run : Array (String × String) → TestM Unit
 
 /--
-Builds a test entry from any testable value. The name's components are its path, split at dots.
+Builds a test entry from any testable value, which takes no settings. The name's components are its
+path, split at dots.
 -/
 def TestEntry.of {α} [IsTest α] (package moduleName name : String) (location : Location)
     (value : α) (docstring? : Option String := none) : TestEntry where
@@ -43,10 +52,14 @@ def TestEntry.of {α} [IsTest α] (package moduleName name : String) (location :
   path := if name.isEmpty then #[] else (name.splitOn ".").toArray
   location := location
   docstring? := docstring?
-  run := IsTest.toTest value
+  run := fun _ => IsTest.toTest value
 
-/-- Runs a single test entry, collecting all of its results. -/
-def runEntry (cfg : Context) (entry : TestEntry) : IO (Array Result) := do
+/--
+Runs a single test entry with the given settings, as name and value pairs, collecting all of its
+results.
+-/
+def runEntry (cfg : TestContext) (entry : TestEntry) (settings : Array (String × String) := #[]) :
+    IO (Array Result) := do
   let log ← IO.mkRef (#[] : Array Result)
   let insideMs ← IO.mkRef 0
   let ctx := { cfg with
@@ -55,34 +68,16 @@ def runEntry (cfg : Context) (entry : TestEntry) : IO (Array Result) := do
     description? := entry.docstring?
   }
   let start ← IO.monoMsNow
-  let (outcome, output) ← runCapturing ctx entry.run
+  let (outcome, output) ← runCapturing ctx (entry.run settings)
   let stop ← IO.monoMsNow
   let dur := stop - start
   let logged ← log.get
   return #[ctx.resultOfOutcome outcome output dur (← insideMs.get) logged] ++ logged
 
-/-- Runs all the test entries in this process, one after another, and collects their results. -/
-def run (cfg : Context) (entries : Array TestEntry) : IO (Array Result) := do
-  let mut all : Array Result := #[]
-  for entry in entries do
-    all := all ++ (← runEntry cfg entry)
-  return all
-
-/--
-A base context with the given settings and a fresh, empty log. Without a seed for property tests,
-one is generated using the default Lean RNG.
--/
-def mkContext (updateGolden : Bool := false)
-    (options : OptionMap := {}) (seed : Option Nat := none) : IO Context := do
-  let seed ←
-    match seed with
-    | some seed => pure seed
-    | none => IO.rand 0 (2 ^ 32 - 1)
+/-- A base context with a fresh, empty log. -/
+def mkContext (updateGolden : Bool := false) : IO TestContext := do
   let log ← IO.mkRef (#[] : Array Result)
-  let usedOptions ← IO.mkRef ({} : Std.HashSet String)
   let outputFailed ← IO.mkRef false
   let watchFailed ← IO.mkRef false
   let insideMs ← IO.mkRef 0
-  return {
-    updateGolden, options, seed, log, usedOptions, outputFailed, watchFailed, insideMs
-  }
+  return { updateGolden, log, outputFailed, watchFailed, insideMs }

@@ -53,7 +53,7 @@ A property: reversing a list of natural numbers twice gives the list back.
 The widget reports the random seed and allows experimentation with it.
 -/
 @[test]
-def reverseReverse : Test :=
+def reverseReverse : seed → Test :=
   property (∀ l : List Nat, (if shouldPass then l.reverse else l).reverse = l)
 
 /--
@@ -73,7 +73,7 @@ private def unlucky (l : List Nat) : Bool :=
 A property test that is highly likely to fail in a variety of ways.
 -/
 --@[test]
-def unluckyLists : Test :=
+def unluckyLists : seed → Test :=
   property (∀ l : List Nat, unlucky l = false)
 
 /--

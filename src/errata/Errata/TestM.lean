@@ -22,7 +22,7 @@ The monad in which tests run.
 The reader carries the configuration and the result log; the exception layer carries a structured
 failure, which the interpreter distinguishes from an {name}`IO.Error` that escapes.
 -/
-abbrev TestM := ReaderT Context (ExceptT TestFailure IO)
+abbrev TestM := ReaderT TestContext (ExceptT TestFailure IO)
 
 /-- A test: a {name}`TestM` action that succeeds unless it fails an assertion or raises an error. -/
 abbrev Test := TestM Unit
@@ -56,24 +56,34 @@ instance : Alternative TestM where
   failure := failHere "failure"
   orElse x y := tryCatch x fun _ => y ()
 
-/-- All values supplied for a test option, in order; records that the option was read. -/
+/--
+Deprecated: a test takes a setting as a parameter instead. All values that the editor widget's
+single-test runner supplied for a free-form option, in order; records that the option was read.
+Under a test executable, the result is empty.
+-/
 def optionValues (name : String) : TestM (Array String) := do
-  let ctx ← read
-  ctx.usedOptions.modify (·.insert name)
-  return ctx.options.getD name #[]
+  let some legacy := (← read).legacyOptions? | return #[]
+  legacy.used.modify (·.insert name)
+  return legacy.values.getD name #[]
 
-/-- The last value supplied for a test option, if any; records that the option was read. -/
+/--
+Deprecated: a test takes a setting as a parameter instead. The last value that the editor widget's
+single-test runner supplied for a free-form option, if any; records that the option was read.
+-/
 def option? (name : String) : TestM (Option String) :=
   return (← optionValues name).back?
 
-/-- Whether a test option is present and not set to an explicit false value; records the read. -/
+/--
+Deprecated: a test takes a setting as a parameter instead. Whether the editor widget's single-test
+runner supplied a free-form option with a value other than an explicit false one; records the read.
+-/
 def flag (name : String) : TestM Bool :=
   return match (← optionValues name).back? with
     | some v => v != "false" && v != "0" && v != "no"
     | none => false
 
 /-- Builds a result for the current scope with the given status and duration. -/
-def Context.mkResult (ctx : Context) (status : Status) (durationMs : Nat := 0) : Result where
+def TestContext.mkResult (ctx : TestContext) (status : Status) (durationMs : Nat := 0) : Result where
   test := ctx.test
   path := ctx.path
   resultPath := ctx.resultPath
@@ -92,7 +102,7 @@ The status is the worst of the code's own outcome and the statuses of the named 
 below it: an error outranks a failure, which outranks a pass. The duration does not include that of
 inner named results.
 -/
-def Context.resultOfOutcome (ctx : Context)
+def TestContext.resultOfOutcome (ctx : TestContext)
     (outcome : Except IO.Error (Except TestFailure Unit)) (output : OutputLog)
     (durationMs insideMs : Nat) (recorded : Array Result) : Result :=
   let below := recorded.filter (·.resultPath.size == ctx.resultPath.size + 1)
@@ -175,7 +185,7 @@ captured. A destination that prints then reaches the runner's own streams from a
 The first failure is reported on the runner's stderr, under the name {name}`what`. {name}`failed`
 records it, and later calls leave the destination alone.
 -/
-private def toLiveDestination (ctx : Context) (failed : IO.Ref Bool) (what : String)
+private def toLiveDestination (ctx : Context.Common) (failed : IO.Ref Bool) (what : String)
     (act : IO Unit) : IO Unit := do
   unless ← failed.get do
     let run : IO Unit :=
@@ -194,9 +204,9 @@ private def toLiveDestination (ctx : Context) (failed : IO.Ref Bool) (what : Str
 Hands a result event to the context's watcher, as output is handed to its destination. The watcher
 has a failure record of its own, so it keeps receiving events after a write of output has failed.
 -/
-private def notifyResult (ctx : Context) (ev : ResultEvent) : IO Unit := do
+private def notifyResult (ctx : TestContext) (ev : ResultEvent) : IO Unit := do
   if let some watch := ctx.watchResults then
-    toLiveDestination ctx ctx.watchFailed "result watcher" (watch ev)
+    toLiveDestination ctx.toCommon ctx.watchFailed "result watcher" (watch ev)
 
 /--
 Runs a test action with the given context, capturing its outcome as data rather than letting it
@@ -206,7 +216,7 @@ it is written, so a live runner can stream output while the test runs.
 
 Output from tasks or subprocesses spawned by the test is not captured.
 -/
-def runCapturing (ctx : Context) (act : TestM Unit) :
+def runCapturing (ctx : TestContext) (act : TestM Unit) :
     IO (Except IO.Error (Except TestFailure Unit) × OutputLog) := do
   let log ← IO.mkRef (#[] : Array Output)
   -- The destination runs with the streams from before the outermost capture, so writing to stdout
@@ -219,7 +229,7 @@ def runCapturing (ctx : Context) (act : TestM Unit) :
   let emit (o : Output) : IO Unit := do
     log.modify (·.push o)
     if let some dest := ctx.writeOutput then
-      toLiveDestination ctx ctx.outputFailed "live output destination" (dest o)
+      toLiveDestination ctx.toCommon ctx.outputFailed "live output destination" (dest o)
   let (outStream, outClose) ← captureStream emit .stdout
   let (errStream, errClose) ← captureStream emit .stderr
   -- Closing inside the captured action makes dangling bytes at the end of the test an error of the

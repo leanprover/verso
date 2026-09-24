@@ -92,11 +92,12 @@ private def resultLines (verbosity : Verbosity) (r : Result) (lead label : Strin
     Array String := Id.run do
   let detail := lead ++ "    "
   let mut out := #[]
+  let slow := if r.slow then " [slow]" else ""
   let headline := match r.outcome with
-    | .reported .pass => s!"{lead}{statusTag r.outcome} {label} ({r.durationMs}ms)"
-    | .reported (.fail f) => s!"{lead}{statusTag r.outcome} {label}: {f.message}"
-    | .reported (.error m) => s!"{lead}{statusTag r.outcome} {label}: {m}"
-    | .inconclusive reason => s!"{lead}{statusTag r.outcome} {label}: {reason.describe}"
+    | .reported .pass => s!"{lead}{statusTag r.outcome} {label} ({r.durationMs}ms){slow}"
+    | .reported (.fail f) => s!"{lead}{statusTag r.outcome} {label}{slow}: {f.message}"
+    | .reported (.error m) => s!"{lead}{statusTag r.outcome} {label}{slow}: {m}"
+    | .inconclusive reason => s!"{lead}{statusTag r.outcome} {label}{slow}: {reason.describe}"
   out := out.push headline
   if verbosity.showsAllDocstrings || !r.outcome.isPass then
     if let some d := r.description? then out := out.push (indentLines d detail)
@@ -412,7 +413,20 @@ instance : ToJson Result where
       r.outcome.fields ++
       (if r.output.isEmpty then [] else [("output", ToJson.toJson r.output)]) ++
       (match r.description? with | some d => [("description", Json.str d)] | none => []) ++
-      (match r.reproduce? with | some c => [("reproduce", Json.str c)] | none => [])
+      (match r.reproduce? with | some c => [("reproduce", Json.str c)] | none => []) ++
+      (if r.settings.isEmpty then []
+        else [("settings", Json.arr (r.settings.map fun (k, v) =>
+          Json.mkObj [("name", Json.str k), ("value", Json.str v)]))]) ++
+      (if r.slow then [("slow", Json.bool true)] else [])
+
+/-- Decodes the settings of a result: an array of objects with a name and a value. -/
+def resultSettings (j : Json) : Except String (Array (String × String)) := do
+  match j.getObjVal? "settings" with
+  | .error _ => return #[]
+  | .ok v =>
+    let items ← v.getArr?
+    items.mapM fun item => do
+      return (← item.getObjValAs? String "name", ← item.getObjValAs? String "value")
 
 instance : FromJson Result where
   fromJson? j := do
@@ -430,7 +444,9 @@ instance : FromJson Result where
       outcome := ← Outcome.ofFields? j,
       output := (← optField j "output").getD {},
       description? := ← optField j "description",
-      reproduce? := ← optField j "reproduce"
+      reproduce? := ← optField j "reproduce",
+      settings := ← resultSettings j,
+      slow := (← optField j "slow").getD false
     }
 
 /--

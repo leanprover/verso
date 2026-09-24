@@ -34,12 +34,14 @@ structure Planned where
   path : Array String := #[]
   /-- The test's description from the inventory. -/
   description? : Option String := none
-  /-- The seed that the test receives. -/
-  seed : Nat
+  /-- The seed that the test receives, when it takes the {lit}`seed` setting. -/
+  seed? : Option String := none
   /-- The settings that the test receives, in order, the seed among them. -/
   settings : Array (String × String) := #[]
   /-- The command line that runs the test by hand. -/
   reproduce : String
+  /-- How long the test may run before the report marks it slow, in milliseconds. -/
+  slowAfterMs : Nat := 60 * 1000
 deriving Repr, Inhabited
 
 /-- How a test executable's process ended, as the runner observed it. -/
@@ -50,6 +52,8 @@ inductive Exit where
   | timedOut (afterMs : Nat) (killed : Bool)
   /-- The process could not be started. -/
   | spawnFailed (message : String)
+  /-- The process was not started, since the mandatory setting has no value. -/
+  | settingMissing (setting : String)
 deriving Repr, Inhabited
 
 /-- Something that happened during a run. -/
@@ -155,6 +159,7 @@ zero exit with no verdict is a pass, a non-zero exit with no verdict is
 def mergeOutcome (verdict? : Option Protocol.VerdictInfo) (unreadable? : Option String)
     (exit : Exit) : Outcome :=
   match exit with
+  | .settingMissing s => .inconclusive (.settingMissing s)
   | .spawnFailed m => .inconclusive (.spawnFailed m)
   | .timedOut ms killed => .inconclusive (.timedOut ms killed)
   | .exited code =>
@@ -210,7 +215,9 @@ def testResults (r : Running) (exit : Exit) (durationMs : Nat) : Array Result :=
     durationMs := durationMs - inside
     output := { log := r.output }
     description? := p.description?
-    reproduce? := if outcome.isPass then none else some p.reproduce
+    reproduce? := if outcome.isPass || exit matches .settingMissing _ then none else some p.reproduce
+    settings := p.settings
+    slow := durationMs ≥ p.slowAfterMs
   }
   #[own] ++ named
 
@@ -220,8 +227,9 @@ def outcomeEvent (p : Planned) (outcome : Outcome) (durationMs : Nat) : Json :=
     [("type", Json.str "outcome"), ("exe", Json.str p.exe), ("test", Json.str p.test),
       ("kind", Json.str "test"), ("path", ToJson.toJson p.path)] ++
     outcome.fields ++
-    [("duration_ms", ToJson.toJson durationMs), ("seed", Json.str (toString p.seed)),
-      ("settings", Json.mkObj (p.settings.toList.map fun (k, v) => (k, Json.str v)))] ++
+    [("duration_ms", ToJson.toJson durationMs)] ++
+    (match p.seed? with | some s => [("seed", Json.str s)] | none => []) ++
+    [("settings", Json.mkObj (p.settings.toList.map fun (k, v) => (k, Json.str v)))] ++
     (match p.description? with | some d => [("description", Json.str d)] | none => []) ++
     (if outcome.isPass then [] else [("reproduce", Json.str p.reproduce)])
 

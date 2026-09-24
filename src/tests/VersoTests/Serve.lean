@@ -22,21 +22,21 @@ namespace Verso.Tests.Serve
 
 /-- A range result stays within bounds whenever it selects a sub-range. -/
 @[test]
-def rangeBounds : Test := property <| ∀ (a b size : Nat), show Bool from
+def rangeBounds : seed → Test := property <| ∀ (a b size : Nat), show Bool from
   match parseRange s!"bytes={a}-{b}" size with
   | .range s e => s ≤ e && e < size
   | _ => true
 
 /-- The resolved mount's prefix is genuinely a prefix of the request, and no match is missed. -/
 @[test]
-def mountPrefix : Test := property <| ∀ (prefixes segs : Array String), show Bool from
+def mountPrefix : seed → Test := property <| ∀ (prefixes segs : Array String), show Bool from
   match resolveMountBy id prefixes segs with
   | some (p, _) => (prefixSegments p).isPrefixOf segs
   | none => prefixes.all fun q => !(prefixSegments q).isPrefixOf segs
 
 /-- The chosen mount has the longest matching prefix of any candidate. -/
 @[test]
-def mountLongest : Test := property <| ∀ (prefixes segs : Array String), show Bool from
+def mountLongest : seed → Test := property <| ∀ (prefixes segs : Array String), show Bool from
   match resolveMountBy id prefixes segs with
   | some (p, _) =>
     prefixes.all fun q =>
@@ -45,7 +45,7 @@ def mountLongest : Test := property <| ∀ (prefixes segs : Array String), show 
 
 /-- Mount resolution does not depend on the order of the mount table. -/
 @[test]
-def mountShuffle : Test := property <| ∀ (prefixes segs : Array String),
+def mountShuffle : seed → Test := property <| ∀ (prefixes segs : Array String),
   (resolveMountBy id prefixes segs).map (·.1) ==
     (resolveMountBy id prefixes.reverse segs).map (·.1)
 

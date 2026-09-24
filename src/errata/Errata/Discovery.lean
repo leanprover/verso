@@ -8,10 +8,12 @@ module
 public import Errata.IsTest
 public import Errata.Runner
 public import Errata.Helpers
+public import Errata.Setting
 public import Errata.TestRegistry
 public import Lean
 public meta import Lean
 public meta import Errata.TestRegistry
+public meta import Errata.SettingAttribute
 public meta import Errata.NameJson
 public meta import Errata.Widget
 
@@ -25,22 +27,62 @@ set_option doc.verso true
 namespace Errata
 
 /--
-Builds the action that runs a declaration as a test, using the {name}`IsTest` instance for its type
-that is visible at the declaration. The declaration must not be {lit}`meta` or universe polymorphic.
+The setting that a parameter's type names: {lit}`S` for a parameter of type {lit}`S` and
+{lit}`Option S`, where {lit}`S` is a declaration that {lit}`@[setting]` marks. The type is read as
+elaborated, where the parameter {lit}`(x : S)` has the type {lit}`Setting.type S`.
 -/
-meta def testAction (decl : Name) : MetaM Expr := do
+meta def settingOfParameter? (env : Environment) (type : Expr) : Option SettingUse :=
+  let known (e : Expr) : Option Name :=
+    match e with
+    | .app (.const ``Errata.Setting.type []) (.const s []) =>
+      if (settingExt.getState env).any (·.decl == s) then some s else none
+    | _ => none
+  match type with
+  | .app (.const ``Option _) inner => (known inner).map ({ decl := ·, optional := true })
+  | _ => (known type).map ({ decl := ·, optional := false })
+
+/--
+Builds the action that runs a declaration as a test, using the {name}`IsTest` instance for its type
+that is visible at the declaration, and returns it with the settings that the test takes. Every
+parameter of the declaration is a setting {lit}`S` or {lit}`Option S`. The action receives the
+settings as name and value pairs, parses each parameter's value with its setting's parser, and
+applies the test to the values. The declaration must not be {lit}`meta` or universe polymorphic.
+-/
+meta def testAction (decl : Name) : MetaM (Expr × Array SettingUse) := do
   let env ← getEnv
   if isMarkedMeta env decl then
     throwError m!"A test must not be `meta`"
   let info ← getConstInfo decl
   unless info.levelParams.isEmpty do
     throwError m!"A test must not be universe polymorphic"
-  let goal := mkApp (mkConst ``IsTest) info.type
-  match ← trySynthInstance goal with
-  | .some inst =>
-    return mkApp3 (mkConst ``IsTest.toTest) info.type (← instantiateMVars inst) (mkConst decl)
-  | _ =>
-    throwError m!"`@[test]` requires an `Errata.IsTest` instance for the test's type{indentExpr info.type}"
+  let pairs := mkApp2 (mkConst ``Prod [.zero, .zero]) (mkConst ``String) (mkConst ``String)
+  let settingsType := mkApp (mkConst ``Array [.zero]) pairs
+  withLocalDeclD `settings settingsType fun settings => do
+    forallTelescope info.type fun params body => do
+      let mut uses : Array SettingUse := #[]
+      for p in params do
+        let ty ← instantiateMVars (← inferType p)
+        match settingOfParameter? env ty with
+        | some use => uses := uses.push use
+        | none =>
+          throwError m!"The parameter `{← p.fvarId!.getUserName}` of `{privateToUserName decl}` has \
+            the type{indentExpr ty}\nwhich is not a setting. A test's parameters are settings: \
+            `S` or `Option S` for a declaration `S` marked `@[setting]`."
+      let goal := mkApp (mkConst ``IsTest) body
+      let inst ← match ← trySynthInstance goal with
+        | .some inst => instantiateMVars inst
+        | _ =>
+          throwError m!"`@[test]` requires an `Errata.IsTest` instance for the test's \
+            type{indentExpr body}"
+      let mut action := mkApp3 (mkConst ``IsTest.toTest) body inst (mkAppN (mkConst decl) params)
+      -- The parameters are bound from the innermost outwards, each by the combinator that reads its
+      -- setting's value.
+      for i in (List.range params.size).reverse do
+        let use := uses[i]!
+        let combinator := if use.optional then ``Setting.withOptional else ``Setting.withValue
+        action := mkApp4 (mkConst combinator) (mkConst use.decl)
+          (toExpr (settingNameOf use.decl)) settings (← mkLambdaFVars #[params[i]!] action)
+      return (← mkLambdaFVars #[settings] action, uses)
 
 /--
 The name for the definition that runs the test {name}`decl`: {lit}`run` below the test's own name,
@@ -55,35 +97,44 @@ meta def runDeclName (env : Environment) (decl : Name) : Name := Id.run do
   return name
 
 /--
-Checks that a test executable can reach {name}`decl` through a plain {lit}`import` of its module.
-In a module file, this holds for a public declaration, such as one in a {lit}`public section`.
+Records a declaration as a test with the given tags. The action that runs it is compiled, with the
+{name}`IsTest` instance in force here, into an exported definition beside it. A test executable
+reaches that definition through a plain {lit}`import` of the test's module. A test must itself be
+exported: in a module, it is public, which a {lit}`public section` arranges. The docstring is read
+here, from the live environment, and stored with the test.
 -/
-meta def ensureExported (decl : Name) : AttrM Unit := do
-  unless ((← getEnv).setExporting true).contains decl do
-    throwError m!"`{privateToUserName decl}` is private or not exported, so a test executable \
-      cannot reach it. Make it public, for example by declaring it in a `public section`."
-
-/--
-Records a declaration as a test. The action that runs it is compiled, with the {name}`IsTest`
-instance in force here, into an exported definition beside it. A test executable reaches that
-definition through a plain {lit}`import` of the test's module. A test must itself be exported: in a
-module, it is public, which a {lit}`public section` arranges. The docstring is read here, from the
-live environment, and stored with the test.
--/
-meta def recordTest (decl : Name) : AttrM Unit := do
+meta def recordTest (decl : Name) (tags : Array String := #[]) : AttrM Unit := do
   if (testExt.getState (← getEnv)).any (·.name == decl) then
     throwError m!"`{privateToUserName decl}` is already marked as a test"
   ensureExported decl
-  let action ← (testAction decl).run'
+  let (action, settings) ← (testAction decl).run'
   let run := runDeclName (← getEnv) decl
-  let type := mkApp (mkConst ``TestM) (mkConst ``Unit)
+  let pairs := mkApp2 (mkConst ``Prod [.zero, .zero]) (mkConst ``String) (mkConst ``String)
+  let type ← mkArrow (mkApp (mkConst ``Array [.zero]) pairs) (mkApp (mkConst ``TestM) (mkConst ``Unit))
   let val ← mkDefinitionValInferringUnsafe run [] type action .opaque
   withExporting (isExporting := true) do
     addAndCompile (.defnDecl val)
   let docstring? ← findDocString? (← getEnv) decl
   modifyEnv (testExt.addEntry · {
-    name := decl, run, isUnsafe := val.safety == .unsafe, file := ← getFileName, docstring?
+    name := decl, run, isUnsafe := val.safety == .unsafe, file := ← getFileName, docstring?,
+    tags, settings
   })
+
+/--
+The arguments of the {lit}`test` attribute: {lit}`@[test]`, or {lit}`@[test (tags := a, b)]` with the
+test's tags.
+-/
+syntax (name := test) "test" (" (" ident " := " ident,+ ")")? : attr
+
+/-- The tags that the attribute's syntax gives. The one keyword argument is {lit}`tags`. -/
+meta def testTags (stx : Syntax) : AttrM (Array String) := do
+  match stx with
+  | `(attr| test) => return #[]
+  | `(attr| test ($key := $tags,*)) =>
+    unless key.getId == `tags do
+      throwErrorAt key m!"`@[test]` has no argument `{key.getId}`; its one argument is `tags`"
+    return (tags.getElems.map (·.getId.toString (escape := false)))
+  | _ => throwUnsupportedSyntax
 
 /-- A synthetic syntax carrying the given source range, used to position the widget. -/
 meta def rangeSyntax [Monad m] [MonadFileMap m]
@@ -146,9 +197,9 @@ meta initialize
     -- Applied after compilation so the declaration's docstring is in the environment to capture.
     applicationTime := .afterCompilation
     add := fun decl stx kind => do
-      Attribute.Builtin.ensureNoArgs stx
+      let tags ← testTags stx
       unless kind == AttributeKind.global do throwAttrMustBeGlobal `test kind
-      recordTest decl
+      recordTest decl tags
       -- The widget reaches the editor through the info tree, which the language server keeps and a
       -- build leaves out, so a build skips the work of placing the widget.
       unless (← getInfoState).enabled do return
@@ -234,8 +285,9 @@ syntax testModules := ident ("." "*")?
 named modules, and expands to the array of {name}`TestEntry` values that run them. A name with a
 trailing {lit}`.*` also names every imported module below it. Even if a module is named more than
 once, its tests are not duplicated. Each module must be imported so its tests are reachable. Each
-test is named by its fully qualified declaration name. Unsafe tests are wrapped in
-{kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
+test is named by its fully qualified declaration name, and carries its tags and the settings it
+takes, each with its description and a reference to its declared default. Unsafe tests are wrapped
+in {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
 -/
 syntax (name := getAllTests) "getAllTests%" str testModules* : term
 
@@ -279,11 +331,22 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
           | none => `((none : Option String))
         let ref ← `(@$(mkCIdent test.run))
         let run ← if test.isUnsafe then `(unsafe $ref) else pure ref
+        -- Each setting's description is its docstring, and its default is read from the setting's
+        -- value when the test executable runs.
+        let settings ← test.settings.mapM fun use => do
+          let doc? := (settingExt.getState env).find? (·.decl == use.decl) |>.bind (·.docstring?)
+          let docStx ← match doc? with
+            | some doc => `(some $(quote doc))
+            | none => `((none : Option String))
+          `({ name := $(quote (settingNameOf use.decl)), optional := $(quote use.optional),
+              description? := $docStx, default? := Errata.Setting.default? @$(mkCIdent use.decl)
+              : Errata.SettingRef })
         entries := entries.push <| ←
           `({ package := $(quote package), moduleName := $(quote moduleStr),
               name := $(quote testName), path := $(quote path),
               location := $(← exprToSyntax (toExpr location)),
-              docstring? := $docStx, run := $run : Errata.TestEntry })
+              docstring? := $docStx, tags := $(quote test.tags),
+              settings := #[$settings,*], run := $run : Errata.TestEntry })
   elabTerm (← `(#[$entries,*])) expectedType?
 
 /--
