@@ -79,7 +79,10 @@ structure HelperDecl where
   isUnsafe : Bool
   /-- The source file that defines the helper. -/
   file : String
-  /-- The helper's docstring, rendered as Markdown, captured when the attribute is applied. -/
+  /--
+  The helper's docstring as {lit}`findDocString?` returns it when the attribute is applied: a
+  Markdown docstring as written, and a Verso docstring rendered as Markdown.
+  -/
   docstring? : Option String := none
 deriving Inhabited
 

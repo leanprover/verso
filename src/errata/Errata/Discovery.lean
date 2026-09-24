@@ -181,14 +181,16 @@ meta def helperType : Expr :=
 
 /--
 Records a declaration as a helper. The declaration must have the type {lean}`List String → IO UInt32`,
-must be exported as a test is, and must not be {lit}`meta` or universe polymorphic. The docstring is
-read here, from the live environment, and stored with the helper.
+must be exported as a test is, and must not be {lit}`meta`, {lit}`noncomputable`, or universe
+polymorphic. The docstring is read here, from the live environment, and stored with the helper.
 -/
 meta def recordHelper (decl : Name) : AttrM Unit := do
   if (helperExt.getState (← getEnv)).any (·.name == decl) then
     throwError m!"`{privateToUserName decl}` is already marked as a test helper"
   if isMarkedMeta (← getEnv) decl then
     throwError m!"A test helper must not be `meta`"
+  if isNoncomputable (← getEnv) decl then
+    throwError m!"A test helper must not be `noncomputable`"
   ensureExported decl
   let info ← getConstInfo decl
   unless info.levelParams.isEmpty do

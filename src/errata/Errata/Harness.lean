@@ -249,8 +249,9 @@ closes, the executable ends its own process group and exits. Otherwise the comma
 any standard input, {lit}`/dev/null` included. The test itself reads an empty standard input.
 
 {lit}`errata-helper <name> [ARG]...` runs the helper in {name}`helpers` with that name, passing it the
-arguments that follow, and exits with the helper's exit code. The helper runs with the process's own
-standard input, output, and error. This mode belongs to the Lean harness and is outside the protocol
+arguments that follow, and exits with the helper's exit code, which the process that started it sees
+modulo 256, as the operating system reports it. The helper runs with the process's own standard
+input, output, and error. This mode belongs to the Lean harness and is outside the protocol
 between the runner and its test executables: {name (scope := "Errata")}`runHelper` starts it from
 inside a test. An unknown name is reported on standard error, with the exit code {lit}`2`.
 

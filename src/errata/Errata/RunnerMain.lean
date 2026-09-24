@@ -401,7 +401,10 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
   let fail (why : String) := Except.error (listFailure exe why stdout stderr)
   let some code := code?
     | return fail s!"it did not finish within {ctx.opts.timeoutMs}ms"
-  unless code == 0 do return fail s!"it exited with code {code}"
+  unless code == 0 do
+    return match signalOfExitCode? code with
+      | some s => fail s!"it was ended by signal {s} (exit code {code})"
+      | none => fail s!"it exited with code {code}"
   let text ← IO.FS.readFile file
   let lines := text.splitOn "\n" |>.filter (!·.trimAscii.isEmpty)
   if lines.isEmpty then return fail "it wrote nothing to its list file"

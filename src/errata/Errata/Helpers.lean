@@ -11,6 +11,7 @@ for behavior that only a separate process shows.
 module
 
 public import Errata.TestM
+import Errata.ProcessControl
 
 public section
 
@@ -36,6 +37,10 @@ arguments, and returns its exit code and what it wrote to standard output and st
 value is {lean}`none`. {name}`stdin` is written to the subprocess's standard input, which is then
 closed.
 
+The exit code is the helper's result modulo 256, as the operating system reports it. The output is
+decoded as UTF-8; when it is not valid UTF-8, each byte of {lit}`0x80` or above becomes
+{lit}`U+FFFD`.
+
 The helper is named by a name literal with two backquotes, so a name that refers to no declaration
 is an error at elaboration time. A test that runs a helper must run under the test
 executable that the Lean harness builds, which sets how helpers are reached; elsewhere the test ends
@@ -57,20 +62,25 @@ def runHelper (helper : Lean.Name) (args : List String)
     stdin := .piped, stdout := .piped, stderr := .piped
   }
   let (input, child) ← child.takeStdin
-  -- Both streams are read on threads of their own, so neither pipe fills while the other is read or
-  -- while standard input is written.
-  let outTask ← IO.asTask (prio := .dedicated) child.stdout.readToEnd
-  let errTask ← IO.asTask (prio := .dedicated) child.stderr.readToEnd
-  unless stdin.isEmpty do
-    -- A helper that exits without reading its input closes the pipe, which fails the write; its exit
-    -- code and output say what happened.
-    try
+  -- Both streams are read as bytes on threads of their own, so neither pipe fills while the other is
+  -- read or while standard input is written.
+  let outTask ← IO.asTask (prio := .dedicated) child.stdout.readBinToEnd
+  let errTask ← IO.asTask (prio := .dedicated) child.stderr.readBinToEnd
+  -- A write to a helper that exits without reading all of its input fails with a broken pipe. The
+  -- failure is dropped, and the helper's exit code and output are returned as for any other helper.
+  let write : IO Unit := do
+    unless stdin.isEmpty do
       input.putStr stdin
       input.flush
-    catch _ => pure ()
+  let writeQuietly : IO Unit := tryCatch write fun _ => pure ()
+  writeQuietly
   -- The helper's standard input closes when its handle is released after its last use above, so a
   -- helper that reads to the end of its input finishes.
-  let stdout ← IO.ofExcept (← IO.wait outTask)
-  let stderr ← IO.ofExcept (← IO.wait errTask)
+  let text (task : Task (Except IO.Error ByteArray)) : IO String := do
+    match ← IO.wait task with
+    | .ok bytes => return ProcessControl.decodeLine bytes
+    | .error e => return s!"<the stream could not be read: {e}>"
+  let stdout ← text outTask
+  let stderr ← text errTask
   let exitCode ← child.wait
   return { exitCode, stdout, stderr }
