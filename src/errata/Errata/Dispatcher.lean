@@ -171,20 +171,18 @@ def mergeOutcome (verdict? : Option Protocol.VerdictInfo) (unreadable? : Option 
       | some .pass, c => .inconclusive (.verdictMismatch c .pass)
       | some v, _ => .reported v
 
-/-- The named results of a finished test, as results below the test's own. -/
+/--
+The named results of a finished test, as results below the test's own. A named result starts after
+the result that contains it, so the nodes are in an order in which each parent precedes its children,
+and each node's path extends its parent's. A node whose parent is unknown is placed directly below
+the test.
+-/
 def nodeResults (p : Planned) (nodes : Array Node) : Array Result := Id.run do
-  let names : Std.HashMap Nat (Nat × String) :=
-    nodes.foldl (init := {}) fun m n => m.insert n.id (n.parent, n.name)
-  let rec pathOf (fuel id : Nat) : List String :=
-    match fuel with
-    | 0 => []
-    | fuel + 1 =>
-      if id == 0 then [] else
-      match names.get? id with
-      | some (parent, name) => pathOf fuel parent ++ [name]
-      | none => []
+  let mut paths : Std.HashMap Nat (Array String) := {}
   let mut out := #[]
   for n in nodes do
+    let path := (paths.getD n.parent #[]).push n.name
+    paths := paths.insert n.id path
     let outcome : Outcome ←
       match n.finish? with
       | none => pure (.reported (.error "the named result did not finish"))
@@ -195,7 +193,7 @@ def nodeResults (p : Planned) (nodes : Array Node) : Array Result := Id.run do
         | none => pure (.reported (.error "the named result did not finish"))
     out := out.push {
       exe := p.exe, test := p.test, path := p.path
-      resultPath := (pathOf (nodes.size + 1) n.id).toArray
+      resultPath := path
       outcome, durationMs := (n.finish?.bind (·.durationMs?)).getD 0
       output := { log := n.output }
     }
