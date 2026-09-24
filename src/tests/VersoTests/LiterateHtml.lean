@@ -19,33 +19,17 @@ private def cleanDir (dir : System.FilePath) : IO Unit := do
     IO.FS.removeDirAll dir
   IO.FS.createDirAll dir
 
-/--
-The built `verso-literate-html` and `verso-literate-plan` executables, which each test sets from its
-settings before it runs any of them. A test executable runs one test per process.
--/
-private initialize literateExes : IO.Ref (Option (System.FilePath × System.FilePath)) ←
-  IO.mkRef none
-
-/-- The path of the built executable with the given name, from the test's settings. -/
-private def exePath (name : String) : IO System.FilePath := do
-  let some (html, plan) ← literateExes.get
-    | throw <| IO.userError s!"the path of {name} is not set"
-  match name with
-  | "verso-literate-html" => pure html
-  | "verso-literate-plan" => pure plan
-  | _ => throw <| IO.userError s!"no setting gives the path of {name}"
-
-/-- Runs one of the built executables. Throws on non-zero exit. -/
-private def runLakeExe (name : String) (args : Array String) : IO Unit := do
+/-- Runs a built executable. Throws on non-zero exit. -/
+private def runExe (exe : System.FilePath) (args : Array String) : IO Unit := do
   let child ← IO.Process.spawn {
-    cmd := (← exePath name).toString
+    cmd := exe.toString
     args := args
     stdout := .null
     stderr := .inherit
   }
   let exitCode ← child.wait
   if exitCode != 0 then
-    throw <| IO.userError s!"{name} failed with exit code {exitCode}"
+    throw <| IO.userError s!"{exe} failed with exit code {exitCode}"
 
 /--
 Generates a module-map file from a JSON directory.
@@ -75,8 +59,11 @@ private def generateModuleMap (jsonDir mapFile : System.FilePath)
           lines := lines.push s!"{modName}\t{entry.path}{srcSuffix}"
   IO.FS.writeFile mapFile ("\n".intercalate lines.toList ++ "\n")
 
-/-- Runs verso-literate-html with a module-map generated from a JSON directory. -/
-private def runLiterateHtml (jsonDir htmlDir : System.FilePath)
+/--
+Runs the built `verso-literate-html` executable `exe` with a module-map generated from a JSON
+directory.
+-/
+private def runLiterateHtml (exe jsonDir htmlDir : System.FilePath)
     (planFile configFile : Option System.FilePath := none)
     (sourceDir : Option System.FilePath := none) : IO Unit := do
   -- If plan file is provided, filter the module map to only planned modules
@@ -99,32 +86,38 @@ private def runLiterateHtml (jsonDir htmlDir : System.FilePath)
   let mut args := #[htmlDir.toString, mapFile.toString]
   if let some cf := configFile then
     args := args.push cf.toString
-  runLakeExe "verso-literate-html" args
+  runExe exe args
 
-/-- Runs verso-literate-plan to produce a plan file. -/
-private def runLiteratePlan (moduleListFile planFile : System.FilePath) (tomlFile : Option System.FilePath := none) : IO Unit := do
+/-- Runs the built `verso-literate-plan` executable `exe` to produce a plan file. -/
+private def runLiteratePlan (exe moduleListFile planFile : System.FilePath) (tomlFile : Option System.FilePath := none) : IO Unit := do
   let mut args := #[moduleListFile.toString, planFile.toString]
   if let some tf := tomlFile then
     args := args ++ #[tf.toString]
-  runLakeExe "verso-literate-plan" args
+  runExe exe args
 
-/-- Runs one of the built executables capturing stdout and stderr, returning (exitCode, stdout, stderr). -/
-private def runLakeExeCapture (name : String) (args : Array String) : IO (UInt32 × String × String) := do
+/-- Runs a built executable capturing stdout and stderr, returning (exitCode, stdout, stderr). -/
+private def runExeCapture (exe : System.FilePath) (args : Array String) : IO (UInt32 × String × String) := do
   let result ← IO.Process.output {
-    cmd := (← exePath name).toString
+    cmd := exe.toString
     args := args
   }
   return (result.exitCode, result.stdout, result.stderr)
 
-/-- Runs verso-literate-plan capturing output, returning (exitCode, stdout, stderr). -/
-private def runLiteratePlanCapture (moduleListFile planFile : System.FilePath) (tomlFile : Option System.FilePath := none) : IO (UInt32 × String × String) := do
+/--
+Runs the built `verso-literate-plan` executable `exe` capturing output, returning (exitCode, stdout,
+stderr).
+-/
+private def runLiteratePlanCapture (exe moduleListFile planFile : System.FilePath) (tomlFile : Option System.FilePath := none) : IO (UInt32 × String × String) := do
   let mut args := #[moduleListFile.toString, planFile.toString]
   if let some tf := tomlFile then
     args := args ++ #[tf.toString]
-  runLakeExeCapture "verso-literate-plan" args
+  runExeCapture exe args
 
-/-- Runs verso-literate-html capturing output, returning (exitCode, stdout, stderr). -/
-private def runLiterateHtmlCapture (jsonDir htmlDir : System.FilePath)
+/--
+Runs the built `verso-literate-html` executable `exe` capturing output, returning (exitCode, stdout,
+stderr).
+-/
+private def runLiterateHtmlCapture (exe jsonDir htmlDir : System.FilePath)
     (planFile configFile : Option System.FilePath := none)
     (sourceDir : Option System.FilePath := none) : IO (UInt32 × String × String) := do
   let mapFile := htmlDir.addExtension "module-map"
@@ -145,13 +138,18 @@ private def runLiterateHtmlCapture (jsonDir htmlDir : System.FilePath)
   let mut args := #[htmlDir.toString, mapFile.toString]
   if let some cf := configFile then
     args := args.push cf.toString
-  runLakeExeCapture "verso-literate-html" args
+  runExeCapture exe args
 
-/-- Shared test data: pre-built JSON directory and module list file. -/
+/--
+Shared test data: the pre-built JSON directory and module list file, and the built executables that
+the tests run.
+-/
 structure TestData where
   jsonDir : System.FilePath
   modules : Array String
   moduleListFile : System.FilePath
+  htmlExe : System.FilePath
+  planExe : System.FilePath
 
 /--
 Runs a test in an independent temporary directory. The callback receives
@@ -170,7 +168,7 @@ private def withTestDir (data : TestData)
 
 /-- All modules produce HTML files with expected structure, navigation, and content. -/
 private def testDefaultBehavior (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
 
   let expectedFiles := #[
     htmlDir / "LitConfig" / "index.html",
@@ -209,7 +207,7 @@ private def testDefaultBehavior (data : TestData) : Test := withTestDir data fun
 
 /-- The `{kw}` docstring role renders keyword atoms in the HTML output. -/
 private def testKeywordRole (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   -- The module docstring contains {kw}`where`, which should render as a keyword-highlighted token
   assertContains "where" coreHtml
@@ -230,7 +228,7 @@ have handlers), and that the tactic and conv handlers attach the syntax kind's d
 hovers.
 -/
 private def testAllBuiltinDocRoles (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   let builtinsHtml := htmlDir / "LitConfig" / "Builtins" / "index.html"
   unless ← builtinsHtml.pathExists do
     fail s!"Expected Builtins HTML page at {builtinsHtml}"
@@ -250,7 +248,7 @@ Checks that user-registered `@[inline_to_literate]` and `@[block_to_literate]` h
 built-ins.
 -/
 private def testCustomLiterateHandlers (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   let jsonFile := jsonPath jsonDir "LitConfig.UserExt"
   unless ← jsonFile.pathExists do
     fail s!"Expected JSON for LitConfig.UserExt at {jsonFile}"
@@ -322,8 +320,8 @@ private def testUnknownExtensionFallback : Test := do
 /-- Excluded modules produce no HTML output and are absent from the navbar. -/
 private def testExclude (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
   IO.FS.writeFile tomlFile "exclude = [\"LitConfig.NoDocstrings\"]\n"
-  runLiteratePlan data.moduleListFile planFile (some tomlFile)
-  runLiterateHtml jsonDir htmlDir (some planFile) (some tomlFile)
+  runLiteratePlan data.planExe data.moduleListFile planFile (some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (some planFile) (some tomlFile)
 
   if ← (htmlDir / "LitConfig" / "NoDocstrings" / "index.html").pathExists then
     fail "Excluded module LitConfig.NoDocstrings should not have HTML output"
@@ -339,8 +337,8 @@ private def testExclude (data : TestData) : Test := withTestDir data fun jsonDir
 /-- The `order` config controls the ordering of modules in the navbar. -/
 private def testNavbarOrder (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
   IO.FS.writeFile tomlFile "order = [\"LitConfig.NoDocstrings\", \"LitConfig.Core\"]\n"
-  runLiteratePlan data.moduleListFile planFile (some tomlFile)
-  runLiterateHtml jsonDir htmlDir (some planFile) (some tomlFile)
+  runLiteratePlan data.planExe data.moduleListFile planFile (some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (some planFile) (some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   let navbarSection := litConfigHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
@@ -352,8 +350,8 @@ private def testNavbarOrder (data : TestData) : Test := withTestDir data fun jso
 /-- A configured landing page module's content replaces the default table of contents. -/
 private def testLandingPage (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
   IO.FS.writeFile tomlFile "landing_page = \"LitConfig.Core\"\n"
-  runLiteratePlan data.moduleListFile planFile (some tomlFile)
-  runLiterateHtml jsonDir htmlDir (some planFile) (some tomlFile)
+  runLiteratePlan data.planExe data.moduleListFile planFile (some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (some planFile) (some tomlFile)
 
   let landingHtml ← IO.FS.readFile (htmlDir / "index.html")
   assertContains "Core Module" landingHtml
@@ -367,8 +365,8 @@ private def testHtmlLandingPageNotFound (data : TestData) : Test := withTestDir 
   -- Write a plan that includes only the real modules (so planning succeeds),
   -- but the TOML references a module that doesn't exist.
   IO.FS.writeFile tomlFile "landing_page = \"NonExistent.Module\"\n"
-  runLiteratePlan data.moduleListFile planFile none
-  let (exitCode, _, stderr) ← runLiterateHtmlCapture jsonDir htmlDir (some planFile) (some tomlFile)
+  runLiteratePlan data.planExe data.moduleListFile planFile none
+  let (exitCode, _, stderr) ← runLiterateHtmlCapture data.htmlExe jsonDir htmlDir (some planFile) (some tomlFile)
   if exitCode == 0 then
     fail "HTML landing_page not found: should have failed with non-zero exit code"
   assertContains "not found" stderr
@@ -377,8 +375,8 @@ private def testHtmlLandingPageNotFound (data : TestData) : Test := withTestDir 
 /-- Excluding a parent module also removes all its children from the output. -/
 private def testRecursiveExclusion (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
   IO.FS.writeFile tomlFile "exclude = [\"LitConfig.Core\"]\n"
-  runLiteratePlan data.moduleListFile planFile (some tomlFile)
-  runLiterateHtml jsonDir htmlDir (some planFile) (some tomlFile)
+  runLiteratePlan data.planExe data.moduleListFile planFile (some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (some planFile) (some tomlFile)
 
   if ← (htmlDir / "LitConfig" / "Core" / "index.html").pathExists then
     fail "Excluded module LitConfig.Core should not have HTML output"
@@ -392,8 +390,8 @@ private def testRecursiveExclusion (data : TestData) : Test := withTestDir data 
 /-- The `order_children` config controls the ordering of children under a specific parent. -/
 private def testOrderChildren (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
   IO.FS.writeFile tomlFile "[order_children]\n\"LitConfig\" = [\"LitConfig.NoDocstrings\", \"LitConfig.Core\"]\n"
-  runLiteratePlan data.moduleListFile planFile (some tomlFile)
-  runLiterateHtml jsonDir htmlDir (some planFile) (some tomlFile)
+  runLiteratePlan data.planExe data.moduleListFile planFile (some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (some planFile) (some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   let navbarSection := litConfigHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
@@ -404,7 +402,7 @@ private def testOrderChildren (data : TestData) : Test := withTestDir data fun j
 
 /-- A non-empty `xref.json` cross-reference file is generated in the output. -/
 private def testXrefJsonGenerated (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   unless ← (htmlDir / "xref.json").pathExists do
     fail "xref.json was not generated"
   let xrefContent ← IO.FS.readFile (htmlDir / "xref.json")
@@ -416,7 +414,7 @@ private def testPlanFileContent (data : TestData) : Test := IO.FS.withTempDir fu
   let planFile := tmpDir / "plan"
   let tomlFile := tmpDir / "literate.toml"
   -- No config: plan should contain all modules
-  runLiteratePlan data.moduleListFile planFile
+  runLiteratePlan data.planExe data.moduleListFile planFile
   let planContent ← IO.FS.readFile planFile
   let planModules := planContent.splitOn "\n" |>.filter (!·.isEmpty)
   for mod in data.modules do
@@ -424,7 +422,7 @@ private def testPlanFileContent (data : TestData) : Test := IO.FS.withTempDir fu
       fail s!"Plan file should contain module '{mod}' but doesn't"
   -- With exclusion: excluded modules should be absent from plan
   IO.FS.writeFile tomlFile "exclude = [\"LitConfig.Core\"]\n"
-  runLiteratePlan data.moduleListFile planFile (some tomlFile)
+  runLiteratePlan data.planExe data.moduleListFile planFile (some tomlFile)
   let planContent ← IO.FS.readFile planFile
   let planModules := planContent.splitOn "\n" |>.filter (!·.isEmpty)
   if planModules.contains "LitConfig.Core" then
@@ -439,7 +437,7 @@ private def testTargetsFiltering (data : TestData) : Test := IO.FS.withTempDir f
   let planFile := tmpDir / "plan"
   let tomlFile := tmpDir / "literate.toml"
   IO.FS.writeFile tomlFile "[[targets]]\nmodule = \"LitConfig.Core\"\n"
-  runLiteratePlan data.moduleListFile planFile (some tomlFile)
+  runLiteratePlan data.planExe data.moduleListFile planFile (some tomlFile)
   let planContent ← IO.FS.readFile planFile
   let planModules := planContent.splitOn "\n" |>.filter (!·.isEmpty)
   unless planModules.contains "LitConfig.Core" do
@@ -454,7 +452,7 @@ private def testTargetsLibrary (data : TestData) : Test := IO.FS.withTempDir fun
   let planFile := tmpDir / "plan"
   let tomlFile := tmpDir / "literate.toml"
   IO.FS.writeFile tomlFile "[[targets]]\nlibrary = \"LitConfig\"\n"
-  runLiteratePlan data.moduleListFile planFile (some tomlFile)
+  runLiteratePlan data.planExe data.moduleListFile planFile (some tomlFile)
   let planContent ← IO.FS.readFile planFile
   let planModules := planContent.splitOn "\n" |>.filter (!·.isEmpty)
   -- All modules in the LitConfig library should be included
@@ -472,7 +470,7 @@ private def testTargetsLibraryNonexistent (data : TestData) : Test := IO.FS.with
   let planFile := tmpDir / "plan"
   let tomlFile := tmpDir / "literate.toml"
   IO.FS.writeFile tomlFile "[[targets]]\nlibrary = \"NonexistentLib\"\n"
-  let (exitCode, _, _) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
+  let (exitCode, _, _) ← runLiteratePlanCapture data.planExe data.moduleListFile planFile (some tomlFile)
   unless exitCode != 0 do
     fail "Library target with nonexistent library should fail"
 
@@ -481,7 +479,7 @@ private def testTargetsLibraryAndModule (data : TestData) : Test := IO.FS.withTe
   let planFile := tmpDir / "plan"
   let tomlFile := tmpDir / "literate.toml"
   IO.FS.writeFile tomlFile "[[targets]]\nlibrary = \"LitConfig\"\nmodule = \"LitConfig.Core\"\n"
-  runLiteratePlan data.moduleListFile planFile (some tomlFile)
+  runLiteratePlan data.planExe data.moduleListFile planFile (some tomlFile)
   let planContent ← IO.FS.readFile planFile
   let planModules := planContent.splitOn "\n" |>.filter (!·.isEmpty)
   unless planModules.contains "LitConfig.Core" do
@@ -494,7 +492,7 @@ private def testTargetsLibraryAndModule (data : TestData) : Test := IO.FS.withTe
 /-- Commands listed in `hide_commands` produce no output while other commands remain visible. -/
 private def testHideCommands (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
   IO.FS.writeFile tomlFile "hide_commands = [\"set_option\"]\n"
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   assertNotContains "set_option" litConfigHtml
@@ -505,7 +503,7 @@ private def testHideCommands (data : TestData) : Test := withTestDir data fun js
 /-- The metadata title appears in the landing page and module page `<title>` tags. -/
 private def testMetadataTitle (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
   IO.FS.writeFile tomlFile "[metadata]\ntitle = \"Test Site\"\n"
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   let landingHtml ← IO.FS.readFile (htmlDir / "index.html")
   assertContains "<title>Test Site</title>" landingHtml
@@ -524,7 +522,7 @@ private def testExtraCss (data : TestData) : Test := IO.FS.withTempDir fun tmpDi
   let extraCssFile := tmpDir / "custom-test.css"
   IO.FS.writeFile extraCssFile "body { background: red; }\n"
   IO.FS.writeFile tomlFile s!"extra_css = [\"{extraCssFile}\"]\n"
-  runLiterateHtml data.jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe data.jsonDir htmlDir (configFile := some tomlFile)
 
   unless ← (htmlDir / "custom-test.css").pathExists do
     fail "extra CSS: custom-test.css was not copied to output"
@@ -535,7 +533,7 @@ private def testExtraCss (data : TestData) : Test := IO.FS.withTempDir fun tmpDi
 /-- Declaration docstrings are hidden globally while module docstrings remain visible. -/
 private def testShowDocstringsFalse (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
   IO.FS.writeFile tomlFile "show_docstrings = false\n"
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   assertNotContains "A greeting message" litConfigHtml
@@ -546,7 +544,7 @@ private def testShowDocstringsFalse (data : TestData) : Test := withTestDir data
 /-- `show_imports = false` hides the imports list. -/
 private def testShowImportsFalse (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
   IO.FS.writeFile tomlFile "show_imports = false\n"
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   assertNotContains "imports-list" coreHtml
@@ -554,7 +552,7 @@ private def testShowImportsFalse (data : TestData) : Test := withTestDir data fu
 
 /-- Default config shows imports in a collapsible details element. -/
 private def testShowImportsDefault (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
 
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   assertContains "imports-list" coreHtml
@@ -564,7 +562,7 @@ private def testShowImportsDefault (data : TestData) : Test := withTestDir data 
 
 /-- Default config renders output blocks for #eval commands. -/
 private def testShowOutput (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
 
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   -- Check for an actual lean-output element (class on a <pre> tag), not just the CSS rules
@@ -574,7 +572,7 @@ private def testShowOutput (data : TestData) : Test := withTestDir data fun json
 /-- `show_output = []` suppresses all output blocks. -/
 private def testShowOutputEmpty (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
   IO.FS.writeFile tomlFile "show_output = []\n"
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   -- Check that no actual lean-output elements exist (CSS rules in `<style>` don't count)
@@ -584,7 +582,7 @@ private def testShowOutputEmpty (data : TestData) : Test := withTestDir data fun
 /-- Docstrings are hidden for specific named declarations while other content remains. -/
 private def testHideDocstringsFor (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
   IO.FS.writeFile tomlFile "hide_docstrings_for = [\"hello\"]\n"
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   assertNotContains "A greeting message" litConfigHtml
@@ -600,7 +598,7 @@ private def testFavicon (data : TestData) : Test := IO.FS.withTempDir fun tmpDir
   let faviconFile := tmpDir / "test-favicon.png"
   IO.FS.writeFile faviconFile "fake-png-data"
   IO.FS.writeFile tomlFile s!"[metadata]\nfavicon = \"{faviconFile}\"\n"
-  runLiterateHtml data.jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe data.jsonDir htmlDir (configFile := some tomlFile)
 
   unless ← (htmlDir / "test-favicon.png").pathExists do
     fail "favicon: test-favicon.png was not copied to output"
@@ -616,7 +614,7 @@ private def testExtraJs (data : TestData) : Test := IO.FS.withTempDir fun tmpDir
   let extraJsFile := tmpDir / "custom-test.js"
   IO.FS.writeFile extraJsFile "console.log('test');\n"
   IO.FS.writeFile tomlFile s!"extra_js = [\"{extraJsFile}\"]\n"
-  runLiterateHtml data.jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe data.jsonDir htmlDir (configFile := some tomlFile)
 
   unless ← (htmlDir / "custom-test.js").pathExists do
     fail "extra JS: custom-test.js was not copied to output"
@@ -627,8 +625,8 @@ private def testExtraJs (data : TestData) : Test := IO.FS.withTempDir fun tmpDir
 /-- Targets + exclude: exclusion narrows the target set. -/
 private def testTargetsPlusExclude (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
   IO.FS.writeFile tomlFile "exclude = [\"LitConfig.Core.Basic\"]\n\n[[targets]]\nmodule = \"LitConfig.Core\"\n"
-  runLiteratePlan data.moduleListFile planFile (some tomlFile)
-  runLiterateHtml jsonDir htmlDir (some planFile) (some tomlFile)
+  runLiteratePlan data.planExe data.moduleListFile planFile (some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (some planFile) (some tomlFile)
 
   unless ← (htmlDir / "LitConfig" / "Core" / "index.html").pathExists do
     fail "targets+exclude: LitConfig.Core should exist"
@@ -640,7 +638,7 @@ private def testTargetsPlusExclude (data : TestData) : Test := withTestDir data 
 /-- show_docstrings = false with show_docstrings_for exceptions still shows the excepted docstring. -/
 private def testShowDocstringsForExceptions (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
   IO.FS.writeFile tomlFile "show_docstrings = false\nshow_docstrings_for = [\"hello\"]\n"
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   assertContains "A greeting message" litConfigHtml
@@ -653,7 +651,7 @@ private def testShowDocstringsForExceptions (data : TestData) : Test := withTest
 /-- Metadata description appears as a meta tag in the HTML. -/
 private def testMetadataDescription (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
   IO.FS.writeFile tomlFile "[metadata]\ndescription = \"A test description\"\n"
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   assertContains "A test description" litConfigHtml
@@ -663,7 +661,7 @@ private def testMetadataDescription (data : TestData) : Test := withTestDir data
 
 /-- The current page is highlighted in the navbar with the 'current' class. -/
 private def testCurrentPageHighlighting (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
 
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   let navbarSection := coreHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
@@ -676,7 +674,7 @@ private def testPlanTargetsPlusExclude (data : TestData) : Test := IO.FS.withTem
   let planFile := tmpDir / "plan"
   let tomlFile := tmpDir / "literate.toml"
   IO.FS.writeFile tomlFile "exclude = [\"LitConfig.Core.Basic\"]\n\n[[targets]]\nmodule = \"LitConfig.Core\"\n"
-  runLiteratePlan data.moduleListFile planFile (some tomlFile)
+  runLiteratePlan data.planExe data.moduleListFile planFile (some tomlFile)
   let planContent ← IO.FS.readFile planFile
   let planModules := planContent.splitOn "\n" |>.filter (!·.isEmpty)
   unless planModules.contains "LitConfig.Core" do
@@ -691,7 +689,7 @@ private def testPlanLandingPageNotInSet (data : TestData) : Test := IO.FS.withTe
   let planFile := tmpDir / "plan"
   let tomlFile := tmpDir / "literate.toml"
   IO.FS.writeFile tomlFile "landing_page = \"NonExistent.Module\"\n"
-  let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
+  let (exitCode, _, stderr) ← runLiteratePlanCapture data.planExe data.moduleListFile planFile (some tomlFile)
   if exitCode == 0 then
     fail "plan landing_page validation: should have failed with non-zero exit code"
   assertContains "landing_page" stderr
@@ -702,7 +700,7 @@ private def testPlanEmptyModuleSet (data : TestData) : Test := IO.FS.withTempDir
   let planFile := tmpDir / "plan"
   let tomlFile := tmpDir / "literate.toml"
   IO.FS.writeFile tomlFile "exclude = [\"LitConfig\"]\n"
-  let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
+  let (exitCode, _, stderr) ← runLiteratePlanCapture data.planExe data.moduleListFile planFile (some tomlFile)
   if exitCode == 0 then
     fail "plan empty module set: should have failed with non-zero exit code"
   assertContains "no modules" stderr
@@ -713,7 +711,7 @@ private def testPlanOrderWarning (data : TestData) : Test := IO.FS.withTempDir f
   let planFile := tmpDir / "plan"
   let tomlFile := tmpDir / "literate.toml"
   IO.FS.writeFile tomlFile "order = [\"NonExistent.Module\"]\n"
-  let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
+  let (exitCode, _, stderr) ← runLiteratePlanCapture data.planExe data.moduleListFile planFile (some tomlFile)
   if exitCode != 0 then
     fail "plan order warning: should succeed (warning only, not error)"
   assertContains "Warning" stderr
@@ -727,7 +725,7 @@ private def testHtmlInvalidDocstringFor (data : TestData) : Test := IO.FS.withTe
   let tomlFile := tmpDir / "literate.toml"
   IO.FS.createDirAll htmlDir
   IO.FS.writeFile tomlFile "hide_docstrings_for = [\"nonexistent_decl\"]\n"
-  let (exitCode, _, stderr) ← runLiterateHtmlCapture data.jsonDir htmlDir (configFile := some tomlFile)
+  let (exitCode, _, stderr) ← runLiterateHtmlCapture data.htmlExe data.jsonDir htmlDir (configFile := some tomlFile)
   if exitCode == 0 then
     fail "HTML invalid docstring_for: should have failed with non-zero exit code"
   assertContains "nonexistent_decl" stderr
@@ -747,7 +745,7 @@ private def testThemeCss (data : TestData) : Test := IO.FS.withTempDir fun tmpDi
     "text_color = \"#ddd\"",
     ""
   ])
-  runLiterateHtml data.jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe data.jsonDir htmlDir (configFile := some tomlFile)
 
   unless ← (htmlDir / "literate-theme.css").pathExists do
     fail "theme: literate-theme.css was not generated"
@@ -768,7 +766,7 @@ private def testThemeCss (data : TestData) : Test := IO.FS.withTempDir fun tmpDi
 
 /-- No theme CSS file is generated when theme is empty. -/
 private def testThemeCssEmpty (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   if ← (htmlDir / "literate-theme.css").pathExists then
     fail "theme empty: literate-theme.css should not exist with default config"
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
@@ -782,7 +780,7 @@ private def testPerModuleHideCommands (data : TestData) : Test := withTestDir da
     "hide_commands = [\"set_option\"]",
     ""
   ])
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   assertNotContains "set_option" litConfigHtml
@@ -799,7 +797,7 @@ private def testPerModuleTitle (data : TestData) : Test := withTestDir data fun 
     "title = \"Core Library\"",
     ""
   ])
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   assertContains "Core Library" coreHtml
@@ -817,7 +815,7 @@ private def testPerModuleTitleBreadcrumbs (data : TestData) : Test := withTestDi
     "title = \"Core Library\"",
     ""
   ])
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   -- On the Core page itself, breadcrumbs should show "Core Library" as current (last entry)
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
@@ -846,7 +844,7 @@ private def testPerModuleUrl (data : TestData) : Test := withTestDir data fun js
     "url = \"core-docs\"",
     ""
   ])
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   -- HTML should be at the custom URL path, not the default
   unless ← (htmlDir / "core-docs" / "index.html").pathExists do
@@ -884,7 +882,7 @@ private def testPerModuleUrlInheritance (data : TestData) : Test := withTestDir 
     "url = \"core-docs\"",
     ""
   ])
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   -- Child module LitConfig.Core.Basic should be at core-docs/Basic/, not LitConfig/Core/Basic/
   unless ← (htmlDir / "core-docs" / "Basic" / "index.html").pathExists do
@@ -911,7 +909,7 @@ private def testPlanDuplicateUrl (data : TestData) : Test := IO.FS.withTempDir f
     "url = \"LitConfig/NoDocstrings\"",
     ""
   ])
-  let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
+  let (exitCode, _, stderr) ← runLiteratePlanCapture data.planExe data.moduleListFile planFile (some tomlFile)
   if exitCode == 0 then
     fail "plan duplicate url: should have failed with non-zero exit code"
   assertContains "same URL" stderr
@@ -926,7 +924,7 @@ private def testPlanDuplicateUrlTrailingSlash (data : TestData) : Test := IO.FS.
     "url = \"LitConfig/NoDocstrings/\"",
     ""
   ])
-  let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
+  let (exitCode, _, stderr) ← runLiteratePlanCapture data.planExe data.moduleListFile planFile (some tomlFile)
   if exitCode == 0 then
     fail "plan duplicate url trailing slash: should have failed with non-zero exit code"
   assertContains "same URL" stderr
@@ -943,7 +941,7 @@ private def testPlanDuplicateUrlCase (data : TestData) : Test := IO.FS.withTempD
     "url = \"LitConfig/NoDocstrings\"",
     ""
   ])
-  let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
+  let (exitCode, _, stderr) ← runLiteratePlanCapture data.planExe data.moduleListFile planFile (some tomlFile)
   if exitCode == 0 then
     fail "plan duplicate url case: should have failed with non-zero exit code"
   assertContains "differ only in case" stderr
@@ -951,21 +949,21 @@ private def testPlanDuplicateUrlCase (data : TestData) : Test := IO.FS.withTempD
 
 /-- CSS contains focus-visible indicators. -/
 private def testAccessibilityFocusVisible (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   let css ← IO.FS.readFile (htmlDir / "literate.css")
   assertContains "focus-visible" css
     "accessibility: literate.css does not contain focus-visible rules"
 
 /-- CSS contains prefers-reduced-motion rules. -/
 private def testAccessibilityReducedMotion (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   let css ← IO.FS.readFile (htmlDir / "literate.css")
   assertContains "prefers-reduced-motion" css
     "accessibility: literate.css does not contain prefers-reduced-motion"
 
 /-- Hamburger menu has ARIA attributes. -/
 private def testAccessibilityAria (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   assertContains "aria-label=\"Menu\"" litConfigHtml
     "accessibility: hamburger input missing aria-label"
@@ -974,7 +972,7 @@ private def testAccessibilityAria (data : TestData) : Test := withTestDir data f
 
 /-- LitConfig root module (with headings) gets a page ToC. -/
 private def testPageToc (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   assertContains "page-toc" litConfigHtml
     "page ToC: LitConfig page should contain page-toc"
@@ -985,7 +983,7 @@ private def testPageToc (data : TestData) : Test := withTestDir data fun jsonDir
 
 /-- Page ToC entries for headings in the same modDoc block have distinct anchors. -/
 private def testPageTocDistinctAnchors (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   -- Extract the page-toc nav element content
   let tocSection := litConfigHtml.splitOn "<nav class=\"page-toc\"" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
@@ -1007,7 +1005,7 @@ private def testPageTocDistinctAnchors (data : TestData) : Test := withTestDir d
 
 /-- Nested Verso sections produce distinct ToC entries at each level. -/
 private def testPageTocNestedSections (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   -- Should have a page ToC
   assertContains "page-toc" coreHtml
@@ -1030,14 +1028,14 @@ private def testPageTocNestedSections (data : TestData) : Test := withTestDir da
 
 /-- NoDocstrings module (no headings) should not get a page ToC. -/
 private def testPageTocAbsent (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   let noDocHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "NoDocstrings" / "index.html")
   assertNotContains "page-toc" noDocHtml
     "page ToC absent: NoDocstrings page should not have a page-toc"
 
 /-- CSS contains dark mode defaults. -/
 private def testCssDarkMode (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   let css ← IO.FS.readFile (htmlDir / "literate.css")
   assertContains "prefers-color-scheme: dark" css
     "dark mode: literate.css does not contain dark mode media query"
@@ -1047,7 +1045,7 @@ private def testImageCopying (data : TestData) (projectDir : System.FilePath) : 
   let htmlDir := tmpDir / "html"
   IO.FS.createDirAll htmlDir
   let srcDir ← IO.FS.realPath projectDir
-  runLiterateHtml data.jsonDir htmlDir (sourceDir := some srcDir)
+  runLiterateHtml data.htmlExe data.jsonDir htmlDir (sourceDir := some srcDir)
 
   -- Verify copied image file exists in the flat -verso-images directory
   let imgDest := htmlDir / "-verso-images" / "LitConfig--test-diagram.png"
@@ -1101,7 +1099,7 @@ private def testImagePathTraversal : Test := IO.FS.withTempDir fun tmpDir => do
 
 /-- Single-root project: navbar uses nav-title header instead of collapsible details. -/
 private def testSingleRootNavFlattening (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   let navbarSection := litConfigHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
@@ -1116,7 +1114,7 @@ private def testSingleRootNavFlattening (data : TestData) : Test := withTestDir 
 /-- `docstrings_as_text = true` renders declaration docstrings as prose (mod-doc class). -/
 private def testDocstringsAsText (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
   IO.FS.writeFile tomlFile "docstrings_as_text = true\n"
-  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+  runLiterateHtml data.htmlExe jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   -- "A greeting message" docstring should appear as prose with mod-doc class
@@ -1127,7 +1125,7 @@ private def testDocstringsAsText (data : TestData) : Test := withTestDir data fu
 
 /-- `docstrings_as_text` defaults to false: declaration docstrings render inside code boxes. -/
 private def testDocstringsAsTextDefault (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   -- "A greeting message" should appear but NOT with mod-doc class on the declaration docstring div
@@ -1147,7 +1145,7 @@ private def testDocstringsAsTextDefault (data : TestData) : Test := withTestDir 
 
 /-- CSS uses custom properties (var(--verso-*)) throughout. -/
 private def testCssCustomProperties (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
   let css ← IO.FS.readFile (htmlDir / "literate.css")
   assertContains "--verso-text-color" css
     "CSS vars: literate.css does not define --verso-text-color"
@@ -1228,7 +1226,8 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
 /-- The literate HTML generator produces the expected output for the single-root test project. -/
 @[test (tags := slow)]
 def literateHtml (htmlExe : literateHtmlExe) (planExe : literatePlanExe) : Test := do
-  literateExes.set (some (← IO.FS.realPath htmlExe, ← IO.FS.realPath planExe))
+  let htmlExe ← IO.FS.realPath htmlExe
+  let planExe ← IO.FS.realPath planExe
   let projectDir := "test-projects/literate-config"
   let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings", "LitConfig.Builtins", "LitConfig.UserExt"]
 
@@ -1272,7 +1271,7 @@ def literateHtml (htmlExe : literateHtmlExe) (planExe : literatePlanExe) : Test 
     let moduleEntries := modules.map fun m => s!"LitConfig\t{m}"
     IO.FS.writeFile moduleListFile ("\n".intercalate moduleEntries.toList ++ "\n")
 
-    let data : TestData := { jsonDir, modules, moduleListFile }
+    let data : TestData := { jsonDir, modules, moduleListFile, htmlExe, planExe }
 
     for (name, test) in htmlTests data projectDir do
       result name test
@@ -1281,7 +1280,7 @@ def literateHtml (htmlExe : literateHtmlExe) (planExe : literatePlanExe) : Test 
 
 /-- Multi-root project: navbar uses collapsible details for top-level entries, not nav-title. -/
 private def testMultiRootNavTree (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
-  runLiterateHtml jsonDir htmlDir
+  runLiterateHtml data.htmlExe jsonDir htmlDir
 
   let libAHtml ← IO.FS.readFile (htmlDir / "LibA" / "index.html")
   let navbarSection := libAHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
@@ -1304,7 +1303,8 @@ private def multiRootHtmlTests (data : TestData) : List (String × Test) := [
 /-- The literate HTML generator produces the expected output for the multi-root test project. -/
 @[test (tags := slow)]
 def literateHtmlMultiRoot (htmlExe : literateHtmlExe) (planExe : literatePlanExe) : Test := do
-  literateExes.set (some (← IO.FS.realPath htmlExe, ← IO.FS.realPath planExe))
+  let htmlExe ← IO.FS.realPath htmlExe
+  let planExe ← IO.FS.realPath planExe
   let projectDir := "test-projects/literate-multi-root"
   let modules := #["LibA", "LibA.Core", "LibB", "LibB.Utils"]
 
@@ -1346,7 +1346,7 @@ def literateHtmlMultiRoot (htmlExe : literateHtmlExe) (planExe : literatePlanExe
       s!"{lib}\t{m}"
     IO.FS.writeFile moduleListFile ("\n".intercalate moduleEntries.toList ++ "\n")
 
-    let data : TestData := { jsonDir, modules, moduleListFile }
+    let data : TestData := { jsonDir, modules, moduleListFile, htmlExe, planExe }
 
     for (name, test) in multiRootHtmlTests data do
       result name test
