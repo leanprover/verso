@@ -9,6 +9,7 @@ public meta import Lean.Widget.UserWidget
 public meta import Lean.Server
 public meta import Errata.NameJson
 public meta import Errata.WidgetOutcome
+public meta import Errata.ProcessControl
 
 public section
 
@@ -301,9 +302,6 @@ private meta def handleLine (state : RunState) (line : String) : IO Unit := do
       if let .ok oc := (fromJson? o : Except String Runner.RunOutcome) then
         state.outcome.set oc
 
-/-- How long to wait, in milliseconds, before reading the protocol file again once it is read up. -/
-private meta def protocolPollMs : UInt32 := 15
-
 /--
 Handles one line of the runner's JSON protocol. The line is provided as UTF-8 encoded bytes.
 
@@ -312,59 +310,6 @@ If the line is invalid UTF-8 or if it is empty, then it is skipped.
 private meta def handleLineBytes (state : RunState) (bytes : ByteArray) : IO Unit := do
   if let some line := String.fromUTF8? bytes then
     unless line.isEmpty do handleLine state line
-
-/--
-Handles each complete line in {name}`bytes`. Returns the bytes after the last newline, which
-constitute an incomplete line, along with how many of them have been inspected for newlines. The
-bytes before {name}`scanned` are assumed to not contain any newlines.
--/
-private meta def handleLines (state : RunState) (bytes : ByteArray) (scanned : Nat) :
-    IO (ByteArray × Nat) := do
-  let mut start := 0
-  for i in [scanned:bytes.size] do
-    if bytes[i]! == '\n'.toUInt8 then
-      handleLineBytes state (bytes.extract start i)
-      start := i + 1
-  -- A read that ends within a line keeps the bytes in the buffer they arrived in, so a line that
-  -- spans many reads is copied when it is complete.
-  if start == 0 then return (bytes, bytes.size)
-  return (bytes.extract start bytes.size, bytes.size - start)
-
-private meta structure ProtocolReaderState extends RunState where
-  /-- The temporary file that the runner writes its protocol to. -/
-  file : IO.FS.Handle
-  /-- The runner's exit code, once it has exited. -/
-  exitCode : IO (Option UInt32)
-  /-- The bytes of a partially-written line of runner output. -/
-  pending : ByteArray := .empty
-  /--
-  How many of the bytes in {name (full := ProtocolReaderState.pending)}`pending` have been looked
-  at.
-  -/
-  scanned : Nat := 0
-  /--
-  Whether the runner had exited before the current read began, so that everything it wrote is
-  already in the file.
-  -/
-  exited : Bool := false
-
-/--
-Polls the runner's protocol output file, handling each line as it is completed. Returns once the
-runner has exited and the file has been read to its end. The file is read as bytes, with each line
-decoded once all of it has arrived, so a read that ends within a character leaves the character
-intact.
--/
-private meta partial def followProtocol (reader : ProtocolReaderState) : IO Unit := do
-  let bytes ← reader.file.read 65536
-  if !bytes.isEmpty then
-    let (pending, scanned) ← handleLines reader.toRunState (reader.pending ++ bytes) reader.scanned
-    followProtocol { reader with pending, scanned }
-  else if reader.exited then
-    handleLineBytes reader.toRunState reader.pending
-  else
-    let exited := (← reader.exitCode).isSome
-    unless exited do IO.sleep protocolPollMs
-    followProtocol { reader with exited }
 
 /--
 Passes along what the runner writes to the output stream {name}`stream`, adding each line to the
@@ -388,16 +333,6 @@ private meta partial def forwardStream (stream : Runner.OutputChunk.Stream) (han
 How long to wait, in milliseconds, for the runner's output pipes to close once the runner has exited.
 -/
 private meta def pipeGraceMs : Nat := 500
-
-/--
-Waits until every task has finished, or until {name}`ms` milliseconds have passed. Returns whether
-every task has finished.
--/
-private meta def waitAtMost (ms : Nat) (tasks : List (Task (Except IO.Error Unit))) : IO Bool := do
-  let allDone ← IO.mapTasks (fun _ => pure ()) tasks
-  let timeout ← IO.asTask (prio := .dedicated) (IO.sleep ms.toUInt32)
-  discard <| IO.waitAny [allDone, timeout]
-  IO.hasFinished allDone
 
 /-- The number of characters of a failed subprocess's output to be reported. -/
 private meta def detailLimit : Nat := 4000
@@ -470,7 +405,7 @@ private meta def buildAndRun (source : System.FilePath) (moduleJson declJson opt
       return
   -- The runner writes its protocol to a file of its own, where no other output can mix into it.
   IO.FS.withTempFile fun _ protocolPath => do
-    let protocol ← IO.FS.Handle.mk protocolPath .read
+    let protocol ← ProcessControl.Tail.open protocolPath
     -- The runner finds the test's module through the `LEAN_PATH` that it inherits. It exits when its
     -- standard input closes, which happens when this file worker exits. Its own process group lets a
     -- cancel kill the processes that the test starts.
@@ -499,12 +434,15 @@ private meta def buildAndRun (source : System.FilePath) (moduleJson declJson opt
         state.kill.set (pure ())
       code.set c?
       return c?
-    followProtocol { state with file := protocol, exitCode }
+    -- The file is read as bytes, with each line decoded once all of it has arrived, so a read that
+    -- ends within a character leaves the character intact. Once the runner has exited, the file is
+    -- read to its end.
+    protocol.follow (return (← exitCode).isSome) (handleLineBytes state)
     -- Processes that the test started can hold the runner's output pipes open after the runner has
     -- exited. They get a grace period, then are killed, and what they wrote is still read.
-    unless ← waitAtMost pipeGraceMs [runOutTask, runErrTask] do
+    unless ← ProcessControl.waitAtMost pipeGraceMs [runOutTask, runErrTask] do
       try run.kill catch _ => pure ()
-      discard <| waitAtMost pipeGraceMs [runOutTask, runErrTask]
+      discard <| ProcessControl.waitAtMost pipeGraceMs [runOutTask, runErrTask]
     -- `followProtocol` returns only after the runner has exited, so the code is set.
     let code := (← code.get).getD 0
     finishWith state (runnerFailure code)
