@@ -38,8 +38,6 @@ structure Context where
   runner derives for each test from the run's seed.
   -/
   seed : Nat
-  /-- Whether a panic message in a check's captured stderr leaves its status as it is. -/
-  ignorePanics : Bool := false
   /-- The running test's name. -/
   test : String := ""
   /-- The components of the running test's name. -/

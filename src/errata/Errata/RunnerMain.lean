@@ -49,10 +49,6 @@ structure Options where
   eventsPath : Option String := none
   /-- Fails the run if warnings are logged. -/
   wfail : Bool := false
-  /-- Passes {lit}`setting:ignorePanics=true` to every test. -/
-  ignorePanics : Bool := false
-  /-- Runs every test executable with {lit}`LEAN_ABORT_ON_PANIC` set, so a panic ends its process. -/
-  exitOnPanic : Bool := false
   /-- How many tests may run at once. -/
   jobs : Nat := 1
   /-- Lists the tests without running them. -/
@@ -133,8 +129,6 @@ where cmd := `[Cli|
       markdown : String;       "Write a Markdown report (for a CI job summary) to the given path."
       events : String;         "Write the run's events to the given path as JSON lines."
       wfail;                   "Fail the run if warnings are logged."
-      "ignore-panics";         "Leave a check's status as it is when it panics."
-      "exit-on-panic";         "End a test's process at its first panic."
       jobs : Nat;              "How many tests may run at once (1)."
       list;                    "List the tests without running them."
       timeout : String;        "How long a test may run before it is stopped, such as 90s or 10m (10m)."
@@ -157,7 +151,7 @@ private def pathFlag (p : Cli.Parsed) (name : String) : Except String (Option St
   | some f => if f.value.isEmpty then .error s!"--{name} expects a path" else .ok (some f.value)
 
 /-- The settings that the runner passes to the Lean harness for its own options. -/
-private def reservedTestOptions : List String := ["seed", "updateGolden", "ignorePanics"]
+private def reservedTestOptions : List String := ["seed", "updateGolden"]
 
 /-- Interprets a parsed command line as runner settings. -/
 def optionsOfParsed (p : Cli.Parsed) : Except String Options := do
@@ -190,8 +184,6 @@ def optionsOfParsed (p : Cli.Parsed) : Except String Options := do
     markdownPath := ← pathFlag p "markdown",
     eventsPath := ← pathFlag p "events",
     wfail := p.hasFlag "wfail",
-    ignorePanics := p.hasFlag "ignore-panics",
-    exitOnPanic := p.hasFlag "exit-on-panic",
     jobs, list := p.hasFlag "list", timeoutMs, gracePeriodMs, testOptions
   }
 
@@ -336,10 +328,12 @@ end when it closes.
 -/
 def lifelineVariable : String := "ERRATA_LIFELINE"
 
-/-- The environment variables that every test executable receives. -/
+/--
+The environment variables that every test executable receives. {lit}`LEAN_ABORT_ON_PANIC` is
+{lit}`1`, so a panic ends the process that panicked.
+-/
 def RunContext.env (ctx : RunContext) (exe : ExecutableConfig) : Array (String × Option String) :=
-  #[("LEAN_ABORT_ON_PANIC", if ctx.opts.exitOnPanic then some "1" else none),
-    (lifelineVariable, some "1")] ++
+  #[("LEAN_ABORT_ON_PANIC", some "1"), (lifelineVariable, some "1")] ++
     (ctx.config.errataDir?.map fun d => #[("ERRATA_DIR", some d)]).getD #[] ++
     exe.env.map fun (k, v) => (k, some v)
 
@@ -446,8 +440,7 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
 def RunContext.settingsFor (ctx : RunContext) (exe : ExecutableConfig) (t : InventoryTest) :
     Nat × Array (String × String) :=
   let seed := testSeed ctx.runSeed exe.name t.name
-  let flags := (if ctx.opts.updateGolden then #[("updateGolden", "true")] else #[]) ++
-    (if ctx.opts.ignorePanics then #[("ignorePanics", "true")] else #[])
+  let flags := if ctx.opts.updateGolden then #[("updateGolden", "true")] else #[]
   (seed, #[("seed", toString seed)] ++ flags ++ ctx.opts.testOptions)
 
 /-- The arguments of a test executable that runs one test. -/
@@ -461,7 +454,7 @@ error.
 def RunContext.reproduce (ctx : RunContext) (exe : ExecutableConfig) (name : String)
     (settings : Array (String × String)) : String :=
   let env : Array (String × String) :=
-    (if ctx.opts.exitOnPanic then #[("LEAN_ABORT_ON_PANIC", "1")] else #[]) ++
+    #[("LEAN_ABORT_ON_PANIC", "1")] ++
     ((ctx.config.errataDir?.map fun d => #[("ERRATA_DIR", d)]).getD #[]) ++ exe.env
   let words := env.map (fun (k, v) => s!"{k}={shellQuote v}") ++
     (exe.command ++ runArgs "/dev/stderr" name settings).map shellQuote

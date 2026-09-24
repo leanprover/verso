@@ -45,11 +45,10 @@ def settingsOf (args : List String) : Array (String × String) :=
     | name :: value => some (name, "=".intercalate value)
 
 /--
-The settings that the Lean harness itself reads: {lit}`seed`, the seed for property tests;
-{lit}`updateGolden`, which rewrites golden files when it is {lit}`true`; and {lit}`ignorePanics`,
-which keeps a check's status unchanged when the check panics, when it is {lit}`true`.
+The settings that the Lean harness itself reads: {lit}`seed`, the seed for property tests, and
+{lit}`updateGolden`, which rewrites golden files when it is {lit}`true`.
 -/
-def harnessSettings : List String := ["seed", "updateGolden", "ignorePanics"]
+def harnessSettings : List String := ["seed", "updateGolden"]
 
 /--
 The context for a test run with the given settings. The harness's own settings configure it, and
@@ -70,7 +69,7 @@ def contextOf (settings : Array (String × String)) : IO (Except String Context)
     if harnessSettings.contains name then acc
     else acc.insert name ((acc.getD name #[]).push value)
   let ctx ← mkContext (updateGolden := lookup "updateGolden" == some "true")
-    (options := options) (seed := seed?) (ignorePanics := lookup "ignorePanics" == some "true")
+    (options := options) (seed := seed?)
   return .ok ctx
 
 /-- Writes the inventory: the protocol record, then a test record for each entry. -/
@@ -220,12 +219,11 @@ its file, line, and column, and its docstring as its description.
 {lit}`errata-run <out> <name> [setting:NAME=VALUE]...` runs the test with that name and writes its
 records to {lit}`out`. It exits with {lit}`0` when the test passes and {lit}`1` otherwise. The runner
 passes its own options to the test as settings: {lit}`setting:seed=N` is the seed for property tests,
-{lit}`setting:updateGolden=true` rewrites golden files, and {lit}`setting:ignorePanics=true` leaves
-a check's status unchanged when the check panics. Every other setting is a test option, read with
-{name}`option?` and {name}`flag`. When the environment variable {lit}`ERRATA_LIFELINE` is {lit}`1`,
-as the runner sets it, the executable's standard input is its lifeline: when the pipe closes, the
-executable ends its own process group and exits. Otherwise the command runs by hand with any
-standard input, {lit}`/dev/null` included. The test itself reads an empty standard input.
+and {lit}`setting:updateGolden=true` rewrites golden files. Every other setting is a test option,
+read with {name}`option?` and {name}`flag`. When the environment variable {lit}`ERRATA_LIFELINE` is
+{lit}`1`, as the runner sets it, the executable's standard input is its lifeline: when the pipe
+closes, the executable ends its own process group and exits. Otherwise the command runs by hand with
+any standard input, {lit}`/dev/null` included. The test itself reads an empty standard input.
 
 With any other arguments, the executable prints its usage and exits with {lit}`2`.
 -/

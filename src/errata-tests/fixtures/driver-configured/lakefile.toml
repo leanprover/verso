@@ -26,7 +26,7 @@ name = "AppUnsafe"
 [[lean_lib]]
 name = "AppStray"
 
-# A test that panics and passes anyway, beside one that does not panic.
+# A test that panics, beside one that does not panic.
 [[lean_lib]]
 name = "AppPanic"
 

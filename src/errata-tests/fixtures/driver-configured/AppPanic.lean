@@ -10,9 +10,9 @@ public section
 @[test]
 def calm : Bool := true
 
-/-- A test that panics and still passes, since a panic returns a default value. -/
+/-- A test that panics, which ends its process. -/
 @[test]
-def panicsThenPasses : Test := do
+def panics : Test := do
   let xs : Array Nat := #[]
   -- An index that the compiler cannot fold away.
   let i ← IO.rand 0 0

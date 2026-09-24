@@ -73,8 +73,7 @@ A base context with the given settings and a fresh, empty log. Without a seed fo
 one is generated using the default Lean RNG.
 -/
 def mkContext (updateGolden : Bool := false)
-    (options : OptionMap := {}) (seed : Option Nat := none) (ignorePanics : Bool := false) :
-    IO Context := do
+    (options : OptionMap := {}) (seed : Option Nat := none) : IO Context := do
   let seed ←
     match seed with
     | some seed => pure seed
@@ -85,5 +84,5 @@ def mkContext (updateGolden : Bool := false)
   let watchFailed ← IO.mkRef false
   let insideMs ← IO.mkRef 0
   return {
-    updateGolden, options, seed, ignorePanics, log, usedOptions, outputFailed, watchFailed, insideMs
+    updateGolden, options, seed, log, usedOptions, outputFailed, watchFailed, insideMs
   }

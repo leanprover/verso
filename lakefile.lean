@@ -491,7 +491,7 @@ script run (args) do
         return (configFile, runnerPath)
   -- The runner's standard input is a lifeline that the driver holds, and `ERRATA_LIFELINE` asks the
   -- runner to end its tests when that pipe closes. The runner's environment has no
-  -- `LEAN_ABORT_ON_PANIC`; the runner sets it for the tests under `--exit-on-panic`.
+  -- `LEAN_ABORT_ON_PANIC`; the runner sets it for every test executable.
   let child ← IO.Process.spawn {
     cmd := runnerPath.toString, args := #[configPath.toString] ++ runnerArgs.toArray
     stdin := .piped

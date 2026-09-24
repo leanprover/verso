@@ -796,57 +796,18 @@ def driverReportsUnreachableModules : Test := do
       assertContains "1 passed, 0 failed, 0 errors" out.stdout
       assertContains "<error message=" (← IO.FS.readFile junit)
 
-/-- A test that indexes past the end of an array, and so panics and continues with a default. -/
-private def panicking : Test := do
-  let xs : Array Nat := #[]
-  -- An index that the compiler cannot fold away.
-  let i ← IO.rand 0 0
-  assertBEq 0 xs[i]!
-
 /--
-A panic prints a message and continues with a default value, so a test that panics can produce a
-passing verdict. The panic message is captured with the test's stderr and makes its result an error,
-unless the context ignores panics.
--/
-@[test]
-def panicIsAnError : Test := do
-  result "reported as an error" do
-    let results ← resultsOf panicking
-    assertBEq 1 results.size
-    match results[0]!.status with
-    | .error m => assertContains "index out of bounds" m
-    | s => fail s!"expected an error, got {repr s}"
-  result "ignored on request" do
-    let cfg ← mkContext (ignorePanics := true)
-    let results ← runEntry cfg (TestEntry.of "p" "M" "t" default panicking)
-    assertBEq 1 results.size
-    assertTrue results[0]!.status.isSuccess "the panic leaves the pass alone"
-
-/--
-The runner reports a test that panics as an error and fails the run. `--ignore-panics` leaves the
-test's own verdict in place, and `--exit-on-panic` ends the test's process at the panic, which is
-reported as ended by a signal while the rest of the run goes on. The fixture's `AppPanic` library has
-a test that indexes past the end of an array.
+A test that panics ends its test executable's process, which the runner reports as ended by a
+signal with the panic's message in its output, and the rest of the run goes on. The fixture's
+`AppPanic` library has a test that indexes past the end of an array.
 -/
 @[test]
 def driverReportsPanics : Test := do
-  let fixture := fixturesDir / "driver-configured"
-  result "A panic is an error" do
-    let out ← lakeInFixture fixture #["test", "--", "AppPanic"]
-    assertExitCode 1 out
-    assertContains "ERROR panicsThenPasses: panicked: Error: index out of bounds" out.stdout
-    assertContains "1 passed, 0 failed, 1 errors, 0 inconclusive" out.stdout
-  result "The --ignore-panics flag leaves the verdict alone" do
-    let out ← lakeInFixture fixture #["test", "--", "AppPanic", "--test-options", "--ignore-panics"]
-    assertExitCode 0 out
-    assertContains "2 passed, 0 failed, 0 errors" out.stdout
-  result "The --exit-on-panic flag ends the test's process" do
-    let out ← lakeInFixture fixture #["test", "--", "AppPanic", "--test-options", "--exit-on-panic"]
-    assertExitCode 1 out
-    assertContains "INCONCLUSIVE panicsThenPasses: the test executable was ended by signal 6"
-      out.stdout
-    assertContains "Error: index out of bounds" out.stdout
-    assertContains "1 passed, 0 failed, 0 errors, 1 inconclusive" out.stdout
+  let out ← lakeInFixture (fixturesDir / "driver-configured") #["test", "--", "AppPanic"]
+  assertExitCode 1 out
+  assertContains "INCONCLUSIVE panics: the test executable was ended by signal 6" out.stdout
+  assertContains "Error: index out of bounds" out.stdout
+  assertContains "1 passed, 0 failed, 0 errors, 1 inconclusive" out.stdout
 
 /--
 The compile-time commands register their verdicts as tests, so a module that imports only
@@ -1078,6 +1039,9 @@ def runnerArgParsing : Test := do
     assertTrue ((parse ["--", "--seed=3"]) matches .error _)
   result "unknown flag rejected" do
     assertTrue ((parse ["--golden", "on"]) matches .error _)
+  result "panic flags rejected" do
+    assertTrue ((parse ["--ignore-panics"]) matches .error _)
+    assertTrue ((parse ["--exit-on-panic"]) matches .error _)
   result "misplaced library name diagnosed" do
     match parse ["--verbose", "ErrataTests"] with
     | .error msg => assertContains "ErrataTests" msg

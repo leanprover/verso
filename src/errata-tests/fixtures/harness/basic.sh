@@ -93,7 +93,7 @@ case "$mode" in
         exit 0
         ;;
       panics)
-        if [ -n "$LEAN_ABORT_ON_PANIC" ]; then
+        if [ "$LEAN_ABORT_ON_PANIC" = 1 ]; then
           echo "PANIC at the conformance suite" >&2
           kill -ABRT $$
         fi

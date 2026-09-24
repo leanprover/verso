@@ -163,12 +163,12 @@ def childProcessesEnded : Test := do
   assertTrue left.stdout.trimAscii.isEmpty s!"processes are left running: {left.stdout}"
 
 /--
-Under {lit}`--exit-on-panic`, a test executable receives {lit}`LEAN_ABORT_ON_PANIC`; a test that
-aborts is reported as ended by a signal, and the rest of the run goes on.
+Every test executable receives {lit}`LEAN_ABORT_ON_PANIC=1`; a test that aborts is reported as ended
+by a signal, and the rest of the run goes on.
 -/
 @[test]
 def panicEndsOnlyItsTest : Test := do
-  let r ← runWith #[basic ["panics", "pass"]] { exitOnPanic := true }
+  let r ← runWith #[basic ["panics", "pass"]]
   expectOutcome r "panics" (· matches .inconclusive (.signaled 6)) "signaled 6"
   expectOutcome r "pass" (· matches .reported .pass) "a pass"
 
