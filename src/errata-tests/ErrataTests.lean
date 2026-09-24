@@ -19,6 +19,7 @@ import ErrataTests.Docstrings
 import ErrataTests.WidgetInteractive
 import ErrataTests.Conformance
 import ErrataTests.Settings
+import ErrataTests.Roles
 import ErrataTests.Filter
 
 open Errata

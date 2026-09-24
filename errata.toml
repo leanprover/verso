@@ -9,6 +9,10 @@ versoExe = { needs = "verso" }
 literateHtmlExe = { needs = "verso-literate-html" }
 literatePlanExe = { needs = "verso-literate-plan" }
 
+# A test of Errata's conformance suite needs a value that nothing else gives.
+[profile.default.settings.ErrataTests.Roles]
+required = "given"
+
 [profile.ci.settings.VersoTests.Settings]
 checkTeX = "true"
 
