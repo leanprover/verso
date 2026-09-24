@@ -18,8 +18,8 @@ Evaluates the test named by {lean}`declName`, defined in {lean}`module`, to a te
 discovery builds one.
 
 The entry's action is the definition that {lit}`@[test]` compiled beside the test, reached through
-{lit}`import all` of its module so a module-private test is still reachable. The runner has no
-package name to give the entry, so that field is empty.
+{lit}`import all` of its module. The runner has no package name to give the entry, so that field is
+empty.
 -/
 unsafe def evalTestEntry (module declName : Name) : CoreM Errata.TestEntry :=
   MetaM.run' do
@@ -34,9 +34,11 @@ unsafe def evalTestEntry (module declName : Name) : CoreM Errata.TestEntry :=
     let ty := mkApp (mkConst ``Errata.TestM) (mkConst ``Unit)
     let act ← evalExpr (Errata.TestM Unit) ty (mkConst test.run) (safety := .unsafe)
     let location ← Errata.testLocation test
+    let userName := privateToUserName test.name
     return {
       package := "", moduleName := module.toString
-      test := Errata.testNameBelow module (privateToUserName test.name)
+      name := userName.toString
+      path := userName.components.map (·.toString (escape := false)) |>.toArray
       location, docstring? := test.docstring?, run := act
     }
 

@@ -13,13 +13,16 @@ public import Errata
 public import Errata.WidgetRunner
 public meta import Errata
 import all Errata.FS
-import all ErrataTests.Fixture
-import all ErrataTests.Fixture.Sub
-import all ErrataTests.Docstrings
-import all ErrataTests.WidgetInteractive
+import ErrataTests.Fixture
+import ErrataTests.Fixture.Sub
+import ErrataTests.Docstrings
+import ErrataTests.WidgetInteractive
+import ErrataTests.Conformance
 
 open Errata
 open Errata.Widget.Runner
+
+public section
 
 /-- A bare boolean is a passing test. -/
 @[test]
@@ -73,7 +76,7 @@ set_option doc.verso true in
 #eval 3 + 4
 
 /--
-error: Module `NoSuchModule` is not imported, so its tests cannot be reached. Import it, using `import all NoSuchModule` if it belongs to the module system.
+error: Module `NoSuchModule` is not imported, so its tests cannot be reached. Import it.
 -/
 #test_msgs in
 example : Array TestEntry := getAllTests% "verso" NoSuchModule
@@ -99,7 +102,19 @@ def discoveryNamesModules : Test := do
 
 /-- The docstring of a test in the docstring fixture module, when it has one. -/
 private def fixtureDocstring (test : String) : Option String :=
-  (getAllTests% "verso" ErrataTests.Docstrings).find? (·.test == test) |>.bind (·.docstring?)
+  (getAllTests% "verso" ErrataTests.Docstrings).find? (·.name == test) |>.bind (·.docstring?)
+
+/-- A test is named by its fully qualified declaration name, and its path is the name's components. -/
+@[test]
+def testsAreFullyQualified : Test := do
+  let entries := getAllTests% "verso" ErrataTests.Docstrings
+  let some entry := entries.find? (·.path.back? == some "customRoleDoc") | fail "the test is missing"
+  assertBEq "ErrataTests.Docstrings.customRoleDoc" entry.name
+  assertBEq #["ErrataTests", "Docstrings", "customRoleDoc"] entry.path
+
+/-- error: `hidden` is private or not exported, so a test executable cannot reach it. Make it public, for example by declaring it in a `public section`. -/
+#test_msgs in
+@[test] private def hidden : Bool := true
 
 /-- A Markdown docstring is captured as written. -/
 @[test]
@@ -124,7 +139,8 @@ renderer runs in the capturing scope, so the name it shortens comes out fully qu
 -/
 @[test]
 def customRoleDocstringRendered : Test := do
-  let some doc := fixtureDocstring "customRoleDoc" | assertTrue false "docstring missing"
+  let some doc := fixtureDocstring "ErrataTests.Docstrings.customRoleDoc"
+    | assertTrue false "docstring missing"
   assertContains "Refers to `ErrataTests.Docstrings.docstringTarget`, whose name" doc
 
 /-- A test's docstring travels with its results. -/
@@ -143,33 +159,67 @@ def docstringReachesResults : Test := do
     assertBEq 2 ((markdownReport { results, seed := 0 }).splitOn "What it checks.").length
 
 /--
+A result for the report tests: the test {name}`test` with the verdict {name}`v`, from an executable
+with no name, so the human-readable report prints it without headings.
+-/
+private def sample (test : String) (v : Verdict) (resultPath : Array String := #[])
+    (description? : Option String := none) (output : OutputLog := {}) (exe := "") : Result :=
+  { exe, test, resultPath, outcome := .reported v, description?, output }
+
+/--
 The human-readable report shows a failure's docstring, indented below its status line, and shows a
 pass's docstring only when every docstring is shown.
 -/
 @[test]
 def reportShowsDocstring : Test := do
-  let pass : Result :=
-    { package := "p", moduleName := "M", test := "t", status := .pass,
-      description? := some "Passing doc." }
-  let fail : Result :=
-    { package := "p", moduleName := "M", test := "u", status := .fail { message := "boom" },
-      description? := some "Failing doc.
-Second line." }
+  let pass := sample "t" .pass (description? := some "Passing doc.")
+  let fail := sample "u" (.fail { message := "boom" }) (description? := some "Failing doc.
+Second line.")
   let silent ← captureOutput do discard <| humanReport .silent #[pass, fail]
-  assertContains "FAIL  p/M  u: boom\n    Failing doc.\n    Second line.\n" silent.stdout
+  assertContains "FAIL  u: boom\n    Failing doc.\n    Second line.\n" silent.stdout
   assertNotContains "Passing doc." silent.stdout
   let verbose ← captureOutput do discard <| humanReport .verbose #[pass]
   assertNotContains "Passing doc." verbose.stdout
   let all ← captureOutput do discard <| humanReport .superVerbose #[pass]
-  assertContains "ok    p/M  t" all.stdout
+  assertContains "ok    t" all.stdout
   assertContains "\n    Passing doc.\n" all.stdout
+
+/--
+The human-readable report nests tests below their executable and the levels of their paths, printing
+each level once and each test by the last component of its path.
+-/
+@[test]
+def reportNestsByPath : Test := do
+  let at_ (path : Array String) : Result :=
+    { exe := "Lib", test := ".".intercalate path.toList, path, outcome := .reported .pass }
+  let out ← captureOutput do
+    discard <| humanReport .verbose
+      #[at_ #["A", "B", "one"], at_ #["A", "B", "two"], at_ #["A", "C", "three"], at_ #["four"]]
+  let lines := out.stdout.splitOn "\n" |>.map fun l => (l.splitOn " (").headD l
+  assertBEq ["Lib", "  A", "    B", "      ok    one", "      ok    two", "    C",
+    "      ok    three", "  ok    four"] (lines.take 8)
+
+/-- An inconclusive test is reported with its reason, its output, and the command that reproduces it. -/
+@[test]
+def reportShowsInconclusive : Test := do
+  let r : Result := {
+    test := "slow", outcome := .inconclusive (.timedOut 1000 false)
+    output := { log := #[.stdout "partial\n"] }, reproduce? := some "exe errata-run out slow"
+  }
+  let out ← captureOutput do discard <| humanReport .silent #[r]
+  assertContains "INCONCLUSIVE slow: timed out after 1000ms and was terminated" out.stdout
+  assertContains "partial" out.stdout
+  assertContains "reproduce: exe errata-run out slow" out.stdout
+  assertContains "0 passed, 0 failed, 0 errors, 1 inconclusive" out.stdout
+  let xml := junitReport { results := #[r], seed := 0 }
+  assertContains "<error message=\"inconclusive: timed out after 1000ms and was terminated\" \
+    type=\"timedOut\">" xml
+  assertContains "**1** inconclusive" (markdownReport { results := #[r], seed := 0 })
 
 /-- The Markdown report includes a failure's docstring as Markdown. -/
 @[test]
 def markdownReportShowsDocstring : Test := do
-  let fail : Result :=
-    { package := "p", moduleName := "M", test := "u", status := .fail { message := "boom" },
-      description? := some "Checks `x` and **y**." }
+  let fail := sample "u" (.fail { message := "boom" }) (description? := some "Checks `x` and **y**.")
   assertContains "u: boom</summary>\n\nChecks `x` and **y**.\n\n"
     (markdownReport { results := #[fail], seed := 0 })
 
@@ -183,9 +233,13 @@ open Lean (toJson fromJson?)
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Lean.Position
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Location
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for TestFailure
-deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Status
+deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Verdict
+deriving instance Plausible.Shrinkable, Plausible.Arbitrary for FixturePhase
+deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Inconclusive
+deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Outcome
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Output
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for OutputLog
+deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Result.Kind
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Result
 
 /-- The JSON encoding of a result round-trips: decoding the encoding recovers the result. -/
@@ -350,84 +404,67 @@ def captureRejectsDanglingBytes : Test := do
   assertBEq 1 results.size
   assertTrue (results[0]!.status matches .error _)
 
-/-- The invocation that these tests hand to the runner. -/
-def testInvocation : Invocation := { run := "lake test", runner := "lake test -- --test-options" }
+/-- A test executable, written in shell, whose one test passes. -/
+private def passingExe : Runner.ExecutableConfig :=
+  ErrataTests.Conformance.basic ["pass"]
 
 /--
-The flag that these tests use to mark a runner as started by the driver.
-
-This is deliberately not the canonical one defined in the Lake config, so that we test that the generated code works with _whatever_ is passed and that the value is not hard-coded twice.
+Runs the runner on a configuration with every report written to a temporary directory, returning the
+exit code and the JUnit, JSON, and Markdown reports.
 -/
-def testDriverFlag : String := "--from-driver"
-
-/--
-Under --wfail, an option that no test reads causes the run to fail instead of only issuing a
-warning.
--/
-@[test]
-def wfailPromotesUnusedOptions : Test := do
-  let entry := TestEntry.of "p" "M" "t"
-    { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ } (pure () : Test)
-  let lax ← IO.mkRef (0 : UInt32)
-  let wfail ← IO.mkRef (0 : UInt32)
-  discard <| captureOutput do
-    lax.set (← runMain testInvocation #[entry] ["--", "--bogus=1"])
-    wfail.set (← runMain testInvocation #[entry] ["--wfail", "--", "--bogus=1"])
-  assertBEq 0 (← lax.get)
-  assertBEq 1 (← wfail.get)
-
-/--
-Runs the runner with every report written to a temporary directory, returning the exit code and the
-JUnit, JSON, and Markdown reports.
--/
-private def runReporting (entries : Array TestEntry) (args : List String) :
+private def runReporting (config : Runner.Config) (args : List String) :
     TestM (UInt32 × String × String × String) :=
   IO.FS.withTempDir fun dir => do
     let xml := dir / "report.xml"
     let json := dir / "report.json"
     let md := dir / "report.md"
+    let args := ["config.json", "--junit", xml.toString, "--json", json.toString,
+      "--markdown", md.toString] ++ args
+    let opts ← match Runner.parseOptions args with
+      | .ok opts => pure opts
+      | .error e => fail s!"the options do not parse: {e}"
     let code ← IO.mkRef (0 : UInt32)
     discard <| captureOutput do
-      code.set (← runMain testInvocation entries
-        (["--junit", xml.toString, "--json", json.toString, "--markdown", md.toString] ++ args))
+      code.set (← Runner.executeAndWrite config opts)
     return (← code.get, ← IO.FS.readFile xml, ← IO.FS.readFile json, ← IO.FS.readFile md)
 
 /--
-An option that no test reads is a warning in every report, with the way to make it fail the run.
-Under `--wfail` it is an error. A run with nothing to report has no "Test run" suite.
+The driver's warnings are warnings in every report, with the way to make them fail the run. Under
+`--wfail` they are errors. A run with nothing to report has no "Test run" suite.
 -/
 @[test]
-def unusedOptionsReachReports : Test := do
-  let entry := TestEntry.of "p" "M" "t" default (pure () : Test)
+def warningsReachReports : Test := do
+  let config : Runner.Config := { executables := #[passingExe] }
+  let warned := { config with warnings := #["something looks off"] }
   result "absent without issues" do
-    let (_, xml, _, _) ← runReporting #[entry] []
+    let (code, xml, _, _) ← runReporting config []
+    assertBEq 0 code.toNat
     assertNotContains "Test run" xml
   result "as a warning" do
-    let (code, xml, _, md) ← runReporting #[entry] ["--", "--bogus=1"]
+    let (code, xml, _, md) ← runReporting warned []
     assertBEq 0 code.toNat
     assertContains "<testsuite name=\"Test run\"" xml
     assertNotContains "<error" xml
-    assertContains "never read: bogus" xml
+    assertContains "something looks off" xml
     assertContains "--wfail" xml
-    assertContains "never read: bogus" md
+    assertContains "something looks off" md
   result "as an error under --wfail" do
-    let (code, xml, _, md) ← runReporting #[entry] ["--wfail", "--", "--bogus=1"]
+    let (code, xml, _, md) ← runReporting warned ["--wfail"]
     assertBEq 1 code.toNat
     assertContains "<error message=" xml
-    assertContains "never read: bogus" xml
+    assertContains "something looks off" xml
     assertContains "## ❌" md
 
-/-- The seed for the run's property tests reaches the JSON and Markdown reports. -/
+/-- The run's seed reaches the JSON and Markdown reports. -/
 @[test]
 def seedReachesReports : Test := do
-  let entry := TestEntry.of "p" "M" "t" default (pure () : Test)
-  let (_, _, json, md) ← runReporting #[entry] ["--seed", "7"]
+  let (_, _, json, md) ← runReporting { executables := #[passingExe] } ["--seed", "7"]
   let .ok j := Lean.Json.parse json | fail "the JSON report does not parse"
   assertBEq (some 7) (j.getObjValAs? Nat "seed").toOption
   assertContains "seed **7**" md
 
 /-- A value from a wide range that is never shrunk, so that a counterexample reflects the seed. -/
-private structure Wide where
+structure Wide where
   n : Nat
 deriving Repr
 
@@ -460,7 +497,7 @@ def propertySeedReplays : Test := do
   -- The counterexample is the detail's first paragraph.
   let counterexample (detail : String) : String := (detail.splitOn "\n\n").headD detail
   result "the detail names the seed" do
-    assertContains s!"--seed {seed}" detail
+    assertContains s!"seed {seed}" detail
   result "the seed replays the counterexample" do
     let (_, again) ← seededResults (some seed) wide
     assertBEq (some (counterexample detail)) ((failDetail? again[0]!).map counterexample)
@@ -787,28 +824,29 @@ def panicIsAnError : Test := do
 
 /--
 The runner reports a test that panics as an error and fails the run. `--ignore-panics` leaves the
-test's own verdict in place, and `--exit-on-panic` stops the runner at the panic, whose message the
-runtime prints as it exits. The fixture's `AppPanic` library has a test that indexes past the end of
-an array.
+test's own verdict in place, and `--exit-on-panic` ends the test's process at the panic, which is
+reported as ended by a signal while the rest of the run goes on. The fixture's `AppPanic` library has
+a test that indexes past the end of an array.
 -/
 @[test]
 def driverReportsPanics : Test := do
   let fixture := fixturesDir / "driver-configured"
-  let panicked := "app/AppPanic  panicsThenPasses: "
   result "A panic is an error" do
     let out ← lakeInFixture fixture #["test", "--", "AppPanic"]
     assertExitCode 1 out
-    assertContains s!"ERROR {panicked}panicked: Error: index out of bounds" out.stdout
-    assertContains "1 passed, 0 failed, 1 errors" out.stdout
+    assertContains "ERROR panicsThenPasses: panicked: Error: index out of bounds" out.stdout
+    assertContains "1 passed, 0 failed, 1 errors, 0 inconclusive" out.stdout
   result "The --ignore-panics flag leaves the verdict alone" do
     let out ← lakeInFixture fixture #["test", "--", "AppPanic", "--test-options", "--ignore-panics"]
     assertExitCode 0 out
     assertContains "2 passed, 0 failed, 0 errors" out.stdout
-  result "The --exit-on-panic flag stops the runner at the panic" do
+  result "The --exit-on-panic flag ends the test's process" do
     let out ← lakeInFixture fixture #["test", "--", "AppPanic", "--test-options", "--exit-on-panic"]
-    assertTrue (out.exitCode != 0) "the run does not succeed"
-    assertContains "Error: index out of bounds" out.stderr
-    assertNotContains "passed" out.stdout
+    assertExitCode 1 out
+    assertContains "INCONCLUSIVE panicsThenPasses: the test executable was ended by signal 6"
+      out.stdout
+    assertContains "Error: index out of bounds" out.stdout
+    assertContains "1 passed, 0 failed, 0 errors, 1 inconclusive" out.stdout
 
 /--
 The compile-time commands register their verdicts as tests, so a module that imports only
@@ -822,34 +860,55 @@ def compileTimeImportSuffices : Test := do
   assertContains "2 passed, 0 failed, 0 errors" out.stdout
 
 /--
-A test in a dependency's library is reported under the dependency's package. The fixture requires
-the `dep` package, whose `DepLib` library has one test.
+A test in a dependency's library runs in that library's own test executable, which is built in the
+dependency's build directory. The fixture requires the `dep` package, whose `DepLib` library has one
+test.
 -/
 @[test]
-def dependencyTestsKeepTheirPackage : Test := do
+def dependencyTestsHaveTheirOwnExecutable : Test := do
   let fixture := fixturesDir / "driver-configured"
   IO.FS.withTempDir fun dir => do
     let junit := dir / "report.xml"
     let out ← lakeInFixture fixture
       #["test", "--", "dep/DepLib", "--test-options", "-v", "--junit", junit.toString]
     assertExitCode 0 out
-    assertContains "ok    dep/DepLib  depTest" out.stdout
-    assertContains "package=\"dep\"" (← IO.FS.readFile junit)
+    assertContains "DepLib\n  ok    depTest" out.stdout
+    assertContains "<testsuite name=\"DepLib\"" (← IO.FS.readFile junit)
+    let config ← IO.FS.readFile (fixture / ".lake" / "errata" / "config.json")
+    assertContains "dep/.lake/build/bin/errata-test-DepLib" config
 
 /--
-A legacy root that imports a module-system child, each with a test, has each test discovered once:
-the child's through the bridge and the root's through the main. The fixture's `AppMixed` library
-has that shape, and the child's test is private to its module.
+A legacy root that imports a module-system child, each with a test, has each test discovered once.
+The fixture's `AppMixed` library has that shape.
 -/
 @[test]
 def mixedDiscoveryRunsEachTestOnce : Test := do
   let out ← lakeInFixture (fixturesDir / "driver-configured")
     #["test", "--", "AppMixed", "--test-options", "-v"]
   assertExitCode 0 out
-  assertContains "ok    app/AppMixed  parentTest" out.stdout
-  assertContains "ok    app/AppMixed.Child  childTest" out.stdout
+  assertContains "ok    parentTest" out.stdout
+  assertContains "ok    childTest" out.stdout
   assertBEq 2 (out.stdout.splitOn "childTest").length
   assertContains "2 passed, 0 failed, 0 errors" out.stdout
+
+/--
+A test that runs past the timeout is reported as timed out, and the run goes on. What a test's
+subprocess writes reaches the report. The fixture's `AppSlow` library has a test that sleeps and one
+that prints from a subprocess.
+-/
+@[test]
+def driverEnforcesTimeouts : Test := do
+  let fixture := fixturesDir / "driver-configured"
+  IO.FS.withTempDir fun dir => do
+    let junit := dir / "report.xml"
+    let out ← lakeInFixture fixture
+      #["test", "--", "AppSlow", "--test-options", "--timeout", "1s", "--junit", junit.toString]
+    assertExitCode 1 out
+    assertContains "INCONCLUSIVE sleeps: timed out after" out.stdout
+    assertContains "1 passed, 0 failed, 0 errors, 1 inconclusive" out.stdout
+    let xml ← IO.FS.readFile junit
+    assertContains "type=\"timedOut\"" xml
+    assertContains "from a subprocess" xml
 
 /--
 The `IsTest` instance that runs a test is the one in force where the test is declared. The
@@ -867,7 +926,7 @@ def instanceIsFixedAtDeclaration : Test := do
   result "an instance elsewhere does not change the verdict" do
     let out ← lakeInFixture fixture #["test", "--", "AppShadow"]
     assertExitCode 1 out
-    assertContains "FAIL  app/AppShadow.Failing  failsAsWritten" out.stdout
+    assertContains "FAIL  failsAsWritten" out.stdout
     assertContains "1 passed, 1 failed, 0 errors" out.stdout
 
 /-- A test that prints, then records a named result that sleeps and fails. -/
@@ -904,12 +963,12 @@ def reportShowsTestOutputAboveFailedNamedResult : Test := do
   let results ← resultsOf setupThenFailingCheck
   let failures ← IO.mkRef 0
   let out ← captureOutput do failures.set (← humanReport .silent results)
-  let own := "FAIL  somePkg/SomeFile  inner: a named result did not pass\n" ++
+  let own := "FAIL  inner: a named result did not pass\n" ++
     "    SomeFile.lean:42:23\n    output:\n    setup\n"
   assertContains own out.stdout
   -- The named result follows the test's own result.
   assertContains "\n  FAIL  check: " ((out.stdout.splitOn own)[1]?.getD "")
-  assertContains "0 passed, 2 failed, 0 errors" out.stdout
+  assertContains "0 passed, 2 failed, 0 errors, 0 inconclusive" out.stdout
   assertBEq 2 (← failures.get)
 
 /-- Named results print indented under their test by their own names, siblings included. -/
@@ -919,7 +978,7 @@ def reportIndentsNamedResultsUnderTheirParent : Test := do
     result "b" (pure ())
     result "c" (result "d" (pure ()))
   let out ← captureOutput do discard <| humanReport .verbose results
-  assertTrue (out.stdout.startsWith "ok    somePkg/SomeFile  inner (")
+  assertTrue (out.stdout.startsWith "ok    inner (")
     "the test's own line comes first"
   assertContains "\n  ok    b (" out.stdout
   assertContains "\n  ok    c (" out.stdout
@@ -947,99 +1006,155 @@ def junitIncludesTestOutputOnFailedNamedResult : Test := do
   assertContains "<system-out>setup" xml
   assertBEq 1 ((xml.splitOn "<system-out>").length - 1)
 
-/-- The runner's help names the command that its options follow. -/
+/-- The runner's help names the command that its options follow, which the configuration records. -/
 @[test]
 def runnerHelpNamesInvocation : Test := do
-  let out ← captureOutput do
-    discard <| runMain testInvocation #[] ["--help"]
-  assertContains s!"{testInvocation.runner} [FLAGS]" out.all
+  IO.FS.withTempDir fun dir => do
+    let config := dir / "config.json"
+    let invocation := "lake test -- --test-options"
+    IO.FS.writeFile config (Lean.toJson ({ invocation? := some invocation } : Runner.Config)).compress
+    let out ← captureOutput do
+      discard <| Runner.main [config.toString, "--help"]
+    assertContains s!"{invocation} [FLAGS]" out.all
 
 /--
-The generated runner's entry point runs the tests when the driver's flag leads, and otherwise
-explains how to run the tests and fails.
--/
-@[test]
-def driverMainChecksFlag : Test := do
-  let entry := TestEntry.of "p" "M" "t"
-    { file := "f", startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ } (pure () : Test)
-  let withFlag ← IO.mkRef (0 : UInt32)
-  let withoutFlag ← IO.mkRef (0 : UInt32)
-  let out ← captureOutput do
-    withFlag.set (← driverMain testDriverFlag testInvocation #[entry] [testDriverFlag])
-    withoutFlag.set (← driverMain testDriverFlag testInvocation #[entry] [])
-  result "flag leads" do
-    assertBEq 0 (← withFlag.get)
-  result "flag missing" do
-    assertBEq 1 (← withoutFlag.get)
-    assertContains testInvocation.run out.all
-    assertContains testDriverFlag out.all
-
-/--
-The generated runner starts only when the driver's flag is its first argument, and the flag is
-removed before the runner's own options are parsed.
--/
-@[test]
-def driverInvocation : Test := do
-  result "flag is removed" do
-    assertBEq (some ["-v", "--", "--x=1"])
-      (checkInvocation testDriverFlag testInvocation [testDriverFlag, "-v", "--", "--x=1"]).toOption
-  result "no arguments" do
-    assertTrue (checkInvocation testDriverFlag testInvocation [] matches .error _)
-  result "missing flag" do
-    assertTrue (checkInvocation testDriverFlag testInvocation ["-v"] matches .error _)
-  result "flag must come first" do
-    assertTrue
-      (checkInvocation testDriverFlag testInvocation ["-v", testDriverFlag] matches .error _)
-  result "message says how to run the tests" do
-    let .error msg := checkInvocation testDriverFlag testInvocation [] | fail "expected an error"
-    assertTrue ((msg.splitOn testInvocation.run).length > 1) "message should name the command"
-    assertTrue ((msg.splitOn testDriverFlag).length > 1) "message should name the flag"
-
-/--
-The runner's command line: the `-v` forms select the verbosity, declared flags parse, and options
-for the tests go after `--`.
+The runner's command line: the configuration file first, the `-v` forms select the verbosity,
+declared flags parse, and options for the tests go after `--`.
 -/
 @[test]
 def runnerArgParsing : Test := do
+  let parse (args : List String) := Runner.parseOptions ("config.json" :: args)
+  result "configuration" do
+    assertBEq (some "config.json") ((parse []).toOption.map (·.configPath))
   result "default verbosity" do
-    assertBEq (some Verbosity.silent) ((parseOptions []).toOption.map (·.verbosity))
+    assertBEq (some Verbosity.silent) ((parse []).toOption.map (·.verbosity))
   result "-v" do
-    assertBEq (some Verbosity.quiet) ((parseOptions ["-v"]).toOption.map (·.verbosity))
+    assertBEq (some Verbosity.quiet) ((parse ["-v"]).toOption.map (·.verbosity))
   result "--verbose" do
-    assertBEq (some Verbosity.quiet) ((parseOptions ["--verbose"]).toOption.map (·.verbosity))
+    assertBEq (some Verbosity.quiet) ((parse ["--verbose"]).toOption.map (·.verbosity))
   result "-vv" do
-    assertBEq (some Verbosity.verbose) ((parseOptions ["-vv"]).toOption.map (·.verbosity))
+    assertBEq (some Verbosity.verbose) ((parse ["-vv"]).toOption.map (·.verbosity))
   result "-vvv" do
-    assertBEq (some Verbosity.superVerbose) ((parseOptions ["-vvv"]).toOption.map (·.verbosity))
+    assertBEq (some Verbosity.superVerbose) ((parse ["-vvv"]).toOption.map (·.verbosity))
   result "update-golden" do
-    assertBEq (some true) ((parseOptions ["--update-golden"]).toOption.map (·.updateGolden))
+    assertBEq (some true) ((parse ["--update-golden"]).toOption.map (·.updateGolden))
   result "seed" do
-    assertBEq (some (some 42)) ((parseOptions ["--seed", "42"]).toOption.map (·.seed))
+    assertBEq (some (some 42)) ((parse ["--seed", "42"]).toOption.map (·.seed))
   result "non-numeric seed rejected" do
-    assertTrue ((parseOptions ["--seed", "x"]) matches .error _)
+    assertTrue ((parse ["--seed", "x"]) matches .error _)
   result "junit path" do
-    assertBEq (some (some "r.xml")) ((parseOptions ["--junit", "r.xml"]).toOption.map (·.junitPath))
+    assertBEq (some (some "r.xml")) ((parse ["--junit", "r.xml"]).toOption.map (·.junitPath))
   result "missing junit path rejected" do
-    assertTrue ((parseOptions ["--junit"]) matches .error _)
+    assertTrue ((parse ["--junit"]) matches .error _)
+  result "events path" do
+    assertBEq (some (some "e.jsonl")) ((parse ["--events", "e.jsonl"]).toOption.map (·.eventsPath))
+  result "list" do
+    assertBEq (some true) ((parse ["--list"]).toOption.map (·.list))
+  result "timeout and grace period" do
+    let opts := (parse ["--timeout", "90s", "--grace-period", "250ms"]).toOption
+    assertBEq (some 90000) (opts.map (·.timeoutMs))
+    assertBEq (some 250) (opts.map (·.gracePeriodMs))
+  result "default timeout" do
+    assertBEq (some 600000) ((parse []).toOption.map (·.timeoutMs))
+  result "malformed timeout rejected" do
+    assertTrue ((parse ["--timeout", "soon"]) matches .error _)
+  result "one job" do
+    assertBEq (some 1) ((parse ["--jobs", "1"]).toOption.map (·.jobs))
+  result "more jobs rejected" do
+    assertTrue ((parse ["--jobs", "2"]) matches .error _)
   result "test options after --" do
-    let opts := (parseOptions ["--", "--golden", "on", "--flag=v=1", "--golden", "two"]).toOption
-    assertBEq (some #["on", "two"]) (opts.map (·.options.getD "golden" #[]))
-    assertBEq (some #["v=1"]) (opts.map (·.options.getD "flag" #[]))
+    let opts := (parse ["--", "--golden", "on", "--flag=v=1", "--golden", "two"]).toOption
+    assertBEq (some #[("golden", "on"), ("flag", "v=1"), ("golden", "two")])
+      (opts.map (·.testOptions))
   result "valueless test option" do
-    assertBEq (some #[""]) ((parseOptions ["--", "--fast"]).toOption.map (·.options.getD "fast" #[]))
+    assertBEq (some #[("fast", "")]) ((parse ["--", "--fast"]).toOption.map (·.testOptions))
+  result "reserved test option rejected" do
+    assertTrue ((parse ["--", "--seed=3"]) matches .error _)
   result "unknown flag rejected" do
-    assertTrue ((parseOptions ["--golden", "on"]) matches .error _)
+    assertTrue ((parse ["--golden", "on"]) matches .error _)
   result "misplaced library name diagnosed" do
-    match parseOptions ["--verbose", "ErrataTests"] with
+    match parse ["--verbose", "ErrataTests"] with
     | .error msg => assertContains "ErrataTests" msg
     | .ok _ => assertTrue false "expected an error"
+
+/--
+The Lean harness passes settings other than its own to the tests as options, and reads its own seed.
+-/
+@[test]
+def harnessSettings : Test := do
+  let settings := Harness.settingsOf
+    ["setting:seed=5", "setting:check-tex=", "setting:note=a=b", "fixture:x=y", "threads:2"]
+  assertBEq #[("seed", "5"), ("check-tex", ""), ("note", "a=b")] settings
+  let .ok ctx ← Harness.contextOf settings | fail "the settings were rejected"
+  assertBEq 5 ctx.seed
+  assertBEq (some #[""]) (ctx.options.get? "check-tex")
+  assertBEq none (ctx.options.get? "seed")
+  assertTrue ((← Harness.contextOf #[("seed", "x")]) matches .error _) "a malformed seed is rejected"
+
+/--
+The Lean harness lists its tests with their names, paths, and locations, and runs one by name,
+writing its records and exiting with its verdict.
+-/
+@[test]
+def harnessListsAndRuns : Test := do
+  let loc : Location := { file := "F.lean", startPos := ⟨3, 0⟩, endPos := ⟨4, 0⟩ }
+  let entries := #[
+    TestEntry.of "p" "M" "M.good" loc (do IO.println "hello"; result "inner" (pure ()) : Test)
+      (docstring? := some "Good."),
+    TestEntry.of "p" "M" "M.bad" loc (fail "nope" : Test)]
+  -- The records of the output file, decoded.
+  let records (path : System.FilePath) : TestM (Array Protocol.Record) := do
+    let lines := (← IO.FS.readFile path).splitOn "\n" |>.filter (!·.isEmpty)
+    let mut out := #[]
+    for l in lines do
+      match Protocol.Record.parseLine l with
+      | .ok (some (_, r)) => out := out.push r
+      | .ok none => fail s!"a record of an unknown type: {l}"
+      | .error e => fail s!"a line that is not a record: {e}"
+    return out
+  IO.FS.withTempDir fun dir => do
+    let out := dir / "out.jsonl"
+    result "list" do
+      IO.FS.writeFile out ""
+      assertBEq 0 (← Harness.dispatch entries ["errata-list", out.toString])
+      let rs : Array Protocol.Record ← records out
+      assertTrue (rs[0]? matches some (Protocol.Record.protocol (some 1))) "the protocol comes first"
+      let some (Protocol.Record.test info) := rs[1]? | fail "the first test is missing"
+      assertBEq (some "M.good") info.name?
+      assertBEq (some #["M", "good"]) info.path?
+      assertBEq (some "F.lean") info.file?
+      assertBEq (some 3) info.line?
+      assertBEq (some "Good.") info.description?
+      assertBEq 3 rs.size
+    result "a pass" do
+      IO.FS.writeFile out ""
+      assertBEq 0 (← Harness.dispatch entries ["errata-run", out.toString, "M.good"])
+      let rs ← records out
+      assertTrue (rs.any (· matches .start _)) "a start record"
+      assertTrue (rs.any (· matches .output (some "stdout") (some "hello\n") _ (some 0)))
+        "the output record"
+      assertTrue (rs.any fun
+        | .result i => i.id? == some 1 && i.name? == some "inner" && i.status?.isNone
+        | _ => false) "the named result's start"
+      assertTrue (rs.back? matches some (.verdict { status? := some .pass, .. })) "the verdict comes last"
+    result "a failure" do
+      IO.FS.writeFile out ""
+      assertBEq 1 (← Harness.dispatch entries ["errata-run", out.toString, "M.bad"])
+      let rs ← records out
+      assertTrue (rs.back? matches some (.verdict { status? := some .fail, message? := some "nope", .. }))
+        "a failing verdict"
+    result "usage" do
+      let code ← IO.mkRef (0 : UInt32)
+      let printed ← captureOutput do code.set (← Harness.dispatch entries [])
+      assertBEq 2 (← code.get)
+      assertContains "errata-list" printed.stderr
 
 /-- A run that discovers nothing fails: a test tool with no tests is a broken setup, not a pass. -/
 @[test]
 def emptyRunFails : Test := do
   let code ← IO.mkRef (0 : UInt32)
   let out ← captureOutput do
-    code.set (← runMain testInvocation #[] [])
+    code.set (← Runner.executeAndWrite {} {})
   assertContains "no tests were discovered" out.all
   assertBEq 1 (← code.get).toNat
 
@@ -1049,7 +1164,7 @@ with an error case, the JSON object lists the issue, and the Markdown headline i
 -/
 @[test]
 def emptyRunReachesReports : Test := do
-  let (code, xml, json, md) ← runReporting #[] []
+  let (code, xml, json, md) ← runReporting {} []
   assertBEq 1 code.toNat
   result "JUnit" do
     assertContains "<testsuite name=\"Test run\"" xml
@@ -1067,19 +1182,18 @@ def emptyRunReachesReports : Test := do
 /-- At silent verbosity the report hides passes but shows failures and the summary line. -/
 @[test]
 def reportSilent : Test := do
-  let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
-  let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail { message := "boom" } }
+  let pass := sample "t" .pass
+  let fail := sample "u" (.fail { message := "boom" })
   let out ← captureOutput do discard <| humanReport .silent #[pass, fail]
-  assertContains "FAIL  p/M  u: boom" out.stdout
-  assertContains "1 passed, 1 failed, 0 errors" out.stdout
+  assertContains "FAIL  u: boom" out.stdout
+  assertContains "1 passed, 1 failed, 0 errors, 0 inconclusive" out.stdout
   assertBEq 1 (out.stdout.splitOn "ok    ").length
 
 /-- At verbose verbosity the report shows passes too. -/
 @[test]
 def reportVerbose : Test := do
-  let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
-  let out ← captureOutput do discard <| humanReport .verbose #[pass]
-  assertContains "ok    p/M  t" out.stdout
+  let out ← captureOutput do discard <| humanReport .verbose #[sample "t" .pass]
+  assertContains "ok    t" out.stdout
 
 /--
 Characters that XML 1.0 forbids are replaced with the canonical replacement character in the JUnit
@@ -1088,8 +1202,7 @@ report.
 @[test]
 def junitReplacesForbiddenChars : Test := do
   let bad := (Char.ofNat 0xFFFF).toString ++ (Char.ofNat 0xFFFE).toString ++ (Char.ofNat 0x1).toString
-  let r : Result := { package := "p", moduleName := "M", test := "t",
-                      status := .fail { message := s!"bad{bad}char\tkept" } }
+  let r := sample "t" (.fail { message := s!"bad{bad}char\tkept" })
   let xml := junitReport { results := #[r], seed := 0 }
   assertContains "bad\uFFFD\uFFFD\uFFFDchar\tkept" xml
   assertTrue (!xml.contains (Char.ofNat 0xFFFF) && !xml.contains (Char.ofNat 0xFFFE))
@@ -1099,8 +1212,7 @@ def junitReplacesForbiddenChars : Test := do
 @[test]
 def junitIncludesOutput : Test := do
   let output : OutputLog := { log := #[.stdout "out 1\n", .stderr "err <1>\n", .stdout "out 2\n"] }
-  let r : Result := { package := "p", moduleName := "M", test := "t",
-                      status := .fail { message := "boom" }, output }
+  let r := sample "t" (.fail { message := "boom" }) (output := output)
   let xml := junitReport { results := #[r], seed := 0 }
   assertContains "<system-out>out 1\nout 2\n</system-out>" xml
   assertContains "<system-err>err &lt;1&gt;\n</system-err>" xml
@@ -1108,16 +1220,14 @@ def junitIncludesOutput : Test := do
 /-- The JUnit report omits the output elements for a test that produced no output. -/
 @[test]
 def junitOmitsEmptyOutput : Test := do
-  let r : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
-  let xml := junitReport { results := #[r], seed := 0 }
+  let xml := junitReport { results := #[sample "t" .pass], seed := 0 }
   assertNotContains "system-out" xml
   assertNotContains "system-err" xml
 
 /-- A test's results are truncated after the cap at quiet verbosity, with a summary, but not at verbose. -/
 @[test]
 def reportTruncates : Test := do
-  let many := (Array.range 60).map fun i =>
-    ({ package := "p", moduleName := "M", test := "many", resultPath := #[s!"case {i}"], status := .pass } : Result)
+  let many := (Array.range 60).map fun i => sample "many" .pass (resultPath := #[s!"case {i}"])
   let quiet ← captureOutput do discard <| humanReport .quiet many
   assertBEq 51 (quiet.stdout.splitOn "ok    ").length
   -- The summary lines up with the named results' rows, which are one level deep.
@@ -1133,32 +1243,51 @@ around them are summarized.
 @[test]
 def reportTruncationShowsFailures : Test := do
   let many := (Array.range 60).map fun i =>
-    let status : Status := if i == 55 then .fail { message := "boom" } else .pass
-    ({ package := "p", moduleName := "M", test := "many", resultPath := #[s!"case {i}"], status } : Result)
+    let v : Verdict := if i == 55 then .fail { message := "boom" } else .pass
+    sample "many" v (resultPath := #[s!"case {i}"])
   let quiet ← captureOutput do discard <| humanReport .quiet many
   -- The named results have no parent line, so the failure is named in full.
-  assertContains "\nFAIL  p/M  many.case 55: boom" quiet.stdout
+  assertContains "\nFAIL  many.case 55: boom" quiet.stdout
   assertContains "(... and 9 more passed)" quiet.stdout
 
-/-- `humanReport` returns the number of failures and errors. -/
+/-- `humanReport` returns the number of failures, errors, and inconclusive results. -/
 @[test]
 def reportFailureCount : Test := do
-  let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
-  let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail { message := "x" } }
-  let err : Result := { package := "p", moduleName := "M", test := "v", status := .error "oops" }
-  assertBEq 2 (← humanReport .silent #[pass, fail, err])
+  let pass := sample "t" .pass
+  let fail := sample "u" (.fail { message := "x" })
+  let err := sample "v" (.error "oops")
+  let lost : Result := { test := "w", outcome := .inconclusive (.exitedWithoutVerdict 2) }
+  let count ← IO.mkRef 0
+  discard <| captureOutput do count.set (← humanReport .silent #[pass, fail, err, lost])
+  assertBEq 3 (← count.get)
 
-/-- `markdownReport` gives a tally, an open collapsible per failure, and a per-module table. -/
+/--
+`markdownReport` gives a tally, an open collapsible per failure, and a table per test executable.
+-/
 @[test]
 def reportMarkdown : Test := do
-  let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
+  let pass := sample "t" .pass (exe := "E")
   let f : TestFailure := { message := "boom", detail? := some "expected 1\nactual 2" }
-  let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail f }
+  let fail := sample "u" (.fail f) (exe := "E")
   let md := markdownReport { results := #[pass, fail], seed := 0 }
-  assertContains "**1** passed · **1** failed" md
-  assertContains "<details open><summary>❌ <code>p/M</code> u: boom</summary>" md
+  assertContains "**1** passed · **1** failed · **0** errors · **0** inconclusive" md
+  assertContains "<details open><summary>❌ <code>E</code> u: boom</summary>" md
   assertContains "expected 1\nactual 2" md
-  assertContains "Summary by module" md
+  assertContains "Summary by test executable" md
+
+/--
+JUnit has a suite per test executable, and a test's class is its path without its last component, or
+the executable's name for a test whose path has one component.
+-/
+@[test]
+def junitSuitesAndClasses : Test := do
+  let deep : Result := { exe := "Lib", test := "A.B.t", path := #["A", "B", "t"], outcome := .reported .pass }
+  let flat : Result := { exe := "Other", test := "u", path := #["u"], outcome := .reported .pass }
+  let xml := junitReport { results := #[deep, flat], seed := 0 }
+  assertContains "<testsuite name=\"Lib\"" xml
+  assertContains "<testsuite name=\"Other\"" xml
+  assertContains "name=\"A.B.t\" classname=\"A.B\"" xml
+  assertContains "name=\"u\" classname=\"Other\"" xml
 
 /-- `runValue` reports a passing value as passed. -/
 @[test]

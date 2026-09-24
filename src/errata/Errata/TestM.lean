@@ -74,11 +74,10 @@ def flag (name : String) : TestM Bool :=
 
 /-- Builds a result for the current scope with the given status and duration. -/
 def Context.mkResult (ctx : Context) (status : Status) (durationMs : Nat := 0) : Result where
-  package := ctx.package
-  moduleName := ctx.moduleName
   test := ctx.test
+  path := ctx.path
   resultPath := ctx.resultPath
-  status
+  outcome := .reported status.toVerdict
   durationMs
   description? := ctx.description?
 

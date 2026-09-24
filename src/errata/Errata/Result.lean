@@ -5,7 +5,8 @@ Author: David Thrane Christiansen
 -/
 module
 
-public import Lean.Data.Position
+public import Errata.Failure
+public import Errata.Outcome
 
 public section
 
@@ -16,7 +17,7 @@ namespace Errata
 
 /-- How much the human-readable report prints. -/
 inductive Verbosity where
-  /-- Print only failures and errors. -/
+  /-- Print only failures, errors, and inconclusive tests. -/
   | silent
   /-- Also print passes, truncating each test's results after a cap. -/
   | quiet
@@ -45,51 +46,6 @@ def Verbosity.truncates : Verbosity → Bool
 def Verbosity.showsAllDocstrings : Verbosity → Bool
   | .silent | .quiet | .verbose => false
   | .superVerbose => true
-
-/--
-A source span, used in failure messages and editor integration.
--/
-structure Location where
-  /-- The source file that contains the span. -/
-  file : String
-  /-- The start of the span. -/
-  startPos : Lean.Position
-  /-- The end of the span. -/
-  endPos : Lean.Position
-deriving Repr, Inhabited, BEq, DecidableEq, Lean.ToExpr
-
-/-- A test failure, carrying the information needed to explain it. -/
-structure TestFailure where
-  /-- A short description of what went wrong. -/
-  message : String
-  /-- Supporting detail, such as a diff, a counterexample, or expected and actual values. -/
-  detail? : Option String := none
-  /-- The source location of the failed check, when known. -/
-  location? : Option Location := none
-deriving Repr, Inhabited, DecidableEq
-
-/-- The verdict that a test body may return. -/
-inductive TestResult where
-  /-- The test passed. -/
-  | pass
-  /-- The test failed, with details. -/
-  | fail (failure : TestFailure)
-deriving Repr, Inhabited
-
-/-- The recorded outcome of a test or a named result. -/
-inductive Status where
-  /-- The check passed. -/
-  | pass
-  /-- The check failed. -/
-  | fail (failure : TestFailure)
-  /-- An error escaped the check, so it could not produce a verdict. -/
-  | error (message : String)
-deriving Repr, Inhabited, DecidableEq
-
-/-- Whether a status counts as success for the exit code. -/
-def Status.isSuccess : Status → Bool
-  | .pass => true
-  | .fail _ | .error _ => false
 
 /-- A fragment of captured output, tagged by the stream it was written to. -/
 inductive Output where
@@ -146,25 +102,54 @@ def panic? (o : OutputLog) : Option String :=
 
 end OutputLog
 
-/-- One entry collected during a run and rendered by the reporters. -/
+/-- What a result is about: a test, or a phase of a fixture. -/
+inductive Result.Kind where
+  /-- A test or one of its named results. -/
+  | test
+  /-- A phase of a fixture. -/
+  | fixture
+deriving Repr, Inhabited, DecidableEq, BEq
+
+/-- The name of a result's kind, as the reports write it. -/
+def Result.Kind.name : Result.Kind → String
+  | .test => "test"
+  | .fixture => "fixture"
+
+/--
+One entry collected during a run and rendered by the reporters: a test's own result, or one of its
+named results.
+-/
 structure Result where
-  /-- The package that defines the test. -/
-  package : String
-  /-- The module that defines the test, as a dotted name. -/
-  moduleName : String
-  /-- The test declaration's name below its module, as a dotted name. -/
+  /-- The name of the test executable that ran the test. -/
+  exe : String := ""
+  /-- The test's name, unique within its test executable. -/
   test : String
+  /-- The components of the test's name, for nesting in reports; empty when it has none. -/
+  path : Array String := #[]
+  /-- Whether the result is about a test or a fixture phase. -/
+  kind : Result.Kind := .test
   /-- The named result below the test; empty for the test's own result. -/
   resultPath : Array String := #[]
-  /-- The recorded outcome. -/
-  status : Status
+  /-- How the test or named result ended. -/
+  outcome : Outcome
   /-- How long the check took, in milliseconds. -/
   durationMs : Nat := 0
   /-- What the test wrote to stdout and stderr. -/
   output : OutputLog := {}
   /-- The test's docstring, rendered as Markdown, when it has one. -/
   description? : Option String := none
+  /-- A command line that runs the test again by hand, for a test that did not pass. -/
+  reproduce? : Option String := none
 deriving Repr, Inhabited, DecidableEq
+
+/--
+The result's status: its verdict, or an error for an inconclusive outcome, which counts against the
+run as an error does.
+-/
+def Result.status (r : Result) : Status := r.outcome.toStatus
+
+/-- Whether the result's outcome is inconclusive. -/
+def Result.isInconclusive (r : Result) : Bool := r.outcome matches .inconclusive _
 
 /--
 What a test is doing, for a runner that follows it while it runs.
@@ -187,17 +172,10 @@ inductive ResultEvent where
   | expectFailFinished (failuresExpected : Bool)
 deriving Repr, Inhabited
 
-/-- The test name below the module: the declaration and any named result, dotted. -/
+/-- The test's name and any named result, dotted. -/
 def Result.testName (result : Result) : String :=
   if result.resultPath.isEmpty then result.test
   else result.test ++ "." ++ ".".intercalate result.resultPath.toList
-
-/--
-The package-qualified module that defines the test ({lit}`package/module`). Reports use it to label
-each result and to group the results of one module together.
--/
-def Result.moduleTarget (result : Result) : String :=
-  result.package ++ "/" ++ result.moduleName
 
 /-- A failed verdict from a compile-time message mismatch, carrying its source span. -/
 def TestResult.mismatch (message detail file : String)

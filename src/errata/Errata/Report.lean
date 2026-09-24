@@ -20,108 +20,182 @@ namespace Errata
 private def indentLines (text : String) (indent : String := "    ") : String :=
   "\n".intercalate ((text.splitOn "\n").map (fun l => indent ++ l))
 
-/-- A source location rendered as the clickable `file:line:col` of the span's start. -/
-private def locationText (l : Location) : String :=
+/-- A source location rendered as the clickable {lit}`file:line:col` of the span's start. -/
+def Location.text (l : Location) : String :=
   s!"{l.file}:{l.startPos.line}:{l.startPos.column}"
 
-/--
-Prints one result: its status line, its docstring when shown, and for a failure or error its detail
-and captured output.
+/-- Counts of results by category. -/
+structure Tally where
+  /-- Results that passed. -/
+  passed : Nat := 0
+  /-- Results that failed an assertion. -/
+  failed : Nat := 0
+  /-- Results whose verdict is an error. -/
+  errors : Nat := 0
+  /-- Results that are inconclusive. -/
+  inconclusive : Nat := 0
+deriving Repr, Inhabited, DecidableEq
 
-A named result whose parent's line was printed, {name}`parentShown`, is shown indented beneath it
-and named by its last component alone. Otherwise a result is named in full, with its module and its
-dotted test name.
+/-- Counts one more result. -/
+def Tally.add (t : Tally) (r : Result) : Tally :=
+  match r.outcome with
+  | .reported .pass => { t with passed := t.passed + 1 }
+  | .reported (.fail _) => { t with failed := t.failed + 1 }
+  | .reported (.error _) => { t with errors := t.errors + 1 }
+  | .inconclusive _ => { t with inconclusive := t.inconclusive + 1 }
+
+/-- The counts of an array of results. -/
+def Tally.of (results : Array Result) : Tally := results.foldl Tally.add {}
+
+/-- The number of results that did not pass. -/
+def Tally.notPassed (t : Tally) : Nat := t.failed + t.errors + t.inconclusive
+
+/-- The summary line of the human-readable report. -/
+def Tally.summary (t : Tally) : String :=
+  s!"{t.passed} passed, {t.failed} failed, {t.errors} errors, {t.inconclusive} inconclusive"
+
+/--
+The state of the human-readable reporter between tests: the verbosity, the executable and the
+levels of the path last printed, so that the next test's lines nest under them, and the tally so far.
 -/
-private def printResult (verbosity : Verbosity) (r : Result) (parentShown : Bool) : IO Unit := do
-  let depth := if parentShown then r.resultPath.size else 0
-  let lead := "".pushn ' ' (2 * depth)
+structure HumanReporter where
+  /-- How much to print. -/
+  verbosity : Verbosity
+  /-- The executable whose heading was printed last. -/
+  exe? : Option String := none
+  /-- The levels of the path printed last, below the executable. -/
+  levels : Array String := #[]
+  /-- The counts of the results reported so far. -/
+  tally : Tally := {}
+deriving Repr, Inhabited
+
+/-- How many results of one test are printed at {name}`Verbosity.quiet` before the rest are counted. -/
+private def truncationCap : Nat := 50
+
+/-- The label of a result's status on its line. -/
+private def statusTag : Outcome → String
+  | .reported .pass => "ok   "
+  | .reported (.fail _) => "FAIL "
+  | .reported (.error _) => "ERROR"
+  | .inconclusive _ => "INCONCLUSIVE"
+
+/--
+The lines of one result: its status line, its docstring when shown, and for anything but a pass,
+what explains it, its captured output, and the command that reproduces it. {name}`lead` is the
+indentation of the status line, and {name}`label` is the name printed on it.
+-/
+private def resultLines (verbosity : Verbosity) (r : Result) (lead label : String) :
+    Array String := Id.run do
   let detail := lead ++ "    "
-  let name := match r.resultPath.back? with
-    | some last => if parentShown then last else s!"{r.moduleTarget}  {r.testName}"
-    | none => s!"{r.moduleTarget}  {r.testName}"
-  let printDoc : IO Unit := do
-    if verbosity.showsAllDocstrings || !r.status.isSuccess then
-      if let some d := r.description? then IO.println (indentLines d detail)
-  let printOutput : IO Unit := do
-    unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}" detail)
-  match r.status with
-  | .pass =>
-    IO.println s!"{lead}ok    {name} ({r.durationMs}ms)"
-    printDoc
-  | .fail f =>
-    IO.println s!"{lead}FAIL  {name}: {f.message}"
-    printDoc
-    if let some l := f.location? then IO.println (indentLines (locationText l) detail)
-    if let some d := f.detail? then IO.println (indentLines d detail)
-    printOutput
-  | .error m =>
-    IO.println s!"{lead}ERROR {name}: {m}"
-    printDoc
-    printOutput
+  let mut out := #[]
+  let headline := match r.outcome with
+    | .reported .pass => s!"{lead}{statusTag r.outcome} {label} ({r.durationMs}ms)"
+    | .reported (.fail f) => s!"{lead}{statusTag r.outcome} {label}: {f.message}"
+    | .reported (.error m) => s!"{lead}{statusTag r.outcome} {label}: {m}"
+    | .inconclusive reason => s!"{lead}{statusTag r.outcome} {label}: {reason.describe}"
+  out := out.push headline
+  if verbosity.showsAllDocstrings || !r.outcome.isPass then
+    if let some d := r.description? then out := out.push (indentLines d detail)
+  match r.outcome with
+  | .reported .pass => pure ()
+  | .reported (.fail f) =>
+    if let some l := f.location? then out := out.push (indentLines l.text detail)
+    if let some d := f.detail? then out := out.push (indentLines d detail)
+  | .inconclusive (.verdictMismatch _ (.fail f)) =>
+    out := out.push (indentLines s!"reported: {f.message}" detail)
+  | .inconclusive (.verdictMismatch _ (.error m)) =>
+    out := out.push (indentLines s!"reported: {m}" detail)
+  | _ => pure ()
+  unless r.outcome.isPass do
+    unless r.output.isEmpty do out := out.push (indentLines s!"output:\n{r.output.all}" detail)
+    if let some cmd := r.reproduce? then out := out.push (indentLines s!"reproduce: {cmd}" detail)
+  return out
 
 /--
-Prints the truncation summary for a test whose results were capped, given the number of passes that
-were suppressed and the nesting depth of the last of them, so the summary lines up with its rows.
-Only passing test results are ever suppressed; failures and errors are always printed.
--/
-private def printSuppressed (suppressed depth : Nat) : IO Unit := do
-  if suppressed > 0 then
-    IO.println s!"{"".pushn ' ' (2 * depth + 4)}(... and {suppressed} more passed)"
+Reports the results of one test: the test's own result first, then its named results. The lines are
+nested below the test executable and the levels of the test's path, which are printed when they
+differ from the previous test's. A test without a path is listed directly below its executable.
 
-/--
-Prints a human-readable report and returns the number of failures. Failures and errors are printed
-at every verbosity. {name}`Verbosity.quiet` adds passing tests, printing at most a fixed number of
-lines per test, the test's own and its named results' at every depth, and summarizing the remainder.
-{name}`Verbosity.verbose` shows all results. {name}`Verbosity.superVerbose` also shows every test's
-docstring.
+Failures, errors, and inconclusive results are printed at every verbosity.
+{name}`Verbosity.quiet` adds passing results, printing at most a fixed number of lines per test and
+summarizing the rest. {name}`Verbosity.verbose` shows all results, and
+{name}`Verbosity.superVerbose` also shows every docstring.
 -/
-def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
-  let cap := 50
-  let mut passed := 0
-  let mut failed := 0
-  let mut errors := 0
-  let mut curKey : Option (String × String) := none
-  let mut shown := 0
+def HumanReporter.test (h : HumanReporter) (results : Array Result) :
+    HumanReporter × Array String := Id.run do
+  let h := { h with tally := results.foldl Tally.add h.tally }
+  let some root := results[0]? | return (h, #[])
+  let v := h.verbosity
+  -- Which results are printed: failures always, and passes when the verbosity shows them, up to the
+  -- cap when it truncates.
+  let mut shown : Array Result := #[]
+  let mut count := 0
   let mut more := 0
   let mut moreDepth := 0
+  for r in results do
+    if !r.outcome.isPass then
+      shown := shown.push r
+      count := count + 1
+    else if v.showsPasses then
+      if v.truncates && count ≥ truncationCap then
+        more := more + 1
+        moreDepth := r.resultPath.size
+      else
+        shown := shown.push r
+        count := count + 1
+  if shown.isEmpty then return (h, #[])
+  let mut out : Array String := #[]
+  let mut h := h
+  -- The executable's heading, and the levels of the path above the test.
+  let exe := root.exe
+  if h.exe? != some exe then
+    unless exe.isEmpty do out := out.push exe
+    h := { h with exe? := some exe, levels := #[] }
+  let base := if exe.isEmpty then 0 else 1
+  let levels := root.path.pop
+  let common := (levels.zip h.levels).takeWhile (fun (a, b) => a == b) |>.size
+  for i in [common : levels.size] do
+    out := out.push ("".pushn ' ' (2 * (base + i)) ++ levels[i]!)
+  h := { h with levels }
+  let depth := base + levels.size
+  let label := root.path.back?.getD root.test
   -- The printed results that enclose the current position, outermost first.
   let mut context : Array (Array String) := #[]
-  for r in results do
-    match r.status with
-    | .pass => passed := passed + 1
-    | .fail _ => failed := failed + 1
-    | .error _ => errors := errors + 1
-    -- Results of one test are contiguous; truncation is per test (its data-driven sub-results).
-    let key := (r.moduleTarget, r.test)
-    if curKey != some key then
-      printSuppressed more moreDepth
-      curKey := some key
-      shown := 0
-      more := 0
-      context := #[]
-    -- Pop the printed results that are not parents of the current item.
+  for r in shown do
     context := context.popWhile fun top =>
       !(top.size < r.resultPath.size && top.isPrefixOf r.resultPath)
     let parentShown :=
       if let some top := context.back? then top.size + 1 == r.resultPath.size else false
-    let print : IO Unit := printResult verbosity r parentShown
-    match r.status with
-    | .fail _ | .error _ =>
-      print
-      context := context.push r.resultPath
-      shown := shown + 1
-    | .pass =>
-      if verbosity.showsPasses then
-        if verbosity.truncates && shown ≥ cap then
-          more := more + 1
-          moreDepth := r.resultPath.size
-        else
-          print
-          context := context.push r.resultPath
-          shown := shown + 1
-  printSuppressed more moreDepth
-  IO.println s!"{passed} passed, {failed} failed, {errors} errors"
-  return failed + errors
+    let nest := if parentShown then r.resultPath.size else 0
+    let lead := "".pushn ' ' (2 * (depth + nest))
+    let name := match r.resultPath.back? with
+      | some last => if parentShown then last else s!"{label}.{".".intercalate r.resultPath.toList}"
+      | none => label
+    out := out ++ resultLines v r lead name
+    context := context.push r.resultPath
+  if more > 0 then
+    out := out.push s!"{"".pushn ' ' (2 * (depth + moreDepth) + 4)}(... and {more} more passed)"
+  return (h, out)
+
+/--
+Prints a human-readable report of results that were gathered in one place, and returns the number
+of results that did not pass. The results of one test are contiguous, the test's own first.
+-/
+def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
+  let mut h : HumanReporter := { verbosity }
+  let mut i := 0
+  while i < results.size do
+    let r := results[i]!
+    let mut j := i + 1
+    while j < results.size && results[j]!.exe == r.exe && results[j]!.test == r.test &&
+        !results[j]!.resultPath.isEmpty do
+      j := j + 1
+    let (h', lines) := h.test (results.extract i j)
+    h := h'
+    for l in lines do IO.println l
+    i := j
+  IO.println h.tally.summary
+  return h.tally.notPassed
 
 /--
 Replaces the forbidden characters in XML 1.0 with {lit}`U+FFFD`, the canonical replacement
@@ -135,35 +209,18 @@ The forbidden characters are:
 private def replaceXmlForbidden (s : String) : String :=
   s.map fun
     | c@'\t' | c@'\n' | c@'\r' => c
-    | '\uFFFE' | '\uFFFF' => replacement
+    | '￾' | '￿' => replacement
     | c => if c.toNat < 0x20 then replacement else c
 where
-  replacement := '\uFFFD'
+  replacement := '�'
 
 /--
 Escapes text for XML and replaces the characters that are forbidden in XML 1.0, so a captured ANSI
 escape or {lit}`NUL` byte in a message or output fragment cannot make the report malformed.
 -/
-private def xmlEscape (s : String) : String :=
+def xmlEscape (s : String) : String :=
   replaceXmlForbidden <|
     s.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;" |>.replace "\"" "&quot;"
-
-instance : ToJson Location where
-  toJson l := json%{
-    "file": $l.file,
-    "startLine": $l.startPos.line,
-    "startColumn": $l.startPos.column,
-    "endLine": $l.endPos.line,
-    "endColumn": $l.endPos.column
-  }
-
-instance : FromJson Location where
-  fromJson? j := do
-    return {
-      file := ← j.getObjValAs? String "file",
-      startPos := ⟨← j.getObjValAs? Nat "startLine", ← j.getObjValAs? Nat "startColumn"⟩,
-      endPos := ⟨← j.getObjValAs? Nat "endLine", ← j.getObjValAs? Nat "endColumn"⟩
-    }
 
 instance : ToJson Output where
   toJson
@@ -216,21 +273,25 @@ instance : FromJson RunReport.Issue where
     | other => .error s!"unknown issue level: {other}"
 
 /--
-Everything a report renders: the results, the issues with the run as a whole, and the seed for the
-run's property tests.
+Everything a report renders: the results, the issues with the run as a whole, and the run's seed,
+from which each test's own seed is derived.
 -/
 structure RunReport where
   /-- The results of every test and named result. -/
   results : Array Result
   /-- The issues with the run as a whole. -/
   issues : Array RunReport.Issue := #[]
-  /-- The seed for the run's property tests. -/
+  /-- The run's seed. -/
   seed : Nat
 deriving Repr, Inhabited
 
 /-- Whether an issue fails the run. -/
 def RunReport.failsRun (report : RunReport) : Bool :=
   report.issues.any (·.isError)
+
+/-- Whether a report counts as a successful run: every test passed and no issue is an error. -/
+def RunReport.succeeded (report : RunReport) : Bool :=
+  report.results.all (·.outcome.isPass) && !report.failsRun
 
 /--
 The suite under which the run's own issues are reported in formats that don't have any other slot
@@ -241,25 +302,13 @@ def runSuite : String := "Test run"
 /-- The note that accompanies a warning, telling how to make it fail the run. -/
 private def wfailNote : String := "Run with --wfail to make warnings fail the run."
 
-/-- The suite a result belongs to: its package-qualified module. -/
-private def suiteOf (r : Result) : String :=
-  r.moduleTarget
-
-/-- The case name of a result: the test name below the module. -/
-private def caseOf (r : Result) : String :=
-  r.testName
-
-private def countWhere (results : Array Result) (p : Status → Bool) : Nat :=
-  results.countP (p ·.status)
-
-/-- Groups results by their package-qualified module in a single pass, keeping first-seen order. -/
-private def byModule (results : Array Result) : Array (String × Array Result) := Id.run do
+/-- Groups results by their test executable in a single pass, keeping first-seen order. -/
+private def byExe (results : Array Result) : Array (String × Array Result) := Id.run do
   let mut order : Array String := #[]
   let mut groups : Std.HashMap String (Array Result) := {}
   for r in results do
-    let s := suiteOf r
-    if !groups.contains s then order := order.push s
-    groups := groups.alter s fun cur => some ((cur.getD #[]).push r)
+    if !groups.contains r.exe then order := order.push r.exe
+    groups := groups.alter r.exe fun cur => some ((cur.getD #[]).push r)
   return order.map fun s => (s, groups.getD s #[])
 
 /-- Renders attributes, with their values escaped, for inclusion in an opening tag. -/
@@ -281,22 +330,38 @@ private def xmlElements (indent tag : String) (attrs : List (String × String))
   else s!"{indent}<{tag}{xmlAttrs attrs}>\n{"\n".intercalate children.toList}\n{indent}</{tag}>"
 
 /--
-A JUnit test case: the verdict element for a failure or error, then the captured output of each
-stream that has any.
+The JUnit {lit}`classname` of a result: a fixture's name followed by {lit}` (fixture)` for a fixture
+entry, and otherwise the test's path without its last component, joined with dots, or the
+executable's name when that leaves nothing.
 -/
-private def junitCase (indent suite : String) (r : Result) : String :=
+def junitClassname (r : Result) : String :=
+  match r.kind with
+  | .fixture => s!"{r.test} (fixture)"
+  | .test =>
+    let parent := r.path.pop
+    if parent.isEmpty then r.exe else ".".intercalate parent.toList
+
+/--
+A JUnit test case: the verdict element for a failure, an error, or an inconclusive outcome, then the
+captured output of each stream that has any.
+-/
+private def junitCase (indent : String) (r : Result) : String :=
   let inner := indent ++ "  "
   let verdict : Array String :=
-    match r.status with
-    | .pass => #[]
-    | .fail f =>
-      let loc := match f.location? with | some l => locationText l ++ ": " | none => ""
+    match r.outcome with
+    | .reported .pass => #[]
+    | .reported (.fail f) =>
+      let loc := match f.location? with | some l => l.text ++ ": " | none => ""
       #[xmlText inner "failure" [("message", loc ++ f.message)] (f.detail?.getD "")]
-    | .error m => #[xmlText inner "error" [("message", m)]]
+    | .reported (.error m) => #[xmlText inner "error" [("message", m)]]
+    | .inconclusive reason =>
+      #[xmlText inner "error" [("message", s!"inconclusive: {reason.describe}"),
+        ("type", reason.reasonName)] (r.reproduce?.map (s!"reproduce: {·}") |>.getD "")]
   let stream (tag text : String) : Array String :=
     if text.isEmpty then #[] else #[xmlText inner tag [] text]
   let time := toString (Float.ofNat r.durationMs / 1000.0)
-  xmlElements indent "testcase" [("name", caseOf r), ("classname", suite), ("time", time)]
+  xmlElements indent "testcase"
+    [("name", r.testName), ("classname", junitClassname r), ("time", time)]
     (verdict ++ stream "system-out" r.output.stdout ++ stream "system-err" r.output.stderr)
 
 /--
@@ -312,9 +377,10 @@ private def junitIssue (indent : String) (issue : RunReport.Issue) : String :=
 
 /--
 Renders the report as JUnit XML. The run's issues, when there are any, come first as the
-{name}`runSuite` suite with one case each. The results follow, grouped by module: each result
-becomes one {lit}`testcase` element, whose {lit}`system-out` and {lit}`system-err` elements contain
-the result's captured output.
+{name}`runSuite` suite with one case each. The results follow, one suite per test executable: each
+result becomes one {lit}`testcase` element, whose {lit}`system-out` and {lit}`system-err` elements
+contain the result's captured output. A failure is a {lit}`failure` element; an error verdict and
+an inconclusive outcome are {lit}`error` elements.
 -/
 def junitReport (report : RunReport) : String :=
   let run :=
@@ -323,70 +389,48 @@ def junitReport (report : RunReport) : String :=
       [("name", runSuite), ("tests", toString report.issues.size), ("failures", "0"),
         ("errors", toString (report.issues.countP (·.isError)))]
       (report.issues.map (junitIssue "    "))]
-  let suites := byModule report.results |>.map fun (_, cases) =>
-    -- Every case in a group shares a package and a module, since the group is keyed by both.
-    let pkg := (cases[0]?.map (·.package)).getD ""
-    let suite := (cases[0]?.map (·.moduleName)).getD ""
+  let suites := byExe report.results |>.map fun (exe, cases) =>
+    let tally := Tally.of cases
     xmlElements "  " "testsuite"
-      [("name", suite), ("package", pkg), ("tests", toString cases.size),
-        ("failures", toString (countWhere cases (· matches .fail _))),
-        ("errors", toString (countWhere cases (· matches .error _)))]
-      (cases.map (junitCase "    " suite))
+      [("name", exe), ("tests", toString cases.size), ("failures", toString tally.failed),
+        ("errors", toString (tally.errors + tally.inconclusive))]
+      (cases.map (junitCase "    "))
   "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ++
     xmlElements "" "testsuites" [] (run ++ suites) ++ "\n"
 
-private def statusFields : Status → List (String × Json)
-  | .pass => [("status", Json.str "pass")]
-  | .fail f =>
-    [("status", Json.str "fail"), ("message", Json.str f.message)] ++
-      (match f.detail? with | some d => [("detail", Json.str d)] | none => []) ++
-      (match f.location? with | some l => [("location", ToJson.toJson l)] | none => [])
-  | .error m => [("status", Json.str "error"), ("message", Json.str m)]
-
 instance : ToJson Result where
-  toJson r := private
+  toJson r :=
     Json.mkObj <|
-      [("package", Json.str r.package), ("module", Json.str r.moduleName),
-        ("test", Json.str r.test), ("resultPath", ToJson.toJson r.resultPath),
+      [("exe", Json.str r.exe), ("test", Json.str r.test), ("path", ToJson.toJson r.path),
+        ("kind", Json.str r.kind.name), ("resultPath", ToJson.toJson r.resultPath),
         ("durationMs", ToJson.toJson r.durationMs)] ++
-      statusFields r.status ++
+      r.outcome.fields ++
       (if r.output.isEmpty then [] else [("output", ToJson.toJson r.output)]) ++
-      (match r.description? with | some d => [("description", Json.str d)] | none => [])
-
-/-- Decodes an optional field: absent maps to {lean}`none`. -/
-private def optField [FromJson α] (j : Json) (key : String) : Except String (Option α) :=
-  match j.getObjVal? key with
-  | .ok v => some <$> FromJson.fromJson? v
-  | .error _ => pure none
-
-instance : FromJson Status where
-  fromJson? j := private do
-    match ← j.getObjValAs? String "status" with
-    | "pass" => return .pass
-    | "error" => return .error (← j.getObjValAs? String "message")
-    | "fail" => return .fail {
-        message := ← j.getObjValAs? String "message",
-        detail? := ← optField j "detail",
-        location? := ← optField j "location"
-      }
-    | other => .error s!"unknown status: {other}"
+      (match r.description? with | some d => [("description", Json.str d)] | none => []) ++
+      (match r.reproduce? with | some c => [("reproduce", Json.str c)] | none => [])
 
 instance : FromJson Result where
-  fromJson? j := private do
+  fromJson? j := do
+    let kind ← match ← j.getObjValAs? String "kind" with
+      | "test" => pure Result.Kind.test
+      | "fixture" => pure .fixture
+      | other => .error s!"unknown result kind: {other}"
     return {
-      package := ← j.getObjValAs? String "package",
-      moduleName := ← j.getObjValAs? String "module",
+      exe := ← j.getObjValAs? String "exe",
       test := ← j.getObjValAs? String "test",
+      path := ← j.getObjValAs? (Array String) "path",
+      kind,
       resultPath := ← j.getObjValAs? (Array String) "resultPath",
       durationMs := ← j.getObjValAs? Nat "durationMs",
-      status := ← FromJson.fromJson? j,
+      outcome := ← Outcome.ofFields? j,
       output := (← optField j "output").getD {},
-      description? := ← optField j "description"
+      description? := ← optField j "description",
+      reproduce? := ← optField j "reproduce"
     }
 
 /--
 Renders the report as a JSON object: the results as an array of objects under {lit}`results`, the
-run's issues under {lit}`issues`, and the seed for its property tests under {lit}`seed`.
+run's issues under {lit}`issues`, and the run's seed under {lit}`seed`.
 -/
 def jsonReport (report : RunReport) : String :=
   (json%{ "results": $report.results, "issues": $report.issues, "seed": $report.seed }).pretty
@@ -402,19 +446,19 @@ private def fencedBlock (body : String) : String :=
   s!"{fence}\n{body}\n{fence}"
 
 /--
-Renders the report as Markdown for a CI job summary: a headline tally, each of the run's issues
-and each failure and error in an open collapsible block, the latter with its location and detail,
-and a per-module table in a closed one.
+Renders the report as Markdown for a CI job summary: a headline tally of the four categories, each
+of the run's issues and each failure, error, and inconclusive test in an open collapsible block, the
+latter with its location, detail, output, and the command that reproduces it, and a table per test
+executable in a closed one.
 -/
 def markdownReport (report : RunReport) : String := Id.run do
   let results := report.results
-  let passed := countWhere results (· matches .pass)
-  let failed := countWhere results (· matches .fail _)
-  let errors := countWhere results (· matches .error _)
-  let icon := if failed + errors == 0 && !report.failsRun then "✅" else "❌"
+  let tally := Tally.of results
+  let icon := if tally.notPassed == 0 && !report.failsRun then "✅" else "❌"
   let mut out := s!"## {icon} Errata test results\n\n"
   out := out ++
-    s!"**{passed}** passed · **{failed}** failed · **{errors}** errors · seed **{report.seed}**\n\n"
+    s!"**{tally.passed}** passed · **{tally.failed}** failed · **{tally.errors}** errors · \
+      **{tally.inconclusive}** inconclusive · seed **{report.seed}**\n\n"
   for issue in report.issues do
     let mark := if issue.isError then "💥" else "⚠️"
     out := out ++ s!"<details open><summary>{mark} {runSuite} {issue.level}: \
@@ -423,22 +467,25 @@ def markdownReport (report : RunReport) : String := Id.run do
     out := out ++ "</details>\n\n"
   for r in results do
     let render (mark message : String) (detail? : Option String) : String := Id.run do
-      let mut s := s!"<details open><summary>{mark} <code>{xmlEscape r.moduleTarget}</code> \
+      let mut s := s!"<details open><summary>{mark} <code>{xmlEscape r.exe}</code> \
         {xmlEscape r.testName}: {xmlEscape message}</summary>\n\n"
       if let some d := r.description? then s := s ++ s!"{d}\n\n"
-      if let .fail f := r.status then
-        if let some l := f.location? then s := s ++ s!"`{locationText l}`\n\n"
+      if let .reported (.fail f) := r.outcome then
+        if let some l := f.location? then s := s ++ s!"`{l.text}`\n\n"
       if let some d := detail? then s := s ++ s!"{fencedBlock d}\n\n"
       unless r.output.isEmpty do
         s := s ++ s!"<details><summary>output</summary>\n\n{fencedBlock r.output.all}\n\n</details>\n\n"
+      if let some cmd := r.reproduce? then
+        s := s ++ s!"Reproduce with:\n\n{fencedBlock cmd}\n\n"
       return s ++ "</details>\n\n"
-    match r.status with
-    | .fail f => out := out ++ render "❌" f.message f.detail?
-    | .error m => out := out ++ render "💥" m none
-    | _ => pure ()
-  out := out ++ "<details><summary>Summary by module</summary>\n\n"
-  out := out ++ "| Module | ✅ | ❌ | 💥 |\n| :-- | --: | --: | --: |\n"
-  for (m, cs) in byModule results do
-    out := out ++ s!"| {m} | {countWhere cs (· matches .pass)} | {countWhere cs (· matches .fail _)} \
-      | {countWhere cs (· matches .error _)} |\n"
+    match r.outcome with
+    | .reported (.fail f) => out := out ++ render "❌" f.message f.detail?
+    | .reported (.error m) => out := out ++ render "💥" m none
+    | .inconclusive reason => out := out ++ render "❔" s!"inconclusive: {reason.describe}" none
+    | .reported .pass => pure ()
+  out := out ++ "<details><summary>Summary by test executable</summary>\n\n"
+  out := out ++ "| Executable | ✅ | ❌ | 💥 | ❔ |\n| :-- | --: | --: | --: | --: |\n"
+  for (exe, cs) in byExe results do
+    let t := Tally.of cs
+    out := out ++ s!"| {exe} | {t.passed} | {t.failed} | {t.errors} | {t.inconclusive} |\n"
   return out ++ "\n</details>\n"

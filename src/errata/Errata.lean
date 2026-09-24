@@ -5,6 +5,8 @@ Author: David Thrane Christiansen
 -/
 module
 
+public import Errata.Failure
+public import Errata.Outcome
 public import Errata.Result
 public import Errata.Context
 public import Errata.Here
@@ -22,5 +24,11 @@ public import Errata.WidgetRunner
 public import Errata.Discovery
 public import Errata.CompileTime
 public import Errata.Property
+public import Errata.Protocol
+public import Errata.ProcessControl
+public import Errata.Harness
+public import Errata.RunnerConfig
+public import Errata.Dispatcher
+public import Errata.RunnerMain
 
 set_option doc.verso true

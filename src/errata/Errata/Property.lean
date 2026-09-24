@@ -31,4 +31,4 @@ def property (p : Prop) (cfg : Configuration := {}) (loc : Location := by exact 
   | .gaveUp n => failAt loc s!"property gave up after discarding {n} cases"
   | .failure _ counterExample _ =>
     failAt loc "property falsified"
-      (detail? := some s!"{"\n".intercalate counterExample}\n\nReproduce with --seed {seed}.")
+      (detail? := some s!"{"\n".intercalate counterExample}\n\nReproduce with the seed {seed}.")

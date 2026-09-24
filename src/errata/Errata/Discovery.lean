@@ -42,19 +42,37 @@ meta def testAction (decl : Name) : MetaM Expr := do
     throwError m!"`@[test]` requires an `Errata.IsTest` instance for the test's type{indentExpr info.type}"
 
 /--
-Records a declaration as a test. The action that runs it is compiled into a private definition
-beside it, so the {name}`IsTest` instance in force here is the one that runs it wherever it is run.
+The name for the definition that runs the test {name}`decl`: {lit}`run` below the test's own name,
+or {lit}`run_2`, {lit}`run_3`, and so on when that name is taken.
+-/
+meta def runDeclName (env : Environment) (decl : Name) : Name := Id.run do
+  let mut name := decl ++ `run
+  let mut n := 2
+  while env.contains name do
+    name := decl ++ Name.mkSimple s!"run_{n}"
+    n := n + 1
+  return name
+
+/--
+Records a declaration as a test. The action that runs it is compiled into an exported definition
+beside it, so the {name}`IsTest` instance in force here is the one that runs it wherever it is run,
+and the test executable reaches it through a plain {lit}`import` of the test's module. A test must
+itself be exported: in a module, it is public, which a {lit}`public section` arranges.
 The docstring is read here, while it is still in the live environment, since a downstream build does
 not load the imported docstrings.
 -/
 meta def recordTest (decl : Name) : AttrM Unit := do
   if (testExt.getState (← getEnv)).any (·.name == decl) then
     throwError m!"`{privateToUserName decl}` is already marked as a test"
+  unless ((← getEnv).setExporting true).contains decl do
+    throwError m!"`{privateToUserName decl}` is private or not exported, so a test executable \
+      cannot reach it. Make it public, for example by declaring it in a `public section`."
   let action ← (testAction decl).run'
-  let run := mkPrivateName (← getEnv) (← mkFreshUserName (privateToUserName decl ++ `run))
+  let run := runDeclName (← getEnv) decl
   let type := mkApp (mkConst ``TestM) (mkConst ``Unit)
   let val ← mkDefinitionValInferringUnsafe run [] type action .opaque
-  addAndCompile (.defnDecl val)
+  withExporting (isExporting := true) do
+    addAndCompile (.defnDecl val)
   let docstring? ← findDocString? (← getEnv) decl
   modifyEnv (testExt.addEntry · {
     name := decl, run, isUnsafe := val.safety == .unsafe, file := ← getFileName, docstring?
@@ -159,8 +177,8 @@ syntax testModules := ident ("." "*")?
 {lit}`getAllTests% "package" Mod.A Mod.B.* ...` reads the tests recorded by {lit}`@[test]` in the
 named modules, and expands to the array of {name}`TestEntry` values that run them. A name with a
 trailing {lit}`.*` also names every imported module below it. Even if a module is named more than
-once, its tests are not duplicated. Each module must be imported, with {lit}`import all` for
-module-system modules, so its tests are reachable. Unsafe tests are wrapped in
+once, its tests are not duplicated. Each module must be imported so its tests are reachable. Each
+test is named by its fully qualified declaration name. Unsafe tests are wrapped in
 {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
 -/
 syntax (name := getAllTests) "getAllTests%" str testModules* : term
@@ -185,7 +203,7 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
     let rootName := modStx.getId
     let some rootIdx := env.getModuleIdx? rootName
       | throwErrorAt modStx "Module `{rootName}` is not imported, so its tests cannot be \
-          reached. Import it, using `import all {rootName}` if it belongs to the module system."
+          reached. Import it."
     let mut chosen : Array (Name × ModuleIdx) := #[(rootName, rootIdx)]
     if below then
       for h : idx in [0 : moduleNames.size] do
@@ -195,10 +213,9 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
       seen := seen.insert moduleName
       let moduleStr := moduleName.toString
       for test in testExt.getModuleEntries env idx do
-        -- The internal name is used here, because the user-facing name can be ambiguous for private
-        -- tests
         let userName := privateToUserName test.name
-        let testName := testNameBelow moduleName userName
+        let testName := userName.toString
+        let path := userName.components.map (·.toString (escape := false)) |>.toArray
         let location ← testLocation test
         -- The docstring captured when the attribute was applied, so the report and widget can show it.
         let docStx ← match test.docstring? with
@@ -208,6 +225,7 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
         let run ← if test.isUnsafe then `(unsafe $ref) else pure ref
         entries := entries.push <| ←
           `({ package := $(quote package), moduleName := $(quote moduleStr),
-              test := $(quote testName), location := $(← exprToSyntax (toExpr location)),
+              name := $(quote testName), path := $(quote path),
+              location := $(← exprToSyntax (toExpr location)),
               docstring? := $docStx, run := $run : Errata.TestEntry })
   elabTerm (← `(#[$entries,*])) expectedType?

@@ -45,3 +45,7 @@ name = "AppLocalInstance"
 # A failing boolean test beside a module whose high-priority `IsTest Bool` instance passes anything.
 [[lean_lib]]
 name = "AppShadow"
+
+# A test that sleeps past a short timeout, beside one whose output comes from a subprocess.
+[[lean_lib]]
+name = "AppSlow"

@@ -33,16 +33,17 @@ structure Context where
   updateGolden : Bool := false
   /-- Project-specific options, as a multi-map so repeated options accumulate. -/
   options : OptionMap := {}
-  /-- The seed for property tests. -/
+  /--
+  The seed for property tests. A test executable receives it as the {lit}`seed` setting, which the
+  runner derives for each test from the run's seed.
+  -/
   seed : Nat
   /-- Whether a panic message in a check's captured stderr leaves its status as it is. -/
   ignorePanics : Bool := false
-  /-- The package that defines the running test. -/
-  package : String := ""
-  /-- The module that defines the running test, as a dotted name. -/
-  moduleName : String := ""
-  /-- The running test declaration's name below its module. -/
+  /-- The running test's name. -/
   test : String := ""
+  /-- The components of the running test's name. -/
+  path : Array String := #[]
   /--
   The docstring of the current scope, rendered as Markdown: the running test's, when it has one,
   and {lean}`none` inside a named result.
@@ -60,7 +61,7 @@ structure Context where
   and appends its results to the enclosing scope's log when it finishes.
   -/
   log : IO.Ref (Array Result)
-  /-- The option names read during the run, shared across all tests, for reporting unused options. -/
+  /-- The option names read during the run, shared across all tests, for the widget's report. -/
   usedOptions : IO.Ref (HashSet String)
   /--
   Receives each captured output fragment as it is written, in order. A runner that streams a test's

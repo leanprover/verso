@@ -31,7 +31,7 @@ are recovered later, once the declaration ranges are available.
 structure TestDecl where
   /-- The test declaration's name. -/
   name : Name
-  /-- The private definition beside the test whose value is the action that runs it. -/
+  /-- The exported definition beside the test whose value is the action that runs it. -/
   run : Name
   /-- Whether the action is unsafe, as it is when the test is. -/
   isUnsafe : Bool
@@ -53,16 +53,6 @@ def testLocation [Monad m] [MonadEnv m] [MonadLiftT BaseIO m] (test : TestDecl) 
     startPos := (range.map (·.range.pos)).getD ⟨0, 0⟩
     endPos := (range.map (·.range.endPos)).getD ⟨0, 0⟩
   }
-
-/--
-The name used for reports of test results. If the module's name is a prefix of the test's name, it
-is stripped; after, it is converted to a string.
--/
-def testNameBelow (moduleName declName : Name) : String :=
-  let below :=
-    if moduleName.isPrefixOf declName then declName.components.drop moduleName.components.length
-    else declName.components
-  ".".intercalate (below.map (·.toString))
 
 /--
 The tests recorded by {lit}`@[test]`, per module. Tests are recorded as modules are elaborated;
