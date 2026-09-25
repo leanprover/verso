@@ -10,7 +10,8 @@ where the pytest arguments name the tests' paths and any options, as a pytest co
 named by its node id, with the node id's parts as its path, its markers as its tags, its docstring as
 its description, and its file and line. `errata-run` runs the one item with that node id and writes
 its verdict to OUT, with the location and the detail of a failure, and exits with 0 when it passed
-and 1 otherwise.
+and 1 otherwise. Several invocations may be chained, each separated by a `;` argument; they run in
+order in one process, stopping at the first that exits non-zero.
 
 A suite declares the settings its tests take in a module-level dictionary `errata_settings_decl` in a
 `conftest.py`, which maps each setting's name to a dictionary with its `description` and optionally
@@ -47,7 +48,7 @@ USAGE = """usage:
   python errata_pytest.py PYTEST-ARG... errata-list <out>
   python errata_pytest.py PYTEST-ARG... errata-run <out> <node-id> [setting:NAME=VALUE]... [threads:N]
 
-The Errata runner starts test executables; to run the tests, run the Errata driver, which is
+Several invocations may be chained, each separated by a ';' argument. The Errata runner starts test executables; to run the tests, run the Errata driver, which is
 usually `lake test`."""
 
 ERRATA_SETTING_MARKER = (
@@ -71,9 +72,16 @@ def relative_path(path):
 
 
 def node_path(nodeid):
-    """The parts of a node id: the file's path components, the class if any, and the function."""
-    file_part, *rest = nodeid.split("::")
-    return [p for p in file_part.split("/") if p] + rest
+    """
+    The parts of a node id: the file's path components, the class if any, and the function with its
+    parameter id, which may itself hold `::` and `/`.
+    """
+    head, bracket, params = nodeid.partition("[")
+    file_part, *rest = head.split("::")
+    parts = [p for p in file_part.split("/") if p] + rest
+    if bracket and parts:
+        parts[-1] += bracket + params
+    return parts
 
 
 def item_settings(item):
@@ -220,13 +228,23 @@ class RunPlugin:
         """Keeps the report of each phase of the item: setup, call, and teardown."""
         self.reports[report.when] = report
 
-    def verdict(self):
-        """The test's verdict record, from the reports of its setup, call, and teardown."""
+    def verdict(self, code):
+        """
+        The test's verdict record, from the reports of its setup, call, and teardown, and from
+        pytest's exit code when the test did not run.
+        """
         if not self.found:
             if self.collect_errors:
                 return failure_verdict(
                     "error", self.collect_errors[0], "collecting the tests failed"
                 )
+            if code not in (pytest.ExitCode.OK, pytest.ExitCode.NO_TESTS_COLLECTED):
+                return {
+                    "type": "verdict",
+                    "status": "error",
+                    "message": f"pytest ended with exit code {int(code)} ({exit_code_name(code)}) "
+                    "before it ran the test; its output says why",
+                }
             return {"type": "verdict", "status": "error", "message": f"no test is named {self.nodeid}"}
         setup = self.reports.get("setup")
         call = self.reports.get("call")
@@ -248,6 +266,14 @@ class RunPlugin:
             verdict = failure_verdict("error", teardown, "the test's teardown failed")
         verdict["duration_ms"] = int(duration * 1000)
         return verdict
+
+
+def exit_code_name(code):
+    """The name of one of pytest's exit codes, such as `USAGE_ERROR`."""
+    try:
+        return pytest.ExitCode(int(code)).name
+    except ValueError:
+        return "an unknown code"
 
 
 def failure_verdict(status, report, fallback):
@@ -309,19 +335,57 @@ def run_test(pytest_args, out_path, nodeid, rest):
         write_record(out, {"type": "protocol", "version": 1})
         plugin = RunPlugin(nodeid, settings, out)
         # Without capturing, what the test prints reaches the runner as it is printed.
-        pytest.main(["--capture=no", *pytest_args, "-p", "no:cacheprovider"], plugins=[plugin])
-        verdict = plugin.verdict()
+        code = pytest.main(
+            ["--capture=no", *pytest_args, "-p", "no:cacheprovider"], plugins=[plugin]
+        )
+        verdict = plugin.verdict(code)
         write_record(out, verdict)
     return 0 if verdict["status"] == "pass" else 1
 
 
+def split_chain(argv):
+    """The invocations of a chain: the arguments, split at each `;` argument."""
+    links = [[]]
+    for arg in argv:
+        if arg == ";":
+            links.append([])
+        else:
+            links[-1].append(arg)
+    return links
+
+
 def main(argv):
-    """Carries out the invocation that the arguments give, and returns the exit code."""
-    mode_at = next((i for i, a in enumerate(argv) if a in MODES), None)
+    """
+    Carries out the invocation that the arguments give, or each invocation of a chain whose
+    invocations are separated by `;` arguments, in order, stopping at the first that exits
+    non-zero, and returns the exit code of the last that ran. The pytest arguments precede the
+    first invocation and serve them all.
+    """
+    links = split_chain(argv)
+    first = links[0]
+    mode_at = next((i for i, a in enumerate(first) if a in MODES), None)
     if mode_at is None:
         print(USAGE, file=sys.stderr)
         return 2
-    pytest_args, mode, rest = argv[:mode_at], argv[mode_at], argv[mode_at + 1:]
+    pytest_args = first[:mode_at]
+    links[0] = first[mode_at:]
+    code = 2
+    for link in links:
+        # Each invocation imports the suite afresh, as a process of its own would.
+        modules = set(sys.modules)
+        try:
+            code = invoke(pytest_args, link)
+        finally:
+            for name in set(sys.modules) - modules:
+                del sys.modules[name]
+        if code != 0:
+            break
+    return code
+
+
+def invoke(pytest_args, link):
+    """Carries out one invocation, and returns its exit code."""
+    mode, rest = (link[0], link[1:]) if link else ("", [])
     if mode == "errata-list" and len(rest) == 1:
         return list_tests(pytest_args, rest[0])
     if mode == "errata-run" and len(rest) >= 2:

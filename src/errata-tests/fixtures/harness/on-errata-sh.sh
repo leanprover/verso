@@ -20,7 +20,8 @@ errata_settings() {
 errata_tests() {
   local t settings tags
   for t in pass fail verdict-fail silent unknown-records mismatch-pass mismatch-fail exits sleeps \
-      stubborn spawns panics garbled records twice flood lingers greets needs-setting; do
+      stubborn spawns panics garbled records twice flood lingers greets needs-setting errexit \
+      fail-goes-on; do
     settings="Errata.seed,optional(marker),optional(note)"
     case "$t" in
       greets) settings="$settings,greeting" ;;
@@ -36,10 +37,10 @@ errata_tests() {
 }
 
 # Runs one test. Each shows one way that a test can end, as the test of the same name in `basic.sh`
-# does.
+# does; `errexit` and `fail-goes-on` show how the harness ends a test that fails.
 errata_run_test() {
   local marker
-  marker=$(errata_setting marker)
+  marker=$(errata_setting marker) || true
   case "$1" in
     pass)
       errata_record '{"type":"verdict","status":"pass"}'
@@ -63,8 +64,18 @@ errata_run_test() {
       exit 1
       ;;
     mismatch-fail)
-      errata_fail "it failed"
+      # The harness exits with 1 after `errata_fail`, so this test fails where `basic.sh`'s
+      # contradicts its verdict.
+      errata_fail "it failed" || true
       exit 0
+      ;;
+    errexit)
+      false
+      echo "REACHED after false"
+      ;;
+    fail-goes-on)
+      errata_fail "stopped here" || true
+      echo "went on"
       ;;
     exits)
       echo "about to exit" >&2
@@ -104,7 +115,7 @@ errata_run_test() {
       errata_record '{"type":"verdict","status":"pass"}'
       ;;
     twice)
-      errata_fail "first"
+      errata_fail "first" || true
       errata_record '{"type":"verdict","status":"pass"}'
       exit 0
       ;;

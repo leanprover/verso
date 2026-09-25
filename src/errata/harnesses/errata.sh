@@ -21,6 +21,9 @@
 #
 #   errata_main "$@"
 #
+# A test's body runs in a subshell with `set -e`: a command that fails ends the test with its status,
+# and `errata_fail`, which returns 1, ends it as failed unless the body catches the status.
+#
 # The runner sets ERRATA_DIR to the directory of Errata's sources in every test executable's
 # environment. The library needs bash 3.2 or later and the POSIX utilities that ship with macOS and
 # Linux. It writes the records to file descriptor 9, which it opens on the file that the runner
@@ -37,6 +40,10 @@ _errata_given_values=()
 _errata_threads=""
 # `list` while errata-list writes the inventory, and `collect` while errata-run learns the names.
 _errata_mode=""
+# Whether errata-list has written a test record, after which no setting record may follow.
+_errata_listed_test=""
+# The file that errata_fail creates while a test runs, so that the harness learns of the failure.
+_errata_failed_mark=""
 
 # The control characters that JSON strings escape as \u00XX, apart from tab, newline, and carriage
 # return, which have short escapes, and the escape of each.
@@ -140,6 +147,8 @@ errata_setting_decl() {
   done
   case "$_errata_mode" in
     list)
+      [ -z "$_errata_listed_test" ] ||
+        _errata_misuse "the setting $name is declared after a test; declare settings in errata_settings"
       local record
       record="{\"type\":\"setting\",\"name\":$(_errata_json_string "$name")"
       record+=",\"description\":$(_errata_json_string "$description")"
@@ -167,6 +176,13 @@ errata_test() {
   while [ $# -gt 0 ]; do
     [ $# -ge 2 ] || _errata_misuse "$1 takes a value"
     case "$1" in
+      --path | --tags | --settings)
+        case "$2" in
+          *$'\n'*) _errata_misuse "the value of $1 for the test $name holds a newline" ;;
+        esac
+        ;;
+    esac
+    case "$1" in
       --path) record+=",\"path\":$(_errata_json_list "$2")" ;;
       --file) record+=",\"file\":$(_errata_json_string "$2")" ;;
       --line)
@@ -185,7 +201,10 @@ errata_test() {
     shift 2
   done
   case "$_errata_mode" in
-    list) errata_record "$record}" ;;
+    list)
+      errata_record "$record}"
+      _errata_listed_test=1
+      ;;
     collect) _errata_test_names+=("$name") ;;
   esac
 }
@@ -222,6 +241,7 @@ errata_fail() {
   record="{\"type\":\"verdict\",\"status\":\"fail\",\"message\":$(_errata_json_string "$1")"
   [ $# -ge 2 ] && record+=",\"detail\":$(_errata_json_string "$2")"
   errata_record "$record}"
+  if [ -n "$_errata_failed_mark" ]; then : > "$_errata_failed_mark"; fi
   return 1
 }
 
@@ -264,6 +284,7 @@ _errata_invoke() {
       exec 9>>"$2"
       errata_record '{"type":"protocol","version":1}'
       _errata_mode=list
+      _errata_listed_test=""
       if declare -F errata_settings > /dev/null; then errata_settings; fi
       if declare -F errata_tests > /dev/null; then errata_tests; fi
       _errata_mode=""
@@ -308,8 +329,21 @@ _errata_invoke() {
       declare -F errata_run_test > /dev/null ||
         _errata_misuse "the script declares tests and defines no errata_run_test"
       errata_record "{\"type\":\"start\",\"time_ms\":$(_errata_now_ms)}"
-      # The test runs in a subshell, so that its `exit` ends only the test.
-      if (errata_run_test "$name"); then status=0; else status=$?; fi
+      local errexit="" marks
+      marks=$(mktemp -d)
+      _errata_failed_mark="$marks/failed"
+      case $- in *e*) errexit=1 ;; esac
+      # The test runs in a subshell, so that its `exit` ends only the test, and with `errexit`, so
+      # that a failing command ends it. Bash honors `errexit` only in a subshell that is a command
+      # of its own, outside any condition.
+      set +e
+      (set -e; errata_run_test "$name")
+      status=$?
+      [ -n "$errexit" ] && set -e
+      # A test that failed with `errata_fail` exits with 1, whatever its body returned.
+      [ -e "$_errata_failed_mark" ] && status=1
+      rm -rf "$marks"
+      _errata_failed_mark=""
       exec 9>&-
       return "$status"
       ;;
@@ -328,7 +362,9 @@ _errata_invoke() {
 # invocation of a chain whose invocations are separated by a ';' argument, in order, stopping at the
 # first that exits non-zero, and exits with the status of the last that ran. `errata-list` writes the
 # inventory: the settings that `errata_settings` declares, then the tests that `errata_tests`
-# declares. `errata-run` runs one test with `errata_run_test NAME` and exits with its status.
+# declares. `errata-run` runs one test with `errata_run_test NAME` in a subshell with `set -e`, so
+# that a command that fails ends the test, and exits with its status, or with 1 when the test called
+# `errata_fail`.
 errata_main() {
   local status=2 invocation
   [ $# -gt 0 ] || { _errata_usage; exit 2; }
@@ -339,7 +375,11 @@ errata_main() {
       shift
     done
     [ $# -gt 0 ] && shift
-    if _errata_invoke ${invocation[@]+"${invocation[@]}"}; then status=0; else status=$?; fi
+    # The invocation is a command of its own, outside any condition, so that the test's `errexit`
+    # takes effect.
+    set +e
+    _errata_invoke ${invocation[@]+"${invocation[@]}"}
+    status=$?
     [ "$status" -eq 0 ] || break
   done
   exit "$status"

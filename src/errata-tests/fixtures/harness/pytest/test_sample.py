@@ -1,6 +1,6 @@
 """
 Tests that show the conformance suite how a pytest test can end: passing, failing, with an error in
-its setup, parameterized, marked, inside a class, and taking settings.
+its setup, parameterized, with an odd parameter id, marked, inside a class, and taking settings.
 """
 
 import pytest
@@ -26,6 +26,12 @@ def test_errors(broken):
 def test_squares(n):
     """A parameterized test."""
     assert n * n >= n
+
+
+@pytest.mark.parametrize("s", ["x"], ids=["a::b/c"])
+def test_odd_id(s):
+    """A test whose parameter id holds `::` and `/`."""
+    assert s == "x"
 
 
 @pytest.mark.chatty

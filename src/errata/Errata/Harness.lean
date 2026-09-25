@@ -32,7 +32,8 @@ def usage : String :=
     <test-executable> errata-list <out>\n  \
     <test-executable> errata-run <out> <test-name> [setting:NAME=VALUE]...\n  \
     <test-executable> errata-helper <helper-name> [ARG]...\n\n\
-    The Errata runner starts test executables, and tests start their helpers. To run the tests, \
+    Several errata-list and errata-run invocations may be chained, each separated by a ';' \
+    argument. The Errata runner starts test executables, and tests start their helpers. To run the tests, \
     run the Errata driver, which is usually `lake test`."
 
 /--
@@ -218,6 +219,24 @@ def dispatch (entries : Array TestEntry) (args : List String) (helpers : Array H
     IO.eprintln usage
     return 2
 
+/-- The invocations of a chain: the arguments, split at each {lit}`;` argument. -/
+def chainLinks (args : List String) : List (List String) :=
+  let (last, done) := args.foldl (init := ([], [])) fun (cur, done) a =>
+    if a == ";" then ([], done ++ [cur]) else (cur ++ [a], done)
+  done ++ [last]
+
+/--
+Carries out the invocations of a chain in order with {name}`dispatch`, stopping at the first that
+exits non-zero, and returns the exit code of the last that ran.
+-/
+def dispatchChain (entries : Array TestEntry) (links : List (List String))
+    (helpers : Array Helper := #[]) : IO UInt32 := do
+  let mut code := 0
+  for link in links do
+    code ← dispatch entries link helpers
+    unless code == 0 do break
+  return code
+
 /-- Flushes the standard streams and ends the process with {name}`code`. -/
 def exitNow (code : UInt8) : IO α := do
   try (← IO.getStdout).flush catch _ => pure ()
@@ -266,21 +285,28 @@ input, output, and error. This mode belongs to the Lean harness, and
 {name (scope := "Errata")}`runHelper` starts it from inside a test. For an unknown name, the
 executable writes a message to standard error and exits with {lit}`2`.
 
+Several {lit}`errata-list` and {lit}`errata-run` invocations may be chained, each separated by a
+{lit}`;` argument. The executable carries them out in order, stops at the first that exits non-zero,
+and exits with the status of the last that ran.
+
 With any other arguments, the executable prints its usage and exits with {lit}`2`.
 -/
 def main (entries : Array TestEntry) (args : List String) (helpers : Array Helper := #[]) :
     IO UInt32 := do
   match args with
-  | "errata-run" :: _ =>
+  | "errata-helper" :: _ => dispatch entries args helpers
+  | _ =>
+    let links := chainLinks args
+    unless links.any (·.head? == some "errata-run") do
+      return ← dispatchChain entries links helpers
     -- The read blocks on a thread of its own, which it holds for the length of the run.
     if (← IO.getEnv "ERRATA_LIFELINE") == some "1" then
       let _ ← IO.asTask (prio := .dedicated) (exitWhenStdinCloses (← IO.getStdin))
     -- The main thread, where the test runs, reads an empty standard input from here on.
     discard <| IO.setStdin (IO.FS.Stream.ofBuffer (← IO.mkRef {}))
-    let code ← try dispatch entries args catch e => do
+    let code ← try dispatchChain entries links catch e => do
       IO.eprintln s!"uncaught exception: {e}"
       pure 1
     -- The thread that reads standard input runs until the pipe closes, and a Lean program that
     -- returns from `main` waits for its threads, so the process is ended here.
     exitNow code.toUInt8
-  | _ => dispatch entries args helpers

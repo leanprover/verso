@@ -20,7 +20,7 @@ errata_tests() {
 # Runs one case. Its output streams to the test's output as it arrives and is also kept, so that a
 # failure's verdict can carry it as its detail.
 errata_run_test() {
-  local log status
+  local log status output
   log=$(mktemp)
   set -o pipefail
   if src/tests/interactive/test_single.sh "$cases/$1.lean" 2>&1 | tee "$log"; then
@@ -28,11 +28,11 @@ errata_run_test() {
   else
     status=$?
   fi
-  if [ "$status" -ne 0 ]; then
-    errata_fail "test_single.sh failed on $1.lean with exit code $status" "$(cat "$log")"
-  fi
+  output=$(cat "$log")
   rm -f "$log"
-  return "$status"
+  if [ "$status" -ne 0 ]; then
+    errata_fail "test_single.sh failed on $1.lean with exit code $status" "$output"
+  fi
 }
 
 errata_main "$@"

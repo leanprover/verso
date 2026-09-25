@@ -435,14 +435,39 @@ def unknownRecordsIgnored : Test := forEach scriptedProducts fun p => do
   let r ← p.runTests #["unknown-records"]
   expectOutcome r "unknown-records" (· matches .reported .pass) "a pass"
 
-/-- An exit code that contradicts the reported verdict is a mismatch, whichever way it goes. -/
+/--
+An exit code that contradicts the reported verdict is a mismatch, whichever way it goes. On the
+shell harness a test that calls `errata_fail` exits with 1, so its `mismatch-fail` fails.
+-/
 @[test]
 def verdictMismatch : Test := forEach scriptedProducts fun p => do
   let r ← p.runTests #["mismatch-pass", "mismatch-fail"]
   expectOutcome r "mismatch-pass" (· matches .inconclusive (.verdictMismatch 1 .pass))
     "verdictMismatch 1 pass"
-  expectOutcome r "mismatch-fail" (· matches .inconclusive (.verdictMismatch 0 (.fail _)))
-    "verdictMismatch 0 fail"
+  if p.exe.name == basicProduct.exe.name then
+    expectOutcome r "mismatch-fail" (· matches .inconclusive (.verdictMismatch 0 (.fail _)))
+      "verdictMismatch 0 fail"
+  else
+    expectOutcome r "mismatch-fail" (· matches .reported (.fail _)) "a failure"
+
+/--
+The shell harness runs a test's body with `set -e`, so a command that fails ends the test, and a
+test that called `errata_fail` fails even when its body goes on and returns zero.
+-/
+@[test]
+def shellHarnessEndsFailingTests : Test := do
+  let r ← errataShProduct.runTests #["errexit", "fail-goes-on"]
+  result "a failing command ends the test" do
+    expectOutcome r "errexit" (· matches .inconclusive (.exitedWithoutVerdict 1))
+      "exitedWithoutVerdict 1"
+    let some res := r.result? "errexit" | fail "no result"
+    assertNotContains "REACHED" res.output.all
+  result "errata_fail fails the test" do
+    match r.outcome? "fail-goes-on" with
+    | some (.reported (.fail f)) => assertBEq "stopped here" f.message
+    | o => fail s!"expected a failure, got {repr o}"
+    let some res := r.result? "fail-goes-on" | fail "no result"
+    assertContains "went on" res.output.stdout
 
 /-- A non-zero exit code without a verdict is inconclusive, with the code. -/
 @[test]
@@ -596,21 +621,83 @@ def eventsFileWritten : Test := do
     assertContains "\"type\":\"protocol\"" (lines.headD "")
     assertContains "\"type\":\"end\"" (lines.getLastD "")
 
+/-- The verdict records among the lines of {name}`text`, skipping lines that are not records. -/
+def verdictsIn (text : String) : Array Json :=
+  (text.splitOn "\n").toArray.filterMap fun l =>
+    match Json.parse l with
+    | .ok j => if isEvent "verdict" none j then some j else none
+    | .error _ => none
+
 /--
 A test that did not pass carries a command that reproduces it: its executable, {lit}`errata-run`, its
-name, and its settings, quoted for a POSIX shell.
+name, and its settings, quoted for a POSIX shell. Run in a shell, the command writes the test's
+verdict to standard error and exits non-zero.
 -/
 @[test]
-def reproductionLine : Test := forEach scriptedProducts fun p => do
-  let r ← p.runTests #["fail", "pass"] { sets := #[("note", "it's")] }
-  let some res := r.result? "fail" | fail "no result"
-  let some cmd := res.reproduce? | fail "no reproduction line"
-  let script := p.exe.command[1]!
-  assertContains s!"{script} errata-run /dev/stderr fail setting:Errata.seed=" cmd
-  assertContains "'setting:note=it'\\''s'" cmd
-  assertNotContains "  " cmd
-  result "a pass has none" do
-    assertTrue ((r.result? "pass").bind (·.reproduce?)).isNone
+def reproductionLine : Test := do
+  forEach products fun p => do
+    let r ← p.run #[p.fails, p.passes]
+    let some res := r.result? p.fails.test | fail "no result"
+    let some cmd := res.reproduce? | fail "no reproduction line"
+    assertContains s!"errata-run /dev/stderr {shellQuote p.fails.test}" cmd
+    assertNotContains "  " cmd
+    let out ← IO.Process.output { cmd := "bash", args := #["-c", cmd] }
+    assertTrue (out.exitCode != 0) s!"the reproduction exited with 0: {cmd}"
+    assertBEq #[some "fail"] ((verdictsIn out.stderr).map (strField · "status"))
+    result "a pass has none" do
+      assertTrue ((r.result? p.passes.test).bind (·.reproduce?)).isNone
+  forEach scriptedProducts fun p => do
+    let r ← p.runTests #["fail"] { sets := #[("note", "it's")] }
+    let some cmd := (r.result? "fail").bind (·.reproduce?) | fail "no reproduction line"
+    let script := p.exe.command[1]!
+    assertContains s!"{script} errata-run /dev/stderr fail setting:Errata.seed=" cmd
+    assertContains "'setting:note=it'\\''s'" cmd
+
+/-- The arguments that run a role's test, with the settings it needs. -/
+def Role.args (r : Role) (out : System.FilePath) : Array String :=
+  #["errata-run", out.toString, r.test] ++ r.sets.map fun (k, v) => s!"setting:{k}={v}"
+
+/--
+A chain of invocations separated by {lit}`;` arguments runs in order in one process, stops at the
+first that exits non-zero, and exits with its status.
+-/
+@[test]
+def chainsRunInOrder : Test := forEach products fun p => do
+  IO.FS.withTempDir fun dir => do
+    let out := dir / "out.jsonl"
+    result "a chain stops at the first failure" do
+      IO.FS.writeFile out ""
+      let r ← p.invoke (p.passes.args out ++ #[";"] ++ p.fails.args out ++ #[";"] ++ p.passes.args out)
+      assertTrue (r.exitCode != 0) "the chain exited with 0"
+      assertBEq #[some "pass", some "fail"]
+        ((verdictsIn (← IO.FS.readFile out)).map (strField · "status"))
+    result "a chain that passes" do
+      IO.FS.writeFile out ""
+      let r ← p.invoke (p.passes.args out ++ #[";"] ++ p.passes.args out)
+      assertExitCode 0 r
+      assertBEq 2 (verdictsIn (← IO.FS.readFile out)).size
+
+/--
+A test executable's result file begins with the {lit}`protocol` record. The runner reads a result
+file whose first record is another as unreadable.
+-/
+@[test]
+def resultFileBeginsWithProtocol : Test := do
+  forEach products fun p => do
+    IO.FS.withTempDir fun dir => do
+      let out := dir / "out.jsonl"
+      IO.FS.writeFile out ""
+      discard <| p.invoke (p.passes.args out)
+      let first := (← IO.FS.readFile out).splitOn "\n" |>.headD ""
+      match Json.parse first with
+      | .ok j => assertBEq (some "protocol") (strField j "type")
+      | .error e => fail s!"the first line is not JSON: {e}" (some first)
+  result "a verdict before the protocol record" do
+    let r ← runWith #[basic ["protocol-late"]]
+    match r.outcome? "protocol-late" with
+    | some (.inconclusive (.resultStreamUnreadable m)) =>
+      assertContains "does not begin with a protocol record" m
+    | o => fail s!"expected resultStreamUnreadable, got {repr o}"
 
 /-- Shell quoting leaves safe words alone and single-quotes the rest. -/
 @[test]
@@ -688,7 +775,7 @@ def defaultFilterAndCommandLine : Test := do
 /--
 Once the inventory is known, a `tag(…)` that no test carries, an `exe(…)` that names no test
 executable, and a filter that selects no test are warnings at their places, which `--wfail` makes
-errors.
+errors. The configuration's filters draw them only in a run of every test executable.
 -/
 @[test]
 def filterWarnings : Test := do
@@ -707,6 +794,23 @@ def filterWarnings : Test := do
   result "--wfail" do
     let r ← runWith #[basic ["pass"]] { filters := #["tag(fast) | name(pass)"], wfail := true }
     assertTrue r.report.failsRun
+  result "the configuration's filters in a run of some executables" do
+    let text : FilterText := { text := "all() \\ tag(browser)", source := .file "errata.toml" 3 17 }
+    let override : Override := { filter := { text := "exe(elsewhere)" }, timeoutMs? := some 5000 }
+    let config : Config := {
+      profiles := #[{ name := "default", defaultFilter? := some text, overrides := #[override] }]
+      partialSelection := true }
+    let r ← runWith #[basic ["pass"]] { wfail := true } config
+    assertBEq #[] (r.report.issues.map (·.message))
+    expectOutcome r "pass" (· matches .reported .pass) "a pass"
+    result "the command line's filters still warn" do
+      let r ← runWith #[basic ["pass"]] { filters := #["tag(fast) | name(pass)"] } config
+      assertBEq #["--filter:0: tag(fast) matches no tag of any test"]
+        (r.report.issues.map (·.message))
+    result "every executable" do
+      let r ← runWith #[basic ["pass"]] {} { config with partialSelection := false }
+      assertTrue (r.report.issues.any (·.message == "errata.toml:3:25: tag(browser) matches no tag of any test"))
+        s!"{r.report.issues.map (·.message)}"
 
 /-- An override's values apply to the tests its filter matches; the first match wins per value. -/
 @[test]
@@ -874,30 +978,34 @@ def readRecords (path : System.FilePath) : TestM (Array Json) := do
     | .error e => fail s!"a line that is not JSON: {e}" (some l)
 
 /--
-Errata's shell harness runs a chain of invocations in order in one process and stops at the first
-that exits non-zero, exiting with its status. It writes names and descriptions with any character
-as JSON strings, rejects `errata-fixture` and unknown modes with exit code 2, and reports an
-undeclared test as an error.
+Errata's shell harness writes names and descriptions with any character as JSON strings, rejects a
+list value with a newline and a setting declared after a test, rejects `errata-fixture` and unknown
+modes with exit code 2, and reports an undeclared test as an error.
 -/
 @[test]
 def shellHarness : Test := do
   let p := errataShProduct
   IO.FS.withTempDir fun dir => do
     let out := dir / "out.jsonl"
-    result "a chain stops at the first failure" do
+    -- Lists the tests of a script whose `errata_tests` has the given body.
+    let listScript (body : String) : IO IO.Process.Output := do
+      let script := dir / "misuse.sh"
+      IO.FS.writeFile script <|
+        "source \"$ERRATA_DIR/harnesses/errata.sh\"\n" ++ s!"errata_tests() \{ {body}; }\n" ++
+        "errata_run_test() { :; }\nerrata_main \"$@\"\n"
       IO.FS.writeFile out ""
-      let r ← p.invoke #["errata-run", out.toString, "pass", ";", "errata-run", out.toString,
-        "verdict-fail", ";", "errata-run", out.toString, "pass"]
-      assertExitCode 1 r
-      let records ← readRecords out
-      let starts := records.filter (isEvent "start")
-      assertBEq 2 starts.size
-      let verdicts := records.filterMap (strField · "status")
-      assertBEq #["pass", "fail"] verdicts
-    result "a chain that passes" do
-      IO.FS.writeFile out ""
-      let r ← p.invoke #["errata-run", out.toString, "pass", ";", "errata-run", out.toString, "silent"]
-      assertExitCode 0 r
+      IO.Process.output {
+        cmd := "bash", args := #[script.toString, "errata-list", out.toString]
+        env := #[("ERRATA_DIR", some (← errataDir).toString)]
+      }
+    result "a list value with a newline" do
+      let r ← listScript "errata_test t --tags \"$(printf 'a\\nb')\""
+      assertExitCode 2 r
+      assertContains "holds a newline" r.stderr
+    result "a setting declared after a test" do
+      let r ← listScript "errata_test t; errata_setting_decl late \"A setting.\""
+      assertExitCode 2 r
+      assertContains "the setting late is declared after a test" r.stderr
     result "an unknown test" do
       IO.FS.writeFile out ""
       let r ← p.invoke #["errata-run", out.toString, "nothing"]
@@ -955,6 +1063,9 @@ def pytestHarness : Test := do
     let inside ← find "TestGroup::test_inside"
     assertBEq (some #["TestGroup", "test_inside"])
       ((inside.getObjValAs? (Array String) "path").toOption.map fun a => a.extract (a.size - 2) a.size)
+    let odd ← find "test_odd_id[a::b/c]"
+    assertBEq (some "test_odd_id[a::b/c]")
+      ((odd.getObjValAs? (Array String) "path").toOption.bind (·.back?))
     let marked ← find "test_marked"
     assertBEq (some #["chatty"]) (marked.getObjValAs? (Array String) "tags").toOption
     let greets ← find "test_greets"
@@ -977,6 +1088,16 @@ def pytestHarness : Test := do
     match r.outcome? e.test with
     | some (.reported (.error m)) => assertContains "the fixture broke" m
     | o => fail s!"expected an error, got {repr o}"
+  result "pytest's own error" do
+    IO.FS.withTempDir fun dir => do
+      let out := dir / "out.jsonl"
+      IO.FS.writeFile out ""
+      let r ← p.invoke (#["--no-such-flag"] ++ p.passes.args out)
+      assertExitCode 1 r
+      let verdicts := verdictsIn (← IO.FS.readFile out)
+      assertBEq #[some "error"] (verdicts.map (strField · "status"))
+      assertContains "pytest ended with exit code 4 (USAGE_ERROR) before it ran the test"
+        ((verdicts[0]?.bind (strField · "message")).getD "")
 
 /-! # Processes -/
 

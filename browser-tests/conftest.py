@@ -7,16 +7,15 @@ import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-# The built site, relative to this directory, when neither the Errata setting `siteDir` nor
-# `--site-dir` names another.
+# The built site, relative to this directory, when pytest runs without Errata's harness and
+# `--site-dir` names no other.
 DEFAULT_SITE_DIR = "../_out/html-multi"
 
 # The Errata settings that the browser tests take, when Verso's pytest harness runs them: the built
-# site, which `errata.toml` binds per suite, and Errata's seed, from which the redirect tests draw.
+# site, which `errata.toml` binds per suite unless the command line gives `--site-dir`, and Errata's
+# seed, from which the redirect tests draw.
 errata_settings_decl = {
-    "siteDir": {
-        "description": "The directory of the built site that the tests serve; --site-dir otherwise."
-    },
+    "siteDir": {"description": "The directory of the built site that the tests serve."},
     "Errata.seed": {"description": "The seed that chooses the redirects to test."},
 }
 
@@ -73,8 +72,9 @@ def pytest_addoption(parser):
     parser.addoption(
         "--site-dir",
         action="store",
-        default=DEFAULT_SITE_DIR,
-        help="Path to the built site directory",
+        default=None,
+        help=f"Path to the built site directory (default: {DEFAULT_SITE_DIR}, or the Errata "
+        "setting siteDir under Errata's harness)",
     )
     parser.addoption(
         "--server-url",
@@ -110,20 +110,34 @@ def pytest_generate_tests(metafunc):
 def pytest_collection_modifyitems(config, items):
     """
     Marks every browser test with `browser`, the tag that Errata's default filter leaves out, and
-    marks the tests that serve a site or draw redirects as taking the Errata settings they read.
+    marks the tests that serve a site or draw redirects as taking the Errata settings they read. A
+    test that serves a site needs `siteDir` unless the command line gives `--site-dir`.
     """
+    site_given = config.getoption("--site-dir") is not None
     for item in items:
         item.add_marker(pytest.mark.browser)
-        if "site_dir" in item.fixturenames:
-            item.add_marker(pytest.mark.errata_setting("siteDir", optional=True))
+        if "site_dir" in item.fixturenames and not site_given:
+            item.add_marker(pytest.mark.errata_setting("siteDir"))
         if "redirect_case" in item.fixturenames:
             item.add_marker(pytest.mark.errata_setting("Errata.seed", optional=True))
 
 
 @pytest.fixture(scope="session")
 def site_dir(request):
-    """The built site: the Errata setting `siteDir` when the test received it, and `--site-dir` otherwise."""
-    site = errata_settings_of(request).get("siteDir") or request.config.getoption("--site-dir")
+    """
+    The built site: `--site-dir` when the command line gives it, and otherwise the Errata setting
+    `siteDir` under Errata's harness, which the runner requires, or the default site without it.
+    """
+    site = request.config.getoption("--site-dir")
+    if site is None:
+        try:
+            settings = request.getfixturevalue("errata_settings")
+        except pytest.FixtureLookupError:
+            site = DEFAULT_SITE_DIR
+        else:
+            if "siteDir" not in settings:
+                pytest.fail("the test received no value for the Errata setting siteDir")
+            site = settings["siteDir"]
     return (Path(__file__).parent / site).resolve()
 
 
