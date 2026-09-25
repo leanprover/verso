@@ -435,6 +435,9 @@ the test with that name and writes its records to {lit}`out`. It exits with {lit
 passes and {lit}`1` otherwise. The test receives the settings and the fixtures' values, and parses
 the values of those it takes; a missing mandatory setting or fixture, or a value that a parser
 rejects, ends the test with an error. Its context holds the thread grant, {lit}`1` without one.
+When tests run concurrently, the runner also sets {lit}`LEAN_NUM_THREADS` to the grant, which sizes
+the executable's task pool and reaches the processes it starts; when one test runs at a time, the
+variable is left as it is, and the test uses the machine.
 
 {lit}`errata-fixture <out> <name> setup|prepare|teardown [setting:NAME=VALUE]...
 [fixture:NAME=VALUE]... [threads:N]` runs that phase of the fixture with that name, with the

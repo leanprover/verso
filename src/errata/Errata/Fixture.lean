@@ -377,10 +377,10 @@ meta def recordFixture (decl : Name) (threads? : Option Nat) : AttrM Unit := do
 
 /--
 The arguments of the {lit}`fixture` attribute: {lit}`@[fixture]`, or
-{lit}`@[fixture (threads := N)]` for a fixture whose phases ask for {lit}`N` hardware threads. Each
-phase runs with {lit}`LEAN_NUM_THREADS` set to its grant, one without a request, and the processes
-it starts inherit it, so a fixture whose setup runs a Lake build asks for the threads that the
-build should use.
+{lit}`@[fixture (threads := N)]` for a fixture whose phases ask for {lit}`N` hardware threads. When
+tests run concurrently, each phase runs with {lit}`LEAN_NUM_THREADS` set to its grant, one without
+a request, and the processes it starts inherit it, so a fixture whose setup runs a Lake build asks
+for the threads that the build should use.
 -/
 syntax (name := fixture) "fixture" (" (" &"threads" " := " num ")")? : attr
 

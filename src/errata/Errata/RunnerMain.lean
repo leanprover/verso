@@ -334,15 +334,15 @@ def fixtureArgs (out name : String) (phase : FixturePhase) (settings : Array (St
 /--
 The command that runs a chain of invocations by hand, quoted for a POSIX shell: the executable
 with the invocations separated by {lit}`;` arguments. Their records go to standard error, and
-{lit}`LEAN_NUM_THREADS` is {name}`threads`, the thread grant of the invocation that the chain
-reproduces.
+{lit}`LEAN_NUM_THREADS` is {name}`threads?`, the thread grant of the invocation that the chain
+reproduces when the run bounded it, and absent otherwise.
 -/
 def RunContext.reproduceChain (ctx : RunContext) (exe : ExecutableConfig)
-    (links : Array (Array String)) (threads : Nat := 1) : String :=
+    (links : Array (Array String)) (threads? : Option Nat := none) : String :=
   let env : Array (String × String) :=
     #[("LEAN_ABORT_ON_PANIC", "1")] ++
     ((ctx.config.errataDir?.map fun d => #[("ERRATA_DIR", d)]).getD #[]) ++ exe.env ++
-    #[("LEAN_NUM_THREADS", toString threads)]
+    ((threads?.map fun n => #[("LEAN_NUM_THREADS", toString n)]).getD #[])
   let chain := links.foldl (init := #[]) fun acc l =>
     (if acc.isEmpty then acc else acc.push ";") ++ l
   let words := env.map (fun (k, v) => s!"{k}={shellQuote v}") ++
@@ -384,6 +384,9 @@ structure Invocation where
   args : String → Array String
   /-- The thread grant. -/
   threads : Nat := 1
+  /-- Whether {lit}`LEAN_NUM_THREADS` bounds its runtime to the grant, as it does when tests run
+  concurrently. -/
+  boundRuntime : Bool := false
   /-- How long it may run, in milliseconds. -/
   timeoutMs : Nat
   /-- How long it has after it is terminated, in milliseconds. -/
@@ -472,8 +475,10 @@ handed on, the result file is read up to its end, so the records that it wrote b
 precede it. It is terminated at its timeout and killed after the grace period; the watch checks the
 clock after every bounded read of the result file. Once the test executable has exited, the
 processes that it started have the pipe grace to release its output pipes, and then its process
-group is swept. The environment holds {lit}`LEAN_NUM_THREADS` with the thread grant, which the
-processes that the test executable starts inherit. {name}`n` numbers the result file. A teardown,
+group is swept. When the slot pool holds more than one slot, the environment holds
+{lit}`LEAN_NUM_THREADS` with the thread grant, which the processes that the test executable starts
+inherit; with one slot the sole process and what it starts use the machine. {name}`n` numbers the
+result file. A teardown,
 as {name}`teardown` says, starts after the run has been cancelled too.
 -/
 def RunContext.launch (ctx : RunContext) (inv : Invocation) (n : Nat) (teardown : Bool := false) :
@@ -483,7 +488,8 @@ def RunContext.launch (ctx : RunContext) (inv : Invocation) (n : Nat) (teardown 
   let file := ctx.dir / s!"run-{n}.jsonl"
   IO.FS.writeFile file ""
   let start ← IO.monoMsNow
-  let env := ctx.env exe ++ #[("LEAN_NUM_THREADS", some (toString inv.threads))]
+  let env := ctx.env exe ++
+    (if inv.boundRuntime then #[("LEAN_NUM_THREADS", some (toString inv.threads))] else #[])
   let spawned ←
     try
       let some cmd := exe.command[0]? | throw <| .userError "the command is empty"
@@ -573,6 +579,12 @@ def Plan.settingConflicts (plan : Plan) : Array String := Id.run do
               its fixture {fixture.name} received it as {v.quote}"
   return out
 
+/--
+Whether the run bounds each process's runtime threads with {lit}`LEAN_NUM_THREADS`: only when its
+slot pool holds more than one slot, so that tests run concurrently.
+-/
+def Plan.boundsRuntime (plan : Plan) : Bool := plan.pool > 1
+
 /-- The grant of a request of {name}`n` threads in the plan's pool. -/
 def Plan.grant (plan : Plan) (n : Nat) : Nat := max 1 (min n plan.pool)
 
@@ -622,7 +634,8 @@ def RunContext.reproduceJob (ctx : RunContext) (plan : Plan) (job : Scheduler.Jo
   let closure := Scheduler.closureOf plan.fixtureSpecs roots
   let links := closure.map (plan.phaseArgs out · .setup #[]) ++ middle ++
     closure.reverse.map (plan.phaseArgs out · .teardown #[])
-  ctx.reproduceChain ctx.config.executables[exeIdx]! links threads
+  ctx.reproduceChain ctx.config.executables[exeIdx]! links
+    (if plan.boundsRuntime then some threads else none)
 
 /-- What the dispatcher knows of a job before it runs. -/
 def RunContext.plannedJob (ctx : RunContext) (plan : Plan) (job : Scheduler.Job) : Planned :=
@@ -653,6 +666,7 @@ def RunContext.invocation (ctx : RunContext) (plan : Plan) (job : Scheduler.Job)
     let (test, r) := plan.tests[t]!
     { exe := ctx.config.executables[test.exeIdx]!, planned
       args := (plan.testArgs · t values), threads := plan.testThreads t
+      boundRuntime := plan.boundsRuntime
       timeoutMs := r.timeoutMs, gracePeriodMs := r.gracePeriodMs }
   | .setup f | .prepare f _ | .teardown f =>
     let (e, _, r) := plan.fixtures[f]!
@@ -662,6 +676,7 @@ def RunContext.invocation (ctx : RunContext) (plan : Plan) (job : Scheduler.Job)
       | _ => .setup
     { exe := ctx.config.executables[e]!, planned
       args := (plan.phaseArgs · f phase values), threads := plan.fixtureThreads f
+      boundRuntime := plan.boundsRuntime
       timeoutMs := r.timeoutMs, gracePeriodMs := r.gracePeriodMs }
 
 /--

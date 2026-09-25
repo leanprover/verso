@@ -47,8 +47,9 @@
 # of Errata's sources; ERRATA_RUN_ID, the run's identifier, the same for every process of one run and
 # different in the next, for work a script does once per run; and ERRATA_LIFELINE=1, which marks
 # standard input as a pipe that closes when the runner ends. Scripts read the first two from their
-# environment, and the runner ends shell tests' process groups itself. A test or fixture that asks
-# for threads also receives LEAN_NUM_THREADS, the same number as `errata_threads` prints.
+# environment, and the runner ends shell tests' process groups itself. When tests run concurrently,
+# every test and fixture phase also receives LEAN_NUM_THREADS, the same number as `errata_threads`
+# prints.
 #
 # The library needs bash 3.2 or later and the POSIX utilities that ship with macOS and Linux. It
 # writes the records to file descriptor 9, which it opens on the file that the runner names, so the

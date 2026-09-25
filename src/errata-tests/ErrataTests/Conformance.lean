@@ -829,7 +829,8 @@ def reproductionLine : Test := do
     let some res := r.result? p.fails.test | fail "no result"
     let some cmd := res.reproduce? | fail "no reproduction line"
     assertContains s!"errata-run /dev/stderr {shellQuote p.fails.test}" cmd
-    assertContains "LEAN_NUM_THREADS=1 " cmd
+    -- One test runs at a time, so the line leaves the runtime's threads to the machine.
+    assertNotContains "LEAN_NUM_THREADS" cmd
     assertContains " threads:1" cmd
     assertNotContains "  " cmd
     let out ← IO.Process.output
@@ -838,6 +839,10 @@ def reproductionLine : Test := do
     assertBEq #[some "fail"] ((verdictsIn out.stderr).map (strField · "status"))
     result "a pass has none" do
       assertTrue ((r.result? p.passes.test).bind (·.reproduce?)).isNone
+    result "with two slots, the line bounds the runtime's threads" do
+      let r ← p.run #[p.fails] { jobs := 2 }
+      let some cmd := (r.result? p.fails.test).bind (·.reproduce?) | fail "no reproduction line"
+      assertContains "LEAN_NUM_THREADS=1 " cmd
   forEach scriptedProducts fun p => do
     let r ← p.runTests #["fail"] { sets := #[("note", "it's")] }
     let some cmd := (r.result? "fail").bind (·.reproduce?) | fail "no reproduction line"
@@ -1812,16 +1817,18 @@ def threadGrants : Test := forEach products fun p => do
         assertTrue (lines.contains s!"start {test}") s!"{lines}"
 
 /--
-Every invocation receives a thread grant: a test that asks for nothing receives {lit}`threads:1` and
-{lit}`LEAN_NUM_THREADS=1`.
+Every invocation receives a thread grant: a test that asks for nothing receives {lit}`threads:1`.
+With two slots it also receives {lit}`LEAN_NUM_THREADS=1`; with one slot the variable is absent.
 -/
 @[test]
 def defaultThreadGrant : Test := forEach products fun p => do
-  let r ← p.run #[p.printsRunId] { jobs := 4 }
-  let some res := r.result? p.printsRunId.test | fail "no result"
-  assertContains "LEAN_NUM_THREADS: 1" res.output.stdout
-  unless p.name == pytestProduct.name do
-    assertContains "threads: 1;" res.output.stdout
+  for (jobs, shown) in [(1, "LEAN_NUM_THREADS: \n"), (2, "LEAN_NUM_THREADS: 1\n")] do
+    result s!"with {jobs} slots" do
+      let r ← p.run #[p.printsRunId] { jobs }
+      let some res := r.result? p.printsRunId.test | fail "no result"
+      assertContains shown res.output.stdout
+      unless p.name == pytestProduct.name do
+        assertContains "threads: 1;" res.output.stdout
 
 /-- Test executables asked for a fixture outside their inventory exit non-zero. -/
 @[test]
