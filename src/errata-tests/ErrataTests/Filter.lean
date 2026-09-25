@@ -59,8 +59,8 @@ def filterPrecedence : Test := do
 
 /--
 `default()` selects what the default filter selects, and prints back as itself. Judged from an
-executable's name alone, a filter selects every test of the executable, none of them, or an
-unknown part, which `default()` takes from the default filter's answer.
+executable's name alone, filters select every test of the executable, none of them, or an unknown
+part, which `default()` takes from the default filter's answer.
 -/
 @[test]
 def filterDefaultAndExecutables : Test := do

@@ -817,9 +817,9 @@ def unknownProfile : Test := do
 /--
 The command line's filter expressions, joined by union, select from the tests that the profile's
 default filter selects, unless `--ignore-default-filter` draws them from the whole inventory; in a
-filter expression, `default()` stands for the default filter. A command-line filter with a syntax
-error ends the run with the exit code of an invalid filter; a filter of the configuration with a
-syntax error, and a default filter that contains `default()`, end it with that of a setup error.
+filter expression, `default()` stands for the default filter. Command-line filters with syntax
+errors end the run with the exit code of an invalid filter; filters of the configuration with syntax
+errors, and default filters that contain `default()`, end it with that of a setup error.
 -/
 @[test]
 def defaultFilterAndCommandLine : Test := do
@@ -880,9 +880,9 @@ def nameFiltersAndSkip : Test := do
   assertBEq #["verdict-fail"] (← ran { nameFilters := #["fail"], filters := #["name(verdict)"] })
 
 /--
-A run that selects no test fails with the exit code 4 under `--no-tests fail`, the default; under
-`--no-tests warn` it succeeds with a warning, which `--wfail` makes fail as `fail` does; under
-`--no-tests pass` it succeeds without an issue.
+Runs that select no test fail with the exit code 4 under `--no-tests fail`, the default; under
+`--no-tests warn` they succeed with a warning, which `--wfail` makes fail as `fail` does; under
+`--no-tests pass` they succeed without an issue.
 -/
 @[test]
 def noTestsToRun : Test := do
@@ -938,8 +938,8 @@ def skippedCounts : Test := do
 
 /--
 An `exe(…)` is judged against every test executable of the package, those that the filters ruled
-out before building included, so a filter that names or excludes a ruled-out executable draws no
-warning, under `--wfail` too.
+out before building included, so filters that name or exclude a ruled-out executable draw no
+warnings, under `--wfail` too.
 -/
 @[test]
 def ruledOutExecutablesAreKnown : Test := do

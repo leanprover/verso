@@ -190,9 +190,9 @@ Second line.")
 /--
 Each line of the human-readable report has nextest's shape: the status word, right-aligned in twelve
 characters, the duration in seconds in brackets, the executable, and the name column. The name
-column nests: a test whose path shares leading components with the previous test of the same
-executable is indented two spaces per shared component and shows the rest of its path, and a test
-that shares nothing, or follows another executable, shows its full name. The summary line has the
+column nests: tests whose paths share leading components with the previous test of the same
+executable are indented two spaces per shared component and show the rest of their paths, and tests
+that share nothing, or follow another executable, show their full names. The summary line has the
 same shape, with the counts of the results.
 -/
 @[test]
@@ -1135,8 +1135,8 @@ def driverBuildsNeededTargets : Test :=
 The driver builds only the targets that the selected profile's settings need, and only the test
 executables that the command line's filters can select by their names: the libraries' and the ones
 that `errata.toml` adds, which receive the directory of Errata's sources. The runner's
-configuration says when the filters left some executables out, and a run whose filters leave out
-every executable selects no test.
+configuration says when the filters left some executables out, and runs whose filters leave out
+every executable select no test.
 -/
 @[test]
 def driverSelectsProfilesAndExecutables : Test :=
@@ -1232,8 +1232,8 @@ def driverHelpWithBrokenConfiguration : Test :=
 /--
 The runner reads the whole command line before anything is built: an unknown option, an option of
 the other command, and a malformed value end the run with the exit code of a usage error, and an
-unknown profile with the exit code of a setup error. A first argument that is neither `run` nor
-`list` begins the options and filters of a run.
+unknown profile with the exit code of a setup error. If the first argument is neither `run` nor
+`list`, then it begins the options and filters of a run.
 -/
 @[test]
 def driverChecksCommandLine : Test := do
@@ -1267,8 +1267,8 @@ def compileTimeImportSuffices : Test := do
   assertContains "2 passed, 0 failed, 0 errors" out.stdout
 
 /--
-The driver selects among the root package's libraries only, so the tests of a dependency's library
-are neither built nor listed, even when a filter names its executable. The fixture requires the
+The driver selects among the root package's libraries only, so the tests of dependencies' libraries
+are neither built nor listed, even when a filter names their executables. The fixture requires the
 `dep` package, whose `DepLib` library has one test.
 -/
 @[test]
@@ -1384,8 +1384,8 @@ def reportShowsTestOutputAboveFailedNamedResult : Test := do
 
 /--
 Named results print on status lines of their own, after their test's, indented in the name column
-two spaces below their closest printed ancestor, by their own names. A named result whose ancestors
-were not printed is named by the test's name and its path.
+two spaces below their closest printed ancestor, by their own names. Named results whose ancestors
+were not printed are named by the test's name and their paths.
 -/
 @[test]
 def reportNamesNamedResultsByPath : Test := do
@@ -1471,8 +1471,8 @@ def runnerResolvesNeededTargets : Test := do
     | .error e => assertContains "profiles.default.settings.a: the target 'stamp'" e
 
 /--
-The runner's command line: the two configuration files first, the `-v` forms select the verbosity,
-options parse, and `--set` and `--filter` repeat.
+The runner's command line begins with the two configuration files, the `-v` forms select the
+verbosity, options parse, and `--set` and `--filter` repeat.
 -/
 @[test]
 def runnerArgParsing : Test := do
@@ -1584,7 +1584,7 @@ def runnerArgParsing : Test := do
 
 /--
 The driver builds only the test executables that a run can select, judged by their names: the
-filter expressions and the default filter can rule an executable out, and name filters and
+filter expressions and the default filter can rule executables out, and name filters and
 `--skip` patterns never do.
 -/
 @[test]
@@ -1740,8 +1740,7 @@ def harnessListsAndRuns : Test := do
       assertContains "no helper is named M.other" printed.stderr
 
 /--
-A run that selects no test fails by default, with the exit code 4: a test tool with no tests to run
-is a broken setup, not a pass.
+Runs that select no test fail by default, with the exit code 4.
 -/
 @[test]
 def emptyRunFails : Test := do
@@ -1791,8 +1790,8 @@ def reportVerbose : Test := do
 /--
 The status word of each outcome, as nextest writes it where nextest has the outcome: `PASS`, `FAIL`,
 `TIMEOUT`, the signal's name, and `XFAIL` for a test executable that could not start; an error
-verdict is `ERROR`, and the other inconclusive outcomes are `INCONCLUSIVE`. A slow test's word is
-its outcome's.
+verdict is `ERROR`, and the other inconclusive outcomes are `INCONCLUSIVE`. Slow tests keep their
+outcomes' words.
 -/
 @[test]
 def statusWords : Test := do

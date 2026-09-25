@@ -523,9 +523,9 @@ script run (args) do
       IO.eprintln s!"error: {planFile} is not JSON: {e}"
       return 1
   if plan.help then return 0
-  -- The targets that the selected profile's settings need are resolved before anything else is
-  -- built, so that an unknown target ends Discovery at once. A listing that shows no settings
-  -- needs no target.
+  -- The targets that the selected profile's settings need are resolved before any test library is
+  -- built, so that an unknown target ends Discovery at once. Listings that show no settings need
+  -- no targets.
   let wanted :=
     if plan.needs then neededTargets ((config.getObjValD "profiles").getObjValD plan.profile)
     else #[]
@@ -554,9 +554,9 @@ script run (args) do
   let addedExes := added.filter (plan.executables.contains ·.name)
   let libs := ws.root.leanLibs.filter (plan.executables.contains <| libName ·)
   let ruledOut := candidates.filter (!plan.executables.contains ·)
-  -- A library that the filters ruled out is a test library when a module of it that an earlier
-  -- build left on disk records a test. Nothing is built for this, so a library that was never
-  -- built is not known to have tests, and the summary leaves it out of its count.
+  -- Libraries that the filters ruled out are test libraries when a module of theirs that an earlier
+  -- build left on disk records a test. Nothing is built for this check, so the summary's count
+  -- covers only libraries whose modules an earlier build left on disk.
   let ruledOutLibs := ws.root.leanLibs.filter (ruledOut.contains <| libName ·)
   let ruledOutMods ← try
       runBuild do
@@ -596,10 +596,10 @@ script run (args) do
   let mut testMods : Array Lean.Name := #[]
   for (moduleName, oleanFile) in modInfos do
     if (← moduleInfo oleanFile).hasTests then testMods := testMods.push moduleName
-  -- A module that sits under a library's roots without being reachable from them is never built, so
-  -- any tests it defines are silently left out. A library is checked when its built modules record
-  -- tests. Such a module is a configuration slip, which the runner reports as a warning alongside
-  -- the results, and the run goes ahead.
+  -- Modules that sit under a library's roots without being reachable from them are never built, so
+  -- any tests they define are left out. Libraries whose built modules record tests are checked for
+  -- such modules. They are configuration slips, which the runner reports as warnings alongside the
+  -- results, and the run goes ahead.
   let mut unreachable : Array (Lake.LeanLib × Array Lean.Name) := #[]
   for (lib, mods) in libMods do
     if mods.any (testMods.contains ·) then
@@ -625,8 +625,8 @@ script run (args) do
     if let some parent := file.parent then IO.FS.createDirAll parent
     let changed ← if ← file.pathExists then pure ((← IO.FS.readFile file) != src) else pure true
     if changed then IO.FS.writeFile file src
-  -- An executable is named after its library. Executables that the configuration file adds are
-  -- named apart from the libraries' executables.
+  -- Libraries' test executables are named after their libraries, so the executables that the
+  -- configuration file adds must have names that no library of the package has.
   for e in added do
     if ws.root.leanLibs.any (libName · == e.name) then
       IO.eprintln s!"errata.toml:{e.line}:{e.col}: the [[executable]] name '{e.name}' is the name \

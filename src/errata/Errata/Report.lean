@@ -106,9 +106,9 @@ def bracketedDuration (ms : Nat) : String :=
   s!"[{padLeft 8 s!"{ms / 1000}.{"".pushn '0' (3 - frac.length)}{frac}"}s]"
 
 /--
-The name of a signal by its number, as the system's headers spell it without the {lit}`SIG`
-prefix. The numbers from 1 to 15 that POSIX systems share, and those that differ between macOS and
-Linux, are named for the system that the runner runs on.
+The name of a signal by its number, as the system's headers name it without the {lit}`SIG` prefix,
+for the numbers from 1 to 15. Where macOS and Linux differ, at 7, 10, and 12, the name is the one of
+the system that the runner runs on.
 -/
 def signalName? (signal : Nat) : Option String :=
   match signal with
@@ -165,9 +165,9 @@ deriving Repr, Inhabited
 private def truncationCap : Nat := 50
 
 /--
-A test's name in its styles: when the name ends with the last component of its path, the part
-before that component in the style of namespaces and the component in the style of names, and
-otherwise the whole name in the style of names.
+A test's name in its styles. When the name ends with the last component of its path, the part
+before that component is in the style of namespaces and the component is in the style of names;
+otherwise the whole name is in the style of names.
 -/
 def styleTestName (color : Bool) (name : String) (path : Array String) : String :=
   let last := path.back?.getD name
@@ -231,8 +231,8 @@ duration in brackets, and the counts of results by outcome. When {name}`skipped?
 line ends with the number of listed tests that the filters left out, {lit}`N tests skipped`, and,
 when they are not zero, the number of libraries with tests that the filters ruled out before
 building, {lit}`M test libraries skipped`, and of the configuration's executables that they ruled
-out, {lit}`K executables skipped`. A ruled-out library counts when a module that an earlier build
-left on disk records a test; a library never built is not counted.
+out, {lit}`K executables skipped`. Ruled-out libraries count only when a module of theirs that an
+earlier build left on disk records a test.
 -/
 def HumanReporter.summary (h : HumanReporter) (elapsedMs : Nat)
     (skipped? : Option (Nat × Nat × Nat) := none) : String :=

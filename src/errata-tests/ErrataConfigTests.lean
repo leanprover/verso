@@ -240,9 +240,9 @@ def filterPositionsFallBack : Test := do
       (e.render (.file "errata.toml" 1 4 #[]))
 
 /--
-A profile names its report files with `junit`, `json`, and `markdown`, each a path, which a profile
-inherits from its ancestors and the runner reads from the elaborated file. A path that is not a
-string, or is empty, is a problem at its position.
+Profiles name their report files with `junit`, `json`, and `markdown`, each a path, which profiles
+inherit from their ancestors and the runner reads from the elaborated file. Paths that are not
+strings, or are empty, are problems at their positions.
 -/
 @[test]
 def reportPathsAreProfileKeys : Test := do

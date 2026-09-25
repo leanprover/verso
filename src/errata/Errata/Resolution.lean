@@ -97,9 +97,9 @@ def SourcedFilter.at (f : SourcedFilter) (offset : Nat) : String :=
   f.source.at offset
 
 /--
-The tests that a run selects. A test is selected when one of the filter expressions selects it, its
-name contains one of the name filters, no skip pattern is in its name, and the default filter
-selects it; without filter expressions, or without name filters, that part holds for every test.
+The tests that a run selects: those that one of the filter expressions selects, whose names contain
+one of the name filters and no skip pattern, and that the default filter selects unless it is set
+aside. Without filter expressions, or without name filters, that part holds for every test.
 -/
 structure Selection where
   /-- The command line's filter expressions, joined by union. -/
@@ -120,7 +120,7 @@ deriving Inhabited
 def Selection.nameMatches (s : Selection) (pattern name : String) : Bool :=
   if s.exact then name == pattern else (name.find? pattern).isSome
 
-/-- Whether the default filter selects a test; a run without one selects every test. -/
+/-- Whether the default filter selects a test. If there is no default filter, then it is true. -/
 def Selection.defaultSelects (s : Selection) (r : Filter.Record) : Bool :=
   (s.default?.map (·.expr.eval r)).getD true
 

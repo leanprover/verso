@@ -77,7 +77,7 @@ def ok : UInt32 := 0
 /-- A cancelled run, or a failure without a code of its own. -/
 def other : UInt32 := 1
 
-/-- The command line could not be read, as for nextest's argument parser. -/
+/-- The command line could not be read. The value is the one that nextest's argument parser uses. -/
 def usage : UInt32 := 2
 
 /-- The run selected no test, under {lit}`--no-tests fail` (nextest's {lit}`NO_TESTS_RUN`). -/
@@ -106,7 +106,7 @@ def listFailed : UInt32 := 104
 
 end ExitCode
 
-/-- The runner's settings, from its command line. -/
+/-- The runner's options, from its command line. -/
 structure Options where
   /-- The path of the configuration file that {lit}`errata-config` writes. -/
   configPath : String := ""
@@ -294,8 +294,8 @@ def optionSpecs : Array OptionSpec := #[
 ]
 
 /--
-Earlier options of the command line, by long name, each with what now does its work, for the
-message that rejects it.
+Retired options of the command line, by long name, each with the text that the message rejecting it
+adds: what does the option's work.
 -/
 def replacedOptions : List (String × String) := [
   ("test-options", "the arguments after `lake test --` go to the runner as they are: `run` or \
@@ -358,7 +358,10 @@ where
     if arg.startsWith "--" then
       (findLongOption? ((arg.drop 2).copy.splitOn "=").head!).isSome
     else arg.startsWith "-" && (findShortOption? arg).isSome
-  /-- The option that an argument that begins with {lit}`-` names, with its value. -/
+  /--
+  The option that an argument beginning with {lit}`-` names, with its value, and whether the value
+  is the next argument.
+  -/
   optionOf (arg : String) (next? : Option String) : Except String (GivenOption × Bool) :=
     if arg.startsWith "--" then
       let body := (arg.drop 2).copy
@@ -398,7 +401,7 @@ private def verbosityRank : Verbosity → Nat
   | .verbose => 2
   | .superVerbose => 3
 
-/-- Applies one option to the settings read so far. -/
+/-- Applies one option to the options read so far. -/
 def applyOption (opts : Options) (g : GivenOption) : Except String Options := do
   let value := g.value?.getD ""
   let path : Except String String :=
@@ -461,8 +464,8 @@ def applyOption (opts : Options) (g : GivenOption) : Except String Options := do
 /--
 Reads the command line that follows the configuration files: {lit}`run` or {lit}`list` when the
 first argument is one of those words, and {lit}`run` otherwise; then the options and the name
-filters. An option that belongs to the other command is an error, and so is an option that is not
-repeatable and is given twice. The profile is {name}`profileEnv` when the command line names none
+filters. Options of the other command are errors, and so are options that are not repeatable and
+are given twice. The profile is {name}`profileEnv` when the command line names none
 and it is not empty.
 -/
 def parseCommandLine (args : List String) (profileEnv : Option String := none) :
@@ -512,14 +515,14 @@ def usage (invocation : String) : String := Id.run do
     run   Run the selected tests; the command when the first argument is neither word.\n  \
     list  List the selected tests.\n\n\
     The command is the first argument; after an option, run and list are name filters.\n\n\
-    A test is selected when its name contains a name filter (equals one, under --exact), a filter\n\
-    expression selects it, no --skip pattern is in its name, and the profile's default filter\n\
-    selects it. Without name filters, or without filter expressions, that condition holds for\n\
-    every test. In a filter expression, default() stands for the default filter.\n\n\
+    Tests are selected when their names contain a name filter (equal one, under --exact), a\n\
+    filter expression selects them, no --skip pattern is in their names, and the profile's\n\
+    default filter selects them. Without name filters, or without filter expressions, that\n\
+    condition holds for every test. In a filter expression, default() stands for the default\n\
+    filter.\n\n\
     A run's summary counts the results by outcome and the listed tests left out, then the test\n\
-    libraries and executables that the filters ruled out before building. A ruled-out library\n\
-    counts when a module that an earlier build left on disk records a test; a library never built\n\
-    is not counted.\n"
+    libraries and executables that the filters ruled out before building. Ruled-out libraries\n\
+    count only when a module of theirs that an earlier build left on disk records a test.\n"
   let mut group := ""
   for s in optionSpecs do
     if s.group != group then

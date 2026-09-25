@@ -399,7 +399,7 @@ private def showValue (v : String) : String := v.quote
 private def indented (indent text : String) : String :=
   "\n".intercalate ((text.trimAscii.copy.splitOn "\n").map (indent ++ ·))
 
-/-- The selected tests, grouped by their test executables in inventory order. -/
+/-- The selected tests, gathered by test executable in inventory order. -/
 private def byExecutable (selected : Array (InventoryTest × Resolved)) :
     Array (Nat × Array (InventoryTest × Resolved)) :=
   selected.foldl (init := #[]) fun acc (t, r) =>
@@ -413,8 +413,8 @@ Prints the selected tests in nextest's human format: each test executable's name
 its selected tests, indented by four spaces. With {name}`verbose`, the settings that the test
 executables declare come first when there are any, with their descriptions and defaults; each test
 is followed by its file and line, its tags, its description, and the values it receives; and the
-mandatory settings that nothing gives a value come last, with the tests that need them. Seeds derived from a run seed
-that the command line leaves to chance are shown as derived.
+mandatory settings that nothing gives a value come last, with the tests that need them. Seeds
+derived from a run seed that the command line leaves to chance are shown as derived.
 -/
 def printHumanList (ctx : RunContext) (color verbose : Bool) (listings : Array Listing)
     (selected : Array (InventoryTest × Resolved)) : IO Unit := do
@@ -481,8 +481,8 @@ def printOnelineList (ctx : RunContext) (selected : Array (InventoryTest × Reso
 /--
 The selected tests as JSON: the profile, the run's seed, the number of listed tests selected and
 left out, under {lit}`not-built` the names of the libraries and executables that the filters ruled
-out before building, the
-settings that the test executables declare, and each test executable with its selected tests.
+out before building, the settings that the test executables declare, and each test executable with
+its selected tests.
 Each test has its name, path, file, line, tags, and description, the values it receives, the
 mandatory settings without a value, whether its seed is derived from the run's, and its timeout,
 grace period, and slow mark in milliseconds.
@@ -523,11 +523,10 @@ def unknownProfile (config : Config) (name : String) : String :=
 
 /--
 The filters of a run, parsed: the selection, from the command line's filters and the profile's
-default filter, or the configuration's when the profile has none, and each override's filter. The
-result is the messages of the filters that do not parse, and of a default filter that contains
-{lit}`default()`, with the exit code they end the run with: {name}`ExitCode.setupError` when a
-filter of the configuration is among them, as nextest treats its configuration's filters, and
-{name}`ExitCode.invalidFilter` otherwise.
+default filter, or the configuration's when the profile has none, and each override's filter. If
+some filters do not parse, or the default filter contains {lit}`default()`, then the result is
+their messages with the exit code they end the run with: {name}`ExitCode.setupError` when a filter
+of the configuration is among them, and {name}`ExitCode.invalidFilter` otherwise.
 -/
 def parseSelection (config : Config) (opts : Options) (profile : Profile) :
     Except (Array String × UInt32) (Selection × Array (SourcedFilter × Override)) := do
@@ -812,8 +811,8 @@ def useColor (choice : ColorChoice) : IO Bool := do
 
 /--
 Reports a command line that could not be read, with the way to the usage text, and returns
-{name}`ExitCode.usage`. When the command line asks for the usage text anywhere, prints it instead
-and returns {name}`ExitCode.ok`.
+{name}`ExitCode.usage`. If the command line asks for the usage text anywhere, then it prints that
+text and returns {name}`ExitCode.ok`.
 -/
 def badCommandLine (args : List String) (invocation message : String) : IO UInt32 := do
   if args.any (fun a => a == "--help" || a == "-h") then

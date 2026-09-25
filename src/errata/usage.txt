@@ -9,15 +9,15 @@ Commands:
 
 The command is the first argument; after an option, run and list are name filters.
 
-A test is selected when its name contains a name filter (equals one, under --exact), a filter
-expression selects it, no --skip pattern is in its name, and the profile's default filter
-selects it. Without name filters, or without filter expressions, that condition holds for
-every test. In a filter expression, default() stands for the default filter.
+Tests are selected when their names contain a name filter (equal one, under --exact), a
+filter expression selects them, no --skip pattern is in their names, and the profile's
+default filter selects them. Without name filters, or without filter expressions, that
+condition holds for every test. In a filter expression, default() stands for the default
+filter.
 
 A run's summary counts the results by outcome and the listed tests left out, then the test
-libraries and executables that the filters ruled out before building. A ruled-out library
-counts when a module that an earlier build left on disk records a test; a library never built
-is not counted.
+libraries and executables that the filters ruled out before building. Ruled-out libraries
+count only when a module of theirs that an earlier build left on disk records a test.
 
 Selection:
   -E, --filter EXPR             Select the tests that the filter expression selects. Repeatable;
