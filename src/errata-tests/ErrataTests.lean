@@ -1052,13 +1052,15 @@ def driverValidatesToml : Test := do
     result variant do
       let out ← withTomlVariant variant #["test"]
       assertExitCode 1 out
-      assertContains message out.stderr
+      assertTrue ((out.stderr.splitOn message).length == 2)
+        s!"the message appears other than once:\n{out.stderr}"
       if beforeBuilding then assertNotContains "errataExe" out.stdout
 
 /--
 Settings bound to targets with `{ needs = … }` receive the targets' results. Editing a target's
 input rebuilds the workspace's configuration, and leaves the elaborated `errata.toml` and the test
-library alone.
+library alone. A run with nothing changed rewrites neither file, editing `errata.toml` rewrites the
+elaborated file, and selecting a profile with other targets rewrites the workspace's configuration.
 -/
 @[test]
 def driverBuildsNeededTargets : Test :=
@@ -1086,6 +1088,26 @@ def driverBuildsNeededTargets : Test :=
       assertTrue ((← config.metadata).modified == configBefore) "config.json was rewritten"
     result "the test library is not" do
       assertTrue ((← olean.metadata).modified == oleanBefore) "TomlLib.olean was rebuilt"
+    result "a run with nothing changed" do
+      let configBefore := (← config.metadata).modified
+      let workspaceBefore := (← workspace.metadata).modified
+      assertExitCode 0 (← lake #["test"])
+      assertTrue ((← config.metadata).modified == configBefore) "config.json was rewritten"
+      assertTrue ((← workspace.metadata).modified == workspaceBefore)
+        "workspace.json was rewritten"
+    result "an edit of errata.toml, then another profile" do
+      let stamp ← IO.FS.realPath (dir / ".lake" / "build" / "stamp.txt")
+      let toml := dir / "errata.toml"
+      IO.FS.writeFile toml <| (← IO.FS.readFile toml) ++
+        s!"\n[profile.plain.settings]\n\"TomlLib.stampFile\" = {stamp.toString.quote}\n"
+      let configBefore := (← config.metadata).modified
+      assertExitCode 0 (← lake #["test"])
+      assertTrue ((← config.metadata).modified != configBefore) "config.json was not rewritten"
+      let workspaceBefore := (← workspace.metadata).modified
+      assertExitCode 0 (← lake #["test", "--", "--test-options", "--profile", "plain"])
+      assertTrue ((← workspace.metadata).modified != workspaceBefore)
+        "workspace.json was not rewritten"
+      assertNotContains "\"stamp\"" (← IO.FS.readFile workspace)
 
 /--
 The driver builds only the targets that the selected profile's settings need. Names on the command

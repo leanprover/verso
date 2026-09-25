@@ -82,6 +82,53 @@ def readsTomlForms : Test := do
     match ← parseVariant "bom" with
     | .error problems => fail s!"the file was rejected: {problems}"
     | .ok f => assertBEq (some 600000) (← profileOf f "default").timeoutMs?
+  result "nested tables through the runner" do
+    match ← parseVariant "nested" with
+    | .error problems => fail s!"the file was rejected: {problems}"
+    | .ok f =>
+      let workspace := Lean.Json.mkObj [("protocol", 1),
+        ("needs", Lean.Json.mkObj [("stamp", "/out/stamp.txt")])]
+      match Runner.Config.ofJson f.toJson workspace (some "default") with
+      | .error e => fail e
+      | .ok c =>
+        assertBEq (some #[("TomlLib.stampFile", "/out/stamp.txt")])
+          ((c.profile? "default").map (·.settings))
+
+/-- The problems that validating {name}`text` reports, joined by newlines. -/
+def problemsOf (text : String) : TestM String := do
+  match ← ErrataConfig.parse text with
+  | .ok _ => fail "the file was accepted"
+  | .error problems => return "\n".intercalate problems.toList
+
+/--
+Validation reports inheritance from a missing profile or from the profile itself, keys that
+overrides do not take, a repeated `[[executable]]` name, `needs` tables with other keys or a
+non-string target, and a setting given both in a nested table and as a dotted key.
+-/
+@[test]
+def reportsStructuralProblems : Test := do
+  let cases : List (String × String × String) := [
+    ("a missing parent", "[profile.a]\ninherits = \"nope\"\n",
+      "errata.toml:2:11: the profile 'a' inherits from 'nope', which is not a profile"),
+    ("the profile itself", "[profile.a]\ninherits = \"a\"\n",
+      "errata.toml:2:11: the profiles inherit in a cycle: a → a"),
+    ("a key of a profile in an override",
+      "[[profile.default.override]]\nfilter = \"all()\"\njobs = 2\n",
+      "errata.toml:3:7: unknown key 'jobs' in an override of the profile 'default'"),
+    ("a repeated executable",
+      "[[executable]]\nname = \"x\"\ncommand = [\"a\"]\n[[executable]]\nname = \"x\"\ncommand = [\"b\"]\n",
+      "the [[executable]] name 'x' is used more than once"),
+    ("a needs table with other keys",
+      "[profile.default.settings]\nx = { needs = \"t\", other = \"u\" }\n",
+      "the setting 'x' must be a string or { needs = \"target\" }, and its table has keys besides \
+        'needs'"),
+    ("a non-string target", "[profile.default.settings]\ny = { needs = 1 }\n",
+      "'needs' must name a Lake target as a string, and it is an integer"),
+    ("a setting nested and flat",
+      "[profile.default.settings]\n\"A.b\" = \"1\"\n[profile.default.settings.A]\nb = \"2\"\n",
+      "the setting 'A.b' is given twice")]
+  for (name, text, message) in cases do
+    result name do assertContains message (← problemsOf text)
 
 /-- Compound durations such as `2m30s` reach the elaborated file as their totals in milliseconds. -/
 @[test]
@@ -98,9 +145,11 @@ def compoundDurations : Test := do
     ("1s500ms", 1500), (" 2m30s ", 150000)]
   for (text, ms) in valid do
     result text do assertBEq (some ms) (ErrataConfig.durationMs? text)
-  for text in ["30s2m", "2m2m", "2 m", "2.5m", "m", ""] do
+  for text in ["30s2m", "2m2m", "2 m", "2.5m", "m", "", "1d", "-1s"] do
     result (if text.isEmpty then "the empty string" else text) do
       assertBEq none (ErrataConfig.durationMs? text)
+  result "a very large number" do
+    assertBEq (some (99999999999999999999 * 1000)) (ErrataConfig.durationMs? "99999999999999999999s")
 
 /--
 Errors in filters are reported at the line and column in the file of the character where they were
@@ -135,6 +184,8 @@ def stringOffsets : Test := do
     ("\"\"\"\r\nab\"\"\"", some ("ab", #[5, 6, 7])),
     ("\"\"\"a \\\n  b\"\"\"", some ("a b", #[3, 4, 9, 10])),
     ("\"a\\qb\"", none),
+    ("\"\\U0001F600x\"", some ((String.singleton (Char.ofNat 0x1F600)).push 'x', #[1, 11, 12])),
+    ("'''a\r\nb'''", some ("a\r\nb", #[3, 4, 5, 6, 7])),
     ("\"\\u00\"", none)]
   for (token, expected) in cases do
     result token do assertBEq expected (ErrataConfig.stringOffsets? token)
