@@ -128,6 +128,8 @@ private def slugString : Doc.Inline Manual → String
 def Citable.tag (c : Citable) : Slug :=
   c.authors.map (slugString) |>.foldr (init := s!"-{c.year}") (· ++ ·) |> .ofString
 
+private def Citable.idHint (c : Citable) : String := s!"--citation-{c.tag}"
+
 def Citable.sortKey (c : Citable) := c.authors.map slugString |>.foldr (init := s!" {c.year}") (· ++ ", " ++ ·)
 
 /--
@@ -263,19 +265,20 @@ where
 
 def Citable.inlineHtml [Monad m]
     (go : Doc.Inline Genre.Manual → HtmlT Manual m Html)
+    (baseId : String)
     (ps : List Citable)
     (fmt : Style) :
     HtmlT Manual m Html := open Html in do
   match fmt with
   | .textual =>
-    let out : Array Html ← ps.toArray.mapM fun p => do
+    let out : Array Html ← ps.toArray.mapIdxM fun i p => do
       let m ← p.bibHtml go
-      pure <| {{ {{← authorHtml p}} s!" ({p.year})"}} ++ Marginalia.html m
+      pure <| {{ {{← authorHtml p}} s!" ({p.year})"}} ++ Marginalia.html m s!"{baseId}-{i}"
     pure <| andList out
   | .parenthetical =>
-    let out : Array Html ← ps.toArray.mapM fun p => do
+    let out : Array Html ← ps.toArray.mapIdxM fun i p => do
       let m ← p.bibHtml go
-      pure <| {{" (" {{← authorHtml p}} s!", {p.year})"}} ++ Marginalia.html m
+      pure <| {{" (" {{← authorHtml p}} s!", {p.year})"}} ++ Marginalia.html m s!"{baseId}-{i}"
     pure <| andList out
   | .here => do
     pure <| andList (← ps.toArray.mapM (·.bibHtml go))
@@ -358,7 +361,7 @@ private partial def cmpCite : Json → Json → Ordering
 inline_extension Inline.cite (citations : List Citable) (style : Style := .parenthetical) where
    -- The nested bit here _should_ be a no-op, but it's to avoid deserialization overhead during the traverse pass
   data := ToJson.toJson (ToJson.toJson citations, style)
-  traverse _ data _ := do
+  traverse id data _ := do
     match FromJson.fromJson? data with
     | .error e => reportError s!"Failed to deserialize citation: {e}"; return none
     | .ok (v : Json × Style) =>
@@ -370,6 +373,14 @@ inline_extension Inline.cite (citations : List Citable) (style : Style := .paren
       | .some (.ok citedSet) =>
         if citedSet.binSearchContains v.1 (cmpCite · · == .lt) then pure ()
         else modify (·.set `Manual.Bibliography <| citedSet.binInsert (cmpCite · · == .lt) v.1)
+      if (← get).externalTags[id]?.isNone then
+        let path ← (·.path) <$> read
+        match FromJson.fromJson? v.1 with
+        | .error e => reportError s!"Failed to deserialize citation: {e}"
+        | .ok (first :: _ : List Citable) =>
+          let _ ← Verso.Genre.Manual.externalTag id path first.idHint
+        | .ok ([] : List Citable) =>
+          let _ ← Verso.Genre.Manual.externalTag id path "--citation"
       pure none -- TODO disambiguate years
   toTeX :=
     open Verso.Output.TeX in
@@ -382,16 +393,19 @@ inline_extension Inline.cite (citations : List Citable) (style : Style := .paren
         | .ok (v' : List Citable) =>
           Citable.inlineTeX go v' v.2
   extraCss := [Marginalia.css]
+  extraJs := [Marginalia.js]
   toHtml :=
-    open Verso.Output.Html in
-    some <| fun go _ data _content => do -- TODO repurpose "content" for e.g. "page 5"
+    open Verso.Output.Html Doc.Html.HtmlT in
+    some <| fun go id data _content => do -- TODO repurpose "content" for e.g. "page 5"
       match FromJson.fromJson? data with
       | .error e => reportError s!"Failed to deserialize citation/style: {e}"; return {{""}}
       | .ok (v : Json × Style) =>
         match FromJson.fromJson? v.1 with
         | .error e => reportError s!"Failed to deserialize citation: {e}"; return {{""}}
-        | .ok (v' : List Citable) =>
-          Citable.inlineHtml go v' v.2
+        | .ok (v' : List Citable) => do
+          let some link := (← state).externalTags[id]?
+            | panic! s!"Untagged citation with data {data}"
+          Citable.inlineHtml go link.htmlId.toString v' v.2
 
 structure CiteConfig where
   citations : List Name

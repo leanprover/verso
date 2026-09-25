@@ -41,6 +41,12 @@ private def charValue (c : Char) : UInt32 :=
   decodeLookup[c.toNat]!
 
 /--
+The most significant base-85 digit of a 32-bit value is a valid digit.
+-/
+private theorem div85_lt {v : UInt32} : v / 85 / 85 / 85 / 85 < 85 := by
+  grind
+
+/--
 Encodes 4 bytes to 5 characters.
 -/
 private def encodeChunk (bytes : ByteArray) (startIdx : Nat) (ok : startIdx + 3 < bytes.size := by grind) : String := Id.run do
@@ -62,7 +68,7 @@ private def encodeChunk (bytes : ByteArray) (startIdx : Nat) (ok : startIdx + 3 
   let d4 := value / 85
 
   -- Look up characters (reverse order for big-endian)
-  let c4 := alphabetChar d4
+  let c4 := alphabetChar d4 div85_lt
   let c3 := alphabetChar d3
   let c2 := alphabetChar d2
   let c1 := alphabetChar d1

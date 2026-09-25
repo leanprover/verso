@@ -1,0 +1,13 @@
+# Tests that the browser tests in `browser-tests/errata-widget` run from the Errata widget.
+name = "errata-widget"
+# Verso's clones of the git dependencies serve this workspace too, so that the modules built from
+# the shared Verso checkout see the same dependency paths from both.
+packagesDir = "../../.lake/packages"
+
+[[require]]
+name = "verso"
+path = "../.."
+
+[[lean_lib]]
+name = "WidgetFixtures"
+globs = ["WidgetFixtures.+"]

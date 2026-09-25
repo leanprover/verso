@@ -28,8 +28,8 @@ root directory.
 
 The runner architecture lies in a small custom script
 `./run_interactive.sh`. This script will call the upstream runner for
-each file in `test-cases`. The script is called from the main Verso
-test runner, in `src/tests/TestMain.lean`.
+each file in `test-cases`. The script is called from the `interactive`
+test in `src/tests/VersoTests/Interactive.lean`.
 
 Files from upstream:
 

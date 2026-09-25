@@ -220,8 +220,20 @@ structure PartMetadata where
   authorshipNote : Option String := none
   /-- The publication date -/
   date : Option String := none
-  /-- The main tag for the part, used for cross-references. -/
-  tag : Option Tag := none
+  /--
+  This part's canonical name.
+
+  The canonical name is used for stable cross references. It also serves as the basis
+  for the section's HTML ID.
+  -/
+  tag : Option String := none
+  /--
+  This part's cross-referencing tag.
+
+  This field is set during traversal, which derives a unique external tag from the part's
+  canonical name.
+  -/
+  xrefTag : Option Tag := none
   /-- If this part ends up as the root of a file, use this name for it -/
   file : Option String := none
   /-- The internal unique ID, which is automatically assigned during traversal. -/
@@ -1072,7 +1084,10 @@ def providedTag [Monad m] [MonadState TraverseState m] [MonadBuildLog m]
   if let some id' := (← get).tags[tag]? then
     if id' != id then
       -- Another element holds this tag, so this one is left without an external tag.
-      reportError s!"Duplicate tag '{name}'"
+      if slug.toString == name then
+        reportError s!"Duplicate tag '{name}'"
+      else
+        reportError s!"Duplicate tag '{name}': its slug '{slug.toString}' is already in use"
       return none
   modify fun st => { st with
     tags := st.tags.insert tag id,
@@ -1376,7 +1391,7 @@ def ancestorSearchPriority (headers : Array PartHeader) : Int :=
     let p : Int := (h.metadata.map (·.searchPriority.val) |>.getD 50 : Nat)
     acc + (p - 50)
 
-def savePartXref (slug : Slug) (id : InternalId) (part : Part Manual) : TraverseM Unit := do
+def savePartXref (name : String) (id : InternalId) (part : Part Manual) : TraverseM Unit := do
   let jsonMetadata :=
     Json.arr ((← read).inPart part |>.headers.map (fun h => json%{
       "title": $h.titleString,
@@ -1392,7 +1407,7 @@ def savePartXref (slug : Slug) (id : InternalId) (part : Part Manual) : Traverse
     ((← read).inPart part |>.headers[1:]).toArray.map (fun (h : PartHeader) => h.metadata.bind (·.assignedNumber))
       |>.mapM _root_.id |>.map sectionNumberString
   let searchPriority := ancestorSearchPriority ((← read).inPart part |>.headers)
-  modify fun (st : TraverseState) => st.saveDomainObject sectionDomain slug.toString id |>.saveDomainObjectData sectionDomain slug.toString (json%{
+  modify fun (st : TraverseState) => st.saveDomainObject sectionDomain name id |>.saveDomainObjectData sectionDomain name (json%{
     "context": $jsonMetadata,
     "title": $title,
     "shortTitle": $shortTitle,
@@ -1403,25 +1418,26 @@ def savePartXref (slug : Slug) (id : InternalId) (part : Part Manual) : Traverse
 /--
 Assigns a tag to a part during traversal.
 
-This operation is careful to preserve and prioritize user-selected tags. In the first round, the
+This operation is careful to preserve and prioritize user-chosen names. In the first round, the
 following may occur:
 
- * If there's no tag at all, then an internal tag is applied.
+ * If the part has a name (from {name}`getName`), its provided tag is converted to a unique
+   external tag whose slug becomes the part's HTML id.
 
- * If there's a provided tag, it is converted to an external tag and added as an xref target.
+ * If the part has no name at all, then an internal tag is applied.
 
 In subsequent rounds, the internal tags are converted to external tags. At this point, the
-user-provided tags have already been made external. It also ensures that auto-generated tags are
-never added as xref targets.
+tags based on the user's {name (full := PartMetadata.tag)}`tag` field have already been made
+external.
 -/
 def tagPart
     (part : Lean.Doc.Part Manual.Inline Manual.Block m) (metadata : m)
-    (getId : m → Option InternalId) (getTag : m → Option Tag)
-    (saveXref : Slug → InternalId → Lean.Doc.Part Manual.Inline Manual.Block m → TraverseM Unit) :
+    (getId : m → Option InternalId) (getTag : m → Option Tag) (getName : m → Option String)
+    (saveXref : String → InternalId → Lean.Doc.Part Manual.Inline Manual.Block m → TraverseM Unit) :
     TraverseM Tag := do
   let some id := getId metadata
     | reportError "No internal ID assigned while tagging part"; return default
-  match getTag metadata with
+  match getTag metadata <|> (getName metadata).map .provided with
   | none =>
     -- Assign an internal tag - the next round will make it external. This is done in two rounds to
     -- give priority to user-provided tags that might otherwise anticipate the name-mangling scheme
@@ -1432,13 +1448,14 @@ def tagPart
     -- Ensure uniqueness
     if let some id' := (← get).tags[t]? then
       if id != id' then
-        reportError s!"Duplicate tag '{t}'"
+        unless t matches Tag.provided _ do
+          reportError s!"Duplicate tag '{t}'"
     else
       modify fun st => {st with tags := st.tags.insert t id}
     let path := (← readThe TraverseContext).path
     match t with
     | Tag.external name =>
-      saveXref name id { part with metadata := some metadata }
+      saveXref ((getName metadata).getD name.toString) id { part with metadata := some metadata }
       -- These are the actual IDs to use in generated HTML and links and such
       modify fun st : TraverseState => { st with externalTags := st.externalTags.insert id { path, htmlId := name } }
       return t
@@ -1462,7 +1479,7 @@ instance : Traverse Manual TraverseM where
     «meta» := { «meta» with id := some id }
 
     -- Next, assign a tag, prioritizing user-chosen external IDs
-    «meta» := { «meta» with tag := ← tagPart part «meta» (·.id) (·.tag) savePartXref }
+    «meta» := { «meta» with xrefTag := ← tagPart part «meta» (·.id) (·.xrefTag) (·.tag) savePartXref }
 
     -- Assign section numbers to subsections
     let mut i := 1
@@ -1581,6 +1598,9 @@ def permalink (id : InternalId) (st : TraverseState) (inline : Bool := true) : H
     -- If there's multiple, select one arbitrarily.
     let (domain, canonicalName) := candidates[0]
     let classes := "permalink-widget " ++ if inline then "inline" else "block"
+    -- The names may contain characters with meaning in URLs, such as spaces or ampersands.
+    let domain := System.Uri.escapeUri (toString domain)
+    let canonicalName := System.Uri.escapeUri canonicalName
     {{<span class={{classes}}>
         <a href=s!"/find/?domain={domain}&name={canonicalName}" title="Permalink">"🔗"</a>
       </span>

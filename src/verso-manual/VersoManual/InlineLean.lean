@@ -275,6 +275,7 @@ meta def elabCommands (config : LeanBlockConfig) (str : StrLit)
     let mut cmdState : Command.State := { env := ← getEnv, maxRecDepth := ← MonadRecDepth.getMaxRecDepth, scopes := origScopes }
     let mut pstate := { pos := startPos, recovering := false, hasLeading := false }
     let mut cmds := #[]
+    let mut cmdTrees : Array (Option Lean.Elab.InfoTree) := #[]
 
     repeat
       let scope := cmdState.scopes.head!
@@ -291,6 +292,13 @@ meta def elabCommands (config : LeanBlockConfig) (str : StrLit)
       let savedTrees := cmdState.infoState.trees
       cmdState ← withInfoTreeContext (mkInfoTree := pure ∘ InfoTree.node (.ofCommandInfo {elaborator := `Manual.Meta.lean, stx := cmd})) <|
         runCommand (Command.elabCommandTopLevel cmd) cmd cctx cmdState
+      -- `elabCommandTopLevel` reset the info state, so the trees present now are exactly this
+      -- command's; record them for the batched highlighting pass below.
+      cmdTrees := cmdTrees.push <|
+        match cmdState.infoState.trees.toArray with
+        | #[t] => some t
+        | #[] => none
+        | ts => some (.node (.ofCommandInfo {elaborator := `Manual.Meta.lean, stx := cmd}) ts.toPArray')
       cmdState := { cmdState with
         messages := savedMsgs ++ cmdState.messages,
         infoState := { cmdState.infoState with trees := savedTrees ++ cmdState.infoState.trees }
@@ -319,12 +327,11 @@ meta def elabCommands (config : LeanBlockConfig) (str : StrLit)
         pushInfoTree (disableUnusedVarLinterInInfoTree t)
 
 
-      let mut hls := Highlighted.empty
       let nonSilentMsgs := cmdState.messages.toArray.filter (!·.isSilent)
-      let mut lastPos : String.Pos.Raw := startPos
-      for cmd in cmds do
-        hls := hls ++ (← highlightIncludingUnparsed cmd nonSilentMsgs cmdState.infoState.trees (startPos? := lastPos))
-        lastPos := (cmd.getTrailingTailPos?).getD lastPos
+      -- One batched highlighting pass shares caches between the whole block's commands.
+      let hlArr ← highlightMany cmds nonSilentMsgs cmdTrees
+        (includeUnparsed := true) (startPos? := some startPos)
+      let hls := hlArr.foldl (· ++ ·) Highlighted.empty
 
       toHighlightedLeanContent config.show hls str
     finally

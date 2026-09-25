@@ -233,8 +233,7 @@ public instance : GetElem? (NameMap α) Name α fun xs n => n ∈ xs where
   getElem xs x ok :=
     if h : isPublic x then
       show α from GetElem.getElem (coll := TreeMap PublicName α PublicName.quickCmp) (idx := PublicName) (elem := α) (valid := fun xs x => x ∈ xs) xs ⟨x, h⟩ <| by
-        simp only [Membership.mem, h, dite_eq_left_of_eq_true] at ok
-        exact ok
+        simpa [Membership.mem, h] using ok
     else
      False.elim <| by
        simp only [Membership.mem, h] at ok

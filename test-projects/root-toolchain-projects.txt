@@ -10,3 +10,4 @@
 
 literate-config
 literate-multi-root
+errata-widget

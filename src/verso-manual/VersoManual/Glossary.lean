@@ -248,7 +248,7 @@ public def tech.descr : InlineDescr where
               content.mapM go
           else
             let keys := remote.domains[technicalTermDomain]?
-              |>.map (·.contents.keysArray.qsortOrd.toList |> ", ".intercalate)
+              |>.map (·.canonicalNames.toList |> ", ".intercalate)
               |>.map ("Keys are: " ++ ·)
               |>.getD "Technical term domain not found."
             reportError s!"No term def with key \"{key}\" in remote {r.quote}. {keys}" loc

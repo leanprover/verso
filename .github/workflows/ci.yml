@@ -13,6 +13,9 @@ jobs:
     build:
         name: Build and test
         runs-on: nscloud-ubuntu-22.04-amd64-8x16
+        permissions:
+            contents: write
+            checks: write
         env:
             # Used for browser tests. Placing them here allows caching to work right.
             PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
@@ -70,11 +73,13 @@ jobs:
 
             - name: Check for orphaned modules
               run: |
-                  # These are all the library modules; docs and tests are excluded
+                  # These are all the library modules plus the Errata self-tests, whose modules
+                  # must stay reachable from their root for the test driver to run them; docs and
+                  # the remaining test libraries are excluded
                   out="$(lake query VersoUtil:orphanMods Verso:orphanMods MultiVerso:orphanMods \
                     VersoSearch:orphanMods VersoBlog:orphanMods VersoManual:orphanMods \
                     VersoIlluminate:orphanMods VersoTutorial:orphanMods VersoLiterate:orphanMods \
-                    VersoLiterateCode:orphanMods)"
+                    VersoLiterateCode:orphanMods Errata:orphanMods ErrataTests:orphanMods)"
                   if [ -n "$(printf '%s' "$out" | tr -d '[:space:]')" ]; then
                     echo "Found orphaned modules:"
                     echo "$out"
@@ -85,6 +90,22 @@ jobs:
             - name: Build the project
               run: |
                   lake build
+
+            # Running linters catches forward reference errors in docstrings. Tests are excluded due
+            # to some spurious linter warnings.
+            #
+            # Libraries are linted one at a time to reduce memory issues on CI runners.
+            - name: Lint the libraries
+              run: |
+                  failed=0
+                  for root in VersoUtil Verso MultiVerso VersoSearch VersoBlog VersoManual \
+                      VersoIlluminate VersoTutorial VersoServe VersoLiterate VersoLiterateCode \
+                      UsersGuide Errata; do
+                      echo "::group::lake lint $root"
+                      lake lint --builtin-lint --builtin-only "$root" || failed=1
+                      echo "::endgroup::"
+                  done
+                  exit "$failed"
 
             # RELEASE_NOTES_BASE is what keeps this working against the shallow checkout above:
             # HEAD^1 is the base branch for both pull_request and merge_group runs, and is one
@@ -146,8 +167,40 @@ jobs:
                   inkscape --version
 
             - name: Run tests
+              id: tests
               run: |
-                  lake test -- --verbose --check-tex
+                  lake test -- --test-options --verbose --wfail --junit=errata-report.xml --markdown=errata-summary.md -- --check-tex
+
+            - name: Add test results to the job summary
+              if: always()
+              run: |
+                  if [ -f errata-summary.md ]; then cat errata-summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+            # Publishing a check run needs a token with `checks: write`, which pull requests from
+            # forks never receive; those runs get their results from the job summary and the
+            # uploaded artifact instead. The report exists once the tests have run, whether they
+            # passed or failed, and a build that fails first leaves it unwritten.
+            - name: Publish the JUnit test report
+              if:
+                  always() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure')
+                  && hashFiles('errata-report.xml') != '' && (github.event_name != 'pull_request' ||
+                  github.event.pull_request.head.repo.full_name == github.repository)
+              uses: dorny/test-reporter@v3
+              with:
+                  name: Errata tests
+                  path: errata-report.xml
+                  reporter: java-junit
+                  fail-on-error: false
+
+            - name: Upload the raw test reports
+              if: always()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: errata-test-reports
+                  path: |
+                      errata-report.xml
+                      errata-summary.md
+                  if-no-files-found: ignore
 
             - name: Test the dev server
               run: |
@@ -207,6 +260,17 @@ jobs:
                   pushd static-web
                   npx tsc --noEmit -p jsconfig.json
                   popd
+
+            # The widget is checked against the React and InfoView declarations that `npm ci`
+            # installs, which are the versions the InfoView runs it with.
+            - name: Type check the run-test widget JS code
+              run: npm run typecheck:widget
+
+            # These tests show the widget in the real InfoView, which `npm ci` installs. pytest runs
+            # them only when `-m errata_widget` selects them.
+            - name: Run the run-test widget's browser tests
+              run: |
+                  uv run --project browser-tests --extra test pytest browser-tests/errata-widget -m errata_widget -v
 
             - name: Check the ToC width storage key stays in sync
               run: |
@@ -285,6 +349,16 @@ jobs:
                   uv run --project browser-tests --extra test pytest \
                     browser-tests/verso-html -v \
                     --site-dir "$(pwd)/_out/verso-html"
+
+            - name: Build the package-manual site for browser tests
+              run: |
+                  lake exe packagedocs --output _out/package-manual
+
+            - name: Run package-manual browser tests
+              run: |
+                  uv run --project browser-tests --extra test pytest \
+                    browser-tests/package-manual -v \
+                    --site-dir "$(pwd)/_out/package-manual/html-multi"
 
             - name: Upload docs to artifact storage
               if: github.ref != 'refs/heads/main'

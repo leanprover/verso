@@ -31,7 +31,7 @@ tag := "serve-running"
 The `verso-serve` command takes an optional port (8000 by default) and an optional directory (the current directory by default).
 
 ```
-$ lake exe serve --port 8000 _out/html
+$ lake exe verso-serve --port 8000 _out/html
 ```
 :::
 
