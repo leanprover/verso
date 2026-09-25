@@ -318,13 +318,13 @@ def violations (seed : UInt64) : List String := Id.run do
 /--
 The scheduler keeps its rules in random runs whose queues are in scheduling orders drawn from a
 seed, cancelled runs and jobs that take no time included: no two exclusive users of a fixture
-overlap, no shared user overlaps an exclusive one, and exclusive
-users claim a fixture in queue order; the slots in use never exceed the pool, and each grant is the
-request or the whole pool; each test is scheduled once or reported without running, unless the run
-is cancelled first, and runs after its prepares; setups end before their fixtures' users and the
-setups of the fixtures that take them begin; teardowns run once whenever the setup ran, cancelled
-runs included, after the last user and after the teardowns of the fixtures that take them, and
-nothing that needs a fixture starts after its teardown; and the run ends.
+overlap, no shared user overlaps an exclusive one, and exclusive users claim a fixture in queue
+order; the slots in use never exceed the pool, and each grant is the request or the whole pool;
+each test is scheduled once or reported without running, unless the run is cancelled first, and
+runs after its prepares; setups end before their fixtures' users and the setups of the fixtures
+that take them begin; teardowns run once whenever the setup ran, cancelled runs included, after the
+last user and after the teardowns of the fixtures that take them, and nothing that needs a fixture
+starts after its teardown; and the run ends.
 -/
 @[test]
 def schedulerKeepsItsRules : seed → Test :=

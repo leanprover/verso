@@ -464,7 +464,7 @@ def step (s : State) : Event → State × Array Command
     let s := { s with cancelled := true }
     s.fill
 
-/-- The elements in an order drawn from {name}`gen`, by a Fisher-Yates shuffle. -/
+/-- The elements in an order drawn from {name}`gen` by the Fisher-Yates algorithm. -/
 def shuffle (gen : StdGen) (xs : Array α) : Array α := Id.run do
   let mut xs := xs
   let mut gen := gen

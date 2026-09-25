@@ -179,7 +179,9 @@ def profileKeys : List String :=
   ["inherits", "timeout", "fixture-timeout", "grace-period", "slow-after", "jobs", "order",
     "update-golden", "settings", "override", "default-filter", "junit", "json", "markdown"]
 
-/-- The order that a profile's {lit}`order` gives: the string {lit}`"default"` or {lit}`"shuffle"`. -/
+/--
+The order that a profile's {lit}`order` gives: the string {lit}`"default"` or {lit}`"shuffle"`.
+-/
 def readOrder (v : Lake.Toml.Value) : CheckM (Option Order) := do
   match v with
   | .string _ "default" => return some .default
