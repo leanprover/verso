@@ -5,8 +5,8 @@ Author: David Thrane Christiansen
 -/
 
 /-
-Tests of a run as the editor widget's server follows it: the transitions of its phase, taken in every
-order, and the display that the runner's events file gives.
+Tests of a run as the editor widget's server follows it: the transitions of its phase, taken in
+every order, and the display that the runner's events file gives.
 -/
 module
 
@@ -20,7 +20,7 @@ public section
 
 namespace ErrataTests.WidgetState
 
-/-- One change of each kind. The kill that {lit}`arm` records does nothing. -/
+/-- One change of each kind. The kill that {lit}`arm` records is {lean}`(pure () : IO Unit)`. -/
 def changes : Array (String × Change) := #[
   ("listed", .listed 5), ("execStart", .execStart 7),
   ("output", .output { stream := .stdout, text := "x" }), ("result", .result { id := 1 }),
@@ -36,10 +36,9 @@ def sizesOf (d : RunData) : List Nat :=
 
 /--
 What is wrong with the transition from {name}`d` by the change named {name}`name`, if anything. A
-run that is over changes only when a disarm clears its kill; a cancel applies to a live run alone and
-its action is the kill that the run holds; a run ends once and keeps its outcome; the driver cannot
-arm a run that is over; the building phase ends only for the running phase; and an outcome arrives
-once.
+run that is over changes only when a disarm clears its kill; a cancel applies to a live run alone
+and its action is the kill that the run holds; a run ends once and keeps its outcome; only a live
+run is armed; the building phase ends only for the running phase; and an outcome arrives once.
 -/
 def problem (d : RunData) (name : String) (c : Change) : Option String :=
   let after := d.apply c
@@ -47,7 +46,8 @@ def problem (d : RunData) (name : String) (c : Change) : Option String :=
   let act? := after.bind (·.2)
   if !d.phase.isLive && after.isSome && !(c matches .disarm) then
     some s!"{name} changed a run that was {d.phase.name}"
-  else if after.isSome && (c matches .disarm) && (d'.phase != d.phase || sizesOf d' != sizesOf d) then
+  else if after.isSome && (c matches .disarm) &&
+      (d'.phase != d.phase || sizesOf d' != sizesOf d) then
     some "a disarm changed more than the kill"
   else if (c matches .cancel) && after.isSome && act?.isSome != d.kill?.isSome then
     some "a cancel's action is not the run's kill"
@@ -90,7 +90,8 @@ def transitionsInEveryOrder : Test := do
           if found.size < 5 then found := found.push s!"{", ".intercalate path.toList}: {p}"
         d := ((d.apply c).map (·.1)).getD d
       count := count + 1
-  assertTrue found.isEmpty s!"{found.size} problems among {count} sequences:\n{"\n".intercalate found.toList}"
+  assertTrue found.isEmpty
+    s!"{found.size} problems among {count} sequences:\n{"\n".intercalate found.toList}"
 
 /-- A cancel after the driver was reaped has no kill to perform. -/
 @[test]
@@ -140,7 +141,7 @@ def cancelRacesTheEnd : Test := do
     assertTrue (c != f) s!"cancel applied: {c}, finish applied: {f}"
     assertBEq (if c then 1 else 0) (← killed.get)
 
-/-- A change that applies wakes the requests that wait on the run, and one that does not wakes none. -/
+/-- The requests that wait on a run wake when a change applies to it, and only then. -/
 @[test]
 def changesWakeWaiters : Test := do
   let s ← RunState.new "r" "" 0 0
@@ -155,8 +156,8 @@ def changesWakeWaiters : Test := do
   assertTrue (← s.phase).isLive
 
 /--
-Locations arrive with codepoint columns and lines from one, and the editor counts lines from zero and
-columns in UTF-16 code units.
+Locations arrive with codepoint columns and lines from one, and the editor counts lines from zero
+and columns in UTF-16 code units.
 -/
 @[test]
 def locationsInTheEditorsUnits : Test := do

@@ -735,10 +735,10 @@ script run (args) do
     IO.eprintln s!"error: the test executables could not be built: {e}"
     return buildFailedCode
   -- The runner's standard input is a lifeline that the driver holds, and `ERRATA_LIFELINE` asks the
-  -- runner to end its tests when that pipe closes. A driver started with `ERRATA_DRIVER_LIFELINE=1`,
-  -- as the editor widget starts it, hands its own standard input on as the runner's lifeline, so the
-  -- runner ends when the driver's parent does; the variable stops at the driver, so a driver that a
-  -- test starts holds a lifeline of its own. The driver removes `LEAN_ABORT_ON_PANIC` from the
+  -- runner to end its tests when that pipe closes. A driver started with
+  -- `ERRATA_DRIVER_LIFELINE=1`, as the editor widget starts it, hands its own standard input on as
+  -- the runner's lifeline, so the runner ends when the driver's parent does; the variable stops at
+  -- the driver, so a driver that a test starts holds a lifeline of its own. The driver removes `LEAN_ABORT_ON_PANIC` from the
   -- runner's environment, and the runner sets it for every test executable.
   let handsOnLifeline := (← IO.getEnv "ERRATA_DRIVER_LIFELINE") == some "1"
   let child ← IO.Process.spawn {

@@ -32,7 +32,7 @@ inductive OutputChunk.Stream where
   | stderr
 deriving Lean.FromJson, Lean.ToJson, Repr, Inhabited, DecidableEq
 
-/-- A run of captured output from a single stream, which the widget renders with the streams apart. -/
+/-- A run of captured output from one stream, which the widget renders with the streams apart. -/
 structure OutputChunk where
   /-- The stream the text was written to. -/
   stream : OutputChunk.Stream
@@ -69,13 +69,13 @@ The lines of source files, each file read once and kept, for the conversion of t
 that the runner reports into the UTF-16 columns that the editor counts.
 -/
 structure SourceLines where
-  /-- Each file read so far, with its lines, or {lean}`none` when it could not be read. -/
+  /-- Each file read so far, with its lines, or {lean}`none` when reading it failed. -/
   files : IO.Ref (Array (System.FilePath × Option (Array String)))
 
 /-- An empty cache of source lines. -/
 def SourceLines.new : BaseIO SourceLines := return { files := ← IO.mkRef #[] }
 
-/-- The lines of a file, read on the first request, or {lean}`none` when it cannot be read. -/
+/-- The lines of a file, read on the first request, or {lean}`none` when reading it fails. -/
 def SourceLines.linesOf (cache : SourceLines) (path : System.FilePath) :
     IO (Option (Array String)) := do
   if let some (_, lines) := (← cache.files.get).find? (·.1 == path) then return lines
@@ -85,8 +85,8 @@ def SourceLines.linesOf (cache : SourceLines) (path : System.FilePath) :
 
 /--
 The span of a location in Lean's form, a path with lines from one and codepoint columns, as the
-editor counts it. The document's lines give the width of each codepoint; a file that cannot be read
-keeps its codepoint columns.
+editor counts it. The document's lines give the width of each codepoint; when reading the file
+fails, the columns stay in codepoints.
 -/
 def Source.ofLocation (cache : SourceLines) (l : Location) : IO Source := do
   let lines ← cache.linesOf l.file
@@ -140,7 +140,7 @@ structure Step where
   {lit}`inconclusive` otherwise.
   -/
   status : String
-  /-- What explains a phase that did not pass. -/
+  /-- What explains a phase that failed, erred, or ended inconclusive. -/
   message? : Option String := none
   /-- How long the phase took, in milliseconds. -/
   durationMs : Nat := 0
@@ -287,22 +287,23 @@ inductive Change where
   | cancel
   /-- The driver started, and {name}`kill` ends it. -/
   | arm (kill : IO Unit)
-  /-- The driver has exited, so its process group may no longer be signaled. -/
+  /-- The driver has exited, and its process group's id is free for reuse. -/
   | disarm
 
 /--
 The transition that a change makes: the run afterwards and an action to perform once the change is
-in place, or {lean}`none` when the change does not apply in the run's phase, which leaves the run as
-it was. Output, results, steps, issues, and outcomes arrive only while the run is live; a run ends once,
-cancelled or done; a cancel's action is the driver's kill, and a driver that starts after a cancel
-does not arm, so its caller ends it.
+in place, or {lean}`none` for a change outside the phases that admit it, and the run then stays as
+it was. Output, results, steps, issues, and outcomes arrive only while the run is live; a run ends
+once, cancelled or done; a cancel's action is the driver's kill; and only a live run is armed, so
+the caller of an arm after a cancel ends the driver itself.
 -/
 def RunData.apply (d : RunData) : Change → Option (RunData × Option (IO Unit))
   | .listed buildMs =>
     if d.phase matches .building then some ({ d with phase := .running, buildMs }, none) else none
   | .execStart t => if d.phase.isLive then some ({ d with execStartTime := t }, none) else none
   | .output c => if d.phase.isLive then some ({ d with chunks := d.chunks.push c }, none) else none
-  | .result n => if d.phase.isLive then some ({ d with results := d.results.push n }, none) else none
+  | .result n =>
+    if d.phase.isLive then some ({ d with results := d.results.push n }, none) else none
   | .step s => if d.phase.isLive then some ({ d with steps := d.steps.push s }, none) else none
   | .issue i => if d.phase.isLive then some ({ d with issues := d.issues.push i }, none) else none
   | .outcome o =>
@@ -310,7 +311,8 @@ def RunData.apply (d : RunData) : Change → Option (RunData × Option (IO Unit)
       some ({ d with outcome? := some o, results := d.results.push (.ofOutcome o) }, none)
     else none
   | .ended =>
-    if d.phase.isLive then some ({ d with phase := .done (d.outcome?.getD .noTest) }, none) else none
+    if d.phase.isLive then some ({ d with phase := .done (d.outcome?.getD .noTest) }, none)
+    else none
   | .finish fallback =>
     if d.phase.isLive then some ({ d with phase := .done (d.outcome?.getD fallback) }, none)
     else none
@@ -335,7 +337,8 @@ structure RunState where
 /-- A new run in its building phase. -/
 def RunState.new (runId version : String) (startTime : Nat) (sourceHash : UInt64) :
     BaseIO RunState := do
-  return { runId, version, startTime, sourceHash, data := ← IO.mkRef { wakeup := ← IO.Promise.new } }
+  let data ← IO.mkRef { wakeup := ← IO.Promise.new }
+  return { runId, version, startTime, sourceHash, data }
 
 /--
 Applies a change to the run as one transition of {name}`RunData.apply`, and returns whether it
@@ -402,14 +405,15 @@ it is {name}`own?`, the test's own declaration, which the widget already shows t
 def RunOutcome.ofRecord (cache : SourceLines) (own? : Option Location) (j : Json) :
     IO RunOutcome := do
   let settings := match j.getObjVal? "settings" >>= (·.getObj?) with
-    | .ok obj => obj.toArray.filterMap fun (name, v) => v.getStr?.toOption.map ({ name, value := · })
+    | .ok obj =>
+      obj.toArray.filterMap fun (name, v) => v.getStr?.toOption.map ({ name, value := · })
     | .error _ => #[]
   let base : RunOutcome := {
     status := "error", durationMs := (fieldOf? j "duration_ms").getD 0, seed? := fieldOf? j "seed"
     settings, description? := fieldOf? j "description"
   }
   match Outcome.ofFields? j with
-  | .error e => return { base with message? := some s!"the runner's outcome could not be read: {e}" }
+  | .error e => return { base with message? := some s!"reading the runner's outcome failed: {e}" }
   | .ok (.reported v) =>
     let (message?, detail?, location?) ← match v with
       | .pass => pure (none, none, none)

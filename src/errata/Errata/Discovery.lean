@@ -227,7 +227,7 @@ private meta opaque settingDefault (decl : Name) : MetaM (Option String)
 
 /--
 A setting that a test takes, as the widget offers a field for it: its name, whether it is optional,
-its docstring, and its declared default, which is {lean}`none` when it cannot be read.
+its docstring, and its declared default, or {lean}`none` in its place when evaluating it fails.
 -/
 meta def declaredSetting (use : SettingUse) : AttrM Errata.Widget.DeclaredSetting := do
   let description? :=

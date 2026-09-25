@@ -90,8 +90,8 @@ meta structure StartRequest where
   /-- Values for the test's settings, which the run passes to the driver with {lit}`--set`. -/
   settings : Array SettingValue := #[]
   /--
-  The identifier that the widget chose for the run, which later replies about the run carry, so the
-  widget can recognize the run it asked for.
+  The identifier that the widget chose for the run, which later replies about the run include, so
+  the widget can recognize the run it asked for.
   -/
   runId : String
 
@@ -248,7 +248,7 @@ private meta def endOf (text : String) : String :=
 private meta def buildFailure (output : String) : RunOutcome :=
   { status := "error", message? := some "lake build failed", detail? := some (endOf output) }
 
-/-- The outcome when the driver could not be started or followed, such as a failed spawn. -/
+/-- The outcome when starting or following the driver raises an error, such as a failed spawn. -/
 private meta def launchFailure (e : IO.Error) : RunOutcome :=
   { status := "error", message? := some s!"the test could not be run: {e}" }
 
