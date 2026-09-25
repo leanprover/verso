@@ -661,9 +661,10 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
     }
     -- Values that the command line gives to settings that nothing declares stop the run. Those that
     -- the configuration gives are warnings, since profiles serve the executables of every library
-    -- and runs may select some of them.
+    -- and runs may select some of them; a run that selects some of them reports none of those.
     let declared := listings.flatMap (·.settings.map (·.name))
-    let undeclared := resolution.undeclared declared
+    let undeclared := resolution.undeclared declared |>.filter fun u =>
+      u.commandLine || !config.partialSelection
     let names := declared.foldl (init := #[]) fun acc n => if acc.contains n then acc else acc.push n
     for u in undeclared do
       d.dispatch (.issue { isError := u.commandLine, message := s!"{u.place} gives the setting \
