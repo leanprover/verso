@@ -61,6 +61,8 @@ structure Frame where
   passed : Nat := 0
   /-- The number of completed tests that failed, had an error, or were inconclusive. -/
   failed : Nat := 0
+  /-- The number of fixture phases that ended without passing. -/
+  fixturesFailed : Nat := 0
   /-- The running tests and fixture phases, in the order they started. -/
   running : Array Entry := #[]
 deriving Repr, Inhabited, DecidableEq
@@ -86,9 +88,11 @@ def Frame.finish (f : Frame) (exe test key : String) (passed? : Option Bool) : F
 
 /--
 The frame after a dispatched event, at {name}`nowMs` on the monotonic clock. Tests and fixture
-phases join the running list when they start and leave it when they end. When a test ends, it
-completes, and it passed when every result of it that the event added to the run, {name}`fresh`,
-passed. Tests that the runner reports without starting a process start and end in the same way.
+phases join the running list when they start and leave it when they end. {name}`fresh` holds the
+results that the event added to the run. A test that ends completes: it passed if all of these
+results passed, and failed otherwise. A fixture phase that ends counts among the failed fixture
+phases if any of them did not pass. Tests that the runner reports without starting a process start
+and end in the same way.
 -/
 def Frame.after (f : Frame) (ev : Event) (fresh : Array Result) (nowMs : Nat) : Frame :=
   match ev with
@@ -97,8 +101,12 @@ def Frame.after (f : Frame) (ev : Event) (fresh : Array Result) (nowMs : Nat) : 
     match fresh[0]? with
     | none => f
     | some own =>
-      let passed? := if own.kind matches .test then some (fresh.all (·.outcome.isPass)) else none
-      f.finish exe test key passed?
+      let passed := fresh.all (·.outcome.isPass)
+      match own.kind with
+      | .test => f.finish exe test key (some passed)
+      | .fixture =>
+        let f := f.finish exe test key none
+        if passed then f else { f with fixturesFailed := f.fixturesFailed + 1 }
   | _ => f
 
 /-- An elapsed time in milliseconds as minutes and seconds, {lit}`m:ss`, with hours as minutes. -/
@@ -115,18 +123,25 @@ private def takeChars (n : Nat) (s : String) : String :=
   String.ofList (s.toList.take n)
 
 /--
-The count line: the tests completed out of the total, with those that passed and failed, then a
-space and the bar of {lit}`=` and spaces that fills the rest of {name}`width`, when at least
-{name}`minBarWidth` columns remain for it. When the counts alone are wider than {name}`width`, they
-are cut to it, uncolored.
+The count line: the tests completed out of the total, with those that passed and failed, and the
+failed fixture phases when there are any, then a space and the bar of {lit}`=` and spaces that fills
+the rest of {name}`width`, when at least {name}`minBarWidth` columns remain for it. When the counts
+alone are wider than {name}`width`, they are cut to it, uncolored.
 -/
 def countLine (f : Frame) (width : Nat) (color : Bool) : String :=
-  let plain := s!"{f.completed}/{f.total} tests completed ({f.passed} passed, {f.failed} failed)"
+  let fixturesWord := if f.fixturesFailed == 1 then "fixture failed" else "fixtures failed"
+  let plainFixtures :=
+    if f.fixturesFailed == 0 then "" else s!", {f.fixturesFailed} {fixturesWord}"
+  let plain := s!"{f.completed}/{f.total} tests completed ({f.passed} passed, {f.failed} failed\
+    {plainFixtures})"
   if plain.length > width then takeChars width plain
   else
     let n (k : Nat) := Style.count.paint color (toString k)
+    let fixtures :=
+      if f.fixturesFailed == 0 then ""
+      else s!", {n f.fixturesFailed} {Style.fail.paint color fixturesWord}"
     let styled := s!"{n f.completed}/{n f.total} tests completed ({n f.passed} \
-      {Style.pass.paint color "passed"}, {n f.failed} {Style.fail.paint color "failed"})"
+      {Style.pass.paint color "passed"}, {n f.failed} {Style.fail.paint color "failed"}{fixtures})"
     let room := width - plain.length - 1
     if room < minBarWidth then styled
     else
@@ -164,10 +179,35 @@ The lines of the progress display: the count line, then {lit}`Running:` and one 
 entry, none wider than {name}`width`. {name}`nowMs` is the time on the monotonic clock that the
 elapsed times are measured to, and {name}`exeWidth` is the width of the executable column. The
 words are in the report's styles when {name}`color` is true; the bar has no color.
+
+When {name}`rows` is not zero, the display has at most {name}`rows` less two lines: the count line,
+{lit}`Running:`, and at most {name}`rows` less four entries. When more entries are running, the
+last line that fits reads {lit}`… and N more`, with the number of entries left out.
 -/
-def render (f : Frame) (nowMs width exeWidth : Nat) (color : Bool) : Array String :=
-  #[countLine f width color, takeChars width "Running:"] ++
-    f.running.map (runningLine · nowMs width exeWidth color)
+def render (f : Frame) (nowMs width exeWidth : Nat) (color : Bool) (rows : Nat := 0) :
+    Array String :=
+  let head := #[countLine f width color, takeChars width "Running:"]
+  let line (e : Entry) := runningLine e nowMs width exeWidth color
+  if rows == 0 then head ++ f.running.map line
+  else
+    let most := rows - 2
+    if most < 2 then head.extract 0 most
+    else
+      let room := most - 2
+      if f.running.size ≤ room then head ++ f.running.map line
+      else if room == 0 then head
+      else
+        let shown := room - 1
+        head ++ (f.running.extract 0 shown).map line ++
+          #[takeChars width s!" … and {f.running.size - shown} more"]
+
+/-- The size of a terminal, in rows and columns of characters. -/
+structure TerminalSize where
+  /-- The number of rows, or zero when it is unknown. -/
+  rows : Nat := 0
+  /-- The number of columns. -/
+  cols : Nat := 80
+deriving Repr, Inhabited, DecidableEq
 
 /-- What a display holds between its operations. -/
 structure DisplayState where
@@ -177,14 +217,12 @@ structure DisplayState where
   live : Bool := false
   /-- Whether clearing the display has ended it. -/
   ended : Bool := false
+  /-- Whether lines printed now leave the block undrawn until the batch that holds it ends. -/
+  held : Bool := false
   /-- The number of lines of the block drawn last, which the next redraw erases. -/
   drawn : Nat := 0
   /-- The width of the executable column. -/
   exeWidth : Nat := 0
-  /-- The terminal's width. -/
-  width : Nat := 80
-  /-- When the terminal's width was read last, on the monotonic clock. -/
-  widthReadMs? : Option Nat := none
 
 /--
 The progress display on a terminal: the block of lines that {name}`render` gives, kept below the
@@ -196,51 +234,61 @@ structure Display where
   out : IO.FS.Stream
   /-- Whether the display's words are colored. -/
   color : Bool
-  /-- The terminal's width when it is fixed; otherwise it is read from the terminal. -/
-  width? : Option Nat := none
+  /-- The terminal's size when it is fixed; otherwise it is read from the terminal. -/
+  size? : Option TerminalSize := none
+  /-- The terminal's size as last read. -/
+  size : IO.Ref TerminalSize
   /-- The display's state, behind a lock. -/
   state : Std.Mutex DisplayState
-
-/-- How often the terminal's width is read at most, in milliseconds. -/
-def widthReadEveryMs : Nat := 2000
 
 /-- How often a live display is redrawn, in milliseconds, so that the elapsed times advance. -/
 def tickMs : UInt32 := 1000
 
+/-- How many redraws of the ticker pass between two readings of the terminal's size. -/
+def ticksPerSizeRead : Nat := 2
+
 /--
-The width of the terminal on standard output: {lit}`COLUMNS` when it is set to a positive number,
-else the columns that {lit}`stty size` reports for standard output, which it reads as its own
-standard input, else 80.
+The size of the terminal on standard output. The columns are {lit}`COLUMNS` when it is set to a
+positive number, and the rows are {lit}`LINES` when it is; otherwise both are what {lit}`stty size`
+reports for standard output. Without either, the size is 80 columns and unknown rows.
 -/
-def terminalWidth : IO Nat := do
-  if let some n := (← IO.getEnv "COLUMNS").bind (·.trimAscii.copy.toNat?) then
-    if n > 0 then return n
-  try
-    -- The child's standard output is the runner's, the terminal; `stty` reads the size of its
-    -- standard input, which the shell makes that terminal, and reports on the piped standard error.
+def terminalSize : IO TerminalSize := do
+  let fromEnv (name : String) : IO (Option Nat) := do
+    return (← IO.getEnv name).bind (·.trimAscii.copy.toNat?) |>.filter (· > 0)
+  let cols? ← fromEnv "COLUMNS"
+  let rows? ← fromEnv "LINES"
+  if let (some cols, some rows) := (cols?, rows?) then return { rows, cols }
+  let stty : TerminalSize ← try
+    -- `stty` reports the size of its standard input, which the shell makes the standard output
+    -- that the child inherits, and writes it to the piped standard error.
     let child ← IO.Process.spawn
       { cmd := "sh", args := #["-c", "stty size <&1 >&2"], stdin := .null, stdout := .inherit
         stderr := .piped }
     let out ← child.stderr.readToEnd
     let _ ← child.wait
-    match (out.splitOn " ").getLast?.bind (·.trimAscii.copy.toNat?) with
-    | some n => return if n > 0 then n else 80
-    | none => return 80
-  catch _ => return 80
+    match (out.trimAscii.copy.splitOn " ").map (·.toNat?) with
+    | [some rows, some cols] => pure { rows, cols := if cols > 0 then cols else 80 }
+    | _ => pure {}
+  catch _ => pure {}
+  return { rows := rows?.getD stty.rows, cols := cols?.getD stty.cols }
 
 /-- A display that writes to {name}`out`, drawn once it is started. -/
-def Display.new (out : IO.FS.Stream) (color : Bool) (width? : Option Nat := none) :
+def Display.new (out : IO.FS.Stream) (color : Bool) (size? : Option TerminalSize := none) :
     BaseIO Display :=
-  return { out, color, width?, state := ← Std.Mutex.new {} }
+  return { out, color, size?, size := ← IO.mkRef (size?.getD {}), state := ← Std.Mutex.new {} }
+
+/-- Reads the terminal's size again, unless the display's size is fixed. -/
+def Display.readSize (d : Display) : IO Unit := do
+  if d.size?.isNone then d.size.set (← terminalSize)
 
 /-- The terminal sequences that erase a block of {name}`n` lines above the cursor. -/
 def eraseText (n : Nat) : String :=
   if n == 0 then "" else s!"\x1b[{n}A\x1b[J"
 
 /--
-Erases the drawn block, writes {name}`text`, and draws the block again when the display is live, as
-one write. The terminal's width is read first when the last reading is older than
-{name}`widthReadEveryMs`.
+Erases the drawn block and writes {name}`text` in one write, followed by the block again when the
+display is live and no batch holds it. The block is rendered one column narrower than the terminal,
+so a terminal that narrows reflows no line of it.
 -/
 private def Display.redraw (d : Display) (text : String) :
     Std.AtomicT DisplayState IO Unit := do
@@ -250,22 +298,16 @@ private def Display.redraw (d : Display) (text : String) :
       d.out.putStr text
       d.out.flush
     return
-  let now ← IO.monoMsNow
-  let s ← match d.width? with
-    | some width => pure { s with width }
-    | none =>
-      if s.widthReadMs?.all (· + widthReadEveryMs ≤ now) then
-        pure { s with width := ← terminalWidth, widthReadMs? := some now }
-      else pure s
-  let lines := render s.frame now s.width s.exeWidth d.color
+  let lines ← if s.held then pure #[] else do
+    let size ← d.size.get
+    pure (render s.frame (← IO.monoMsNow) (size.cols - 1) s.exeWidth d.color size.rows)
   set { s with drawn := lines.size }
-  d.out.putStr (eraseText s.drawn ++ text ++ String.join (lines.toList.map (· ++ "\n")))
-  d.out.flush
+  let out := eraseText s.drawn ++ text ++ String.join (lines.toList.map (· ++ "\n"))
+  unless out.isEmpty do
+    d.out.putStr out
+    d.out.flush
 
-/--
-Prints lines above the display and changes its frame with {name}`f`, in one write: the block is
-erased, the lines are written, and the block is drawn again.
--/
+/-- Changes the display's frame with {name}`f` and prints lines above it, redrawing it once. -/
 def Display.emit (d : Display) (lines : Array String) (f : Frame → Frame := id) : IO Unit :=
   d.state.atomically do
     modify fun s => { s with frame := f s.frame }
@@ -275,9 +317,25 @@ def Display.emit (d : Display) (lines : Array String) (f : Frame → Frame := id
 def Display.print (d : Display) (line : String) : IO Unit :=
   d.emit #[line]
 
+/-- What the display shows. -/
+def Display.frame (d : Display) : IO Frame :=
+  d.state.atomically (return (← get).frame)
+
 /-- Changes the display's frame and redraws it. -/
 def Display.update (d : Display) (f : Frame → Frame) : IO Unit :=
   d.emit #[] f
+
+/--
+Runs {name}`act` as a batch: the lines that it prints appear with the block erased, and the block is
+drawn once, when the batch ends.
+-/
+def Display.batch {α} (d : Display) (act : IO α) : IO α := do
+  d.state.atomically (modify fun s => { s with held := true })
+  try act
+  finally
+    d.state.atomically do
+      modify fun s => { s with held := false }
+      d.redraw ""
 
 /--
 Erases the display and draws nothing more; later lines are printed as they are. Clearing an ended
@@ -293,10 +351,12 @@ def Display.clear (d : Display) : IO Unit :=
 
 /--
 Draws the display with {name}`total` tests to complete and an executable column {name}`exeWidth`
-wide. When {name}`ticker` is true, a thread redraws the display every second until it is cleared.
+wide. When {name}`ticker` is true, a thread redraws the display every second until it is cleared,
+and reads the terminal's size every {name}`ticksPerSizeRead` seconds, outside the display's lock.
 After {name}`Display.clear`, starting draws nothing.
 -/
 def Display.start (d : Display) (total exeWidth : Nat) (ticker : Bool := true) : IO Unit := do
+  d.readSize
   let started ← d.state.atomically do
     if (← get).ended then return false
     modify fun s => { s with live := true, exeWidth, frame := { s.frame with total } }
@@ -304,13 +364,15 @@ def Display.start (d : Display) (total exeWidth : Nat) (ticker : Bool := true) :
     return true
   if started && ticker then
     let _ ← IO.asTask (prio := .dedicated) do
+      let mut ticks := 0
       repeat
         IO.sleep tickMs
+        ticks := ticks + 1
+        if ticks % ticksPerSizeRead == 0 then d.readSize
         let live ← d.state.atomically do
-          if (← get).live then
-            d.redraw ""
-            return true
-          else return false
+          let s ← get
+          if s.live && !s.held then d.redraw ""
+          return s.live
         unless live do break
 
 /--

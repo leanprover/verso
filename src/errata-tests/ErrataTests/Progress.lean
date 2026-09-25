@@ -125,13 +125,43 @@ def framesFollowEvents : Test := do
   assertBEq (2, 0, 2) (f.completed, f.passed, f.failed)
 
 /--
+The display fits the terminal's rows: at most the rows less two lines, the last entry that fits
+replaced by the number of entries left out. Zero rows set no bound.
+-/
+@[test]
+def blockFitsTheRows : Test := do
+  let frame : Errata.Progress.Frame :=
+    { total := 20, running := (List.range 16).toArray.map (entry "Lib" s!"t{·}" 0) }
+  assertBEq 18 (Errata.Progress.render frame now 60 3 false).size
+  assertBEq 18 (Errata.Progress.render frame now 60 3 false (rows := 0)).size
+  let capped := Errata.Progress.render frame now 60 3 false (rows := 12)
+  assertBEq 10 capped.size
+  assertBEq " Lib  t6 (0:00)" capped[8]!
+  assertBEq " … and 9 more" capped[9]!
+  assertBEq 18 (Errata.Progress.render frame now 60 3 false (rows := 20)).size
+  assertBEq 2 (Errata.Progress.render frame now 60 3 false (rows := 4)).size
+  assertBEq 1 (Errata.Progress.render frame now 60 3 false (rows := 3)).size
+  assertBEq 3 (Errata.Progress.render frame now 60 3 false (rows := 5)).size
+
+/-- A failed fixture phase shows on the count line, in the singular for one. -/
+@[test]
+def countsFailedFixtures : Test := do
+  assertBEq "1/2 tests completed (1 passed, 0 failed, 1 fixture failed)"
+    (Errata.Progress.countLine { total := 2, completed := 1, passed := 1, fixturesFailed := 1 }
+      60 false)
+  assertBEq "0/2 tests completed (0 passed, 0 failed, 2 fixtures failed)"
+    (Errata.Progress.countLine { total := 2, fixturesFailed := 2 } 60 false)
+
+/--
 A display writes its block, erases it above each printed line and draws it again below, and erases
-it for good when it is cleared, leaving the printed lines.
+it for good when it is cleared, leaving the printed lines. It renders one column narrower than the
+terminal.
 -/
 @[test]
 def displayWritesItsBlock : Test := do
   let buf ← IO.mkRef ({} : IO.FS.Stream.Buffer)
-  let d ← Errata.Progress.Display.new (IO.FS.Stream.ofBuffer buf) false (width? := some 60)
+  let d ← Errata.Progress.Display.new (IO.FS.Stream.ofBuffer buf) false
+    (size? := some { cols := 61 })
   d.start 2 3 (ticker := false)
   d.print "FAIL Lib x"
   -- An entry that starts in the future shows an elapsed time of zero.
