@@ -35,7 +35,9 @@ optionally `fixtures`, the names of fixtures declared before it that it takes; o
 produced none. The context has the attributes `settings` and `fixtures`, dictionaries from names to
 values, `threads`, and `config`, the pytest configuration of the loaded suite, which holds the
 suite's command-line options. The prepare and the teardown are trivial when the dictionary leaves
-them out. Tests take fixtures through the marker `errata_fixture(NAME)`, which uses the fixture
+them out. `errata-list` records the trivial phases in a file beside its OUT, and an
+`errata-fixture` invocation of such a phase whose OUT is in the same directory succeeds before
+pytest is imported, so it costs the interpreter alone. Tests take fixtures through the marker `errata_fixture(NAME)`, which uses the fixture
 alone among its users, or `errata_fixture(NAME, exclusive=False)`, which shares it with other shared
 users, and read the values through the `errata_fixtures` fixture, a dictionary from names to values.
 
@@ -43,13 +45,70 @@ pytest's own output, and what a test prints, goes to standard output and standar
 runner captures as the test's output; the records go only to OUT.
 """
 
+import hashlib
 import inspect
 import json
 import os
 import sys
 import time
 
-import pytest
+MODES = ("errata-list", "errata-run", "errata-fixture")
+
+# The phases that a fixture may leave out of its declaration, which are then trivial.
+OPTIONAL_PHASES = ("prepare", "teardown")
+
+
+def write_record(out, record):
+    """Appends one record to the output file as a line of JSON."""
+    out.write(json.dumps(record, ensure_ascii=False) + "\n")
+    out.flush()
+
+
+def trivial_phases_path(pytest_args, out_path):
+    """
+    The file in which a listing records the trivial phases of the suite's fixtures: beside the
+    listing's output, in the runner's directory for the run's result files, named by the pytest
+    arguments and the working directory, so that the fixture phases of the same run find it.
+    """
+    digest = hashlib.sha256(json.dumps([os.getcwd(), pytest_args]).encode()).hexdigest()[:16]
+    return os.path.join(os.path.dirname(os.path.abspath(out_path)), f"errata-pytest-{digest}.json")
+
+
+def answer_trivial_phase(argv):
+    """
+    Answers an invocation that is a single fixture phase which the run's listing recorded as
+    trivial, a prepare or a teardown that the fixture's declaration leaves out: it writes the
+    phase's empty success to OUT and returns 0. Any other invocation returns `None`, for pytest to
+    perform.
+    """
+    if ";" in argv:
+        return None
+    mode_at = next((i for i, a in enumerate(argv) if a in MODES), None)
+    if mode_at is None:
+        return None
+    link = argv[mode_at:]
+    if len(link) < 4 or link[0] != "errata-fixture" or link[3] not in OPTIONAL_PHASES:
+        return None
+    out_path, name, phase = link[1], link[2], link[3]
+    try:
+        with open(trivial_phases_path(argv[:mode_at], out_path), encoding="utf-8") as f:
+            trivial = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(trivial, dict) or phase not in trivial.get(name, []):
+        return None
+    with open(out_path, "a", encoding="utf-8") as out:
+        write_record(out, {"type": "protocol", "version": 1})
+    return 0
+
+
+# A trivial phase is answered before pytest is imported, so that it costs the interpreter alone.
+if __name__ == "__main__":
+    TRIVIAL_CODE = answer_trivial_phase(sys.argv[1:])
+    if TRIVIAL_CODE is not None:
+        sys.exit(TRIVIAL_CODE)
+
+import pytest  # noqa: E402
 
 # The markers that configure pytest itself, which the inventory leaves out of a test's tags.
 BUILTIN_MARKERS = {
@@ -62,8 +121,6 @@ BUILTIN_MARKERS = {
     "usefixtures",
     "xfail",
 }
-
-MODES = ("errata-list", "errata-run", "errata-fixture")
 
 USAGE = """usage:
   python errata_pytest.py PYTEST-ARG... errata-list <out>
@@ -110,12 +167,6 @@ def parse_args(rest):
         elif kind == "threads" and pair.isdigit() and int(pair) > 0:
             threads = int(pair)
     return settings, fixtures, threads
-
-
-def write_record(out, record):
-    """Appends one record to the output file as a line of JSON."""
-    out.write(json.dumps(record, ensure_ascii=False) + "\n")
-    out.flush()
 
 
 def relative_path(path):
@@ -259,9 +310,11 @@ class ListPlugin:
     """Collects the inventory once pytest has collected the tests."""
 
     def __init__(self):
-        """Starts with no records and no problems."""
+        """Starts with no records, no problems, and no trivial phases."""
         self.records = []
         self.problems = []
+        # For each declared fixture, the phases that its declaration leaves out.
+        self.trivial = {}
 
     def pytest_configure(self, config):
         """Registers the markers through which a test takes a setting or uses a fixture."""
@@ -278,6 +331,10 @@ class ListPlugin:
         self.problems.extend(problems)
         fixtures, problems = declared_fixtures(session.config)
         self.problems.extend(problems)
+        self.trivial = {
+            name: [phase for phase in OPTIONAL_PHASES if info.get(phase) is None]
+            for name, info in fixtures.items()
+        }
         used = set()
         wanted = set()
         tests = []
@@ -484,7 +541,10 @@ def skipped_verdict(report):
 
 
 def list_tests(pytest_args, out_path):
-    """Writes the inventory of the tests that pytest collects, and returns the exit code."""
+    """
+    Writes the inventory of the tests that pytest collects, records the trivial phases of the
+    suite's fixtures for the fixture phases of the same run, and returns the exit code.
+    """
     plugin = ListPlugin()
     code = pytest.main(
         [*pytest_args, "--collect-only", "-q", "-p", "no:cacheprovider"], plugins=[plugin]
@@ -500,6 +560,14 @@ def list_tests(pytest_args, out_path):
         write_record(out, {"type": "protocol", "version": 1})
         for record in plugin.records:
             write_record(out, record)
+    path = trivial_phases_path(pytest_args, out_path)
+    try:
+        with open(path + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(plugin.trivial, f)
+        os.replace(path + ".tmp", path)
+    except OSError:
+        # Without the record, every phase runs through pytest.
+        pass
     return 0
 
 
