@@ -779,34 +779,47 @@ def RunContext.groupKeys (ctx : RunContext) (plan : Plan) : Array String :=
         s!"\x00{ctx.config.executables[e]!.name}\x00{fixture.name}")
 
 /--
-The keys of the plan's tests and fixtures' phases in the order that a run of the plan with one slot
-reports them, when each fixture's phase whose key is in {name}`failed` fails and every other job
-succeeds. A plan in the inventory's order gives the order of the JUnit report.
+The fixtures among {name}`fs` in the order of their teardowns: each after every fixture among them
+that takes it, and otherwise the earliest in the plan first.
 -/
-def RunContext.sequentialOrder (ctx : RunContext) (plan : Plan) (failed : Array Result.Key) :
-    Array Result.Key := Id.run do
-  let failedSet : Std.HashSet Result.Key := failed.foldl (·.insert ·) {}
-  let (s, first) := Scheduler.step (Scheduler.State.init 1 plan.testSpecs plan.fixtureSpecs) .begin
-  let mut sched := s
-  let mut queue := first
+def Plan.teardownOrder (plan : Plan) (fs : Array Nat) : Array Nat := Id.run do
+  let mut left := fs.qsort (· < ·)
   let mut out := #[]
-  -- The started jobs, which end in the order they started.
-  let mut running : Array Scheduler.Job := #[]
-  repeat
-    let mut finished := false
-    for cmd in queue do
-      match cmd with
-      | .finish => finished := true
-      | .skip job _ => out := out.push (ctx.jobKey plan job)
-      | .spawn job _ _ => running := running.push job
-    if finished then break
-    let some job := running[0]? | break
-    running := running.eraseIdx! 0
-    let key := ctx.jobKey plan job
-    out := out.push key
-    let (s, more) := Scheduler.step sched (.exited job !(failedSet.contains key))
-    sched := s
-    queue := more
+  while !left.isEmpty do
+    let ready? := left.find? fun f => !left.any fun g => plan.fixtureSpecs[g]!.deps.contains f
+    -- Fixtures come after the fixtures they take, so the latest one left is always ready.
+    let f := ready?.getD left.back!
+    out := out.push f
+    left := left.filter (· != f)
+  return out
+
+/--
+The keys of the tests and fixtures' phases of a plan in the order of the JUnit report. The tests
+stand in the plan's order, each after the prepares of its fixtures, in the order it names them. The
+setups of the fixtures that a test needs, directly or through other fixtures, stand before the first
+test that needs them, each after the setups of the fixtures it takes, and their teardowns after the
+last such test, each before the teardowns of the fixtures it takes. A plan in the inventory's order
+gives the inventory's order.
+-/
+def RunContext.reportOrder (ctx : RunContext) (plan : Plan) : Array Result.Key := Id.run do
+  let closures := plan.testSpecs.map fun spec =>
+    Scheduler.closureOf plan.fixtureSpecs (spec.fixtures.map (·.1))
+  let mut firstUser : Std.HashMap Nat Nat := {}
+  let mut lastUser : Std.HashMap Nat Nat := {}
+  for h : t in [0 : closures.size] do
+    for f in closures[t] do
+      firstUser := firstUser.insertIfNew f t
+      lastUser := lastUser.insert f t
+  let mut out := #[]
+  for h : t in [0 : closures.size] do
+    for f in closures[t] do
+      if firstUser.get? f == some t then out := out.push (ctx.jobKey plan (.setup f))
+    for (f, _) in plan.testSpecs[t]!.fixtures do
+      out := out.push (ctx.jobKey plan (.prepare f t))
+    out := out.push (ctx.jobKey plan (.test t))
+    let ending := closures[t].filter (lastUser.get? · == some t)
+    for f in plan.teardownOrder ending do
+      out := out.push (ctx.jobKey plan (.teardown f))
   return out
 
 /-- The invocation that runs a job, with the values of the fixtures it receives. -/
@@ -837,12 +850,10 @@ that the scheduler asks for, reports the tests and setups that it asks to report
 and tells it of each process that ends, until it ends the run. Once the run has been cancelled, the
 scheduler learns of it before the next command, starts no more tests, and tears down the fixtures
 whose setups were invoked. When nothing runs and the scheduler has not ended the run, the tests it
-never started are named in a run-level error. The result is the keys of the fixtures' phases whose
-processes failed or ran past their timeouts.
+never started are named in a run-level error.
 -/
-def RunContext.runScheduled (ctx : RunContext) (plan : Plan) : IO (Array Result.Key) := do
+def RunContext.runScheduled (ctx : RunContext) (plan : Plan) : IO Unit := do
   let d := ctx.dispatcher
-  let mut failed := #[]
   let mut sched := Scheduler.State.init plan.pool plan.testSpecs plan.fixtureSpecs
   let (s, first) := Scheduler.step sched .begin
   sched := s
@@ -906,14 +917,9 @@ def RunContext.runScheduled (ctx : RunContext) (plan : Plan) : IO (Array Result.
     let event : Scheduler.Event := match e.exit with
       | .timedOut .. => .timedOut job
       | _ => .exited job e.succeeded
-    let failedPhase := match event with
-      | .timedOut _ => !(job matches .test _)
-      | _ => !e.succeeded && !(job matches .test _)
-    if failedPhase then failed := failed.push (ctx.jobKey plan job)
     let (s, more) := Scheduler.step sched event
     sched := s
     queue := more
-  return failed
 
 /-- A value as a listing shows it, quoted so that an empty value shows. -/
 private def showValue (v : String) : String := v.quote
@@ -1263,7 +1269,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
       | .shuffle =>
         inventoryPlan.reorder (Scheduler.groupedOrder runSeed (ctx.groupKeys inventoryPlan))
     if let some p := progress? then p.start plan.tests.size exeWidth
-    let failed ← ctx.runScheduled plan
+    ctx.runScheduled plan
     let s ← d.get
     -- Under `--wfail`, the warning of `--no-tests warn` fails the run as `--no-tests fail` does.
     let code :=
@@ -1272,7 +1278,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
       else if s.results.all (·.outcome.isPass) && !s.issues.any (·.isError) then ExitCode.ok
       else ExitCode.testRunFailed
     finish code (skipped, config.skippedTestLibraries.size, config.skippedExecutables.size)
-      (ctx.sequentialOrder inventoryPlan failed)
+      (ctx.reportOrder inventoryPlan)
 
 /--
 The paths of the JUnit, JSON, and Markdown reports: the command line's, or else the profile's, which
