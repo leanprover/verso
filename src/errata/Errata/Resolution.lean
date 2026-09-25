@@ -125,7 +125,10 @@ def seedSetting : String := "Errata.seed"
 
 /-- What a test runs with, as the runner resolved it. -/
 structure Resolved where
-  /-- The values of the settings it takes, in the order it takes them. Optional ones without a value are left out. -/
+  /--
+  The values of the settings it takes that have one, in the order it takes them. An optional setting
+  without a value has no entry.
+  -/
   settings : Array (String × String) := #[]
   /-- The mandatory settings that nothing gives a value. -/
   missing : Array String := #[]
@@ -144,10 +147,10 @@ deriving Repr, Inhabited, DecidableEq
 /--
 Resolves what a test receives. Each setting the test takes comes from the command line, then the
 first override that matches the test and gives it, then the profile, then the setting's declared
-default, and, for {lit}`Errata.seed`, the seed derived from the run's seed. The timeout and the grace period
-come from the command line, the first matching override, the profile, and the defaults, in that
-order; the slow mark and golden updating from the matching override, the profile, and the defaults,
-with {lit}`--update-golden` over all of them.
+default, and, for {lit}`Errata.seed`, the seed derived from the run's seed. The timeout and the
+grace period come from the command line, the first matching override, the profile, and the defaults,
+in that order; the slow mark and golden updating come from the first matching override, the
+profile, and the defaults, with {lit}`--update-golden` over all of them.
 -/
 def ResolutionContext.resolve (ctx : ResolutionContext) (exe : String)
     (declared : Array SettingInfo) (t : InventoryTest) : Resolved := Id.run do

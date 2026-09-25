@@ -6,8 +6,8 @@ Author: David Thrane Christiansen
 
 /-
 Tests of the filter language: the parser's precedence, associativity, escapes, and errors, the
-printer, evaluation, and glob matching, including its time on patterns that make a backtracking
-matcher take exponential time.
+printer, evaluation, and glob matching, including its time on patterns with many `*` against long
+strings that almost match.
 -/
 module
 
@@ -151,7 +151,9 @@ def filterErrorLocations : Test := do
     let .error e := Filter.parse text | fail "expected an error"
     assertBEq "errata.toml:13:10: expected ')'" (e.render (.file "errata.toml" 12 11) text)
 
-/-- Parsing a filter and printing it gives the same text, for filters written in their shortest form. -/
+/--
+Parsing a filter and printing it gives the same text, for filters written in their shortest form.
+-/
 @[test]
 def filterPrintsAsWritten : Test := do
   for text in ["name(a) | tag(b) & !exe(c)", "(name(a) | tag(b)) & file(src/*)", "all() \\ tag(slow)",
@@ -268,8 +270,7 @@ def globCases : Test := do
 
 /--
 Globs match in time proportional to the pattern and the string, so patterns with many `*` against
-long strings that almost match finish at once. A backtracking matcher needs time exponential in the
-number of `*` for them.
+long strings that almost match finish at once.
 -/
 @[test]
 def globMatchingIsLinear : Test := do

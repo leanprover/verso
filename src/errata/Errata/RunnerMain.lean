@@ -54,9 +54,15 @@ structure Options where
   jobs : Nat := 1
   /-- Lists the settings and the tests that would run, without running them. -/
   list : Bool := false
-  /-- How long a test may run before it is terminated, in milliseconds, over the configuration's. -/
+  /--
+  How long a test may run before it is terminated, in milliseconds. It takes precedence over the
+  configuration's value.
+  -/
   timeoutMs? : Option Nat := none
-  /-- How long a terminated test has before it is killed, in milliseconds, over the configuration's. -/
+  /--
+  How long a terminated test has before it is killed, in milliseconds. It takes precedence over the
+  configuration's value.
+  -/
   gracePeriodMs? : Option Nat := none
   /-- Values of settings, in order, from {lit}`--set NAME=VALUE`. -/
   sets : Array (String × String) := #[]
@@ -157,7 +163,9 @@ where
       else if let some v := arg.dropPrefix? "--filter=" then go sets (filters.push v.copy) rest more
       else go sets filters (rest.push arg) more
 
-/-- Splits a {lit}`--set` value at its first {lit}`=`. The value is everything after it, taken verbatim. -/
+/--
+Splits a {lit}`--set` value at its first {lit}`=`. The value is everything after it, taken verbatim.
+-/
 def parseSet (s : String) : Except String (String × String) :=
   match s.splitOn "=" with
   | name :: value@(_ :: _) =>
@@ -503,9 +511,9 @@ arrive. Before a line of output is handed on, the result file is read up to its 
 that the test wrote before that output precede it. The test is terminated at its timeout and killed
 after the grace period. The run loop checks the clock after every bounded read of the result file.
 Once the test executable has exited, the processes that it started have the pipe grace to release
-its output pipes, and then its group is swept. A test whose mandatory setting has no value is
-reported without being started. The result is {lean}`false` when the run has been cancelled and the
-test was not started.
+its output pipes, and then its process group is swept. A test whose mandatory setting has no value
+is reported with no process started. The result is {lean}`false` when the run has been cancelled
+and the test was not started.
 -/
 def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) (r : Resolved) : IO Bool := do
   let exe := ctx.config.executables[t.exeIdx]!
@@ -792,9 +800,10 @@ def writeReports (opts : Options) (report : RunReport) : IO Unit := do
 
 /--
 The {lit}`list` subcommand: lists every test executable, then prints one line per test that the
-filters select, in inventory order: the executable, the name, the file and line, and the tags. No
-filter selects every test, and several are joined by union. The result is the exit code: {lit}`1`
-when a filter has a syntax error or an executable cannot list, and {lit}`0` otherwise.
+filters select, in inventory order: the executable, the name, the file and line, and the tags.
+Several filters are joined by union, and with none every test is selected. The result is the exit
+code: {lit}`1` when a filter has a syntax error or an executable cannot list, and {lit}`0`
+otherwise.
 -/
 def listSubcommand (config : Config) (opts : Options) (filters : Array String)
     (registry : Registry) : IO UInt32 := do

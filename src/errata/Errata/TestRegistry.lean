@@ -6,8 +6,8 @@ Author: David Thrane Christiansen
 
 /-
 The record of the tests that `@[test]` marks, the settings that `@[setting]` marks, and the helpers
-that `@[test_helper]` marks, kept in environment extensions. Discovery reads them at elaboration time, and the single-test runner reads
-the tests from an imported environment at run time.
+that `@[test_helper]` marks, kept in environment extensions. Discovery reads them at elaboration
+time, and the single-test runner reads the tests from an imported environment at run time.
 -/
 module
 

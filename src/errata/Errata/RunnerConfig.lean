@@ -101,7 +101,10 @@ structure Config where
   protocol : Nat := configVersion
   /-- The test executables to list and run. -/
   executables : Array ExecutableConfig := #[]
-  /-- The directory of the Errata package, which test executables receive as {lit}`ERRATA_DIR`. -/
+  /--
+  The directory of Errata's sources, which holds {lit}`harnesses/`. Test executables receive it as
+  {lit}`ERRATA_DIR`.
+  -/
   errataDir? : Option String := none
   /-- The driver's warnings about the run, reported as issues with the run as a whole. -/
   warnings : Array String := #[]
@@ -109,11 +112,13 @@ structure Config where
   invocation? : Option String := none
   /-- The profiles, by name. A configuration without a {lit}`default` profile has an empty one. -/
   profiles : Array Profile := #[]
-  /-- The filter that selects the tests to run when neither the profile nor the command line gives one. -/
+  /--
+  The filter that selects the tests to run when neither the profile nor the command line gives one.
+  -/
   defaultFilter? : Option FilterText := none
   /--
-  Whether the run has some of the package's test executables: the driver was given the names of
-  libraries or executables to test.
+  Whether the driver was given the names of libraries or executables to test, so that the run may
+  have only some of the package's test executables.
   -/
   partialSelection : Bool := false
 deriving Repr, Inhabited, DecidableEq

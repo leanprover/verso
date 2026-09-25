@@ -46,7 +46,8 @@ Builds the action that runs a declaration as a test, using the {name}`IsTest` in
 that is visible at the declaration, and returns it with the settings that the test takes. Every
 parameter of the declaration is a setting {lit}`S` or {lit}`Option S`. The action receives the
 settings as name and value pairs, parses each parameter's value with its setting's parser, and
-applies the test to the values. The declaration must not be {lit}`meta` or universe polymorphic.
+applies the test to the values. The declaration must be a runtime declaration with no universe
+parameters.
 -/
 meta def testAction (decl : Name) : MetaM (Expr × Array SettingUse) := do
   let env ← getEnv

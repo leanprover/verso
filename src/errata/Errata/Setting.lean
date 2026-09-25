@@ -36,12 +36,15 @@ structure Setting where
   -/
   default? : Option String := none
 
-/-- A setting stands for the type of its values, so a parameter {lit}`(x : S)` has the type `S.type`. -/
+/--
+A setting stands for the type of its values, so a parameter {lit}`(x : S)` has the type
+{lit}`S.type`.
+-/
 instance : CoeSort Setting Type := ⟨Setting.type⟩
 
 /-- A setting that a test takes, as a test executable lists it. -/
 structure SettingRef where
-  /-- The setting's name. -/
+  /-- The setting's name: its fully qualified declaration name. -/
   name : String
   /-- Whether the test takes the setting as an {name}`Option`, and so runs without a value. -/
   optional : Bool

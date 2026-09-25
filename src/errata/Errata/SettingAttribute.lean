@@ -34,9 +34,10 @@ meta def ensureExported (decl : Name) : AttrM Unit := do
       cannot reach it. Make it public, for example by declaring it in a `public section`."
 
 /--
-Records a declaration as a setting and makes it reducible, so that a test's parameter of its type
-has the setting's type to instance resolution. The declaration must have the type
-{lit}`Errata.Setting`, be exported with its value, and not be {lit}`meta` or universe polymorphic.
+Records a declaration as a setting and makes it reducible, so that instance resolution sees a test's
+parameter {lit}`(x : S)` at the type of the setting's values. The declaration must be a runtime
+definition of type {lit}`Errata.Setting`, exported with its value, with no universe parameters, and
+marked as a setting once.
 -/
 meta def recordSetting (decl : Name) : AttrM Unit := do
   let env ← getEnv

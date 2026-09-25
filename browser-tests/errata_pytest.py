@@ -85,7 +85,9 @@ def node_path(nodeid):
 
 
 def item_settings(item):
-    """The settings that an item takes, as (name, optional) pairs, in the order its markers name them."""
+    """
+    The settings that an item takes, as (name, optional) pairs, in the order its markers name them.
+    """
     seen = {}
     for marker in item.iter_markers("errata_setting"):
         optional = bool(marker.kwargs.get("optional", False))
@@ -391,7 +393,10 @@ def invoke(pytest_args, link):
     if mode == "errata-run" and len(rest) >= 2:
         return run_test(pytest_args, rest[0], rest[1], rest[2:])
     if mode == "errata-fixture":
-        print("errata_pytest.py: fixtures are not supported by this harness", file=sys.stderr)
+        print(
+            "errata_pytest.py: the pytest harness runs the modes errata-list and errata-run",
+            file=sys.stderr,
+        )
         return 2
     print(USAGE, file=sys.stderr)
     return 2

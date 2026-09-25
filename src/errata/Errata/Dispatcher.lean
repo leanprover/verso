@@ -34,7 +34,7 @@ structure Planned where
   path : Array String := #[]
   /-- The test's description from the inventory. -/
   description? : Option String := none
-  /-- The seed that the test receives, when it takes the {lit}`seed` setting. -/
+  /-- The seed that the test receives, when it takes the setting {lit}`Errata.seed`. -/
   seed? : Option String := none
   /-- The settings that the test receives, in order, the seed among them. -/
   settings : Array (String × String) := #[]
@@ -52,7 +52,7 @@ inductive Exit where
   | timedOut (afterMs : Nat) (killed : Bool)
   /-- The process could not be started. -/
   | spawnFailed (message : String)
-  /-- The process was not started, since the mandatory setting has no value. -/
+  /-- The mandatory setting {name}`setting` has no value, so the runner started no process. -/
   | settingMissing (setting : String)
 deriving Repr, Inhabited
 

@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-# The built site, relative to this directory, when pytest runs without Errata's harness and
+# The built site, relative to this directory, when pytest runs outside Verso's pytest harness and
 # `--site-dir` names no other.
 DEFAULT_SITE_DIR = "../_out/html-multi"
 
@@ -74,7 +74,7 @@ def pytest_addoption(parser):
         action="store",
         default=None,
         help=f"Path to the built site directory (default: {DEFAULT_SITE_DIR}, or the Errata "
-        "setting siteDir under Errata's harness)",
+        "setting siteDir under Verso's pytest harness)",
     )
     parser.addoption(
         "--server-url",
@@ -109,9 +109,10 @@ def pytest_generate_tests(metafunc):
 
 def pytest_collection_modifyitems(config, items):
     """
-    Marks every browser test with `browser`, the tag that Errata's default filter leaves out, and
-    marks the tests that serve a site or draw redirects as taking the Errata settings they read. A
-    test that serves a site needs `siteDir` unless the command line gives `--site-dir`.
+    Marks every browser test with `browser`, the tag that the default profile's filter in
+    `errata.toml` leaves out, and marks the tests that serve a site or draw redirects as taking the
+    Errata settings they read. A test that serves a site needs `siteDir` unless the command line
+    gives `--site-dir`.
     """
     site_given = config.getoption("--site-dir") is not None
     for item in items:
@@ -126,7 +127,8 @@ def pytest_collection_modifyitems(config, items):
 def site_dir(request):
     """
     The built site: `--site-dir` when the command line gives it, and otherwise the Errata setting
-    `siteDir` under Errata's harness, which the runner requires, or the default site without it.
+    `siteDir` under Verso's pytest harness, which the runner requires, or the default site outside
+    the harness.
     """
     site = request.config.getoption("--site-dir")
     if site is None:
@@ -144,8 +146,9 @@ def site_dir(request):
 @pytest.fixture
 def redirect_case(request, redirect_index, site_dir):
     """
-    A redirect to check, as a (source, target) pair, drawn from the site's redirects with the Errata
-    seed or `--seed` when either is given, so that a test with the same seed checks the same redirect.
+    A redirect to check, as a (source, target) pair, drawn from the site's redirects with the
+    setting `Errata.seed` or `--seed` when either is given, so that a test with the same seed checks
+    the same redirect.
     """
     seed = errata_settings_of(request).get("Errata.seed")
     if seed is None:

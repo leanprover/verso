@@ -26,8 +26,8 @@ structure RealStreams where
 
 /--
 Deprecated. Free-form options for a test that the single-test runner of the editor widget passes,
-read with {lit}`option?`, {lit}`optionValues`, and {lit}`flag`. A test takes a setting as a parameter
-instead.
+read with {lit}`option?`, {lit}`optionValues`, and {lit}`flag`. Tests take their configuration as
+settings.
 -/
 structure LegacyOptions where
   /-- Every value given for each option name, in order. -/
@@ -107,7 +107,7 @@ structure TestContext extends Context.Common where
   The time spent so far in the named results directly inside the current scope, in milliseconds.
   -/
   insideMs : IO.Ref Nat
-  /-- Whether golden checks rewrite their expected files instead of comparing. -/
+  /-- Whether golden checks write the actual output to their expected files. -/
   updateGolden : Bool := false
   /--
   Deprecated. The free-form options that the editor widget's single-test runner passes. Test

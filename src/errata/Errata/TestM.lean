@@ -57,7 +57,7 @@ instance : Alternative TestM where
   orElse x y := tryCatch x fun _ => y ()
 
 /--
-Deprecated: a test takes a setting as a parameter instead. All values that the editor widget's
+Deprecated: tests take their configuration as settings. All values that the editor widget's
 single-test runner supplied for a free-form option, in order; records that the option was read.
 Under a test executable, the result is empty.
 -/
@@ -67,14 +67,14 @@ def optionValues (name : String) : TestM (Array String) := do
   return legacy.values.getD name #[]
 
 /--
-Deprecated: a test takes a setting as a parameter instead. The last value that the editor widget's
+Deprecated: tests take their configuration as settings. The last value that the editor widget's
 single-test runner supplied for a free-form option, if any; records that the option was read.
 -/
 def option? (name : String) : TestM (Option String) :=
   return (← optionValues name).back?
 
 /--
-Deprecated: a test takes a setting as a parameter instead. Whether the editor widget's single-test
+Deprecated: tests take their configuration as settings. Whether the editor widget's single-test
 runner supplied a free-form option with a value other than an explicit false one; records the read.
 -/
 def flag (name : String) : TestM Bool :=

@@ -83,7 +83,10 @@ def expectOutcome (r : Run) (test : String) (p : Outcome → Bool) (what : Strin
 
 /-! # Products -/
 
-/-- A test of a product that plays a part in a check: its name, and the settings that it needs to play it. -/
+/--
+A test of a product that plays a part in a check: its name, and the settings that it needs to play
+it.
+-/
 structure Role where
   /-- The test's name, as the product's inventory gives it. -/
   test : String
@@ -145,7 +148,10 @@ def pytestDir : String := "src/errata-tests/fixtures/harness/pytest"
 /-- The node id of a test in the pytest suite. -/
 def pytestTest (name : String) : Role := { test := s!"{pytestDir}/test_sample.py::{name}" }
 
-/-- The pytest suite, run through Verso's pytest harness with the Python environment of its browser tests. -/
+/--
+The pytest suite, run through Verso's pytest harness with the Python environment of Verso's browser
+tests.
+-/
 def pytestProduct : Product where
   name := "pytest"
   exe := {
@@ -289,7 +295,9 @@ def inventoryWellFormed : Test := forEach products fun p => do
   let problems := inventoryProblems records
   assertTrue problems.isEmpty s!"the inventory of {p.name} is malformed" (some ("\n".intercalate problems.toList))
 
-/-- A known passing test passes, a known failing test fails, and a test that throws ends with an error. -/
+/--
+A known passing test passes, a known failing test fails, and a test that throws ends with an error.
+-/
 @[test]
 def knownTestsEndAsTheyShould : Test := forEach products fun p => do
   let roles := #[p.passes, p.fails]
@@ -300,7 +308,10 @@ def knownTestsEndAsTheyShould : Test := forEach products fun p => do
     let r ← p.run #[e]
     expectOutcome r e.test (· matches .reported (.error _)) "an error"
 
-/-- A test executable asked for a test that it does not have exits non-zero without passing. -/
+/--
+A test executable asked for a test outside its inventory exits non-zero and writes no passing
+verdict.
+-/
 @[test]
 def unknownTestNameFails : Test := forEach products fun p => do
   IO.FS.withTempDir fun dir => do
@@ -312,8 +323,8 @@ def unknownTestNameFails : Test := forEach products fun p => do
     assertNotContains "\"status\": \"pass\"" (← IO.FS.readFile out)
 
 /--
-A test whose mandatory setting has no value is inconclusive, naming the setting, and its process is
-never started. The rest of the run goes on.
+A test whose mandatory setting has no value is inconclusive, naming the setting, and the runner
+starts no process for it. The rest of the run goes on.
 -/
 @[test]
 def settingMissing : Test := forEach products fun p => do
@@ -518,7 +529,8 @@ def timeoutEndsTests : Test := forEach scriptedProducts fun p => do
   result "a terminated test was not killed" do
     expectOutcome r "sleeps" (· matches .inconclusive (.timedOut _ false)) "timedOut, terminated"
   -- `basic.sh` ignores the request itself. On the shell harness the test's body runs in a subshell,
-  -- which ignores it while the harness's own process ends, and the sweep of the group ends the rest.
+  -- which ignores it while the harness's own process ends, and the sweep of the process group ends
+  -- the rest.
   if p.exe.name == basicProduct.exe.name then
     result "a test that ignores the request is killed" do
       expectOutcome r "stubborn" (· matches .inconclusive (.timedOut _ true)) "timedOut, killed"
@@ -860,10 +872,11 @@ def overridesApply : Test := forEach scriptedProducts fun p => do
   assertBEq (some "override") ((res.settings.find? (·.1 == "note")).map (·.2))
 
 /--
-Resolution takes each setting from the command line, then the first matching override that gives it,
-then the profile, then the declared default, and for `Errata.seed` the derived seed; the timeout and grace
-period from the command line, the first matching override, the profile, and the defaults; and the
-slow mark and golden updating from the override, the profile, and the defaults.
+Resolution takes each setting from the command line, then the first matching override that gives
+it, then the profile, then the declared default, and for `Errata.seed` the derived seed; the timeout
+and grace period from the command line, the first matching override, the profile, and the
+defaults; and the slow mark and golden updating from the first matching override, the profile, and
+the defaults.
 -/
 @[test]
 def resolutionPrecedence : Test := do
@@ -922,7 +935,10 @@ def resolutionPrecedence : Test := do
     assertBEq defaultSlowAfterMs r.slowAfterMs
     assertBEq false r.updateGolden
 
-/-- A test that runs longer than `slow-after` is marked slow in the human report, and its outcome stands. -/
+/--
+A test that runs longer than `slow-after` is marked slow in the human report, and its outcome
+stands.
+-/
 @[test]
 def slowTestsAreMarked : Test := do
   let config : Config := { profiles := #[{ name := "default", slowAfterMs? := some 0 }] }

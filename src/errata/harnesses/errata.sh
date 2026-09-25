@@ -21,16 +21,19 @@
 #
 #   errata_main "$@"
 #
-# A test's body runs in a subshell with `set -e`: a command that fails ends the test with its status,
-# and `errata_fail`, which returns 1, ends it as failed unless the body catches the status.
+# A test's body runs in a subshell with `set -e`: a command that fails ends the test with its status.
+# `errata_fail` writes a failing verdict and returns 1, which ends the body unless the body catches
+# the status; the test fails either way.
 #
 # The runner sets three variables in every test executable's environment: ERRATA_DIR, the directory
 # of Errata's sources; ERRATA_RUN_ID, the run's identifier, the same for every process of one run and
 # different in the next, for work a script does once per run; and ERRATA_LIFELINE=1, which marks
-# standard input as a pipe that closes when the runner ends. The runner ends a shell test's process
-# group itself, and the library reads none of the three. The library needs bash 3.2 or later and the POSIX utilities that ship with macOS and
-# Linux. It writes the records to file descriptor 9, which it opens on the file that the runner
-# names, so the script's own standard output and standard error stay free for the test's output.
+# standard input as a pipe that closes when the runner ends. A script reads the first two from its
+# environment, and the runner ends a shell test's process group itself.
+#
+# The library needs bash 3.2 or later and the POSIX utilities that ship with macOS and Linux. It
+# writes the records to file descriptor 9, which it opens on the file that the runner names, so the
+# script's own standard output and standard error stay free for the test's output.
 
 # The declared settings' names and defaults, and the tests' names, as errata-run collects them.
 _errata_setting_names=()
@@ -351,7 +354,7 @@ _errata_invoke() {
       return "$status"
       ;;
     errata-fixture)
-      printf 'errata.sh: fixtures are not supported by this version of the shell harness\n' >&2
+      printf 'errata.sh: the shell harness runs the modes errata-list and errata-run\n' >&2
       return 2
       ;;
     *)

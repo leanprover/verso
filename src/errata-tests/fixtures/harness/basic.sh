@@ -17,8 +17,9 @@ record() {
   printf '%s\n' "$1" >> "$out"
 }
 
-# Every test takes Errata's seed, whose value the runner derives, and optionally a marker for the processes it starts and a note. Two tests
-# take more: `greets` a setting with a default, and `needs-setting` one that nothing gives a value.
+# Every test takes Errata's seed, whose value the runner derives, and optionally a marker for the
+# processes it starts and a note. Two tests take more: `greets` a setting with a default, and
+# `needs-setting` one that nothing gives a value.
 common='{"name":"Errata.seed","optional":false},{"name":"marker","optional":true},{"name":"note","optional":true}'
 
 # Carries out one invocation and exits with its status.

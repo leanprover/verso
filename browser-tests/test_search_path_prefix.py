@@ -42,7 +42,8 @@ def _find_free_port() -> int:
 
 
 def _wait_for_port(port: int, timeout: float = 10.0) -> None:
-    """Wait until the server accepts connections on the local port, for at most `timeout` seconds."""
+    """Wait until the server accepts connections on the local port, for at most `timeout`
+    seconds."""
     deadline = time.monotonic() + timeout
     while True:
         try:
@@ -56,11 +57,11 @@ def _wait_for_port(port: int, timeout: float = 10.0) -> None:
 
 @pytest.fixture(scope="session")
 def prefixed_server(site_dir):
-    """Serve the same built site as the `server` fixture, but mounted under `/reference/`.
+    """Serve the same built site as the `server` fixture, mounted under `/reference/`.
 
-    We create a fresh temporary directory, symlink the built site into
-    `<tmp>/reference`, and point `python -m http.server` at the temp dir.
-    The site files themselves are unmodified — only the URL space changes.
+    The fixture symlinks the built site into `<tmp>/reference` in a fresh
+    temporary directory and points `python -m http.server` at that directory.
+    The site's files stay as they are; only the URL space changes.
     """
     if not site_dir.is_dir():
         pytest.skip(f"built site not found at {site_dir}; run `lake build` first")

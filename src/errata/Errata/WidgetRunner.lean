@@ -122,12 +122,12 @@ def summarizeResults (seed : Nat) (testLocation : Location) (results : Array Res
   }
 
 /--
-Runs one test entry to completion, as the batch runner does, and condenses its results into a
+Runs one test entry to completion, as the Lean harness does, and condenses its results into a
 {name}`RunOutcome` whose description is the entry's docstring. Without a seed for property tests,
 one is generated.
 
-The test receives the {lit}`Errata.seed` setting and every option as a setting, followed by the declared
-default of each setting it takes that no option names. The options also reach the deprecated
+The test receives the setting {lit}`Errata.seed` and every option as a setting, followed by the
+declared default of each setting it takes that no option names. The options also reach the deprecated
 {lit}`optionValues`, {lit}`option?`, and {lit}`flag`, and the outcome names the options that the
 test neither read that way nor takes as a setting.
 

@@ -280,8 +280,8 @@ any standard input, {lit}`/dev/null` included. The test itself reads an empty st
 
 The runner also sets {lit}`ERRATA_DIR` to the directory of Errata's sources, where the shell
 harness lives, and {lit}`ERRATA_RUN_ID` to the run's identifier, which is the same for every process
-of one run and differs between runs, so that a test can do work once per run. The Lean harness reads
-neither, and a test reads them from its environment.
+of one run and differs between runs, so that a test can do work once per run. A test reads both from
+its environment.
 
 {lit}`errata-helper <name> [ARG]...` runs the helper in {name}`helpers` with that name, passing it the
 arguments that follow, and exits with the helper's exit code, which the process that started it sees

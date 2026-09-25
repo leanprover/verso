@@ -4,8 +4,7 @@
 # `--site-dir` naming the site; a listing needs no site and starts the harness at once. The site is
 # built once per run: a stamp named after the runner's ERRATA_RUN_ID records the site, and without
 # the variable every invocation builds it. A lock directory per test project makes the check and
-# the build one step, so two suites of one test project never build at once. This script stands in
-# for a fixture that builds the site.
+# the build one step, so two suites of one test project never build at once.
 #
 #   errata_with_site.sh literate PROJECT PYTEST-ARG... MODE ARG...
 #     the literate HTML of the test project PROJECT, which `lake query :literateHtml` builds there
@@ -13,8 +12,8 @@
 #     the site that `verso-html` writes from the literate JSON of PROJECT, which `lake build TARGET`
 #     builds there
 #
-# MODE is `errata-list` or `errata-run`, as the Errata runner passes it, and the script runs from the
-# repository's root.
+# MODE is `errata-list` or `errata-run`, as the Errata runner passes it, and the script runs from
+# the repository's root.
 
 set -euo pipefail
 

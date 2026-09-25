@@ -45,7 +45,9 @@ def Source.at (s : Source) (text : String) (offset : Nat) : String :=
       let sinceNewline := (before.reverse.takeWhile (· != '\n')).length
       s!"{path}:{line + newlines}:{sinceNewline}"
 
-/-- A span of a filter's text: the offsets, in characters, of its first character and past its last. -/
+/--
+A span of a filter's text: the offsets, in characters, of its first character and past its last.
+-/
 structure Span where
   /-- The offset of the first character. -/
   start : Nat := 0
@@ -270,8 +272,8 @@ def matchPattern (p : Array GlobPart) (s : Array Char) : Bool := Id.run do
   let mut px := 0
   let mut sx := 0
   -- The resume point: the pattern position after the latest `*`, and the string position that the
-  -- next attempt starts from. `sx` never decreases below `restartSx - 1`, and `restartSx` grows by one
-  -- at each restart, so the loop ends.
+  -- next attempt starts from. `sx` stays at or above `restartSx - 1`, and `restartSx` grows by one at
+  -- each restart, so the loop ends.
   let mut restartPx := 0
   let mut restartSx := 0
   while px < p.size || sx < s.size do
@@ -343,7 +345,10 @@ inductive Mode where
   | glob
 deriving Repr, Inhabited, DecidableEq
 
-/-- The mode of a matcher with no prefix: contains for names, glob for files and executables, and equality for tags. -/
+/--
+The mode of a matcher with no prefix: containment for names, a glob for files and executables, and
+equality for tags.
+-/
 def Predicate.defaultMode : Predicate → Mode
   | .name => .contains
   | .file | .exe => .glob
@@ -355,7 +360,9 @@ def Mode.prefix : Mode → Char
   | .contains => '~'
   | .glob => '#'
 
-/-- A predicate's argument: the mode, the text after its escapes are read, and the glob it denotes. -/
+/--
+A predicate's argument: the mode, the text after its escapes are read, and the glob it denotes.
+-/
 structure Matcher where
   /-- How the text is compared. -/
   mode : Mode
@@ -460,7 +467,10 @@ private def expect (c : Char) : P Unit := do
   | some d => if d == c then modify (· + 1) else fail (← get) s!"expected '{c}', found {showChar d}"
   | none => fail (← get) s!"expected '{c}'"
 
-/-- Reads the hexadecimal digits and the {lit}`}` of a {lit}`\u{…}` escape, whose {lit}`\` is at {name}`start`. -/
+/--
+Reads the hexadecimal digits and the {lit}`}` of a {lit}`\u{…}` escape, whose {lit}`\` is at
+{name}`start`.
+-/
 private def unicodeEscape (start : Nat) : P Char := do
   expect '{'
   let mut value := 0
@@ -685,7 +695,7 @@ where
       | .or a b _ => (0, s!"{go a 0} | {go b 1}")
     if own < level then s!"({text})" else text
 
-/-- Several filters as one, joined by union. No filter selects every test. -/
+/-- Several filters as one, joined by union. The union of no filters selects every test. -/
 def unionOf (filters : Array Expr) : Expr :=
   match filters[0]? with
   | none => .all {}

@@ -193,10 +193,9 @@ jobs:
                   restore-keys: |
                       literate-multi-root-${{ runner.os }}-${{ hashFiles('test-projects/literate-multi-root/lean-toolchain') }}-${{ hashFiles('test-projects/literate-multi-root/lake-manifest.json') }}-
 
-            # The LaTeX `svg` package shells out to `inkscape --version` during
-            # the `checkTeX` build. Fail here with a clear message if Inkscape
-            # is missing or its version can't be read, rather than deep inside a
-            # lualatex run.
+            # The LaTeX `svg` package shells out to `inkscape --version` during the
+            # TeX build that `VersoTests.Settings.checkTeX` turns on. This step fails
+            # with a clear message if Inkscape is missing or its version can't be read.
             - name: Check Inkscape is available
               run: |
                   inkscape --version

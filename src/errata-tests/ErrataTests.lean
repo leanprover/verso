@@ -1110,8 +1110,8 @@ def driverBuildsNeededTargets : Test :=
 /--
 The driver builds only the targets that the selected profile's settings need. A name on the command
 line selects a test executable that `errata.toml` adds, as it selects a library, and such an
-executable receives the directory of Errata's sources. The runner's configuration says when the run
-has some of the executables, and a name that matches nothing is an error that names both kinds.
+executable receives the directory of Errata's sources. The runner's configuration says when the
+command line named what to test, and a name that matches nothing is an error that names both kinds.
 -/
 @[test]
 def driverSelectsProfilesAndExecutables : Test :=
@@ -1155,7 +1155,7 @@ def driverSelectsProfilesAndExecutables : Test :=
       assertExitCode 1 out
       assertContains "no library, and no [[executable]] in errata.toml, matches 'Nothing'" out.stderr
 
-/-- The `list` subcommand takes filters only, and rejects an option instead of ignoring it. -/
+/-- The `list` subcommand takes filters only, and an option given to it is an error. -/
 @[test]
 def listRejectsOptions : Test := do
   for opt in ["--profile", "--set", "--test-options", "-v"] do
