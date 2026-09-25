@@ -14,6 +14,7 @@ public import Errata.TestM
 public import Errata.Helpers
 public import Errata.SettingAttribute
 public import Errata.Setting
+public import Errata.Fixture
 public import Errata.IsTest
 public import Errata.Assertions
 public import Errata.Process

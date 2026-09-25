@@ -7,6 +7,7 @@ module
 
 public import Std.Data.HashSet
 public import Errata.Result
+public import Errata.Outcome
 
 public section
 
@@ -98,3 +99,34 @@ structure TestContext extends Context.Common where
   insideMs : IO.Ref Nat
   /-- Whether golden checks write the actual output to their expected files. -/
   updateGolden : Bool := false
+
+/--
+The context of a running fixture phase: the common context, the fixture's name, and the phase.
+-/
+structure FixtureContext extends Context.Common where
+  /-- The fixture's name: its fully qualified declaration name. -/
+  fixture : String := ""
+  /-- The phase that is running. -/
+  phase : FixturePhase := .setup
+
+/--
+Contexts that hold a common context: a test's and a fixture phase's. The capture of output and the
+assertion language reach the common part through this class.
+-/
+class HasCommonContext (ρ : Type) where
+  /-- The common part of the context. -/
+  common : ρ → Context.Common
+  /-- The context with its common part replaced. -/
+  setCommon : ρ → Context.Common → ρ
+  /-- Whether golden checks write the actual output to their expected files. -/
+  updateGolden : ρ → Bool
+
+instance : HasCommonContext TestContext where
+  common := TestContext.toCommon
+  setCommon ctx common := { ctx with toCommon := common }
+  updateGolden := TestContext.updateGolden
+
+instance : HasCommonContext FixtureContext where
+  common := FixtureContext.toCommon
+  setCommon ctx common := { ctx with toCommon := common }
+  updateGolden _ := false

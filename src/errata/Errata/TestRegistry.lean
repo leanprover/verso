@@ -5,9 +5,10 @@ Author: David Thrane Christiansen
 -/
 
 /-
-The record of the tests that `@[test]` marks, the settings that `@[setting]` marks, and the helpers
-that `@[test_helper]` marks, kept in environment extensions. Discovery reads them at elaboration
-time, and the single-test runner reads the tests from an imported environment at run time.
+The record of the tests that `@[test]` marks, the settings that `@[setting]` marks, the fixtures
+that `@[fixture]` marks, and the helpers that `@[test_helper]` marks, kept in environment
+extensions. Discovery reads them at elaboration time, and the single-test runner reads the tests
+from an imported environment at run time.
 -/
 module
 
@@ -36,6 +37,14 @@ structure SettingUse where
   optional : Bool
 deriving Inhabited, Repr, BEq
 
+/-- A fixture that a test takes as a parameter. -/
+structure FixtureUse where
+  /-- The declaration of the fixture, which {lit}`@[fixture]` marks. -/
+  decl : Name
+  /-- Whether the test uses the fixture alone among its users, which it does unless it is shared. -/
+  exclusive : Bool
+deriving Inhabited, Repr, BEq
+
 /--
 A recorded test: its declaration name, the definition that runs it, and the source file that
 defines it. The file is captured when the attribute is applied; the declaration's line and column
@@ -45,8 +54,9 @@ structure TestDecl where
   /-- The test declaration's name. -/
   name : Name
   /--
-  The exported definition beside the test whose value runs it. It receives the settings as
-  name and value pairs, parses the ones the test takes, and applies the test to them.
+  The exported definition beside the test whose value runs it. It receives the settings and the
+  fixtures' values as name and value pairs, parses the ones the test takes, and applies the test to
+  them.
   -/
   run : Name
   /-- Whether the action is unsafe, as it is when the test is. -/
@@ -59,7 +69,48 @@ structure TestDecl where
   tags : Array String := #[]
   /-- The settings that the test takes as parameters, in the order of its parameters. -/
   settings : Array SettingUse := #[]
+  /-- The fixtures that the test takes as parameters, in the order of its parameters. -/
+  fixtures : Array FixtureUse := #[]
 deriving Inhabited
+
+/--
+A recorded fixture: a declaration whose type, after its parameters, is {lit}`Errata.Fixture`, which
+{lit}`@[fixture]` marks. The fixture's name is the declaration's fully qualified name.
+-/
+structure FixtureDecl where
+  /-- The fixture's declaration name. -/
+  name : Name
+  /--
+  The exported definition beside the fixture whose value runs one of its phases. It receives the
+  settings and the fixtures' values as name and value pairs, the phase, and the fixture's own value
+  when the phase receives it, and returns the value that the setup produced.
+  -/
+  run : Name
+  /-- Whether the definition is unsafe, as it is when the fixture is. -/
+  isUnsafe : Bool
+  /-- The source file that declares the fixture. -/
+  file : String
+  /-- The fixture's docstring in Markdown, which describes it in the inventory. -/
+  docstring? : Option String := none
+  /-- The settings that the fixture takes as parameters, in the order of its parameters. -/
+  settings : Array SettingUse := #[]
+  /-- The fixtures that the fixture takes as parameters, in the order of its parameters. -/
+  fixtures : Array Name := #[]
+  /-- The number of hardware threads that the fixture's phases ask for, when it asks. -/
+  threads? : Option Nat := none
+deriving Inhabited
+
+/--
+The fixtures recorded by {lit}`@[fixture]`. The state holds the fixtures of every imported module
+and of the current one, so a test's parameter is checked against all of them, in an order in which
+each fixture follows the fixtures it takes.
+-/
+initialize fixtureExt : SimplePersistentEnvExtension FixtureDecl (Array FixtureDecl) ←
+  registerSimplePersistentEnvExtension {
+    name := `Errata.fixture
+    addEntryFn := Array.push
+    addImportedFn := fun imported => imported.flatten
+  }
 
 /--
 The test's own source range, which a failure with no more specific place is reported at. The file is

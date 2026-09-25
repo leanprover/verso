@@ -5,9 +5,9 @@ Author: David Thrane Christiansen
 -/
 
 /-
-The Lean harness: the main of a library's test executable. It lists the library's tests, runs one of
-them by name and writes the protocol's records to the file the runner names, and runs the helpers
-that its tests start.
+The Lean harness: the main of a library's test executable. It lists the library's tests and the
+fixtures they use, runs one test or one phase of a fixture by name and writes the protocol's records
+to the file the runner names, and runs the helpers that its tests start.
 -/
 module
 
@@ -30,23 +30,48 @@ open Protocol
 def usage : String :=
   "usage:\n  \
     <test-executable> errata-list <out>\n  \
-    <test-executable> errata-run <out> <test-name> [setting:NAME=VALUE]...\n  \
+    <test-executable> errata-run <out> <test-name> [setting:NAME=VALUE]... [fixture:NAME=VALUE]... \
+      [threads:N]\n  \
+    <test-executable> errata-fixture <out> <fixture-name> setup|prepare|teardown \
+      [setting:NAME=VALUE]... [fixture:NAME=VALUE]... [threads:N]\n  \
     <test-executable> errata-helper <helper-name> [ARG]...\n\n\
-    Several errata-list and errata-run invocations may be chained, each separated by a ';' \
-    argument. The Errata runner starts test executables, and tests start their helpers. To run the tests, \
-    run the Errata driver, which is usually `lake test`."
+    Several errata-list, errata-run, and errata-fixture invocations may be chained, each \
+    separated by a ';' argument. The Errata runner starts test executables, and tests start their \
+    helpers. To run the tests, run the Errata driver, which is usually `lake test`."
+
+/--
+The arguments of the given kind among a test executable's arguments: each {lit}`KIND:NAME=VALUE`,
+split at the first {lit}`=`, in order. Arguments of any other form are ignored.
+-/
+def pairsOf (kind : String) (args : List String) : Array (String × String) :=
+  args.toArray.filterMap fun arg => do
+    let rest ← arg.dropPrefix? s!"{kind}:"
+    match rest.copy.splitOn "=" with
+    | [] => none
+    | [name] => some (name, "")
+    | name :: value => some (name, "=".intercalate value)
 
 /--
 The settings among a test executable's arguments: each {lit}`setting:NAME=VALUE`, split at the first
 {lit}`=`, in order. Arguments of any other form are ignored.
 -/
 def settingsOf (args : List String) : Array (String × String) :=
-  args.toArray.filterMap fun arg => do
-    let rest ← arg.dropPrefix? "setting:"
-    match rest.copy.splitOn "=" with
-    | [] => none
-    | [name] => some (name, "")
-    | name :: value => some (name, "=".intercalate value)
+  pairsOf "setting" args
+
+/--
+The fixtures' values among a test executable's arguments: each {lit}`fixture:NAME=VALUE`, split at
+the first {lit}`=`, in order. Arguments of any other form are ignored.
+-/
+def fixturesOf (args : List String) : Array (String × String) :=
+  pairsOf "fixture" args
+
+/--
+The thread grant among a test executable's arguments: the number in the last {lit}`threads:N`, and
+{lit}`1` when there is none.
+-/
+def threadsOf (args : List String) : Nat :=
+  let grants := args.filterMap fun arg => (arg.dropPrefix? "threads:").bind (·.toNat?)
+  (grants.getLast?.filter (· > 0)).getD 1
 
 /--
 The setting that the Lean harness reads itself, which no test declares: {lit}`updateGolden`, which
@@ -73,43 +98,74 @@ The context for a test run with the given settings. The harness's own setting co
 reach their helpers through this test executable's {lit}`errata-helper` mode, which
 {name}`invocation` starts as {name}`selfCommand` describes.
 -/
-def contextOf (settings : Array (String × String)) (invocation : Array String := #[]) :
-    IO TestContext := do
+def contextOf (settings : Array (String × String)) (threads : Nat := 1)
+    (invocation : Array String := #[]) : IO TestContext := do
   let lookup (name : String) : Option String := (settings.findRev? (·.1 == name)).map (·.2)
   let ctx ← mkContext (updateGolden := lookup "updateGolden" == some "true")
-  return { ctx with helperCommand := some ((← selfCommand invocation).push "errata-helper") }
+  return { ctx with
+    helperCommand := some ((← selfCommand invocation).push "errata-helper"), threads }
 
 /--
-The settings that the tests in {name}`entries` take, each once, in the order in which the entries
-first name them.
+The fixtures that the tests in {name}`entries` use, directly or through the fixtures they use, in
+the order of {name}`fixtures`, which lists each fixture after the fixtures it takes.
 -/
-def reachedSettings (entries : Array TestEntry) : Array SettingRef := Id.run do
+def reachedFixtures (entries : Array TestEntry) (fixtures : Array FixtureEntry) :
+    Array FixtureEntry := Id.run do
+  let mut needed : Std.HashSet String := entries.foldl (init := {}) fun s e =>
+    e.fixtures.foldl (init := s) fun s f => s.insert f.name
+  -- A fixture's own fixtures come before it, so one pass from the last fixture to the first
+  -- reaches every fixture that a needed one takes.
+  for f in fixtures.reverse do
+    if needed.contains f.name then
+      needed := f.fixtures.foldl (init := needed) fun s d => s.insert d
+  return fixtures.filter (needed.contains ·.name)
+
+/--
+The settings that the tests in {name}`entries` and the fixtures in {name}`fixtures` take, each once,
+in the order in which the entries, and then the fixtures, first name them.
+-/
+def reachedSettings (entries : Array TestEntry) (fixtures : Array FixtureEntry := #[]) :
+    Array SettingRef := Id.run do
   let mut seen : Std.HashSet String := {}
   let mut out := #[]
-  for e in entries do
-    for s in e.settings do
-      unless seen.contains s.name do
-        seen := seen.insert s.name
-        out := out.push s
+  for s in entries.flatMap (·.settings) ++ fixtures.flatMap (·.settings) do
+    unless seen.contains s.name do
+      seen := seen.insert s.name
+      out := out.push s
   return out
 
+/-- The dependencies on settings that a test or fixture record lists, or none for an empty list. -/
+private def settingDeps (settings : Array SettingRef) : Option (Array SettingDep) :=
+  if settings.isEmpty then none
+  else some (settings.map fun s => { name := s.name, optional := s.optional })
+
 /--
-Writes the inventory: the protocol record, a setting record for each setting that the tests take,
-with its description and its declared default, and then a test record for each entry, with its
-tags and the settings it takes.
+Writes the inventory: the protocol record; a setting record for each setting that the tests and
+their fixtures take, with its description and its declared default; a fixture record for each
+fixture that the tests use, directly or through other fixtures, with its description, the settings
+and fixtures it takes, and the threads it asks for; and then a test record for each entry, with its
+tags and the settings and fixtures it takes.
 -/
-def writeInventory (entries : Array TestEntry) (out : IO.FS.Handle) : IO Unit := do
+def writeInventory (entries : Array TestEntry) (out : IO.FS.Handle)
+    (fixtures : Array FixtureEntry := #[]) : IO Unit := do
   writeRecord out (.protocol (some version))
-  for s in reachedSettings entries do
+  let reached := reachedFixtures entries fixtures
+  for s in reachedSettings entries reached do
     writeRecord out (.setting (some s.name) s.description? s.default?)
+  for f in reached do
+    writeRecord out <| .fixture {
+      name? := some f.name, description? := f.docstring?, settings? := settingDeps f.settings
+      fixtures? := if f.fixtures.isEmpty then none else some f.fixtures, threads? := f.threads?
+    }
   for e in entries do
     writeRecord out <| .test {
       name? := some e.name, path? := some e.path, file? := some e.location.file
       line? := some e.location.startPos.line, col? := some e.location.startPos.column
       description? := e.docstring?
       tags? := if e.tags.isEmpty then none else some e.tags
-      settings? := if e.settings.isEmpty then none
-        else some (e.settings.map fun s => { name := s.name, optional := s.optional })
+      settings? := settingDeps e.settings
+      fixtures? := if e.fixtures.isEmpty then none
+        else some (e.fixtures.map fun f => { name := f.name, exclusive := f.exclusive })
     }
 
 /-- The record fields for the status of a finished check. -/
@@ -124,11 +180,11 @@ Runs one test, writing its records to {name}`out`: {lit}`start` as its body begi
 and again as it finishes, and a {lit}`verdict` at the end. Each output record names the named result
 that was open when the fragment was written, {lit}`0` for the test itself. A named result that failed
 within an {name (scope := "Errata.TestM")}`expectFail` that expected it is reported again with the
-status {lit}`expectedFailure`. The test receives {name}`settings`. The result is the exit code:
-{lit}`0` for a pass and {lit}`1` otherwise.
+status {lit}`expectedFailure`. The test receives {name}`settings` and the fixtures' values
+{name}`fixtures`. The result is the exit code: {lit}`0` for a pass and {lit}`1` otherwise.
 -/
 def runTest (entry : TestEntry) (ctx : TestContext) (settings : Array (String × String))
-    (out : IO.FS.Handle) : IO UInt32 := do
+    (out : IO.FS.Handle) (fixtures : Array (String × String) := #[]) : IO UInt32 := do
   writeRecord out (.start (some (← nowMs)))
   -- The results that are open, innermost last, and the identifier of the next one. Output and
   -- result events arrive in the order the test produced them, so the result that wrote a fragment
@@ -177,13 +233,57 @@ def runTest (entry : TestEntry) (ctx : TestContext) (settings : Array (String ×
           if frames.isEmpty then frames else frames.modify (frames.size - 1) (· ++ failed)
   let ctx := { ctx with writeOutput := some saveOutput, watchResults := some watch }
   let start ← IO.monoMsNow
-  let results ← runEntry ctx entry settings
+  let results ← runEntry ctx entry settings fixtures
   let durationMs := (← IO.monoMsNow) - start
   let status := (results[0]?.map (·.status)).getD .pass
   let (st, message?, detail?, location?) := statusInfo status
   writeRecord out <|
     .verdict { status? := some st, message?, detail?, location?, durationMs? := some durationMs }
   return if status.isSuccess then 0 else 1
+
+/--
+Runs one phase of a fixture, writing its records to {name}`out`: an {lit}`output` record for each
+fragment the phase writes, a {lit}`value` record with the value that a setup produced, and a
+{lit}`verdict` when the phase failed. The phase receives {name}`settings`, the fixtures' values
+{name}`fixtures`, among them its own value when the setup produced one, and the thread grant
+{name}`threads`, and reaches its helpers through {name}`invocation`, as {name}`contextOf`
+describes. The result is the exit code, {lit}`0` when the phase succeeded and {lit}`1` otherwise,
+with the value that a setup produced.
+-/
+def runFixture (entry : FixtureEntry) (phase : FixturePhase) (settings : Array (String × String))
+    (fixtures : Array (String × String)) (threads : Nat) (out : IO.FS.Handle)
+    (invocation : Array String := #[]) : IO (UInt32 × Option String) := do
+  let saveOutput (o : Output) : IO Unit := do
+    let (stream, text) := match o with
+      | .stdout s => ("stdout", s)
+      | .stderr s => ("stderr", s)
+    writeRecord out (.output (some stream) (some text) (some (← nowMs)) (some 0))
+  let ctx : FixtureContext := {
+    location := entry.location, description? := entry.docstring?, threads
+    helperCommand := some ((← selfCommand invocation).push "errata-helper")
+    writeOutput := some saveOutput, outputFailed := ← IO.mkRef false
+    fixture := entry.name, phase
+  }
+  let own? := (fixtures.findRev? (·.1 == entry.name)).map (·.2)
+  let start ← IO.monoMsNow
+  let (outcome, _) ← runCapturing ctx (entry.run settings fixtures phase own?)
+  let durationMs? := some ((← IO.monoMsNow) - start)
+  match outcome with
+  | .ok (.ok value?) =>
+    if phase == .setup then
+      let value := value?.getD ""
+      writeRecord out (.value (some value))
+      return (0, some value)
+    return (0, none)
+  | .ok (.error f) =>
+    writeRecord out <| .verdict {
+      status? := some .fail, message? := some f.message, detail? := f.detail?
+      location? := f.location?.map Span.ofLocation, durationMs? }
+    return (1, none)
+  | .error e =>
+    writeRecord out <|
+      .verdict { status? := some .error, message? := some (toString e), durationMs? }
+    return (1, none)
 
 /-- The position of each entry, by its name. -/
 def indexByName (entries : Array TestEntry) : Std.HashMap String Nat := Id.run do
@@ -209,32 +309,57 @@ def runHelperNamed (helpers : Array Helper) (name : String) (args : List String)
     return 2
 
 /--
-Performs one invocation of a test executable, and returns its exit code. {lit}`errata-list`
-writes the inventory; {lit}`errata-run` runs the named test, with the settings that follow its name;
+Performs one invocation of a test executable, and returns its exit code with the fixture and the
+value that a setup produced. {lit}`errata-list` writes the inventory; {lit}`errata-run` runs the
+named test, with the settings, fixtures' values, and thread grant that follow its name;
+{lit}`errata-fixture` runs a phase of the named fixture from {name}`fixtures` likewise;
 {lit}`errata-helper` runs the named helper from {name}`helpers` with the arguments that follow its
-name; anything else prints the usage message. A test reaches its helpers through
+name; anything else prints the usage message. Tests and fixture phases reach their helpers through
 {name}`invocation`, as {name}`contextOf` describes.
 -/
-def dispatch (entries : Array TestEntry) (args : List String) (helpers : Array Helper := #[])
-    (invocation : Array String := #[]) : IO UInt32 := do
+def invoke (entries : Array TestEntry) (args : List String) (helpers : Array Helper := #[])
+    (invocation : Array String := #[]) (fixtures : Array FixtureEntry := #[]) :
+    IO (UInt32 × Option (String × String)) := do
   match args with
-  | "errata-helper" :: name :: rest => runHelperNamed helpers name rest
+  | "errata-helper" :: name :: rest => return (← runHelperNamed helpers name rest, none)
   | ["errata-list", outPath] =>
     let out ← IO.FS.Handle.mk outPath .append
-    writeInventory entries out
-    return 0
+    writeInventory entries out fixtures
+    return (0, none)
   | "errata-run" :: outPath :: name :: rest =>
     let out ← IO.FS.Handle.mk outPath .append
     writeRecord out (.protocol (some version))
     let some entry := (indexByName entries).get? name |>.bind (entries[·]?)
       | writeRecord out (.verdict { status? := some .error, message? := some s!"no test is named {name}" })
-        return 1
+        return (1, none)
     let settings := settingsOf rest
-    let ctx ← contextOf settings invocation
-    runTest entry ctx (settings.filter (!harnessSettings.contains ·.1)) out
+    let ctx ← contextOf settings (threadsOf rest) invocation
+    let settings := settings.filter (!harnessSettings.contains ·.1)
+    return (← runTest entry ctx settings out (fixturesOf rest), none)
+  | "errata-fixture" :: outPath :: name :: phaseName :: rest =>
+    let some phase := FixturePhase.ofName? phaseName
+      | IO.eprintln usage
+        return (2, none)
+    let out ← IO.FS.Handle.mk outPath .append
+    writeRecord out (.protocol (some version))
+    let some entry := fixtures.find? (·.name == name)
+      | IO.eprintln s!"no fixture is named {name}"
+        writeRecord out <|
+          .verdict { status? := some .error, message? := some s!"no fixture is named {name}" }
+        return (1, none)
+    let (code, value?) ←
+      runFixture entry phase (settingsOf rest) (fixturesOf rest) (threadsOf rest) out invocation
+    return (code, value?.map (name, ·))
   | _ =>
     IO.eprintln usage
-    return 2
+    return (2, none)
+
+/--
+Performs one invocation of a test executable, as {name}`invoke` does, and returns its exit code.
+-/
+def dispatch (entries : Array TestEntry) (args : List String) (helpers : Array Helper := #[])
+    (invocation : Array String := #[]) (fixtures : Array FixtureEntry := #[]) : IO UInt32 :=
+  return (← invoke entries args helpers invocation fixtures).1
 
 /-- The invocations of a chain: the arguments, split at each {lit}`;` argument. -/
 def chainLinks (args : List String) : List (List String) :=
@@ -242,16 +367,30 @@ def chainLinks (args : List String) : List (List String) :=
     if a == ";" then ([], done ++ [cur]) else (cur ++ [a], done)
   done ++ [last]
 
+/-- Whether an invocation runs a fixture's teardown. -/
+def isTeardown (link : List String) : Bool :=
+  link matches "errata-fixture" :: _ :: _ :: "teardown" :: _
+
 /--
-Performs the invocations of a chain in order with {name}`dispatch`, stopping at the first that
-exits non-zero, and returns the exit code of the last that ran.
+Performs the invocations of a chain in order with {name}`invoke`, and returns the exit code of the
+last that ran. Each value that a setup produces is added to the later {lit}`errata-run` and
+{lit}`errata-fixture` invocations as that fixture's {lit}`fixture:NAME=VALUE` argument. After an
+invocation exits non-zero, only teardowns run.
 -/
 def dispatchChain (entries : Array TestEntry) (links : List (List String))
-    (helpers : Array Helper := #[]) (invocation : Array String := #[]) : IO UInt32 := do
+    (helpers : Array Helper := #[]) (invocation : Array String := #[])
+    (fixtures : Array FixtureEntry := #[]) : IO UInt32 := do
   let mut code := 0
+  let mut values : Array String := #[]
+  let mut failed := false
   for link in links do
-    code ← dispatch entries link helpers invocation
-    unless code == 0 do break
+    if failed && !isTeardown link then continue
+    let receives := link.head? == some "errata-run" || link.head? == some "errata-fixture"
+    let link := if receives then link ++ values.toList else link
+    let (c, value?) ← invoke entries link helpers invocation fixtures
+    code := c
+    if let some (name, value) := value? then values := values.push s!"fixture:{name}={value}"
+    unless c == 0 do failed := true
   return code
 
 /-- Flushes the standard streams and ends the process with {name}`code`. -/
@@ -280,20 +419,32 @@ def exitWhenStdinCloses (parentIn : IO.FS.Stream) : IO Unit := do
 The main of a test executable made by the Lean harness, over the tests in {name}`entries`.
 
 {lit}`errata-list <out>` writes the inventory to the file {lit}`out`: the {lit}`protocol` record,
-then a {lit}`setting` record for each setting that the tests take, with its docstring as its
-description and its declared default, then a {lit}`test` record per test with its fully qualified
-name, the name's components as its path, its file, line, and column, its docstring as its
-description, its tags, and the settings it takes.
+then a {lit}`setting` record for each setting that the tests and their fixtures take, with its
+docstring as its description and its declared default, then a {lit}`fixture` record for each
+fixture in {name}`fixtures` that the tests use, directly or through other fixtures, with its
+docstring, the settings and fixtures it takes, and the threads it asks for, then a {lit}`test`
+record per test with its fully qualified name, the name's components as its path, its file, line,
+and column, its docstring as its description, its tags, and the settings and fixtures it takes.
 
-{lit}`errata-run <out> <name> [setting:NAME=VALUE]...` runs the test with that name and writes its
-records to {lit}`out`. It exits with {lit}`0` when the test passes and {lit}`1` otherwise. The test
-receives the settings, and parses the values of those it takes; a missing mandatory setting or a
-value that a setting's parser rejects ends the test with an error. The runner passes
-{lit}`setting:updateGolden=true` for {lit}`--update-golden`, which the harness reads itself, with no
-declaration, to rewrite golden files. When the environment variable {lit}`ERRATA_LIFELINE` is
-{lit}`1`, as the runner sets it, the executable's standard input is its lifeline: when the pipe
-closes, the executable ends its own process group and exits. Otherwise the command runs by hand with
-any standard input, {lit}`/dev/null` included. The test itself reads an empty standard input.
+{lit}`errata-run <out> <name> [setting:NAME=VALUE]... [fixture:NAME=VALUE]... [threads:N]` runs
+the test with that name and writes its records to {lit}`out`. It exits with {lit}`0` when the test
+passes and {lit}`1` otherwise. The test receives the settings and the fixtures' values, and parses
+the values of those it takes; a missing mandatory setting or fixture, or a value that a parser
+rejects, ends the test with an error. Its context holds the thread grant, {lit}`1` without one.
+
+{lit}`errata-fixture <out> <name> setup|prepare|teardown [setting:NAME=VALUE]...
+[fixture:NAME=VALUE]... [threads:N]` runs that phase of the fixture with that name, with the
+settings and the values of the fixtures it takes, and its own value, from the setup, as its
+{lit}`fixture:` argument. The setup writes its value as a {lit}`value` record, and a phase that
+fails writes a {lit}`verdict`. It exits with {lit}`0` when the phase succeeds and {lit}`1`
+otherwise; for an unknown fixture it writes an error verdict and exits with {lit}`1`.
+
+The runner passes {lit}`setting:updateGolden=true` for {lit}`--update-golden`, which the harness
+reads itself, with no declaration, to rewrite golden files. When the environment variable
+{lit}`ERRATA_LIFELINE` is {lit}`1`, as the runner sets it, the executable's standard input is its
+lifeline: when the pipe closes, the executable ends its own process group and exits. Otherwise the
+command runs by hand with any standard input, {lit}`/dev/null` included. The test itself reads an
+empty standard input.
 
 The runner also sets {lit}`ERRATA_DIR` to the directory of Errata's sources, where the shell
 harness lives, and {lit}`ERRATA_RUN_ID` to the run's identifier, which is the same for every process
@@ -307,30 +458,32 @@ input, output, and error. This mode belongs to the Lean harness, and
 {name (scope := "Errata")}`runHelper` starts it from inside a test. For an unknown name, the
 executable writes a message to standard error and exits with {lit}`2`.
 
-Several {lit}`errata-list` and {lit}`errata-run` invocations may be chained, each separated by a
-{lit}`;` argument. The executable performs them in order, stops at the first that exits non-zero,
-and exits with the status of the last that ran.
+Several {lit}`errata-list`, {lit}`errata-run`, and {lit}`errata-fixture` invocations may be
+chained, each separated by a {lit}`;` argument. The executable performs them in order, adds the
+value that each setup produces to the later invocations as that fixture's {lit}`fixture:` argument,
+runs only teardowns after an invocation that exits non-zero, and exits with the status of the last
+that ran.
 
 With any other arguments, the executable prints its usage and exits with {lit}`2`.
 
-{name}`invocation` is the command that starts this test executable, which a test's helpers run
-through. The compiled test executable leaves it empty, which stands for the program's own path; the
+{name}`invocation` is the command that starts this test executable, which the helpers of tests and
+fixture phases run through. The compiled test executable leaves it empty, which stands for the program's own path; the
 interpreted product gives the interpreter with its modules.
 -/
 def main (entries : Array TestEntry) (args : List String) (helpers : Array Helper := #[])
-    (invocation : Array String := #[]) : IO UInt32 := do
+    (invocation : Array String := #[]) (fixtures : Array FixtureEntry := #[]) : IO UInt32 := do
   match args with
-  | "errata-helper" :: _ => dispatch entries args helpers invocation
+  | "errata-helper" :: _ => dispatch entries args helpers invocation fixtures
   | _ =>
     let links := chainLinks args
-    unless links.any (·.head? == some "errata-run") do
-      return ← dispatchChain entries links helpers invocation
+    unless links.any (fun l => l.head? == some "errata-run" || l.head? == some "errata-fixture") do
+      return ← dispatchChain entries links helpers invocation fixtures
     -- The read blocks on a thread of its own, which it holds for the length of the run.
     if (← IO.getEnv "ERRATA_LIFELINE") == some "1" then
       let _ ← IO.asTask (prio := .dedicated) (exitWhenStdinCloses (← IO.getStdin))
     -- The main thread, where the test runs, reads an empty standard input from here on.
     discard <| IO.setStdin (IO.FS.Stream.ofBuffer (← IO.mkRef {}))
-    let code ← try dispatchChain entries links helpers invocation catch e => do
+    let code ← try dispatchChain entries links helpers invocation fixtures catch e => do
       IO.eprintln s!"uncaught exception: {e}"
       pure 1
     -- The thread that reads standard input runs until the pipe closes, and a Lean program that

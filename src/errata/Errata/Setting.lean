@@ -57,10 +57,11 @@ deriving Repr, Inhabited, BEq
 /--
 The value of the setting {name}`S`, named {name}`name`, among {name}`settings`: the last value given
 for the name, parsed by the setting's parser. With no value, or a value that the parser rejects, the
-test ends with an error that names the setting.
+test or fixture phase ends with an error that names the setting.
 -/
-def Setting.withValue (S : Setting) (name : String) (settings : Array (String × String))
-    (k : S.type → TestM Unit) : TestM Unit := do
+def Setting.withValue {m : Type → Type} {α : Type} [Monad m] [MonadExceptOf IO.Error m]
+    (S : Setting) (name : String)
+    (settings : Array (String × String)) (k : S.type → m α) : m α := do
   let some raw := (settings.findRev? (·.1 == name)).map (·.2)
     | throwThe IO.Error <| .userError s!"the mandatory setting {name} has no value"
   let some value := S.fromString raw
@@ -71,10 +72,12 @@ def Setting.withValue (S : Setting) (name : String) (settings : Array (String ×
 /--
 The value of the optional setting {name}`S`, named {name}`name`, among {name}`settings`:
 {lean}`none` when no value is given, and otherwise the last value given, parsed by the setting's
-parser. Values that the parser rejects end the test with an error that names the setting.
+parser. Values that the parser rejects end the test or fixture phase with an error that names the
+setting.
 -/
-def Setting.withOptional (S : Setting) (name : String) (settings : Array (String × String))
-    (k : Option S.type → TestM Unit) : TestM Unit := do
+def Setting.withOptional {m : Type → Type} {α : Type} [Monad m] [MonadExceptOf IO.Error m]
+    (S : Setting) (name : String)
+    (settings : Array (String × String)) (k : Option S.type → m α) : m α := do
   match (settings.findRev? (·.1 == name)).map (·.2) with
   | none => k none
   | some raw =>

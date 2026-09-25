@@ -28,23 +28,47 @@ abbrev TestM := ReaderT TestContext (ExceptT TestFailure IO)
 abbrev Test := TestM Unit
 
 /--
+The monad in which a fixture's phases run. It fails as {name}`TestM` does, so the assertion language
+works in both.
+-/
+abbrev FixtureM := ReaderT FixtureContext (ExceptT TestFailure IO)
+
+/--
+The monads in which the assertion language runs: {name}`TestM` and {name}`FixtureM`. They run
+{name}`IO` actions, fail with a {name}`TestFailure`, and know the location of the code that runs and
+whether golden checks rewrite their expected files.
+-/
+class MonadCheck (m : Type → Type) extends MonadLift IO m, MonadExceptOf TestFailure m where
+  /-- The source location reported for a failure with no more specific location. -/
+  location : m Location
+  /-- Whether golden checks write the actual output to their expected files. -/
+  updateGolden : m Bool
+
+instance [HasCommonContext ρ] : MonadCheck (ReaderT ρ (ExceptT TestFailure IO)) where
+  monadLift act := liftM (m := IO) act
+  location := return (HasCommonContext.common (← read)).location
+  updateGolden := return HasCommonContext.updateGolden (← read)
+
+/--
 Fails at the location recorded in the context. The runner seeds that with the test's own source
 range, so a failure with no more specific location still points at the test. This is the primitive
 the internal layer uses when no call site is available.
 -/
-def failHere (message : String) (detail? : Option String := none) : TestM α := do
-  throw { message, detail?, location? := some (← read).location }
+def failHere [Monad m] [MonadCheck m] (message : String) (detail? : Option String := none) :
+    m α := do
+  throwThe TestFailure { message, detail?, location? := some (← MonadCheck.location) }
 
 /--
 Fails at an explicit source location. The assertion language captures its call site with
 {lit}`here%` and reports through this primitive.
 -/
-def failAt (loc : Location) (message : String) (detail? : Option String := none) : TestM α :=
-  throw { message, detail?, location? := some loc }
+def failAt [MonadCheck m] (loc : Location) (message : String) (detail? : Option String := none) :
+    m α :=
+  throwThe TestFailure { message, detail?, location? := some loc }
 
-/-- Fails the current test, or named result, with a message and optional detail. -/
-def fail (message : String) (detail? : Option String := none)
-    (loc : Location := by exact here%) : TestM α :=
+/-- Fails the current test, named result, or fixture phase, with a message and optional detail. -/
+def fail [MonadCheck m] (message : String) (detail? : Option String := none)
+    (loc : Location := by exact here%) : m α :=
   failAt loc message detail?
 
 /--
@@ -183,36 +207,38 @@ private def notifyResult (ctx : TestContext) (ev : ResultEvent) : IO Unit := do
     toLiveDestination ctx.toCommon ctx.watchFailed "result watcher" (watch ev)
 
 /--
-Runs a test action with the given context, capturing its outcome as data rather than letting it
-propagate. The action's stdout and stderr are recorded as text, in order and tagged by stream, and
-returned alongside the outcome. Each fragment is also handed to the context's output destination as
-it is written, so a live runner can stream output while the test runs.
+Runs a test action or a fixture phase with the given context, capturing its outcome as data rather
+than letting it propagate. The action's stdout and stderr are recorded as text, in order and tagged
+by stream, and returned alongside the outcome. Each fragment is also handed to the common context's
+output destination as it is written, so a live runner can stream output while the action runs.
 
-Output from tasks or subprocesses spawned by the test is not captured.
+Output from tasks or subprocesses spawned by the action is not captured.
 -/
-def runCapturing (ctx : TestContext) (act : TestM Unit) :
-    IO (Except IO.Error (Except TestFailure Unit) × OutputLog) := do
+def runCapturing [HasCommonContext ρ] (ctx : ρ) (act : ReaderT ρ (ExceptT TestFailure IO) α) :
+    IO (Except IO.Error (Except TestFailure α) × OutputLog) := do
   let log ← IO.mkRef (#[] : Array Output)
+  let common := HasCommonContext.common ctx
   -- The destination runs with the streams from before the outermost capture, so writing to stdout
   -- from it reaches the runner instead of re-entering a capture at any level.
   let real ←
-    match ctx.realStreams? with
+    match common.realStreams? with
     | some streams => pure streams
     | none => do pure { stdout := ← IO.getStdout, stderr := ← IO.getStderr : RealStreams }
-  let ctx := { ctx with realStreams? := some real }
+  let common := { common with realStreams? := some real }
+  let ctx := HasCommonContext.setCommon ctx common
   let emit (o : Output) : IO Unit := do
     log.modify (·.push o)
-    if let some dest := ctx.writeOutput then
-      toLiveDestination ctx.toCommon ctx.outputFailed "live output destination" (dest o)
+    if let some dest := common.writeOutput then
+      toLiveDestination common common.outputFailed "live output destination" (dest o)
   let (outStream, outClose) ← captureStream emit .stdout
   let (errStream, errClose) ← captureStream emit .stderr
-  -- Closing inside the captured action makes dangling bytes at the end of the test an error of the
-  -- test itself. When the test already failed, that failure is the report's verdict, and a
+  -- Closing inside the captured action makes dangling bytes at the end of the action an error of
+  -- the action itself. When the action already failed, that failure is the report's verdict, and a
   -- dangling-byte error at close does not displace it.
-  let body : IO (Except TestFailure Unit) := do
+  let body : IO (Except TestFailure α) := do
     let r ← (act ctx).run
     match r with
-    | .ok () =>
+    | .ok _ =>
       outClose
       errClose
     | .error _ =>

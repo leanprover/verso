@@ -9,11 +9,13 @@ public import Errata.IsTest
 public import Errata.Runner
 public import Errata.Helpers
 public import Errata.Setting
+public import Errata.Fixture
 public import Errata.TestRegistry
 public import Lean
 public meta import Lean
 public meta import Errata.TestRegistry
 public meta import Errata.SettingAttribute
+public meta import Errata.Fixture
 public meta import Errata.NameJson
 public meta import Errata.Widget
 
@@ -27,74 +29,22 @@ set_option doc.verso true
 namespace Errata
 
 /--
-The setting that a parameter's type names: {lit}`S` for a parameter of type {lit}`S` and
-{lit}`Option S`, where {lit}`S` is a declaration that {lit}`@[setting]` marks. The type is read as
-elaborated, where the parameter {lit}`(x : S)` has the type {lit}`Setting.type S`.
--/
-meta def settingOfParameter? (env : Environment) (type : Expr) : Option SettingUse :=
-  let known (e : Expr) : Option Name :=
-    match e with
-    | .app (.const ``Errata.Setting.type []) (.const s []) =>
-      if (settingExt.getState env).any (·.decl == s) then some s else none
-    | _ => none
-  match type with
-  | .app (.const ``Option _) inner => (known inner).map ({ decl := ·, optional := true })
-  | _ => (known type).map ({ decl := ·, optional := false })
-
-/--
 Builds the action that runs a declaration as a test, using the {name}`IsTest` instance for its type
-that is visible at the declaration, and returns it with the settings that the test takes. Every
-parameter of the declaration is a setting {lit}`S` or {lit}`Option S`. The action receives the
-settings as name and value pairs, parses each parameter's value with its setting's parser, and
-applies the test to the values. The declaration must be a runtime declaration with no universe
-parameters.
+that is visible at the declaration, and returns it with the settings and the fixtures that the test
+takes. Every parameter of the declaration is a setting {lit}`S` or {lit}`Option S`, or a fixture
+{lit}`F` or {lit}`shared F`. The action receives the settings and the fixtures' values as name and
+value pairs, parses each parameter's value with its setting's or its fixture's parser, and applies
+the test to the values. The declaration must be a runtime declaration with no universe parameters.
 -/
-meta def testAction (decl : Name) : MetaM (Expr × Array SettingUse) := do
+meta def testAction (decl : Name) : MetaM (Expr × Array SettingUse × Array FixtureUse) := do
   let env ← getEnv
   if isMarkedMeta env decl then
     throwError m!"A test must not be `meta`"
   let info ← getConstInfo decl
-  let testName := privateToUserName decl
-  let pairs := mkApp2 (mkConst ``Prod [.zero, .zero]) (mkConst ``String) (mkConst ``String)
-  let settingsType := mkApp (mkConst ``Array [.zero]) pairs
-  withLocalDeclD `settings settingsType fun settings => do
+  withLocalDeclD `settings pairsType fun settings =>
+  withLocalDeclD `fixtures pairsType fun fixtures => do
     forallTelescope info.type fun params body => do
-      let mut uses : Array SettingUse := #[]
-      for p in params do
-        let ty ← instantiateMVars (← inferType p)
-        let localDecl ← p.fvarId!.getDecl
-        match localDecl.binderInfo with
-        | .instImplicit =>
-          throwError m!"`{testName}` has an instance parameter of type{indentExpr ty}\nA test's \
-            parameters are settings: `S` or `Option S` for a declaration `S` marked `@[setting]`."
-        | .implicit | .strictImplicit =>
-          throwError m!"The parameter `{localDecl.userName}` of `{testName}` is implicit. A \
-            test's parameters are explicit settings. A setting named before its declaration \
-            becomes an implicit parameter when `autoImplicit` is on, so declare the setting \
-            before the test."
-        | .default =>
-          match settingOfParameter? env ty with
-          | some use => uses := uses.push use
-          | none =>
-            -- Parameters whose types are definitions that stand for settings name the settings
-            -- through other names.
-            let named? : Option Name := match ty with
-              | .app (.const ``Errata.Setting.type []) (.const c [])
-              | .app (.const ``Option _) (.app (.const ``Errata.Setting.type []) (.const c [])) =>
-                some c
-              | _ => none
-            let alias? := named?.bind fun c =>
-              match (env.find? c).bind (·.value?) with
-              | some (.const s []) =>
-                if (settingExt.getState env).any (·.decl == s) then some (c, s) else none
-              | _ => none
-            if let some (c, s) := alias? then
-              throwError m!"The parameter `{localDecl.userName}` of `{testName}` has the type \
-                `{c}`, which stands for the setting `{s}`. A test names a setting directly: \
-                write `{s}`."
-            throwError m!"The parameter `{localDecl.userName}` of `{testName}` has the \
-              type{indentExpr ty}\nwhich is not a setting. A test's parameters are settings: \
-              `S` or `Option S` for a declaration `S` marked `@[setting]`."
+      let uses ← classifyParameters decl "test" params
       unless info.levelParams.isEmpty do
         throwError m!"A test must not be universe polymorphic"
       let goal := mkApp (mkConst ``IsTest) body
@@ -103,27 +53,12 @@ meta def testAction (decl : Name) : MetaM (Expr × Array SettingUse) := do
         | _ =>
           throwError m!"`@[test]` requires an `Errata.IsTest` instance for the test's \
             type{indentExpr body}"
-      let mut action := mkApp3 (mkConst ``IsTest.toTest) body inst (mkAppN (mkConst decl) params)
-      -- The parameters are bound from the innermost outwards, each by the combinator that reads its
-      -- setting's value.
-      for i in (List.range params.size).reverse do
-        let use := uses[i]!
-        let combinator := if use.optional then ``Setting.withOptional else ``Setting.withValue
-        action := mkApp4 (mkConst combinator) (mkConst use.decl)
-          (toExpr (settingNameOf use.decl)) settings (← mkLambdaFVars #[params[i]!] action)
-      return (← mkLambdaFVars #[settings] action, uses)
-
-/--
-The name for the definition that runs the test {name}`decl`: {lit}`run` below the test's own name,
-or {lit}`run_2`, {lit}`run_3`, and so on when that name is taken.
--/
-meta def runDeclName (env : Environment) (decl : Name) : Name := Id.run do
-  let mut name := decl ++ `run
-  let mut n := 2
-  while env.contains name do
-    name := decl ++ Name.mkSimple s!"run_{n}"
-    n := n + 1
-  return name
+      let action := mkApp3 (mkConst ``IsTest.toTest) body inst (mkAppN (mkConst decl) params)
+      let action ← bindParameters params uses settings fixtures (mkConst ``TestM) (mkConst ``Unit)
+        action
+      let settingUses := uses.filterMap fun | .setting u => some u | _ => none
+      let fixtureUses := uses.filterMap fun | .fixture u _ => some u | _ => none
+      return (← mkLambdaFVars #[settings, fixtures] action, settingUses, fixtureUses)
 
 /--
 Records a declaration as a test with the given tags. The action that runs it is compiled, with the
@@ -136,17 +71,17 @@ meta def recordTest (decl : Name) (tags : Array String := #[]) : AttrM Unit := d
   if (testExt.getState (← getEnv)).any (·.name == decl) then
     throwError m!"`{privateToUserName decl}` is already marked as a test"
   ensureExported decl
-  let (action, settings) ← (testAction decl).run'
+  let (action, settings, fixtures) ← (testAction decl).run'
   let run := runDeclName (← getEnv) decl
-  let pairs := mkApp2 (mkConst ``Prod [.zero, .zero]) (mkConst ``String) (mkConst ``String)
-  let type ← mkArrow (mkApp (mkConst ``Array [.zero]) pairs) (mkApp (mkConst ``TestM) (mkConst ``Unit))
+  let type ← mkArrow pairsType
+    (← mkArrow pairsType (mkApp (mkConst ``TestM) (mkConst ``Unit)))
   let val ← mkDefinitionValInferringUnsafe run [] type action .opaque
   withExporting (isExporting := true) do
     addAndCompile (.defnDecl val)
   let docstring? ← findDocString? (← getEnv) decl
   modifyEnv (testExt.addEntry · {
     name := decl, run, isUnsafe := val.safety == .unsafe, file := ← getFileName, docstring?,
-    tags, settings
+    tags, settings, fixtures
   })
 
 /--
@@ -339,13 +274,28 @@ imported module below it.
 syntax testModules := ident ("." "*")?
 
 /--
+The settings that a test or fixture takes, as a test executable's entries list them: each with its
+docstring as its description and a reference to its declared default, which is read from the
+setting's value when the test executable runs.
+-/
+meta def settingRefs (env : Environment) (uses : Array SettingUse) : TermElabM (Array Term) :=
+  uses.mapM fun use => do
+    let doc? := (settingExt.getState env).find? (·.decl == use.decl) |>.bind (·.docstring?)
+    let docStx ← match doc? with
+      | some doc => `(some $(quote doc))
+      | none => `((none : Option String))
+    `({ name := $(quote (settingNameOf use.decl)), optional := $(quote use.optional),
+        description? := $docStx, default? := Errata.Setting.default? @$(mkCIdent use.decl)
+        : Errata.SettingRef })
+
+/--
 {lit}`getAllTests% "package" Mod.A Mod.B.* ...` reads the tests recorded by {lit}`@[test]` in the
 named modules, and expands to the array of {name}`TestEntry` values that run them. A name with a
 trailing {lit}`.*` also names every imported module below it. Even if a module is named more than
 once, its tests are not duplicated. Each module must be imported so its tests are reachable. Each
-test is named by its fully qualified declaration name, and its entry lists its tags and the settings
-it takes, each with its description and a reference to its declared default. Unsafe tests are
-wrapped in {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
+test is named by its fully qualified declaration name, and its entry lists its tags, the settings it
+takes, each with its description and a reference to its declared default, and the fixtures it takes,
+each exclusive or shared. Unsafe tests are wrapped in {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
 -/
 syntax (name := getAllTests) "getAllTests%" str testModules* : term
 
@@ -389,23 +339,57 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
           | none => `((none : Option String))
         let ref ← `(@$(mkCIdent test.run))
         let run ← if test.isUnsafe then `(unsafe $ref) else pure ref
-        -- Each setting's description is its docstring, and its default is read from the setting's
-        -- value when the test executable runs.
-        let settings ← test.settings.mapM fun use => do
-          let doc? := (settingExt.getState env).find? (·.decl == use.decl) |>.bind (·.docstring?)
-          let docStx ← match doc? with
-            | some doc => `(some $(quote doc))
-            | none => `((none : Option String))
-          `({ name := $(quote (settingNameOf use.decl)), optional := $(quote use.optional),
-              description? := $docStx, default? := Errata.Setting.default? @$(mkCIdent use.decl)
-              : Errata.SettingRef })
+        let settings ← settingRefs env test.settings
+        let fixtures ← test.fixtures.mapM fun use =>
+          `({ name := $(quote (settingNameOf use.decl)), exclusive := $(quote use.exclusive)
+              : Errata.FixtureRef })
         entries := entries.push <| ←
           `({ package := $(quote package), moduleName := $(quote moduleStr),
               name := $(quote testName), path := $(quote path),
               location := $(← exprToSyntax (toExpr location)),
               docstring? := $docStx, tags := $(quote test.tags),
-              settings := #[$settings,*], run := $run : Errata.TestEntry })
+              settings := #[$settings,*], fixtures := #[$fixtures,*], run := $run
+              : Errata.TestEntry })
   elabTerm (← `(#[$entries,*])) expectedType?
+
+/--
+{lit}`getAllFixtures%` reads the fixtures recorded by {lit}`@[fixture]` in every imported module,
+and expands to the array of {name}`FixtureEntry` values that run their phases, in an order in which
+each fixture follows the fixtures it takes. Each fixture is named by its fully qualified declaration
+name, and its entry lists the settings and fixtures it takes and the threads it asks for. Unsafe
+fixtures are wrapped in {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
+-/
+syntax (name := getAllFixtures) "getAllFixtures%" : term
+
+/-- Expands {lit}`getAllFixtures%` by reading the recorded fixtures of the imported modules. -/
+@[term_elab getAllFixtures]
+meta def elabGetAllFixtures : TermElab := fun stx expectedType? => do
+  let `(getAllFixtures%) := stx
+    | throwUnsupportedSyntax
+  let env ← getEnv
+  let mut entries : Array Term := #[]
+  for f in fixtureExt.getState env do
+    let ref ← `(@$(mkCIdent f.run))
+    let run ← if f.isUnsafe then `(unsafe $ref) else pure ref
+    let range ← findDeclarationRanges? f.name
+    let location : Location := {
+      file := f.file
+      startPos := (range.map (·.range.pos)).getD ⟨0, 0⟩
+      endPos := (range.map (·.range.endPos)).getD ⟨0, 0⟩
+    }
+    let docStx ← match f.docstring? with
+      | some doc => `(some $(quote doc))
+      | none => `((none : Option String))
+    let threadsStx ← match f.threads? with
+      | some n => `(some $(quote n))
+      | none => `((none : Option Nat))
+    let settings ← settingRefs env f.settings
+    let deps := f.fixtures.map settingNameOf
+    entries := entries.push <| ←
+      `({ name := $(quote (settingNameOf f.name)), location := $(← exprToSyntax (toExpr location)),
+          docstring? := $docStx, settings := #[$settings,*], fixtures := $(quote deps),
+          threads? := $threadsStx, run := $run : Errata.FixtureEntry })
+  elabTerm (← `((#[$entries,*] : Array Errata.FixtureEntry))) expectedType?
 
 /--
 {lit}`getAllHelpers%` reads the helpers recorded by {lit}`@[test_helper]` in every imported module,

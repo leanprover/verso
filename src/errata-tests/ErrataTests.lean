@@ -2308,13 +2308,13 @@ error: `@[setting]` requires the type `Errata.Setting`, and `notASetting` has th
 /--
 error: `instanceParameter` has an instance parameter of type
   Inhabited Nat
-A test's parameters are settings: `S` or `Option S` for a declaration `S` marked `@[setting]`.
+A test's parameters are settings and fixtures: `S` or `Option S` for a declaration `S` marked `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`.
 -/
 #test_msgs in
 @[test] def instanceParameter [Inhabited Nat] : Bool := true
 
 /--
-error: The parameter `n` of `implicitParameter` is implicit. A test's parameters are explicit settings. A setting named before its declaration becomes an implicit parameter when `autoImplicit` is on, so declare the setting before the test.
+error: The parameter `n` of `implicitParameter` is implicit. A test's parameters are explicit settings and fixtures. A setting named before its declaration becomes an implicit parameter when `autoImplicit` is on, so declare the setting before the test.
 -/
 #test_msgs in
 @[test] def implicitParameter {n : seed} : Bool := n == n
@@ -2329,7 +2329,7 @@ error: The parameter `n` of `aliasParameter` has the type `SeedAlias`, which sta
 @[test] def aliasParameter (n : SeedAlias) : Bool := n == n
 
 /--
-error: The parameter `laterSetting` of `usedBeforeDeclaration` is implicit. A test's parameters are explicit settings. A setting named before its declaration becomes an implicit parameter when `autoImplicit` is on, so declare the setting before the test.
+error: The parameter `laterSetting` of `usedBeforeDeclaration` is implicit. A test's parameters are explicit settings and fixtures. A setting named before its declaration becomes an implicit parameter when `autoImplicit` is on, so declare the setting before the test.
 -/
 #test_msgs in
 set_option autoImplicit true in
@@ -2338,10 +2338,84 @@ set_option autoImplicit true in
 /--
 error: The parameter `n` of `takesNat` has the type
   Nat
-which is not a setting. A test's parameters are settings: `S` or `Option S` for a declaration `S` marked `@[setting]`.
+which is neither a setting nor a fixture. A test's parameters are settings and fixtures: `S` or `Option S` for a declaration `S` marked `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`.
 -/
 #test_msgs in
 @[test] def takesNat (n : Nat) : Bool := n == n
+
+/--
+error: `hiddenFixture` is private or not exported, so a test executable cannot reach it. Make it public, for example by declaring it in a `public section`.
+-/
+#test_msgs in
+@[fixture] private def hiddenFixture : Fixture where
+  type := Nat
+  toString := toString
+  fromString := String.toNat?
+  setup := return 1
+
+/--
+error: `unexposedFixture` must expose its value to the modules that import it, so that a test's parameter has the fixture's type there. Mark it `@[expose]`, or declare it with `abbrev`.
+-/
+#test_msgs in
+@[fixture] def unexposedFixture : Fixture where
+  type := Nat
+  toString := toString
+  fromString := String.toNat?
+  setup := return 1
+
+/--
+error: `@[fixture]` requires the type `Errata.Fixture`, after the fixture's parameters, and `notAFixture` has the type
+  Nat
+-/
+#test_msgs in
+@[fixture, expose] def notAFixture : Nat := 3
+
+/-- A fixture for the checks of `@[fixture]`'s messages. -/
+@[fixture, expose] def countFixture : Fixture where
+  type := Nat
+  toString := toString
+  fromString := String.toNat?
+  setup := return 1
+
+/--
+error: `sharingFixture` takes the fixture `countFixture` as `shared`, and `shared` has no meaning on a fixture's parameters: tests claim fixtures, exclusively or shared. Write `countFixture`.
+-/
+#test_msgs in
+@[fixture, expose] def sharingFixture (n : shared countFixture) : Fixture where
+  type := Nat
+  toString := toString
+  fromString := String.toNat?
+  setup := return n
+
+/--
+error: The type of `dependentType`'s value depends on its parameters. A fixture's `type`, `toString`, and `fromString` are the same for every value of its parameters.
+-/
+#test_msgs in
+@[fixture, expose] def dependentType (n : seed) : Fixture where
+  type := Fin (n + 1)
+  toString := toString
+  fromString _ := none
+  setup := return 0
+
+/-- error: A fixture asks for at least one thread -/
+#test_msgs in
+@[fixture (threads := 0), expose] def noThreads : Fixture where
+  type := Nat
+  toString := toString
+  fromString := String.toNat?
+  setup := return 1
+
+/--
+error: The parameter `n` of `takesInt` has the type
+  Int
+which is neither a setting nor a fixture. A fixture's parameters are settings and fixtures: `S` or `Option S` for a declaration `S` marked `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`.
+-/
+#test_msgs in
+@[fixture, expose] def takesInt (n : Int) : Fixture where
+  type := Int
+  toString := toString
+  fromString := String.toInt?
+  setup := return n
 
 /-- error: `@[test]` has no argument `flavor`; its one argument is `tags` -/
 #test_msgs in

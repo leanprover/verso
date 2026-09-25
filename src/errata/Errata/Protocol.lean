@@ -113,6 +113,39 @@ instance : FromJson SettingDep where
       | .error _ => pure false
     return { name, optional }
 
+/-- A fixture that a test uses, as its inventory record names it. -/
+structure FixtureDep where
+  /-- The fixture's name. -/
+  name : String
+  /-- Whether the test uses the fixture alone among its users; a shared use when false. -/
+  exclusive : Bool := true
+deriving Repr, Inhabited, DecidableEq
+
+instance : ToJson FixtureDep where
+  toJson d := Json.mkObj [("name", Json.str d.name), ("exclusive", Json.bool d.exclusive)]
+
+instance : FromJson FixtureDep where
+  fromJson? j := do
+    let name ← j.getObjValAs? String "name"
+    let exclusive ← match j.getObjVal? "exclusive" with
+      | .ok v => FromJson.fromJson? v
+      | .error _ => pure true
+    return { name, exclusive }
+
+/-- An inventory entry for a fixture. Only the name is required of a test executable. -/
+structure FixtureInfo where
+  /-- The fixture's name, unique within the inventory. -/
+  name? : Option String := none
+  /-- The fixture's description. -/
+  description? : Option String := none
+  /-- The settings that the fixture depends on, each mandatory or optional. -/
+  settings? : Option (Array SettingDep) := none
+  /-- The names of the fixtures that the fixture depends on, each declared before it. -/
+  fixtures? : Option (Array String) := none
+  /-- The number of hardware threads that the fixture's phases ask for; one when absent. -/
+  threads? : Option Nat := none
+deriving Repr, Inhabited, DecidableEq
+
 /-- An inventory entry for a test. Only the name is required of a test executable. -/
 structure TestInfo where
   /-- The test's name, unique within the inventory. -/
@@ -133,6 +166,10 @@ structure TestInfo where
   tags? : Option (Array String) := none
   /-- The settings that the test depends on, each mandatory or optional. -/
   settings? : Option (Array SettingDep) := none
+  /-- The fixtures that the test uses, each exclusive or shared. -/
+  fixtures? : Option (Array FixtureDep) := none
+  /-- The number of hardware threads that the test asks for; one when absent. -/
+  threads? : Option Nat := none
 deriving Repr, Inhabited, DecidableEq
 
 /-- A named result's report, when it starts (without a status) and when it finishes. -/
@@ -176,7 +213,7 @@ inductive Record where
   /-- A setting that the test executable's tests take. -/
   | setting (name? description? default? : Option String)
   /-- A fixture that the test executable's tests use. -/
-  | fixture (name? description? : Option String)
+  | fixture (info : FixtureInfo)
   /-- A test in the inventory. -/
   | test (info : TestInfo)
   /-- The test body has begun. -/
@@ -209,12 +246,15 @@ def Record.toJson : Record → Json
   | .protocol v => Json.mkObj <| ("type", Json.str "protocol") :: opt "version" v
   | .setting n d dflt =>
     Json.mkObj <| ("type", Json.str "setting") :: opt "name" n ++ opt "description" d ++ opt "default" dflt
-  | .fixture n d => Json.mkObj <| ("type", Json.str "fixture") :: opt "name" n ++ opt "description" d
+  | .fixture i =>
+    Json.mkObj <| ("type", Json.str "fixture") :: opt "name" i.name? ++
+      opt "description" i.description? ++ opt "settings" i.settings? ++
+      opt "fixtures" i.fixtures? ++ opt "threads" i.threads?
   | .test i =>
     Json.mkObj <| ("type", Json.str "test") :: opt "name" i.name? ++ opt "path" i.path? ++
       opt "file" i.file? ++ opt "line" i.line? ++ opt "col" i.col? ++
       opt "description" i.description? ++ opt "kind" i.kind? ++ opt "tags" i.tags? ++
-      opt "settings" i.settings?
+      opt "settings" i.settings? ++ opt "fixtures" i.fixtures? ++ opt "threads" i.threads?
   | .start t => Json.mkObj <| ("type", Json.str "start") :: opt "time_ms" t
   | .output s t time r =>
     Json.mkObj <| ("type", Json.str "output") :: opt "stream" s ++ opt "text" t ++ opt "time_ms" time ++
@@ -277,13 +317,19 @@ def Record.decode? (j : Json) : Except String (Option Record) := do
   | "protocol" => return some (.protocol (← field j "version"))
   | "setting" =>
     return some (.setting (← field j "name") (← field j "description") (← field j "default"))
-  | "fixture" => return some (.fixture (← field j "name") (← field j "description"))
+  | "fixture" =>
+    return some (.fixture {
+      name? := ← field j "name", description? := ← field j "description",
+      settings? := ← field j "settings", fixtures? := ← field j "fixtures",
+      threads? := ← field j "threads"
+    })
   | "test" =>
     return some (.test {
       name? := ← field j "name", path? := ← field j "path", file? := ← field j "file",
       line? := ← field j "line", col? := ← field j "col",
       description? := ← field j "description", kind? := ← field j "kind",
-      tags? := ← field j "tags", settings? := ← field j "settings"
+      tags? := ← field j "tags", settings? := ← field j "settings",
+      fixtures? := ← field j "fixtures", threads? := ← field j "threads"
     })
   | "start" => return some (.start (← field j "time_ms"))
   | "output" =>

@@ -25,10 +25,10 @@ private def goldenDiff (expected actual : String) : String :=
   "- expected, + actual:\n" ++ Lean.Diff.linesToString diff
 
 /-- Compares a produced string against a golden file, or rewrites it under `--update-golden`. -/
-def goldenFile (expected : System.FilePath) (actual : String)
-    (loc : Location := by exact here%) : TestM Unit := do
-  let ctx ← read
-  if ctx.updateGolden then
+@[nospecialize]
+def goldenFile [Monad m] [MonadCheck m] (expected : System.FilePath) (actual : String)
+    (loc : Location := by exact here%) : m Unit := do
+  if ← MonadCheck.updateGolden then
     writeFile expected actual
   else if ← expected.pathExists then
     let want ← IO.FS.readFile expected
@@ -65,14 +65,14 @@ private def binaryDifference (want got : ByteArray) : String :=
   else s!"{place}: expected {want.size} bytes, produced {got.size} bytes"
 
 /-- Compares a produced directory tree against a golden tree, or rewrites it under `--update-golden`. -/
-def goldenDir (expected actual : System.FilePath)
-    (loc : Location := by exact here%) : TestM Unit := do
-  let ctx ← read
+@[nospecialize]
+def goldenDir [Monad m] [MonadCheck m] (expected actual : System.FilePath)
+    (loc : Location := by exact here%) : m Unit := do
   unless ← actual.isDir do
     failAt loc s!"missing produced directory {actual}"
       (detail? := some "The code under test did not create it as a directory.")
   let actualFiles ← filesUnder actual
-  if ctx.updateGolden then
+  if ← MonadCheck.updateGolden then
     -- The recorded tree is replaced wholesale, so a path that changed shape between file and
     -- directory updates as cleanly as changed content. The golden tree is recorded even when the
     -- produced tree holds no files, so that a later run compares against it rather than reporting

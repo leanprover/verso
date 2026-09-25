@@ -286,14 +286,14 @@ private def unreachableModules (lib : Lake.LeanLib) (known : Lean.NameSet) :
 /--
 Generates the main of a library's test executable. The main is a file without a `module` header. It
 imports the library's test modules, with or without a `module` header, and hands their tests and
-every helper they reach to the Lean harness.
+every helper and fixture they reach to the Lean harness.
 -/
 private def mainSource (pkg : String) (mods : Array Lean.Name) : String :=
   let imports := "\n".intercalate <| "import Errata" :: mods.toList.map (s!"import {·}")
   s!"{imports}\n\n\
     def main (args : List String) : IO UInt32 :=\n  \
     Errata.Harness.main (getAllTests% {pkg.quote} {" ".intercalate (mods.toList.map (·.toString))}) \
-      args (helpers := getAllHelpers%)\n"
+      args (helpers := getAllHelpers%) (fixtures := getAllFixtures%)\n"
 
 /-!
 The configuration file, `errata.toml`, which `errata-config` validates and elaborates into

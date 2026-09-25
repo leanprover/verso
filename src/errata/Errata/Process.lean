@@ -16,8 +16,8 @@ set_option doc.verso true
 namespace Errata
 
 /-- Asserts that a process exited with the expected code, showing its output otherwise. -/
-def assertExitCode (expected : UInt32) (output : IO.Process.Output)
-    (loc : Location := by exact here%) : TestM Unit :=
+def assertExitCode [Monad m] [MonadCheck m] (expected : UInt32) (output : IO.Process.Output)
+    (loc : Location := by exact here%) : m Unit :=
   unless output.exitCode == expected do
     failAt loc s!"process exited with code {output.exitCode}, expected {expected}"
       (detail? := some s!"stdout:\n{output.stdout}\nstderr:\n{output.stderr}")

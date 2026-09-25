@@ -15,9 +15,12 @@ set_option doc.verso true
 
 namespace Errata
 
+-- The assertions run in tests and in fixtures' phases alike.
+variable {m : Type → Type} [Monad m] [MonadCheck m]
+
 /-- Asserts that a condition holds, attaching the detail to the failure when given. -/
 def assertTrue (cond : Bool) (message : String := "assertion failed")
-    (detail? : Option String := none) (loc : Location := by exact here%) : TestM Unit :=
+    (detail? : Option String := none) (loc : Location := by exact here%) : m Unit :=
   unless cond do failAt loc message (detail? := detail?)
 
 /--
@@ -25,25 +28,25 @@ Asserts that the actual value is equal to the expected value according to {name}
 both when they differ.
 -/
 def assertBEq {α} [BEq α] [Repr α] (expected actual : α)
-    (loc : Location := by exact here%) : TestM Unit :=
+    (loc : Location := by exact here%) : m Unit :=
   unless actual == expected do
     failAt loc "values are not equal" (detail? := some s!"expected: {repr expected}\nactual:   {repr actual}")
 
 /-- Asserts that the actual value differs from the unexpected value. -/
 def assertNe {α} [BEq α] [Repr α] (unexpected actual : α)
-    (loc : Location := by exact here%) : TestM Unit := do
+    (loc : Location := by exact here%) : m Unit := do
   if actual == unexpected then
     failAt loc "values are equal but should differ" (detail? := some s!"both: {repr actual}")
 
 /-- Asserts that the actual string contains the expected substring. -/
 def assertContains (expected actual : String) (message : String := "substring not found")
-    (loc : Location := by exact here%) : TestM Unit := do
+    (loc : Location := by exact here%) : m Unit := do
   unless (actual.find? expected).isSome do
     failAt loc message (detail? := some s!"expected to contain: {expected}\nactual: {actual}")
 
 /-- Asserts that the actual string does not contain the unexpected substring. -/
 def assertNotContains (unexpected actual : String) (message : String := "unexpected substring found")
-    (loc : Location := by exact here%) : TestM Unit :=
+    (loc : Location := by exact here%) : m Unit :=
   unless (actual.find? unexpected).isNone do
     failAt loc message (detail? := some s!"expected not to contain: {unexpected}\nactual: {actual}")
 
@@ -54,8 +57,8 @@ rejects. The name says {name}`IO` because the expectation is about a thrown {nam
 opposed to failure in some other error monad.
 -/
 def assertThrowsIO {α} (act : IO α) (acceptable : IO.Error → Bool := fun _ => true)
-    (loc : Location := by exact here%) : TestM Unit := do
-  match ← act.toBaseIO with
+    (loc : Location := by exact here%) : m Unit := do
+  match ← (act.toBaseIO : IO _) with
   | .ok _ => failAt loc "expected an IO error, but the action succeeded"
   | .error e =>
     unless acceptable e do
@@ -67,7 +70,7 @@ by {lit}`SIGABRT` is reported. A panic under {lit}`LEAN_ABORT_ON_PANIC=1` ends a
 The failure shows the exit code and the last lines of standard error.
 -/
 def assertAborted (output : IO.Process.Output)
-    (loc : Location := by exact here%) : TestM Unit :=
+    (loc : Location := by exact here%) : m Unit :=
   unless output.exitCode == 134 do
     let lines := output.stderr.splitOn "\n"
     let tail := "\n".intercalate (lines.drop (lines.length - 20))
@@ -76,24 +79,24 @@ def assertAborted (output : IO.Process.Output)
 
 /-- Asserts that a file exists. -/
 def assertFileExists (path : System.FilePath)
-    (loc : Location := by exact here%) : TestM Unit := do
+    (loc : Location := by exact here%) : m Unit := do
   unless ← path.pathExists do
     failAt loc s!"file does not exist: {path}"
 
 /-- Asserts that an option is absent. -/
 def assertNone {α} [Repr α] (value : Option α)
-    (loc : Location := by exact here%) : Test := do
+    (loc : Location := by exact here%) : m Unit := do
   if let some v := value then
     failAt loc s!"expected none, got {repr v}"
 
 /-- Asserts that an option is present, returning its contents. -/
 def assertSome {α} (value : Option α)
-    (loc : Location := by exact here%) : TestM α :=
+    (loc : Location := by exact here%) : m α :=
   match value with
   | some v => pure v
-  | none => throw { message := "expected some, got none", location? := some loc }
+  | none => failAt loc "expected some, got none"
 
 /-- Asserts that an option is present, without inspecting its contents. -/
 def assertIsSome {α} (value : Option α)
-    (loc : Location := by exact here%) : Test :=
+    (loc : Location := by exact here%) : m Unit :=
   discard (assertSome value loc)
