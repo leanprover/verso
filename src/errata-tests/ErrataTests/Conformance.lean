@@ -453,7 +453,8 @@ def unknownRecordsIgnored : Test := forEach scriptedProducts fun p => do
 
 /--
 Exit codes that contradict the reported verdict are mismatches, whichever way they go. On the shell
-harness, tests that call `errata_fail` exit with 1, so its `mismatch-fail` fails.
+harness, tests that call `errata_fail` exit with 1, so the `mismatch-fail` test of
+`on-errata-sh.sh` fails.
 -/
 @[test]
 def verdictMismatch : Test := forEach scriptedProducts fun p => do

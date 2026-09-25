@@ -536,8 +536,8 @@ arrive. Before a line of output is handed on, the result file is read up to its 
 that the test wrote before that output precede it. The test is terminated at its timeout and killed
 after the grace period. The run loop checks the clock after every bounded read of the result file.
 Once the test executable has exited, the processes that it started have the pipe grace to release
-its output pipes, and then its process group is swept. Tests with mandatory settings that have no
-value are reported with no process started. The result is {lean}`false` when the run has been
+its output pipes, and then its process group is swept. If {name}`t`'s mandatory setting has no
+value, then it is reported with no process started. The result is {lean}`false` when the run has been
 cancelled and the test was not started.
 -/
 def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) (r : Resolved) : IO Bool := do

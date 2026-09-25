@@ -172,7 +172,7 @@ errata_setting_decl() {
 
 # Declares a test: `errata_test NAME [--path a,b,c] [--file F] [--line N] [--description TEXT]
 # [--tags a,b] [--settings a,optional(b)] [--threads N]`. Settings written `optional(b)` are ones
-# the test runs without. The script calls it from `errata_tests`.
+# the tests run without. The script calls it from `errata_tests`.
 errata_test() {
   [ $# -ge 1 ] || _errata_misuse "errata_test takes a name"
   local name=$1

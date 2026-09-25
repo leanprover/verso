@@ -129,8 +129,8 @@ meta def runDeclName (env : Environment) (decl : Name) : Name := Id.run do
 Records a declaration as a test with the given tags. The action that runs it is compiled, with the
 {name}`IsTest` instance in force here, into an exported definition beside it. Test executables
 reach that definition through a plain {lit}`import` of the test's module. Tests must themselves be
-exported: in a module, they are public, which a {lit}`public section` arranges. The docstring is
-read here, from the live environment, and stored with the test.
+exported: in a module, they are public, which a {lit}`public section` arranges. Docstrings are
+read here, from the live environment, and stored with each test.
 -/
 meta def recordTest (decl : Name) (tags : Array String := #[]) : AttrM Unit := do
   if (testExt.getState (← getEnv)).any (·.name == decl) then

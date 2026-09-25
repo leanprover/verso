@@ -123,7 +123,7 @@ def filterPositions : Test := do
 
 /--
 A string token decodes by TOML's rules, with the byte offset of each character and then of the
-closing delimiter. Tokens with escapes that TOML does not define have no offsets.
+closing delimiter. Tokens with escapes outside TOML's set have no offsets.
 -/
 @[test]
 def stringOffsets : Test := do

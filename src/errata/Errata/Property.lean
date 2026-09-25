@@ -24,7 +24,7 @@ open scoped Plausible.Decorations in
 /--
 Checks a property with Plausible, failing with the counterexample if it is falsified. The seed comes
 last, so {lit}`property (∀ …)` is itself a test that takes the {name}`seed` setting. If
-{name}`cfg` holds a seed, then that seed takes precedence.
+{name}`cfg` holds a seed, then that seed takes precedence over the setting's value.
 -/
 def property (p : Prop) (cfg : Configuration := {}) (loc : Location := by exact here%)
     (p' : Decorations.DecorationsOf p := by mk_decorations) [Testable p'] (seed : seed) :

@@ -1841,8 +1841,8 @@ def testsCarryTagsAndSettings : Test := do
 /--
 Tests' actions parse the values of the settings they take and apply the tests to them. The last
 value given for a setting counts, optional settings without values are `none`, and missing
-mandatory settings and values that their parsers reject end the test with an error that names the
-setting.
+mandatory settings and values that their parsers reject end the tests with errors that name the
+settings.
 -/
 @[test]
 def settingsAreParsed : Test := do

@@ -170,7 +170,7 @@ lean_exe «errata-runner» where
   srcDir := "src/errata"
   root := `ErrataRunner
 
--- The processing of `errata.toml`, which reads Lake's TOML parser and nothing else of Lake.
+-- The processing of `errata.toml`, which uses Lake's TOML parser and nothing else of Lake.
 @[default_target]
 lean_lib ErrataConfig where
   srcDir := "src/errata"
