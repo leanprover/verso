@@ -11,7 +11,7 @@ tests=(pass fail verdict-fail silent unknown-records mismatch-pass mismatch-fail
        stubborn spawns panics garbled records twice flood lingers greets needs-setting protocol-late
        run-id exclusive-a exclusive-b shared-a shared-b after-setup-failure after-prepare-failure-a
        after-prepare-failure-b before-teardown-failure uses-dependent after-slow-setup uses-threaded
-       threaded-test fails-with-fixture slow-user slow-named)
+       threaded-test fails-with-fixture slow-user slow-named pair-after-failure)
 # A suite that needs only some of the tests names them here, separated by spaces.
 if [ -n "$BASIC_TESTS" ]; then
   read -r -a tests <<< "$BASIC_TESTS"
@@ -62,6 +62,9 @@ case "$mode" in
           extra=',"fixtures":[{"name":"stamped","exclusive":true}]' ;;
         shared-*) extra=',"fixtures":[{"name":"stamped","exclusive":false}]' ;;
         after-setup-failure) extra=',"fixtures":[{"name":"setup-fails"}]' ;;
+        # Its setups start together when the pool allows, and the first fails.
+        pair-after-failure)
+          extra=',"fixtures":[{"name":"setup-fails"},{"name":"teardown-fails"}]' ;;
         after-prepare-failure-*) extra=',"fixtures":[{"name":"prepare-fails"}]' ;;
         before-teardown-failure) extra=',"fixtures":[{"name":"teardown-fails"}]' ;;
         uses-dependent) extra=',"fixtures":[{"name":"dependent"}]' ;;

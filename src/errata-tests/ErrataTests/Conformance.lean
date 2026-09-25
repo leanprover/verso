@@ -1590,6 +1590,43 @@ def pytestHarness : Test := do
       assertContains "pytest ended with exit code 4 (USAGE_ERROR) before it ran the test"
         ((verdicts[0]?.bind (strField · "message")).getD "")
 
+/--
+Under the runner, the pytest harness answers a trivial fixture phase before it imports pytest, and
+outside the runner it imports pytest for every phase. With a `pytest` module on `PYTHONPATH` that
+fails on import, a trivial prepare succeeds under a run identifier whose listing came first, with
+the records that pytest's answer has, and the same prepare without a run identifier fails on the
+import.
+-/
+@[test]
+def pytestTrivialPhaseUnderTheRunner : Test := do
+  pytestProduct.check
+  IO.FS.withTempDir fun dir => do
+    let stub := dir / "stub"
+    IO.FS.createDirAll stub
+    IO.FS.writeFile (stub / "pytest.py") "raise ImportError('the stub pytest was imported')\n"
+    let runId := toString (← IO.rand 0 (2 ^ 30))
+    let invoke (args : Array String) (env : Array (String × Option String)) :
+        IO IO.Process.Output := do
+      let cmd := pytestProduct.exe.command
+      IO.Process.output {
+        cmd := cmd[0]!, args := cmd.extract 1 cmd.size ++ args
+        env := #[("ERRATA_DIR", some (← errataDir).toString), ("ERRATA_LIFELINE", none)] ++ env }
+    let listing ← invoke #["errata-list", (dir / "list.jsonl").toString]
+      #[("ERRATA_RUN_ID", some runId)]
+    assertBEq 0 listing.exitCode
+    let prepare (out : String) :=
+      #["errata-fixture", (dir / out).toString, "setup-fails", "prepare"]
+    let stubbed := ("PYTHONPATH", some stub.toString)
+    let fast ← invoke (prepare "fast.jsonl") #[("ERRATA_RUN_ID", some runId), stubbed]
+    assertTrue (fast.exitCode == 0) s!"the trivial prepare failed: {fast.stderr}"
+    assertBEq "{\"type\": \"protocol\", \"version\": 1}\n" (← IO.FS.readFile (dir / "fast.jsonl"))
+    let slow ← invoke (prepare "slow.jsonl") #[("ERRATA_RUN_ID", none), stubbed]
+    assertTrue (slow.exitCode != 0) "the prepare without a run identifier succeeded"
+    assertContains "the stub pytest was imported" slow.stderr
+    let real ← invoke (prepare "real.jsonl") #[("ERRATA_RUN_ID", none)]
+    assertTrue (real.exitCode == 0) s!"the prepare through pytest failed: {real.stderr}"
+    assertBEq (← IO.FS.readFile (dir / "fast.jsonl")) (← IO.FS.readFile (dir / "real.jsonl"))
+
 /-! # Fixtures -/
 
 /-- Runs a reproduction line in a shell, as a person would, without a lifeline. -/
@@ -1993,12 +2030,15 @@ def cancelledRunTearsDown : Test := do
 
 /-! # The scheduling order -/
 
-/-- The tests of `basic.sh` that the checks of the scheduling order run, in the inventory's order. -/
+/-- The tests of `basic.sh` that the checks of the scheduling order run, in inventory order. -/
 def orderTests : List String :=
   ["pass", "exclusive-a", "silent", "records", "shared-a", "uses-dependent", "unknown-records",
     "exclusive-b", "shared-b", "run-id", "greets", "verdict-fail"]
 
-/-- The tests of a run in the order their outcomes were reported, which is the order they started. -/
+/--
+The tests of a run in the order their outcomes were reported. With one slot, it is the order in
+which they started.
+-/
 def Run.testOrder (r : Run) : Array String :=
   r.events.filterMap fun e =>
     if isEvent "outcome" (some ("kind", "test")) e then strField e "test" else none
@@ -2051,6 +2091,20 @@ def defaultOrderIsTheInventorys : Test := IO.FS.withTempDir fun dir => do
       let r ← runOrderTests seed stamps config
       assertBEq orderTests.toArray r.testOrder
 
+/-- A text with the values of `Errata.seed` removed. -/
+def withoutSeeds (text : String) : String :=
+  "Errata.seed=".intercalate ((text.splitOn "Errata.seed=").mapIdx fun i part =>
+    if i == 0 then part else String.ofList (part.toList.dropWhile Char.isDigit))
+
+/-- The JUnit report's cases, each as its name, after its fixture's name for a fixture's phase. -/
+def junitCaseNames (xml : String) : List String :=
+  (xml.splitOn "<testcase name=\"").drop 1 |>.map fun s =>
+    let name := (s.splitOn "\"").head!
+    let classname := ((s.splitOn "classname=\"")[1]!.splitOn "\"").head!
+    match classname.dropSuffix? " (fixture)" with
+    | some fixture => s!"{fixture}: {name}"
+    | none => name
+
 /-- A JUnit report with its times removed. -/
 def withoutTimes (xml : String) : String :=
   "time=\"\"".intercalate ((xml.splitOn "time=\"").mapIdx fun i part =>
@@ -2077,18 +2131,33 @@ def junitInInventoryOrder : Test := IO.FS.withTempDir fun dir => do
   let two ← run 2 4 seededOrder
   assertBEq sequential one
   assertBEq sequential two
-  -- Each case as its name, after its fixture's name for a fixture's phase.
-  let names := (sequential.splitOn "<testcase name=\"").drop 1 |>.map fun s =>
-    let name := (s.splitOn "\"").head!
-    let classname := ((s.splitOn "classname=\"")[1]!.splitOn "\"").head!
-    match classname.dropSuffix? " (fixture)" with
-    | some fixture => s!"{fixture}: {name}"
-    | none => name
   assertBEq ["pass", "stamped: setup", "stamped: prepare exclusive-a", "exclusive-a", "silent",
     "records", "records.step", "stamped: prepare shared-a", "shared-a", "dependent: setup",
     "dependent: prepare uses-dependent", "uses-dependent", "dependent: teardown", "unknown-records",
     "stamped: prepare exclusive-b", "exclusive-b", "stamped: prepare shared-b", "shared-b",
-    "stamped: teardown"] names
+    "stamped: teardown"] (junitCaseNames sequential)
+
+/--
+The JUnit report's order holds when fixtures fail and tests are reported without a process: with
+four slots, both setups of a test's two fixtures start, the first fails, and the second's setup and
+teardown still stand around that test; a test without a value for a mandatory setting stands at its
+position. The files of two seeds are the same apart from times and derived seeds.
+-/
+@[test]
+def junitOrderAfterFailures : Test := IO.FS.withTempDir fun dir => do
+  let stamps := dir / "stamps"
+  let tests := ["pass", "pair-after-failure", "needs-setting", "shared-a"]
+  let run (seed : Nat) : IO String := do
+    let r ← runWith #[basic tests]
+      { seed := some seed, jobs? := some 4, sets := #[("stamp-file", stamps.toString)] }
+      seededOrder
+    return withoutSeeds (withoutTimes (junitReport r.report))
+  let one ← run 1
+  let two ← run 2
+  assertBEq one two
+  assertBEq ["pass", "setup-fails: setup", "teardown-fails: setup", "pair-after-failure",
+    "setup-fails: teardown", "teardown-fails: teardown", "needs-setting", "stamped: setup",
+    "stamped: prepare shared-a", "shared-a", "stamped: teardown"] (junitCaseNames one)
 
 /--
 In the JSON report, a test's own duration is its process's by the runner's clock, which includes
