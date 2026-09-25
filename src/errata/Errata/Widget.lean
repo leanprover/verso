@@ -57,19 +57,23 @@ meta initialize runRegistry : IO.Ref (Std.HashMap Name RunState) ← IO.mkRef {}
 meta initialize testNotes : IO.Ref (Std.HashMap Name TestNote) ← IO.mkRef {}
 
 /--
-Takes the workspace's build lock, runs {name}`act`, and releases the lock. The runs started for the
-tests of one workspace then go one at a time, wherever in the workspace those tests are, since each
-builds in the workspace and writes its configuration files.
+Takes the workspace's build lock, and runs {name}`act` with an action that releases it; the lock is
+released when {name}`act` ends, if {name}`act` has not released it earlier. The runs started for the
+tests of one workspace then build one at a time, wherever in the workspace those tests are, since
+each builds in the workspace and writes the driver's configuration files.
 
 The lock is a file under the workspace's {lit}`.lake` directory, and every file worker of the
 workspace opens that same file.
 -/
-private meta def withBuildLock (act : IO α) : IO α := do
+private meta def withBuildLock (act : IO Unit → IO α) : IO α := do
   let dir := (← IO.currentDir) / ".lake"
   IO.FS.createDirAll dir
   let handle ← IO.FS.Handle.mk (dir / "errata-widget-build.lock") .write
   handle.lock
-  try act finally handle.unlock
+  let held ← IO.mkRef true
+  let release : IO Unit := do
+    if ← held.modifyGet fun h => (h, false) then handle.unlock
+  try act release finally release
 
 /--
 A request to start running a test: the declaration and the module that defines it, the values the
@@ -173,7 +177,8 @@ meta structure AwaitResult where
   /-- When the test body started, in epoch ms; 0 until then. Output offsets are relative to it. -/
   execStartTime : Nat := 0
   /--
-  The run's phase: {lit}`building`, {lit}`running`, {lit}`done`, or {lit}`cancelled`.
+  The run's phase: {lit}`waiting` for the build lock, {lit}`building`, {lit}`running`,
+  {lit}`done`, or {lit}`cancelled`.
   -/
   phase : String := "running"
   /-- Whether the run is over and no more output will arrive. -/
@@ -244,9 +249,14 @@ private meta def endOf (text : String) : String :=
   if text.length ≤ detailLimit then text
   else "…\n" ++ text.drop (text.length - detailLimit)
 
-/-- The outcome of a driver that failed before the runner began, with the end of its output. -/
-private meta def buildFailure (output : String) : RunOutcome :=
-  { status := "error", message? := some "lake build failed", detail? := some (endOf output) }
+/--
+The outcome of a driver that ended before the runner began, such as one whose build failed or whose
+script Lake could not find, with the end of its output.
+-/
+private meta def buildFailure (output : String) : RunOutcome := {
+  status := "error", message? := some "the build ended before the test ran"
+  detail? := some (endOf output)
+}
 
 /-- The outcome when starting or following the driver raises an error, such as a failed spawn. -/
 private meta def launchFailure (e : IO.Error) : RunOutcome :=
@@ -281,8 +291,9 @@ meta structure DriverRequest where
   settings : Array (String × String) := #[]
 
 /--
-The arguments with which the driver, {lit}`lake`, runs one test and writes the runner's events: the
-test's module through the interpreted product, a filter that selects the test by its name, and the
+The arguments with which {lit}`lake` runs the driver, the script {lit}`Errata.run` found by its name
+among the workspace's packages, for one test, and the runner writes its events: the test's module
+through the interpreted product, a filter that selects the test by its name, and the
 seed and the settings' values. A seed goes to the seed setting when the test takes it, and otherwise
 to the runner as the run's seed.
 -/
@@ -290,7 +301,7 @@ meta def driverArgs (r : DriverRequest) : Array String :=
   let seed := match r.seed? with
     | some n => if r.takesSeed then #["--set", s!"{seedSetting}={n}"] else #["--seed", toString n]
     | none => #[]
-  #["test", "--", "run", "-E", s!"name(={Filter.escapeText r.test})",
+  #["script", "run", "Errata.run", "run", "-E", s!"name(={Filter.escapeText r.test})",
     "--interpreted", r.module.toString, "--events", r.eventsPath.toString] ++
     seed ++ r.settings.flatMap fun (k, v) => #["--set", s!"{k}={v}"]
 
@@ -304,20 +315,23 @@ private meta def pipeGraceMs : Nat := 500
 private meta def outputKept : Nat := 64000
 
 /--
-Runs the test through the driver, under the workspace's build lock, and applies the changes that the
-runner's events make to {name}`state`. The driver's process group is the run's kill. The driver's
-standard input is a lifeline that this process holds, and {lit}`ERRATA_DRIVER_LIFELINE` asks the
-driver to hand it on to the runner, so the runner and the tests end when this process does. What the
-driver writes, Lake's build log and the runner's report, is kept for the
-message of a driver that fails before the runner ends the run. {name}`own?` is the test's own
-declaration, as {name}`RunOutcome.ofRecord` uses it.
+Runs the test through the driver and applies the changes that the runner's events make to
+{name}`state`. The run waits for the workspace's build lock and holds it until the runner begins its
+Run phase, by which time the driver has built the test's module and written its configuration, so
+another run in the workspace builds while this one's test runs. The driver's process group is the
+run's kill. The driver's standard input is a lifeline that this process holds, and
+{lit}`ERRATA_DRIVER_LIFELINE` asks the driver to hand it on to the runner, so the runner and the
+tests end when this process does. What the driver writes, Lake's build log and the runner's report,
+is kept for the message of a driver that fails before the runner ends the run. {name}`own?` is the
+test's own declaration, as {name}`RunOutcome.ofRecord` uses it.
 -/
 private meta def runThroughDriver (state : RunState) (request : DriverRequest)
     (own? : Option Location) : IO Unit := do
   -- The language server's Lake sets `LAKE` to its own path.
   let lake := (← IO.getEnv "LAKE").getD "lake"
-  withBuildLock do
-    unless (← state.phase).isLive do return
+  withBuildLock fun releaseLock => do
+    -- A run cancelled while it waited for the lock has nothing more to do.
+    unless ← state.apply (.locked (← Protocol.nowMs)) do return
     IO.FS.withTempFile fun _ eventsPath => do
       let events ← ProcessControl.Tail.open eventsPath
       let driver ← IO.Process.spawn {
@@ -334,23 +348,25 @@ private meta def runThroughDriver (state : RunState) (request : DriverRequest)
       let keep (line : String) : IO Unit := output.modify fun text =>
         let text := text ++ line
         if text.length ≤ outputKept then text else text.drop (text.length - outputKept) |>.copy
-      let outTask ← IO.asTask (prio := .dedicated) (ProcessControl.forwardLines driver.stdout keep)
-      let errTask ← IO.asTask (prio := .dedicated) (ProcessControl.forwardLines driver.stderr keep)
+      let forward (h : IO.FS.Handle) := ProcessControl.forwardLines h keep
+      let outTask ← IO.asTask (prio := .dedicated) (forward driver.stdout)
+      let errTask ← IO.asTask (prio := .dedicated) (forward driver.stderr)
       -- The exit code, recorded when the driver is found to have exited.
       let code ← IO.mkRef none
       let exited : IO Bool := do
         if (← code.get).isSome then return true
         let c? ← driver.tryWait
-        -- The driver's process group id is free for reuse once `tryWait` reports the exit, so a
-        -- cancel must no longer kill that group.
-        if c?.isSome then discard <| state.apply .disarm
+        -- The driver's process group id is free for reuse once `tryWait` reports the exit, and
+        -- the rest of the events file then decides the outcome, so a cancel no longer applies.
+        if c?.isSome then discard <| state.apply .exited
         code.set c?
         return c?.isSome
       let cache ← SourceLines.new
       events.follow exited fun bytes => do
         let line := ProcessControl.decodeLine bytes
-        for change in ← changesOfLine cache request.test state.startTime own? line do
+        for change in ← changesOfLine cache request.test (← Protocol.nowMs) own? line do
           discard <| state.apply change
+        if beginsRunPhase line then releaseLock
       -- Processes that outlived the driver can hold its output pipes open. They get a grace period,
       -- and what they wrote before it ends is kept.
       discard <| ProcessControl.waitAtMost pipeGraceMs [outTask, errTask]
@@ -358,7 +374,8 @@ private meta def runThroughDriver (state : RunState) (request : DriverRequest)
       let code := (← code.get).getD 0
       let text ← output.get
       let fallback :=
-        if (← state.phase) matches .building then buildFailure text else runnerFailure code text
+        if (← state.phase) matches .building then buildFailure text
+        else runnerFailure code text
       discard <| state.apply (.finish fallback)
 
 /--
@@ -461,6 +478,11 @@ meta structure SettingField where
   default? : Option String := none
   /-- The value that the profile gives the setting, which fills the field at first. -/
   profileValue? : Option String := none
+  /--
+  The Lake target whose result the profile gives the setting, as {lit}`{ needs = … }` names it;
+  the driver builds it when the test runs.
+  -/
+  needs? : Option String := none
 deriving Lean.FromJson, Lean.ToJson
 
 /-- The reply to a request for a test's settings. -/
@@ -485,20 +507,36 @@ private meta def profileValues (profile : String) : IO (Array (String × String)
     return ((config.profile? profile).map (·.settings)).getD #[]
   catch _ => return #[]
 
+/--
+The settings to which the profile named {name}`profile` gives the result of a Lake target, with the
+target, from the configuration that the driver last elaborated, or none when it has written none.
+-/
+private meta def profileNeeds (profile : String) : IO (Array (String × String)) := do
+  let path := (← IO.currentDir) / ".lake" / "errata" / "config.json"
+  try
+    let config ← Runner.readJsonFile path
+    let settings := (config.getObjValD "profiles").getObjValD profile |>.getObjValD "settings"
+    let .ok fields := settings.getObj? | return #[]
+    return fields.toArray.filterMap fun (k, v) =>
+      (v.getObjValAs? String "needs").toOption.map (k, ·)
+  catch _ => return #[]
+
 open Server in
 /--
 Server RPC method that gives the fields for a test's settings: for each setting that the test takes,
 other than the seed, its name, description, and declared default, whether it is optional, and the
-value that the profile gives it.
+value that the profile gives it, or the target whose result the profile gives it.
 -/
 @[server_rpc_method]
 meta def testSettings (req : RunRef) : RequestM (RequestTask SettingsReply) := do
   let declName ← decodeDecl req.decl
   let declared := (((← testNotes.get).get? declName).map (·.settings)).getD #[]
   let values ← profileValues widgetProfile
+  let needs ← profileNeeds widgetProfile
   let fields := declared.filter (·.name != seedSetting) |>.map fun s => {
     name := s.name, optional := s.optional, description? := s.description?, default? := s.default?
     profileValue? := (values.findRev? (·.1 == s.name)).map (·.2)
+    needs? := (needs.find? (·.1 == s.name)).map (·.2)
   }
   return RequestTask.pure { profile := widgetProfile, fields }
 

@@ -3,8 +3,6 @@ name = "errata-widget"
 # Verso's clones of the git dependencies serve this workspace too, so that the modules built from
 # the shared Verso checkout see the same dependency paths from both.
 packagesDir = "../../.lake/packages"
-# The widget runs a test through the workspace's test driver, which is Errata's.
-testDriver = "verso/Errata.run"
 
 [[require]]
 name = "verso"

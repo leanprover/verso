@@ -180,35 +180,51 @@ function shellWord(text) {
 
 /**
  * @typedef {{name: string, optional: boolean, description?: string, default?: string,
- *            profileValue?: string}} SettingField a setting that the test takes, with the value
- *   that the profile gives it
+ *            profileValue?: string, needs?: string}} SettingField a setting that the test takes,
+ *   with the value that the profile gives it, or the target whose result the profile gives it
  * @typedef {{name: string, value: string}} SettingValue
  */
 
-// The text that a setting's field starts with: the profile's value, or blank when it gives none.
+// The text that a setting's field shows while the reader has left it as the profile gives it: the
+// profile's value, or blank when it gives none.
 /** @param field {SettingField} */
 function prefillOf(field) {
     return typeof field.profileValue === "string" ? field.profileValue : "";
 }
 
+/**
+ * Whether the text that the reader typed leaves the setting unset: an optional setting that the
+ * profile gives no value, emptied.
+ * @param field {SettingField}
+ * @param text {string}
+ */
+function leavesUnset(field, text) {
+    return text === "" && field.optional && typeof field.profileValue !== "string" && !field.needs;
+}
+
 // What a setting's field shows while it is blank: the value that the test then receives.
-/** @param field {SettingField} */
-function placeholderOf(field) {
+/**
+ * @param field {SettingField}
+ * @param typed {boolean} whether the reader has changed the field
+ */
+function placeholderOf(field, typed) {
+    if (typed && !leavesUnset(field, "")) return "empty";
+    if (!typed && field.needs) return "built at run time";
     if (typeof field.default === "string") return field.default;
-    return field.optional ? "none" : "required";
+    return field.optional ? "unset" : "required";
 }
 
 /**
- * The values that a run gives the test's settings: those of the fields whose text differs from what
- * the fields started with. The profile gives the others.
+ * The values that a run gives the test's settings: the text of each field that the reader has
+ * changed, except an emptied field that leaves its setting unset. The profile gives the others.
  * @param fields {SettingField[]}
- * @param values {Record<string, string>}
+ * @param values {Record<string, string>} the text of each field that the reader has changed
  * @returns {SettingValue[]}
  */
 function settingsSent(fields, values) {
     return fields
         .filter(function (f) {
-            return f.name in values && values[f.name] !== prefillOf(f);
+            return f.name in values && !leavesUnset(f, values[f.name]);
         })
         .map(function (f) {
             return { name: f.name, value: values[f.name] };
@@ -750,7 +766,8 @@ function NamedResult(props) {
  *
  *   idle       no run for this test, and no recorded outcome to show
  *   running    a run is in progress, streaming output; its phase is "starting" until the server
- *              has accepted the run, then "building" and "running" as the server reports
+ *              has accepted the run, then "waiting" while another run of the workspace builds,
+ *              "building", and "running", as the server reports
  *   done       a finished run's outcome (live or restored from the session cache)
  *   cancelled  the run was stopped before it produced an outcome
  *   failed     the run could not be carried out at all
@@ -1079,8 +1096,8 @@ function TestRun(props) {
     // The seed for property tests as typed, or blank to generate a random seed.
     const [seed, setSeed] = React.useState("");
     // The settings that the test takes, with the values that the profile gives them, as the server
-    // last reported them, and the text of each setting's field by name. A field holds the profile's
-    // value until the reader changes it.
+    // last reported them, and the text of each field that the reader has changed, by name. A field
+    // shows the profile's value until the reader changes it, and its reset button returns it there.
     const [settingFields, setSettingFields] = React.useState(/** @type {SettingField[]} */ ([]));
     const [settingValues, setSettingValues] = React.useState(
         /** @type {Record<string, string>} */ ({}),
@@ -1172,28 +1189,19 @@ function TestRun(props) {
     }
 
     // Asks the server for the test's settings and the values that the profile gives them. A field
-    // that still holds what it started with takes the profile's value as it now is, and a field the
-    // reader has changed keeps its text.
-    const fieldsRef = React.useRef(/** @type {SettingField[]} */ ([]));
+    // that the reader has left shows the profile's value as it now is, and a field the reader has
+    // changed keeps its text.
     function loadSettings() {
         rsRef.current.call("Errata.Widget.testSettings", { decl: props.decl }).then(
             function (reply) {
                 if (!alive.current) return;
                 const fields = (reply && reply.fields) || [];
-                const before = fieldsRef.current;
-                fieldsRef.current = fields;
                 setSettingFields(fields);
                 setSettingValues(function (values) {
                     /** @type {Record<string, string>} */
                     const next = {};
-                    for (const field of fields) {
-                        const old = before.find(function (f) {
-                            return f.name === field.name;
-                        });
-                        const typed =
-                            field.name in values && (!old || values[field.name] !== prefillOf(old));
-                        next[field.name] = typed ? values[field.name] : prefillOf(field);
-                    }
+                    for (const field of fields)
+                        if (field.name in values) next[field.name] = values[field.name];
                     return next;
                 });
             },
@@ -1383,12 +1391,27 @@ function TestRun(props) {
         });
     }
 
+    // Returns a field to the value that the profile gives its setting.
+    function resetSetting(name) {
+        setSettingValues(function (values) {
+            const next = { ...values };
+            delete next[name];
+            return next;
+        });
+    }
+
     // Fills the fields with the values of an earlier run, so the next run repeats them.
     /** @param used {SettingValue[]} */
     function repeatSettings(used) {
         setSettingValues(function (values) {
             const next = { ...values };
-            for (const s of used) if (s.name in next) next[s.name] = s.value;
+            for (const s of used)
+                if (
+                    settingFields.some(function (f) {
+                        return f.name === s.name;
+                    })
+                )
+                    next[s.name] = s.value;
             return next;
         });
     }
@@ -1476,9 +1499,10 @@ function TestRun(props) {
         // A reply that arrives after a new run has started is about the run before it. A rejected
         // call is tried again through the latest session, as a rejected report is.
         const myGen = gen.current;
-        // The run as it stands at the click, so a retry names the run the reader asked to stop even
-        // when a reply has since pointed the widget at another run of the test.
-        const runId = shownRun.current.runId;
+        // The run that the widget shows at the click, which is the run the reader asked to stop. A
+        // reply about another run of the test can point the widget's reads at that run before it
+        // is shown, so the identifier comes from the state that was drawn.
+        const runId = st.tag === "idle" ? "" : st.runId;
         function attempt(failures) {
             const request = { decl: props.decl, runId: runId };
             rsRef.current.call("Errata.Widget.cancelTest", request).then(
@@ -1590,7 +1614,7 @@ function TestRun(props) {
             ? e(
                   "span",
                   { style: { color: errorColor, fontSize: dimSize } },
-                  "invalid seed — see run settings",
+                  "invalid seed; see run settings",
               )
             : null,
     );
@@ -1636,7 +1660,7 @@ function TestRun(props) {
     // columns, so the fields line up.
     const settingFieldRow = {
         display: "grid",
-        gridTemplateColumns: "minmax(10ch, auto) 16ch",
+        gridTemplateColumns: "minmax(10ch, auto) 16ch 22px",
         gap: "6px",
         alignItems: "center",
         marginTop: "4px",
@@ -1693,9 +1717,12 @@ function TestRun(props) {
                   ? e("div", { style: { ...settingRow, marginTop: "4px" } }, "Settings:")
                   : null,
               settingFields.map(function (field) {
-                  const value = field.name in settingValues ? settingValues[field.name] : "";
+                  // A field the reader has changed holds their text, and one they have left shows
+                  // the profile's value.
+                  const typed = field.name in settingValues;
+                  const value = typed ? settingValues[field.name] : prefillOf(field);
                   return e(
-                      "label",
+                      "div",
                       {
                           key: field.name,
                           role: "group",
@@ -1707,7 +1734,7 @@ function TestRun(props) {
                       e("input", {
                           type: "text",
                           value,
-                          placeholder: placeholderOf(field),
+                          placeholder: placeholderOf(field, typed),
                           disabled: running,
                           title: "Value of " + field.name,
                           onChange: function (ev) {
@@ -1720,6 +1747,27 @@ function TestRun(props) {
                               fontFamily: monoFont,
                           },
                       }),
+                      typed
+                          ? e("button", {
+                                onClick: function () {
+                                    resetSetting(field.name);
+                                },
+                                disabled: running,
+                                title: "Use the profile's value of " + field.name,
+                                "aria-label": "Use the profile's value",
+                                className:
+                                    (running ? "" : "link pointer dim ") +
+                                    "codicon codicon-discard",
+                                style: {
+                                    background: "none",
+                                    border: "none",
+                                    padding: 0,
+                                    color: running
+                                        ? "var(--vscode-disabledForeground, #888)"
+                                        : "var(--vscode-textLink-foreground, #0078d4)",
+                                },
+                            })
+                          : null,
                   );
               }),
           )
@@ -1795,9 +1843,11 @@ function TestRun(props) {
         const label =
             st.phase === "starting"
                 ? "Starting… "
-                : st.phase === "building"
-                  ? "Building… "
-                  : "Running… ";
+                : st.phase === "waiting"
+                  ? "Waiting for another run… "
+                  : st.phase === "building"
+                    ? "Building… "
+                    : "Running… ";
         primary = e(
             "span",
             { style: { color: dimColor } },

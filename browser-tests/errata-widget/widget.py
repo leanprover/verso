@@ -109,7 +109,7 @@ class Widget:
     @property
     def setting_rows(self) -> Locator:
         """The rows of the test's settings in the open settings popup."""
-        return self.page.locator("label[role=group]")
+        return self.page.locator(".tooltip-content [role=group]")
 
     @property
     def expand_named(self) -> Locator:

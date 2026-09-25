@@ -22,13 +22,13 @@ namespace ErrataTests.WidgetState
 
 /-- One change of each kind. The kill that {lit}`arm` records is {lean}`(pure () : IO Unit)`. -/
 def changes : Array (String × Change) := #[
-  ("listed", .listed 5), ("execStart", .execStart 7),
+  ("locked", .locked 1), ("listed", .listed 5), ("execStart", .execStart 7),
   ("output", .output { stream := .stdout, text := "x" }), ("result", .result { id := 1 }),
   ("step", .step { fixture := "f", status := "pass" }),
   ("issue", .issue { level := "warning", message := "w" }),
   ("outcome", .outcome { status := "pass" }), ("ended", .ended),
   ("finish", .finish { status := "error" }), ("cancel", .cancel), ("arm", .arm (pure ())),
-  ("disarm", .disarm)]
+  ("exited", .exited)]
 
 /-- The sizes of what a run has collected, which only a live run adds to. -/
 def sizesOf (d : RunData) : List Nat :=
@@ -36,27 +36,33 @@ def sizesOf (d : RunData) : List Nat :=
 
 /--
 What is wrong with the transition from {name}`d` by the change named {name}`name`, if anything. A
-run that is over changes only when a disarm clears its kill; a cancel applies to a live run alone
-and its action is the kill that the run holds; a run ends once and keeps its outcome; only a live
-run is armed; the building phase ends only for the running phase; and an outcome arrives once.
+run that is over stays as it is; the driver's exit clears the kill and changes nothing else; a
+cancel applies to a live run whose driver is still running, and its action is the kill that the run
+holds; a run ends once and keeps its outcome; only a live run whose driver is still running is
+armed; only the lock ends the waiting and only the List phase ends the building; and an outcome
+arrives once.
 -/
 def problem (d : RunData) (name : String) (c : Change) : Option String :=
   let after := d.apply c
   let d' := (after.map (·.1)).getD d
   let act? := after.bind (·.2)
-  if !d.phase.isLive && after.isSome && !(c matches .disarm) then
+  if !d.phase.isLive && after.isSome then
     some s!"{name} changed a run that was {d.phase.name}"
-  else if after.isSome && (c matches .disarm) &&
-      (d'.phase != d.phase || sizesOf d' != sizesOf d) then
-    some "a disarm changed more than the kill"
+  else if after.isSome && (c matches .exited) &&
+      (d'.phase != d.phase || sizesOf d' != sizesOf d || d'.kill?.isSome) then
+    some "the driver's exit changed more than the kill"
   else if (c matches .cancel) && after.isSome && act?.isSome != d.kill?.isSome then
     some "a cancel's action is not the run's kill"
   else if (c matches .cancel) && after.isSome && !(d'.phase matches .cancelled) then
     some "a cancel did not cancel"
-  else if (c matches .arm _) && !d.phase.isLive && after.isSome then
-    some "a run that is over was armed"
+  else if (c matches .cancel | .arm _) && d.exited && after.isSome then
+    some s!"{name} applied after the driver exited"
+  else if !(c matches .locked _) && d.phase matches .waiting && d'.phase matches .building then
+    some s!"{name} ended the waiting"
   else if !(c matches .listed _) && d.phase matches .building && d'.phase matches .running then
     some s!"{name} ended the building"
+  else if (c matches .listed _) && after.isSome && !(d.phase matches .building) then
+    some "the List phase began outside the building"
   else if (c matches .outcome _) && d.outcome?.isSome && after.isSome then
     some "a second outcome was taken"
   else if (c matches .ended | .finish _) && after.isSome && d.outcome?.isSome &&
@@ -83,7 +89,7 @@ def transitionsInEveryOrder : Test := do
       let mut path : Array String := #[]
       let mut rest := code
       for _ in [0 : len] do
-        let (name, c) := changes[rest % n]?.getD ("disarm", .disarm)
+        let (name, c) := changes[rest % n]?.getD ("exited", .exited)
         rest := rest / n
         path := path.push name
         if let some p := problem d name c then
@@ -93,15 +99,30 @@ def transitionsInEveryOrder : Test := do
   assertTrue found.isEmpty
     s!"{found.size} problems among {count} sequences:\n{"\n".intercalate found.toList}"
 
-/-- A cancel after the driver was reaped has no kill to perform. -/
+/--
+A cancel that arrives after the driver was reaped is answered as finished: it kills nothing, and the
+outcome that the rest of the events file gives is kept.
+-/
 @[test]
 def noKillAfterReaping : Test := do
   let killed ← IO.mkRef 0
   let s ← RunState.new "r" "" 0 0
+  assertTrue (← s.apply (.locked 0))
   assertTrue (← s.apply (.arm (killed.modify (· + 1))))
-  assertTrue (← s.apply .disarm)
-  assertTrue (← s.apply .cancel)
+  assertTrue (← s.apply .exited)
+  assertTrue (!(← s.cancelNamed "r")) "a cancel after the driver's exit applied"
+  assertTrue (← s.apply (.outcome { status := "pass" }))
+  assertTrue (← s.apply .ended)
   assertBEq 0 (← killed.get)
+  assertTrue ((← s.phase) == .done { status := "pass" }) s!"the run is {(← s.phase).name}"
+
+/-- A run cancelled while it waits for the build lock never starts building. -/
+@[test]
+def cancelWhileWaiting : Test := do
+  let s ← RunState.new "r" "" 0 0
+  assertBEq "waiting" (← s.phase).name
+  assertTrue (← s.cancelNamed "r")
+  assertTrue (!(← s.apply (.locked 5))) "a cancelled run took the lock"
 
 /-- A cancel of a live run performs the kill that the run holds, once. -/
 @[test]
@@ -146,7 +167,7 @@ def cancelRacesTheEnd : Test := do
 def changesWakeWaiters : Test := do
   let s ← RunState.new "r" "" 0 0
   let waiting := (← s.data.get).wakeup
-  assertTrue (!(← s.apply .disarm)) "a disarm without a kill applied"
+  assertTrue (!(← s.apply (.listed 3))) "a waiting run began its List phase"
   assertTrue (!(← IO.hasFinished waiting.result?)) "a change that did not apply woke a waiter"
   assertTrue (← s.apply (.output { stream := .stdout, text := "x" }))
   assertTrue (← IO.hasFinished waiting.result?) "the waiter was not woken"
@@ -196,6 +217,7 @@ def displayFromEvents : Test := do
   let p := Conformance.leanProduct
   let r ← p.runTests #["nestedResults"]
   let s ← RunState.new "r" "" 0 0
+  discard <| s.apply (.locked 0)
   let cache ← SourceLines.new
   for e in r.events do
     for c in ← changesOfRecord cache "nestedResults" 0 none e do
@@ -228,6 +250,7 @@ def failureFromEvents : Test := do
   let p := Conformance.leanProduct
   let r ← p.run #[p.fails]
   let s ← RunState.new "r" "" 0 0
+  discard <| s.apply (.locked 0)
   let cache ← SourceLines.new
   for e in r.events do
     for c in ← changesOfRecord cache p.fails.test 0 none e do
@@ -244,7 +267,8 @@ ends without an outcome for its test ends with an error that says so.
 -/
 @[test]
 def recordsOfOtherKinds : Test := do
-  let s ← RunState.new "r" "" 100 0
+  let s ← RunState.new "r" "" 90 0
+  discard <| s.apply (.locked 100)
   let cache ← SourceLines.new
   let apply (j : Json) : TestM Unit := do
     for c in ← changesOfRecord cache "t" 100 none j do discard <| s.apply c

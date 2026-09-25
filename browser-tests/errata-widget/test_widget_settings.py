@@ -19,7 +19,7 @@ def test_the_fields_start_with_the_profile_and_the_run_uses_it(editor):
     expect(widget.setting_field("greeting")).to_have_value("good day")
     # A setting that the profile leaves out starts blank, and the field says what the test gets.
     expect(widget.setting_field("strict")).to_have_value("")
-    expect(widget.setting_field("strict")).to_have_attribute("placeholder", "none")
+    expect(widget.setting_field("strict")).to_have_attribute("placeholder", "unset")
     editor.page.keyboard.press("Escape")
     expect(widget.gear).to_have_attribute("title", "Run settings")
     widget.run_button.click()
@@ -67,12 +67,45 @@ def test_a_value_that_the_setting_rejects_ends_the_test_with_an_error(editor):
     )
 
 
-def test_a_declared_default_is_shown_in_an_empty_field(editor):
+def test_an_emptied_optional_field_leaves_its_setting_unset(editor):
+    editor.show("Passing", "readsSettings")
+    widget = Widget(editor.page)
+    widget.gear.click()
+    widget.setting_field("strict").fill("true")
+    widget.setting_field("strict").fill("")
+    expect(widget.setting_field("strict")).to_have_attribute("placeholder", "unset")
+    editor.page.keyboard.press("Escape")
+    expect(widget.gear).to_have_attribute("title", "Run settings")
+    widget.run_button.click()
+    widget.wait_for_verdict("Passed")
+
+
+def test_an_emptied_field_with_a_profile_value_sends_the_empty_value(editor):
     editor.show("Passing", "readsSettings")
     widget = Widget(editor.page)
     widget.gear.click()
     widget.setting_field("greeting").fill("")
-    expect(widget.setting_field("greeting")).to_have_attribute("placeholder", "hello")
+    expect(widget.setting_field("greeting")).to_have_attribute("placeholder", "empty")
+    editor.page.keyboard.press("Escape")
+    widget.run_button.click()
+    widget.wait_for_verdict("Passed")
+    expect_exact_text(widget.output, "greeting: \n")
+
+
+def test_the_reset_button_restores_the_profiles_value(editor):
+    editor.show("Passing", "readsSettings")
+    widget = Widget(editor.page)
+    widget.gear.click()
+    reset = editor.page.get_by_role("button", name="Use the profile's value")
+    expect(reset).to_have_count(0)
+    widget.setting_field("greeting").fill("hi")
+    reset.click()
+    expect(widget.setting_field("greeting")).to_have_value("good day")
+    expect(reset).to_have_count(0)
+    editor.page.keyboard.press("Escape")
+    widget.run_button.click()
+    widget.wait_for_verdict("Passed")
+    expect_exact_text(widget.output, "greeting: good day\n")
 
 
 def test_the_settings_of_a_run_can_be_used_again(editor):

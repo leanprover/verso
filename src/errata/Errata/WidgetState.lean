@@ -215,6 +215,8 @@ def ResultNode.ofOutcome (o : RunOutcome) : ResultNode where
 
 /-- The phase of a run. -/
 inductive Phase where
+  /-- The run waits for the workspace's build lock, which another run holds. -/
+  | waiting
   /-- The driver is building what the run needs. -/
   | building
   /-- The runner is listing or running the test. -/
@@ -227,11 +229,12 @@ deriving Repr, Inhabited, DecidableEq
 
 /-- Whether a run in this phase is still going. -/
 def Phase.isLive : Phase → Bool
-  | .building | .running => true
+  | .waiting | .building | .running => true
   | .done _ | .cancelled => false
 
 /-- The phase's name as the widget receives it. -/
 def Phase.name : Phase → String
+  | .waiting => "waiting"
   | .building => "building"
   | .running => "running"
   | .done _ => "done"
@@ -243,7 +246,7 @@ change to it is a transition of {lit}`RunData.apply`, so each change sees and re
 -/
 structure RunData where
   /-- The run's phase. -/
-  phase : Phase := .building
+  phase : Phase := .waiting
   /-- The output so far, in order. -/
   chunks : Array OutputChunk := #[]
   /-- The reports from the run's results so far, in order. -/
@@ -252,6 +255,8 @@ structure RunData where
   steps : Array Step := #[]
   /-- The run-level issues that the runner reported, such as warnings about the configuration. -/
   issues : Array Issue := #[]
+  /-- When the run took the build lock, in epoch milliseconds; {lean}`0` until then. -/
+  buildStart : Nat := 0
   /-- How long the driver took before the runner began, in milliseconds; {lean}`0` until then. -/
   buildMs : Nat := 0
   /-- When the test body started, in milliseconds since the Unix epoch; {lean}`0` until then. -/
@@ -260,13 +265,20 @@ structure RunData where
   outcome? : Option RunOutcome := none
   /-- Kills the driver's process group, while the driver has yet to be found to have exited. -/
   kill? : Option (IO Unit) := none
+  /--
+  Whether the driver has exited. What is left of the events file is then read to its end, and the
+  run ends with it.
+  -/
+  exited : Bool := false
   /-- Resolved when the run changes, which wakes the requests that wait on it. -/
   wakeup : IO.Promise Unit
 
 /-- A change to a run. {lit}`RunData.apply` says which changes apply in which phases. -/
 inductive Change where
-  /-- The runner has begun its List phase, after the driver built for {name}`buildMs` ms. -/
-  | listed (buildMs : Nat)
+  /-- The run took the build lock at the given time, and the driver starts to build. -/
+  | locked (timeMs : Nat)
+  /-- The runner began its List phase at the given time. -/
+  | listed (timeMs : Nat)
   /-- The test's body started at the given time. -/
   | execStart (timeMs : Nat)
   /-- Output arrived. -/
@@ -287,19 +299,29 @@ inductive Change where
   | cancel
   /-- The driver started, and {name}`kill` ends it. -/
   | arm (kill : IO Unit)
-  /-- The driver has exited, and its process group's id is free for reuse. -/
-  | disarm
+  /--
+  The driver has exited: its process group's id is free for reuse, and the rest of the events file
+  decides how the run ends.
+  -/
+  | exited
 
 /--
 The transition that a change makes: the run afterwards and an action to perform once the change is
 in place, or {lean}`none` for a change outside the phases that admit it, and the run then stays as
-it was. Output, results, steps, issues, and outcomes arrive only while the run is live; a run ends
-once, cancelled or done; a cancel's action is the driver's kill; and only a live run is armed, so
-the caller of an arm after a cancel ends the driver itself.
+it was. A run waits for the lock, builds, and runs, in that order; output, results, steps, issues,
+and outcomes arrive only while the run is live; a run ends once, cancelled or done; a cancel's
+action is the driver's kill, and a cancel applies only until the driver has exited, after which the
+events file decides the outcome; and only a live run is armed, so the caller of an arm after a
+cancel ends the driver itself.
 -/
 def RunData.apply (d : RunData) : Change → Option (RunData × Option (IO Unit))
-  | .listed buildMs =>
-    if d.phase matches .building then some ({ d with phase := .running, buildMs }, none) else none
+  | .locked t =>
+    if d.phase matches .waiting then some ({ d with phase := .building, buildStart := t }, none)
+    else none
+  | .listed t =>
+    if d.phase matches .building then
+      some ({ d with phase := .running, buildMs := t - d.buildStart }, none)
+    else none
   | .execStart t => if d.phase.isLive then some ({ d with execStartTime := t }, none) else none
   | .output c => if d.phase.isLive then some ({ d with chunks := d.chunks.push c }, none) else none
   | .result n =>
@@ -317,9 +339,14 @@ def RunData.apply (d : RunData) : Change → Option (RunData × Option (IO Unit)
     if d.phase.isLive then some ({ d with phase := .done (d.outcome?.getD fallback) }, none)
     else none
   | .cancel =>
-    if d.phase.isLive then some ({ d with phase := .cancelled, kill? := none }, d.kill?) else none
-  | .arm kill => if d.phase.isLive then some ({ d with kill? := some kill }, none) else none
-  | .disarm => if d.kill?.isSome then some ({ d with kill? := none }, none) else none
+    if d.phase.isLive && !d.exited then
+      some ({ d with phase := .cancelled, kill? := none }, d.kill?)
+    else none
+  | .arm kill =>
+    if d.phase.isLive && !d.exited then some ({ d with kill? := some kill }, none) else none
+  | .exited =>
+    if d.phase.isLive && !d.exited then some ({ d with exited := true, kill? := none }, none)
+    else none
 
 /-- A run of one test, as the server holds it: what identifies it, and its data in one reference. -/
 structure RunState where
@@ -334,7 +361,7 @@ structure RunState where
   /-- The run's data, which changes only through {lit}`RunState.apply`. -/
   data : IO.Ref RunData
 
-/-- A new run in its building phase. -/
+/-- A new run, waiting for the build lock. -/
 def RunState.new (runId version : String) (startTime : Nat) (sourceHash : UInt64) :
     BaseIO RunState := do
   let data ← IO.mkRef { wakeup := ← IO.Promise.new }
@@ -443,17 +470,18 @@ The changes that one record of the runner's events file makes to the run of the 
 {name}`test`. The runner's {lit}`List` phase ends the building; the test's {lit}`start`,
 {lit}`output`, and {lit}`result` records drive the display; its {lit}`outcome` is the result, and a
 fixture phase's {lit}`outcome` is a step; an {lit}`issue` is kept with the run; {lit}`end` ends
-the run. Records about other tests change nothing. {name}`startTime` is when the run began,
-and {name}`own?` is the test's declaration, as {name}`RunOutcome.ofRecord` uses it.
+the run. Records about other tests change nothing. {name}`now` stands in for the time of a phase
+record that gives none, and {name}`own?` is the test's declaration, as
+{name}`RunOutcome.ofRecord` uses it.
 -/
-def changesOfRecord (cache : SourceLines) (test : String) (startTime : Nat) (own? : Option Location)
+def changesOfRecord (cache : SourceLines) (test : String) (now : Nat) (own? : Option Location)
     (j : Json) : IO (Array Change) := do
   let about := (fieldOf? j "test" : Option String) == some test
   match (fieldOf? j "type" : Option String) with
   | some "phase" =>
-    let time : Nat := (fieldOf? j "time_ms").getD startTime
+    let time : Nat := (fieldOf? j "time_ms").getD now
     if (fieldOf? j "name" : Option String) matches some "List" | some "Run" then
-      return #[.listed (time - startTime)]
+      return #[.listed time]
     return #[]
   | some "issue" =>
     return #[.issue {
@@ -478,12 +506,23 @@ def changesOfRecord (cache : SourceLines) (test : String) (startTime : Nat) (own
 
 /--
 The changes that one line of the runner's events file makes, as {name}`changesOfRecord` gives them.
-A line that is not a JSON object changes nothing.
+A line that fails to parse as JSON is skipped, as a record of an unknown type is.
 -/
-def changesOfLine (cache : SourceLines) (test : String) (startTime : Nat) (own? : Option Location)
+def changesOfLine (cache : SourceLines) (test : String) (now : Nat) (own? : Option Location)
     (line : String) : IO (Array Change) :=
   match Json.parse line with
-  | .ok j => changesOfRecord cache test startTime own? j
+  | .ok j => changesOfRecord cache test now own? j
   | .error _ => pure #[]
+
+/--
+Whether a line of the runner's events file is the {lit}`phase` record of the Run phase, after which
+the runner has read its configuration and the driver builds nothing more.
+-/
+def beginsRunPhase (line : String) : Bool :=
+  match Json.parse line with
+  | .ok j =>
+    (fieldOf? j "type" : Option String) == some "phase" &&
+      (fieldOf? j "name" : Option String) == some "Run"
+  | .error _ => false
 
 end Errata.Widget

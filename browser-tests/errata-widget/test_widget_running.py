@@ -6,7 +6,14 @@ import pytest
 from playwright.sync_api import expect
 
 from harness import matching
-from widget import AWAIT, RUN_TIMEOUT, Widget, expect_exact_text, wait_until
+from widget import (
+    AWAIT,
+    RUN_TIMEOUT,
+    Widget,
+    expect_exact_text,
+    wait_for_ticks,
+    wait_until,
+)
 
 pytestmark = pytest.mark.errata_widget
 
@@ -59,9 +66,24 @@ def test_a_failed_build_is_reported_with_the_end_of_its_log(editor):
     widget = Widget(editor.page)
     widget.run_button.click()
     widget.wait_for_verdict("ERROR")
-    expect(widget.messages.first).to_have_text("lake build failed")
+    expect(widget.messages.first).to_have_text("the build ended before the test ran")
     expect(widget.messages.nth(1)).to_contain_text("BuildError")
     expect(widget.seed_badge).to_have_count(0)
+
+
+def test_a_fast_run_finishes_while_a_slow_one_in_another_file_runs(editor):
+    editor.show("Passing", "slow")
+    widget = Widget(editor.page)
+    widget.run_button.click()
+    wait_for_ticks(widget.output, 1)
+    # The slow run holds no lock while its test runs, so a run in another file builds and runs.
+    editor.move_to("TwinA", "twin")
+    expect(widget.title).to_contain_text("twin")
+    widget.run_button.click()
+    widget.wait_for_verdict("Passed")
+    expect_exact_text(widget.output, "from TwinA\n")
+    slow = editor.server_run("Passing", "slow")
+    assert not slow["done"] and slow["phase"] == "running", slow
 
 
 def test_a_test_that_exits_early_is_inconclusive_with_its_exit_code(editor):

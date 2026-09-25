@@ -177,7 +177,7 @@ class LeanServer:
         Kills the drivers that the server's file workers have started, with the runners and the
         test executables below them.
         """
-        drivers = matching("test -- run -E name") & set(
+        drivers = matching("Errata.run run -E name") & set(
             descendants(self.proc.pid)
         )
         kill_trees(drivers)
@@ -295,12 +295,14 @@ def decl_name(params):
 class Rule:
     """A change to how the relay passes on calls of one RPC method, for a number of calls."""
 
-    def __init__(self, lock, method, action, count):
+    def __init__(self, lock, method, action, count, after=0):
         # The relay's lock, which guards whether the rule is released and what it holds.
         self.lock = lock
         self.method = method
         self.action = action
         self.remaining = count
+        # How many calls the rule lets pass before it applies.
+        self.skip = after
         self.held = []
         self.matched = threading.Event()
         self.released = False
@@ -389,9 +391,12 @@ class LspRelay:
         """Keeps the next calls of `method` from reaching the server until the rule is released."""
         return self._add_rule(method, "hold-request", count)
 
-    def hold_replies(self, method, count=1):
-        """Keeps the server's replies to the next calls of `method` from the page until released."""
-        return self._add_rule(method, "hold-reply", count)
+    def hold_replies(self, method, count=1, after=0):
+        """
+        Keeps the server's replies to the next calls of `method` from the page until released,
+        after letting the replies to `after` calls pass.
+        """
+        return self._add_rule(method, "hold-reply", count, after)
 
     def reject_requests(self, method, count=1):
         """Answers the next calls of `method` with an error, without passing them to the server."""
@@ -423,8 +428,8 @@ class LspRelay:
                 about = f" about {decl}" if decl else ""
                 raise TimeoutError(f"no reply to {method}{about} within {timeout}s")
 
-    def _add_rule(self, method, action, count):
-        rule = Rule(self.lock, method, action, count)
+    def _add_rule(self, method, action, count, after=0):
+        rule = Rule(self.lock, method, action, count, after)
         with self.lock:
             self.rules.append(rule)
         return rule
@@ -443,6 +448,9 @@ class LspRelay:
                     and rule.action == action
                     and rule.remaining > 0
                 ):
+                    if rule.skip > 0:
+                        rule.skip -= 1
+                        continue
                     rule.remaining -= 1
                     held = deliver is not None and not rule.released
                     if held:

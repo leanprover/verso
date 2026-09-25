@@ -9,8 +9,7 @@ person would.
 
 Some of these tests fail on purpose, and
 `WidgetFixtures/BuildError.lean` fails to build, so this project is a
-Lake workspace of its own. Its test driver is Errata's, which the
-widget runs a test through, and its `errata.toml` gives the setting
+Lake workspace of its own. Its `errata.toml` gives the setting
 `greeting` a value in the default profile, which the widget's settings
 fields start from.
 

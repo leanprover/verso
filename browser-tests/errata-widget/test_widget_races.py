@@ -85,6 +85,41 @@ def test_a_run_whose_reports_keep_failing_can_still_be_cancelled_and_is_followed
     expect(widget.text("cancelled")).to_be_visible()
 
 
+def test_a_cancel_names_the_run_on_show_while_a_reply_about_another_is_held(editor):
+    editor.show("Passing", "slow")
+    widget = Widget(editor.page)
+    widget.run_button.click()
+    wait_for_ticks(widget.output, 1)
+    # Another run of the test starts elsewhere, which ends the one on show. The page hears of the
+    # end as a rejection, and its next read is about the other run, which points the widget's reads
+    # at that run; the read after it, which would show that run, is held.
+    rejected = editor.relay.reject_replies(AWAIT)
+    props = editor.widget_props("Passing", "slow")
+    editor.call_rpc(
+        "Passing",
+        "slow",
+        "Errata.Widget.startTest",
+        {
+            "decl": props["decl"],
+            "module": props["module"],
+            "version": props["version"],
+            "runId": "started-elsewhere",
+        },
+    )
+    rejected.wait_until_matched()
+    held = editor.relay.hold_replies(AWAIT, after=1)
+    held.wait_until_matched()
+    expect(widget.cancel_button).to_be_enabled()
+    mark = editor.relay.mark()
+    widget.cancel_button.click()
+    editor.relay.wait_for_reply(CANCEL, after=mark)
+    # The cancel named the run on show, which had already ended, so the other run goes on.
+    report = editor.server_run("Passing", "slow")
+    assert report["runId"] == "started-elsewhere" and not report["done"], report
+    held.release()
+    expect(widget.text("Running…")).to_be_visible()
+
+
 def test_a_rejected_cancel_is_tried_again(editor):
     editor.show("Passing", "slow")
     widget = Widget(editor.page)
