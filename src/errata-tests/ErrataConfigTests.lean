@@ -275,6 +275,44 @@ def reportPathsAreProfileKeys : Test := do
       | .error problems => assertBEq #[message] problems
 
 /--
+Profiles name the order in which the runner starts tests with `order`, `"default"` or `"shuffle"`,
+which profiles inherit from their ancestors and the runner reads from the elaborated file. Other
+values are problems at their positions, and so is the key in an override, since a run has one order.
+-/
+@[test]
+def orderIsAProfileKey : Test := do
+  let text := "[profile.default]\norder = \"shuffle\"\n\n[profile.ci]\njobs = 2\n\n\
+    [profile.plain]\norder = \"default\"\n"
+  match ← ErrataConfig.parse text with
+  | .error problems => fail s!"the file was rejected: {problems}"
+  | .ok f =>
+    assertBEq (some .shuffle) (← profileOf f "default").order?
+    assertBEq (some .shuffle) (← profileOf f "ci").order?
+    assertBEq (some .default) (← profileOf f "plain").order?
+    match Runner.Config.ofJson f.toJson (Lean.Json.mkObj [("protocol", 1)]) none with
+    | .error e => fail e
+    | .ok c =>
+      assertBEq (some (some .shuffle)) ((c.profile? "ci").map (·.order?))
+      assertBEq (some (some .default)) ((c.profile? "plain").map (·.order?))
+  match ← ErrataConfig.parse "[profile.default]\njobs = 2\n" with
+  | .error problems => fail s!"the file was rejected: {problems}"
+  | .ok f => assertBEq none (← profileOf f "default").order?
+  let cases : List (String × String) := [
+    ("[profile.ci]\norder = \"random\"\n",
+      "errata.toml:2:8: 'order' must be \"default\" or \"shuffle\", and it is \"random\""),
+    ("[profile.ci]\norder = 1\n",
+      "errata.toml:2:8: 'order' must be the string \"default\" or \"shuffle\", and it is an \
+        integer"),
+    ("[[profile.default.override]]\nfilter = \"all()\"\norder = \"shuffle\"\n",
+      "errata.toml:3:8: 'order' is one per run, so it belongs to a profile and never to an \
+        override")]
+  for (text, message) in cases do
+    result message do
+      match ← ErrataConfig.parse text with
+      | .ok _ => fail "the file was accepted"
+      | .error problems => assertBEq #[message] problems
+
+/--
 The runner writes the report files at the paths that the profile names, relative to the package's
 directory, and a path on the command line takes the place of the profile's.
 -/

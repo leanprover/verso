@@ -60,7 +60,8 @@ def Profile.toJson (p : Profile) : Json :=
   Json.mkObj <|
     optField "timeout-ms" p.timeoutMs? ++ optField "fixture-timeout-ms" p.fixtureTimeoutMs? ++
     optField "grace-period-ms" p.gracePeriodMs? ++ optField "slow-after-ms" p.slowAfterMs? ++
-    optField "jobs" p.jobs? ++ optField "update-golden" p.updateGolden? ++
+    optField "jobs" p.jobs? ++ optField "order" p.order? ++
+    optField "update-golden" p.updateGolden? ++
     [("settings", settingsToJson p.settings),
       ("override", Json.arr (p.overrides.map (·.toJson)))] ++
     (match p.defaultFilter? with | some f => [("default-filter", f.toJson)] | none => []) ++

@@ -109,6 +109,25 @@ structure Override where
   settings : Array (String × SettingValue) := #[]
 deriving Inhabited
 
+/-- The order in which the runner starts tests, as a profile's {lit}`order` gives it. -/
+inductive Order where
+  /-- The inventory's order, written {lit}`"default"`. -/
+  | default
+  /--
+  An order drawn from the run's seed, in which tests that take the same fixtures stand together,
+  written {lit}`"shuffle"`.
+  -/
+  | shuffle
+deriving Inhabited, BEq, Repr
+
+/-- The string that stands for the order in the file. -/
+def Order.name : Order → String
+  | .default => "default"
+  | .shuffle => "shuffle"
+
+instance : Lean.ToJson Order where
+  toJson o := .str o.name
+
 /-- A profile, as the file gives it and, after inheritance, with its ancestors' values merged. -/
 structure Profile where
   /-- The profile's name. -/
@@ -127,6 +146,8 @@ structure Profile where
   slowAfterMs? : Option Nat := none
   /-- How many tests may run at once. -/
   jobs? : Option Nat := none
+  /-- The order in which the runner starts tests. -/
+  order? : Option Order := none
   /-- Whether golden checks rewrite their expected files. -/
   updateGolden? : Option Bool := none
   /-- Values of settings, by name. -/

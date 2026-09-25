@@ -153,7 +153,9 @@ def readOverride (profile : String) (v : Lake.Toml.Value) : CheckM (Option Overr
     | problem v.ref s!"each override of the profile '{profile}' must be a table, and it is \
         {kindOf v}"
       return none
-  checkKeys s!"an override of the profile '{profile}'" overrideKeys t
+  checkKeys s!"an override of the profile '{profile}'" (overrideKeys ++ ["order"]) t
+  if let some x := t.find? `order then
+    problem x.ref s!"'order' is one per run, so it belongs to a profile and never to an override"
   let some filterValue := t.find? `filter
     | problem ref s!"an override of the profile '{profile}' needs a 'filter'"
       return none
@@ -174,8 +176,21 @@ def readOverride (profile : String) (v : Lake.Toml.Value) : CheckM (Option Overr
 
 /-- The keys of a profile. -/
 def profileKeys : List String :=
-  ["inherits", "timeout", "fixture-timeout", "grace-period", "slow-after", "jobs", "update-golden",
-    "settings", "override", "default-filter", "junit", "json", "markdown"]
+  ["inherits", "timeout", "fixture-timeout", "grace-period", "slow-after", "jobs", "order",
+    "update-golden", "settings", "override", "default-filter", "junit", "json", "markdown"]
+
+/-- The order that a profile's {lit}`order` gives: the string {lit}`"default"` or {lit}`"shuffle"`. -/
+def readOrder (v : Lake.Toml.Value) : CheckM (Option Order) := do
+  match v with
+  | .string _ "default" => return some .default
+  | .string _ "shuffle" => return some .shuffle
+  | .string ref s =>
+    problem ref s!"'order' must be \"default\" or \"shuffle\", and it is {s.quote}"
+    return none
+  | other =>
+    problem other.ref s!"'order' must be the string \"default\" or \"shuffle\", and it is \
+      {kindOf other}"
+    return none
 
 /-- The profile named {name}`name`, as the file gives it. -/
 def readProfile (name : String) (v : Lake.Toml.Value) : CheckM (Option Profile) := do
@@ -201,6 +216,7 @@ def readProfile (name : String) (v : Lake.Toml.Value) : CheckM (Option Profile) 
       if n > 0 then p := { p with jobs? := some n.toNat }
       else problem x.ref s!"'jobs' must be a positive integer, and it is {n}"
     | other => problem other.ref s!"'jobs' must be a positive integer, and it is {kindOf other}"
+  if let some x := t.find? `order then p := { p with order? := ← readOrder x }
   if let some x := t.find? `«update-golden» then
     p := { p with updateGolden? := ← readBool "update-golden" x }
   if let some x := t.find? `settings then p := { p with settings := ← readSettings x }
@@ -310,6 +326,7 @@ def inherit (profiles : Array Profile) : CheckM (Array Profile) := do
         gracePeriodMs? := q.gracePeriodMs? <|> acc.gracePeriodMs?
         slowAfterMs? := q.slowAfterMs? <|> acc.slowAfterMs?
         jobs? := q.jobs? <|> acc.jobs?
+        order? := q.order? <|> acc.order?
         updateGolden? := q.updateGolden? <|> acc.updateGolden?
         settings := q.settings.foldl (init := acc.settings) fun s (k, v) =>
           (s.filter (·.1 != k)).push (k, v)

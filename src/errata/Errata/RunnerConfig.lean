@@ -41,6 +41,28 @@ structure ExecutableConfig where
   env : Array (String × String) := #[]
 deriving Repr, Inhabited, DecidableEq
 
+/-- The order in which the runner starts tests, as a profile's {lit}`order` gives it. -/
+inductive Order where
+  /-- The inventory's order. -/
+  | default
+  /--
+  An order drawn from the run's seed, in which tests that take the same fixtures stand together.
+  -/
+  | shuffle
+deriving Repr, Inhabited, DecidableEq
+
+instance : ToJson Order where
+  toJson
+    | .default => "default"
+    | .shuffle => "shuffle"
+
+instance : FromJson Order where
+  fromJson? j := do
+    match ← j.getStr? with
+    | "default" => return .default
+    | "shuffle" => return .shuffle
+    | other => .error s!"the order must be \"default\" or \"shuffle\", and it is {other.quote}"
+
 /--
 A filter's text, and where it came from: a position in the configuration file, which
 {lit}`errata-config` records, or the configuration itself when the file named none.
@@ -87,6 +109,8 @@ structure Profile where
   slowAfterMs? : Option Nat := none
   /-- How many tests may run at once. -/
   jobs? : Option Nat := none
+  /-- The order in which the runner starts tests; the inventory's when absent. -/
+  order? : Option Order := none
   /-- Whether golden checks rewrite their expected files. -/
   updateGolden? : Option Bool := none
   /-- Values of settings, by name. -/
@@ -252,6 +276,7 @@ def Profile.fromJson? (name : String) (resolve : NeedsResolver) (j : Json) :
     gracePeriodMs? := ← configField j "grace-period-ms"
     slowAfterMs? := ← configField j "slow-after-ms"
     jobs? := ← configField j "jobs"
+    order? := ← configField j "order"
     updateGolden? := ← configField j "update-golden"
     settings := ← settingsField resolve j
     overrides
@@ -265,7 +290,8 @@ instance : ToJson Profile where
   toJson p := Json.mkObj <|
     Protocol.opt "timeout-ms" p.timeoutMs? ++ Protocol.opt "fixture-timeout-ms" p.fixtureTimeoutMs? ++
     Protocol.opt "grace-period-ms" p.gracePeriodMs? ++ Protocol.opt "slow-after-ms" p.slowAfterMs? ++
-    Protocol.opt "jobs" p.jobs? ++ Protocol.opt "update-golden" p.updateGolden? ++
+    Protocol.opt "jobs" p.jobs? ++ Protocol.opt "order" p.order? ++
+    Protocol.opt "update-golden" p.updateGolden? ++
     (if p.settings.isEmpty then [] else [("settings", settingsToJson p.settings)]) ++
     (if p.overrides.isEmpty then [] else [("override", ToJson.toJson p.overrides)]) ++
     Protocol.opt "default-filter" p.defaultFilter? ++ Protocol.opt "junit" p.junitPath? ++
