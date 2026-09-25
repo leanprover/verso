@@ -177,29 +177,41 @@ def accepts(port):
         return False
 
 
+def read_to_end(fd):
+    """
+    Reads the file descriptor until its end, unbuffered, so that no Python file object is busy in
+    the reading thread when the process exits.
+    """
+    while os.read(fd, 4096):
+        pass
+
+
 def guard(args):
     """
     Runs the command `args` in this process's group and exits with its code, and when standard
-    input ends, terminates the group, then kills it after a grace period.
+    input ends, terminates the group, then kills it after a grace period. The guard exits through
+    `os._exit`, with its watching thread still blocked in a read, so no finalizer runs at exit.
     """
     child = subprocess.Popen(args, stdin=subprocess.DEVNULL)
     # The guard outlives the terminate signal that it sends its own group, and ends with the child.
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
     def watch():
-        while sys.stdin.buffer.read(4096):
-            pass
+        read_to_end(0)
         group = os.getpgrp()
         signal_group(group, signal.SIGTERM)
         time.sleep(5)
         signal_group(group, signal.SIGKILL)
 
     threading.Thread(target=watch, daemon=True).start()
-    return child.wait()
+    code = child.wait()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code if code >= 0 else 128 - code)
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 3 or sys.argv[1] != "guard":
         print("usage: python services.py guard COMMAND...", file=sys.stderr)
         sys.exit(2)
-    sys.exit(guard(sys.argv[2:]))
+    guard(sys.argv[2:])

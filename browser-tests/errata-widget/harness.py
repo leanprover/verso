@@ -606,6 +606,8 @@ def serve(ready):
     listener = socket.create_server(("127.0.0.1", 0))
 
     def terminate(signum=None, frame=None):
+        # The host stops its server, which joins the server's readers and closes its pipes, and then
+        # exits through `os._exit`, so no finalizer runs with a stream that another thread holds.
         host.stop()
         os._exit(0)
 
@@ -613,7 +615,8 @@ def serve(ready):
     if os.environ.get("ERRATA_LIFELINE") == "1":
 
         def watch_lifeline():
-            while sys.stdin.buffer.read(4096):
+            # Unbuffered reads leave no Python file object busy in this thread when the host exits.
+            while os.read(0, 4096):
                 pass
             terminate()
 
