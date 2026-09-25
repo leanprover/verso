@@ -70,7 +70,8 @@ unsafe def settingRefsOf (uses : Array Errata.SettingUse) : MetaM (Array Errata.
 /--
 The test entry for a recorded test of the module {name}`module`, as {lit}`getAllTests%` builds it:
 the action is the recorded definition, evaluated by name, the settings are as
-{name}`settingRefsOf` gives them, and each fixture is exclusive or shared.
+{name}`settingRefsOf` gives them, each fixture is exclusive or shared, and the threads are those that
+the test asks for.
 -/
 unsafe def entryOf (module : Name) (test : Errata.TestDecl) : MetaM Errata.TestEntry := do
   let run ← evalExpr (Array (String × String) → Array (String × String) → Errata.TestM Unit)
@@ -84,7 +85,7 @@ unsafe def entryOf (module : Name) (test : Errata.TestDecl) : MetaM Errata.TestE
     docstring? := test.docstring?, tags := test.tags, settings := ← settingRefsOf test.settings
     fixtures := test.fixtures.map fun use =>
       { name := Errata.settingNameOf use.decl, exclusive := use.exclusive }
-    run
+    threads? := test.threads?, run
   }
 
 /--
