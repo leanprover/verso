@@ -74,7 +74,7 @@ test as {name}`testInfoOf` gives it at the declaration range that the file recor
 {lit}`@[setting]` could not evaluate, or when the file records no range for a test. An import of the
 modules finds both.
 
-The files are read as they are on disk. The driver builds the modules before a run lists them; a
+The files are read as they are on disk. The driver builds the modules before a run lists them;
 modules edited after their last build list what that build recorded.
 -/
 unsafe def listed? (modules : Array Name) : IO (Option (Array TestInfo × Array FixtureInfo)) := do

@@ -2152,8 +2152,8 @@ the default of every setting that it lists and the files record every test's ran
 modules otherwise; either way it lists what an import lists. {lit}`ErrataTests.Defaults` has a
 default that calls a function of another module, one that reads a value an {lit}`initialize`
 declaration holds, and one of a setting that {lit}`attribute [setting]` marks in another module; the
-listing lists each with the value that the tests receive. A test that {lit}`attribute [test]` marks
-in another module than its declaration's lists its declaration's line.
+listing lists each with the value that the tests receive. Tests that {lit}`attribute [test]` marks
+in another module than their declarations' list their declarations' lines.
 -/
 @[test]
 def interpretedListingFallsBackToAnImport : Test := do
