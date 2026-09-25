@@ -246,7 +246,7 @@ def optionSpecs : Array OptionSpec := #[
   { long := "exact", group := "Selection"
     help := "Match name filters and --skip patterns against whole names." },
   { long := "ignore-default-filter", group := "Selection"
-    help := "Draw the tests from the whole inventory instead of the profile's default filter." },
+    help := "Draw the tests from the whole inventory, setting the profile's default filter aside." },
   { long := "profile", short? := "-P", value? := "NAME", group := "Configuration"
     help := "The profile of errata.toml to use (ERRATA_PROFILE, or default)." },
   { long := "set", value? := "NAME=VALUE", repeatable := true, group := "Configuration"

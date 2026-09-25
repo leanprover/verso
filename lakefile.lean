@@ -564,9 +564,9 @@ script run (args) do
   for (moduleName, oleanFile) in modInfos do
     if (← moduleInfo oleanFile).hasTests then testMods := testMods.push moduleName
   -- A module that sits under a library's roots without being reachable from them is never built, so
-  -- any tests it defines are silently left out. A library is checked when its built modules carry
-  -- tests. That is a configuration slip rather than a test failure, so it is a warning that the
-  -- runner reports alongside the results, and the run goes ahead.
+  -- any tests it defines are silently left out. A library is checked when its built modules record
+  -- tests. Such a module is a configuration slip, which the runner reports as a warning alongside the
+  -- results, and the run goes ahead.
   let mut unreachable : Array (Lake.LeanLib × Array Lean.Name) := #[]
   for (lib, mods) in libMods do
     if mods.any (testMods.contains ·) then
