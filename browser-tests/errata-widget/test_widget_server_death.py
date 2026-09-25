@@ -25,7 +25,16 @@ def test_requests_to_a_server_that_died_fail_at_once(editor):
             {"textDocument": {"uri": uri}, "position": {"line": 0, "character": 0}},
             timeout=110,
         )
-    # A request from the page, which the relay passes to the server.
+    # A request from the page, which the relay passes to the server. The page collects what the
+    # relay delivers, so the test watches the deliveries themselves.
+    delivered = []
+    deliver = editor.relay._deliver
+
+    def watch(message):
+        delivered.append(message)
+        deliver(message)
+
+    editor.relay._deliver = watch
     editor.relay._from_page(
         {
             "jsonrpc": "2.0",
@@ -36,11 +45,7 @@ def test_requests_to_a_server_that_died_fail_at_once(editor):
     )
 
     def answered():
-        with editor.relay.inbox_ready:
-            return any(
-                m.get("id") == "after-the-server-died" and "error" in m
-                for m in editor.relay.inbox
-            )
+        return any(m.get("id") == "after-the-server-died" and "error" in m for m in delivered)
 
     while not answered():
         assert time.monotonic() - start < 10, "the page's request was not answered in 10 s"
