@@ -166,6 +166,7 @@ def writeInventory (entries : Array TestEntry) (out : IO.FS.Handle)
       settings? := settingDeps e.settings
       fixtures? := if e.fixtures.isEmpty then none
         else some (e.fixtures.map fun f => { name := f.name, exclusive := f.exclusive })
+      threads? := e.threads?
     }
 
 /-- The record fields for the status of a finished check. -/
@@ -372,26 +373,29 @@ def isTeardown (link : List String) : Bool :=
   link matches "errata-fixture" :: _ :: _ :: "teardown" :: _
 
 /--
-Performs the invocations of a chain in order with {name}`invoke`, and returns the exit code of the
-last that ran. Each value that a setup produces is added to the later {lit}`errata-run` and
-{lit}`errata-fixture` invocations as that fixture's {lit}`fixture:NAME=VALUE` argument. After an
-invocation exits non-zero, only teardowns run.
+Performs the invocations of a chain in order with {name}`invoke`. Each value that a setup produces
+is added to the later {lit}`errata-run` and {lit}`errata-fixture` invocations as that fixture's
+{lit}`fixture:NAME=VALUE` argument. After an invocation exits non-zero, only teardowns run. The
+result is the exit code of the first invocation other than a teardown that exited non-zero, and
+when there is none, that of the first teardown that did, and otherwise {lit}`0`.
 -/
 def dispatchChain (entries : Array TestEntry) (links : List (List String))
     (helpers : Array Helper := #[]) (invocation : Array String := #[])
     (fixtures : Array FixtureEntry := #[]) : IO UInt32 := do
-  let mut code := 0
+  let mut failure : Option UInt32 := none
+  let mut teardownFailure : Option UInt32 := none
   let mut values : Array String := #[]
-  let mut failed := false
   for link in links do
-    if failed && !isTeardown link then continue
+    let teardown := isTeardown link
+    if (failure.isSome || teardownFailure.isSome) && !teardown then continue
     let receives := link.head? == some "errata-run" || link.head? == some "errata-fixture"
     let link := if receives then link ++ values.toList else link
     let (c, value?) ← invoke entries link helpers invocation fixtures
-    code := c
     if let some (name, value) := value? then values := values.push s!"fixture:{name}={value}"
-    unless c == 0 do failed := true
-  return code
+    unless c == 0 do
+      if teardown then teardownFailure := teardownFailure <|> some c
+      else failure := failure <|> some c
+  return (failure <|> teardownFailure).getD 0
 
 /-- Flushes the standard streams and ends the process with {name}`code`. -/
 def exitNow (code : UInt8) : IO α := do
@@ -461,14 +465,15 @@ executable writes a message to standard error and exits with {lit}`2`.
 Several {lit}`errata-list`, {lit}`errata-run`, and {lit}`errata-fixture` invocations may be
 chained, each separated by a {lit}`;` argument. The executable performs them in order, adds the
 value that each setup produces to the later invocations as that fixture's {lit}`fixture:` argument,
-runs only teardowns after an invocation that exits non-zero, and exits with the status of the last
-that ran.
+runs only teardowns after an invocation that exits non-zero, and exits with the status of the first
+invocation other than a teardown that exited non-zero, or else with that of the first teardown that
+did.
 
 With any other arguments, the executable prints its usage and exits with {lit}`2`.
 
 {name}`invocation` is the command that starts this test executable, which the helpers of tests and
-fixture phases run through. The compiled test executable leaves it empty, which stands for the program's own path; the
-interpreted product gives the interpreter with its modules.
+fixture phases run through. The compiled test executable leaves it empty, which stands for the
+program's own path; the interpreted product gives the interpreter with its modules.
 -/
 def main (entries : Array TestEntry) (args : List String) (helpers : Array Helper := #[])
     (invocation : Array String := #[]) (fixtures : Array FixtureEntry := #[]) : IO UInt32 := do

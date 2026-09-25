@@ -501,6 +501,16 @@ def junitClassname (r : Result) : String :=
     if parent.isEmpty then r.exe else ".".intercalate parent.toList
 
 /--
+The JUnit {lit}`name` of a result: for a fixture entry, its path after the fixture's name, such as
+{lit}`setup`, {lit}`prepare T`, or {lit}`teardown`, and otherwise the test's name and any named
+result, dotted.
+-/
+def junitName (r : Result) : String :=
+  match r.kind with
+  | .fixture => " ".intercalate (r.path.extract 1 r.path.size).toList
+  | .test => r.testName
+
+/--
 A JUnit test case: the verdict element for a failure, an error, or an inconclusive outcome, then the
 captured output of each stream that has any.
 -/
@@ -520,7 +530,7 @@ private def junitCase (indent : String) (r : Result) : String :=
     if text.isEmpty then #[] else #[xmlText inner tag [] text]
   let time := toString (Float.ofNat r.durationMs / 1000.0)
   xmlElements indent "testcase"
-    [("name", r.testName), ("classname", junitClassname r), ("time", time)]
+    [("name", junitName r), ("classname", junitClassname r), ("time", time)]
     (verdict ++ stream "system-out" r.output.stdout ++ stream "system-err" r.output.stderr)
 
 /--

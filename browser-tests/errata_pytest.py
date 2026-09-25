@@ -530,10 +530,31 @@ class FixturePlugin:
         self.fixtures, self.problems = declared_fixtures(session.config)
 
 
+# What a fixture's phase may raise and the harness reports as the phase's verdict: any error, and
+# the exceptions that `pytest.fail`, `pytest.skip`, `pytest.exit`, and `sys.exit` raise, which
+# derive from `BaseException` alone. `KeyboardInterrupt` ends the process as it would anywhere else.
+PHASE_ERRORS = (
+    Exception,
+    SystemExit,
+    pytest.fail.Exception,
+    pytest.skip.Exception,
+    pytest.exit.Exception,
+)
+
+
 def failed_phase_verdict(error):
-    """The verdict of a phase that raised an error: a failed assertion fails, and others err."""
+    """
+    The verdict of a phase that raised an error: a failed assertion fails, and the rest are errors,
+    with the message of `pytest.fail`, `pytest.skip`, or `pytest.exit`, or the code of `sys.exit`.
+    """
     status = "fail" if isinstance(error, AssertionError) else "error"
-    message = str(error) or type(error).__name__
+    if isinstance(error, (pytest.fail.Exception, pytest.skip.Exception, pytest.exit.Exception)):
+        detail = getattr(error, "msg", "") or str(error)
+        message = f"{type(error).__name__}: {detail}" if detail else type(error).__name__
+    elif isinstance(error, SystemExit):
+        message = f"the phase called sys.exit({error.code!r})"
+    else:
+        message = str(error) or type(error).__name__
     return {"type": "verdict", "status": status, "message": message}
 
 
@@ -580,7 +601,7 @@ def run_fixture(pytest_args, out_path, name, phase, rest):
             else:
                 action(fixtures.get(name), context)
                 value = None
-        except Exception as error:  # noqa: BLE001 - every error of the phase is its verdict
+        except PHASE_ERRORS as error:  # noqa: BLE001 - every error of the phase is its verdict
             verdict = failed_phase_verdict(error)
             verdict["duration_ms"] = int((time.monotonic() - start) * 1000)
             write_record(out, verdict)
@@ -604,10 +625,11 @@ def split_chain(argv):
 def main(argv):
     """
     Performs the invocation that the arguments give, or each invocation of a chain whose
-    invocations are separated by `;` arguments, in order, and returns the exit code of the last
-    that ran. Each value that a setup produces is added to the later errata-run and errata-fixture
-    invocations as that fixture's `fixture:NAME=VALUE` argument, and after an invocation exits
-    non-zero only teardowns run. The pytest arguments precede the first invocation and serve them
+    invocations are separated by `;` arguments, in order. Each value that a setup produces is added
+    to the later errata-run and errata-fixture invocations as that fixture's `fixture:NAME=VALUE`
+    argument, and after an invocation exits non-zero only teardowns run. The result is the exit code
+    of the first invocation other than a teardown that exited non-zero, or else that of the first
+    teardown that did, or else 0. The pytest arguments precede the first invocation and serve them
     all.
     """
     links = split_chain(argv)
@@ -618,12 +640,12 @@ def main(argv):
         return 2
     pytest_args = first[:mode_at]
     links[0] = first[mode_at:]
-    code = 2
+    failure = None
+    teardown_failure = None
     carried = []
-    failed = False
     for link in links:
         is_teardown = len(link) >= 4 and link[0] == "errata-fixture" and link[3] == "teardown"
-        if failed and not is_teardown:
+        if (failure is not None or teardown_failure is not None) and not is_teardown:
             continue
         if link and link[0] in ("errata-run", "errata-fixture"):
             link = link + carried
@@ -637,8 +659,14 @@ def main(argv):
         if produced is not None:
             carried.append(f"fixture:{produced[0]}={produced[1]}")
         if code != 0:
-            failed = True
-    return code
+            if is_teardown:
+                teardown_failure = code if teardown_failure is None else teardown_failure
+            else:
+                failure = code if failure is None else failure
+    # The first invocation other than a teardown that failed decides the status, then a teardown.
+    if failure is not None:
+        return failure
+    return teardown_failure if teardown_failure is not None else 0
 
 
 def invoke(pytest_args, link):

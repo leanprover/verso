@@ -588,17 +588,18 @@ _errata_invoke() {
 }
 
 # The main of a test executable. It performs the invocation that its arguments give, or each
-# invocation of a chain whose invocations are separated by a ';' argument, in order, and exits with
-# the status of the last that ran. Each value that a setup produces is added to the later
-# errata-run and errata-fixture invocations as that fixture's `fixture:NAME=VALUE` argument, and
-# after an invocation exits non-zero only teardowns run. `errata-list` writes the inventory: the
+# invocation of a chain whose invocations are separated by a ';' argument, in order. Each value that
+# a setup produces is added to the later errata-run and errata-fixture invocations as that fixture's
+# `fixture:NAME=VALUE` argument, and after an invocation exits non-zero only teardowns run. It exits
+# with the status of the first invocation other than a teardown that exited non-zero, or else with
+# that of the first teardown that did, or else 0. `errata-list` writes the inventory: the
 # settings that `errata_settings` declares, then the fixtures that `errata_fixtures` declares, then
 # the tests that `errata_tests` declares. `errata-run` runs one test with `errata_run_test NAME`,
 # and `errata-fixture` one phase of a fixture with `errata_fixture_PHASE NAME`, each in a subshell
 # with `set -e`, so that a command that fails ends it, and exits with its status, or with 1 when it
 # called `errata_fail`.
 errata_main() {
-  local status=2 invocation carried=() failed=""
+  local status invocation carried=() failure="" teardown_failure="" teardown
   [ $# -gt 0 ] || { _errata_usage; exit 2; }
   while [ $# -gt 0 ]; do
     invocation=()
@@ -607,11 +608,11 @@ errata_main() {
       shift
     done
     [ $# -gt 0 ] && shift
-    if [ -n "$failed" ]; then
-      if [ "${invocation[0]:-}" != errata-fixture ] || [ "${invocation[3]:-}" != teardown ]; then
-        continue
-      fi
+    teardown=""
+    if [ "${invocation[0]:-}" = errata-fixture ] && [ "${invocation[3]:-}" = teardown ]; then
+      teardown=1
     fi
+    if [ -n "$failure$teardown_failure" ] && [ -z "$teardown" ]; then continue; fi
     case "${invocation[0]:-}" in
       errata-run | errata-fixture) invocation+=(${carried[@]+"${carried[@]}"}) ;;
     esac
@@ -623,7 +624,13 @@ errata_main() {
     if [ -n "$_errata_produced_fixture" ]; then
       carried+=("fixture:$_errata_produced_fixture=$_errata_produced_value")
     fi
-    [ "$status" -eq 0 ] || failed=1
+    if [ "$status" -ne 0 ]; then
+      if [ -n "$teardown" ]; then
+        teardown_failure=${teardown_failure:-$status}
+      else
+        failure=${failure:-$status}
+      fi
+    fi
   done
-  exit "$status"
+  exit "${failure:-${teardown_failure:-0}}"
 }
