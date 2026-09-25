@@ -2206,4 +2206,62 @@ def harnessRunsWithoutLifeline : Test := do
     assertExitCode 0 r
     assertContains "\"status\":\"pass\"" (← IO.FS.readFile out)
 
+/-- The test executable with many trivial tests, {lean}`n` of them. -/
+def manyTests (n : Nat) : IO ExecutableConfig := do
+  let script ← IO.FS.realPath (harnessDir / "many.sh")
+  return { name := "many", command := #["bash", script.toString]
+           env := #[("ERRATA_MANY", toString n)] }
+
+/--
+The runner closes a test's files once the test has ended: with four slots and a limit of 256 open
+files, as macOS gives a login shell, a run of 300 tests passes.
+-/
+@[test]
+def runsUnderTheDefaultFileLimit : Test := do
+  unless ← runnerExe.pathExists do fail s!"the runner is not built at {runnerExe}"
+  IO.FS.withTempDir fun dir => do
+    let config : Config :=
+      { executables := #[← manyTests 300], errataDir? := some (← errataDir).toString }
+    let (config, workspace) ← config.write dir
+    let r ← IO.Process.output {
+      cmd := "bash"
+      args := #["-c", "ulimit -n 256 && exec \"$@\"", "runner", runnerExe.toString,
+        config.toString, workspace.toString, "-j", "4"]
+      env := #[("ERRATA_LIFELINE", none)] }
+    assertExitCode 0 r
+    assertContains "300 passed, 0 failed" r.stdout
+
+/-- The number of files that the process {name}`pid` holds open, or {lean}`none` without `lsof`. -/
+def openFiles (pid : UInt32) : IO (Option Nat) := do
+  try
+    let r ← IO.Process.output { cmd := "lsof", args := #["-p", toString pid] }
+    if r.exitCode != 0 then return none
+    return some ((r.stdout.splitOn "\n").filter (!·.isEmpty) |>.length)
+  catch _ => return none
+
+/--
+Across a run of 100 tests with four slots, the files that the runner holds open stay within a bound
+that the running tests' pipes and result files and the run's own files explain, whatever the number
+of tests that have ended. The count is read with {lit}`lsof` where it is available.
+-/
+@[test]
+def openFilesStayBounded : Test := do
+  let pid ← IO.Process.getPID
+  let some before ← openFiles pid | return
+  let peak ← IO.mkRef before
+  let running ← IO.mkRef true
+  let sampler ← IO.asTask (prio := .dedicated) do
+    while ← running.get do
+      if let some n ← openFiles pid then peak.modify (max n)
+      IO.sleep 100
+  let r ← runWith #[← manyTests 100] { jobs? := some 4 }
+  running.set false
+  discard <| IO.wait sampler
+  assertBEq 0 r.code
+  assertBEq 100 (r.report.results.filter (·.outcome.isPass)).size
+  -- Four running tests hold at most three pipes and a result file each.
+  let most ← peak.get
+  assertTrue (most ≤ before + 40)
+    s!"the process held {before} files before the run and {most} at its peak"
+
 end ErrataTests.Conformance

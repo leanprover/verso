@@ -68,6 +68,14 @@ def commandExists (cmd : String) (cwd : Option System.FilePath := none)
     return false
 
 /--
+The operating system's identifier of the child process. The runtime's function reads the child and
+leaves it with the caller, as the borrowed parameter here says, so the child's pipes close when the
+caller's last reference to it goes.
+-/
+@[extern "lean_io_process_child_pid"]
+opaque childPid {cfg : @& IO.Process.StdioConfig} : @& IO.Process.Child cfg → UInt32
+
+/--
 Starts a process in a group of its own. The command and the working directory are checked first,
 and a missing one is an error here. A command without a directory is looked for on the
 {lit}`PATH` that {name}`env` sets, when it sets one.
@@ -84,7 +92,7 @@ def spawnGroup (cmd : String) (args : Array String) (cwd : Option System.FilePat
     cmd, args, cwd, env, setsid := true
     stdin := .piped, stdout := .piped, stderr := .piped
   }
-  return { child, pid := child.pid, armed := ← IO.mkRef true, exitCode := ← IO.mkRef none }
+  return { child, pid := childPid child, armed := ← IO.mkRef true, exitCode := ← IO.mkRef none }
 
 /-- The exit code, if the process has exited. A process that has exited is disarmed. -/
 def Group.tryWait (g : Group) : IO (Option UInt32) := do
