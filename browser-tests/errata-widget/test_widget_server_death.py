@@ -21,6 +21,7 @@ def python_crash_reports():
     return {p.name for p in CRASH_REPORTS.glob("Python-*.ips")}
 
 
+@pytest.mark.lean_server_alone
 def test_requests_to_a_server_that_died_fail_at_once(editor):
     """
     Once the Lean server has died, the page's requests and the harness's own end in an error within

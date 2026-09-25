@@ -198,6 +198,7 @@ def test_a_run_under_a_profile_passes_it_to_the_driver(editor):
     expect_exact_text(widget.output, "greeting: good evening\n")
 
 
+@pytest.mark.lean_server_alone
 def test_a_first_run_runs_a_test_that_the_default_filter_leaves_out(editor):
     # With no configuration that the driver elaborated, the workspace is as a fresh checkout has
     # it: the widget offers no profile, and the run sets the default filter aside.

@@ -5,17 +5,23 @@ connected to it, and an editor that the tests drive in place of VS Code.
 The browser reaches the server through a small HTTP relay. The relay can hold or reject particular
 RPC calls, which lets a test arrange the order in which replies arrive.
 
-One Lean server serves every test of a pytest session. Under Verso's pytest harness, where each test
-runs in a process of its own, one Lean server serves every test of the run: the suite's Errata
-fixture `leanServer` starts this module as a host process, `python harness.py serve READY`, which
-starts the server and serves one test at a time over TCP (`LeanHost`), and each test reaches it
-through a `RemoteLeanSession`. Each test gets its own page and relay. When a test ends, the editor
-ends the test's builds and runs and closes the documents it opened, which ends their file workers.
+One Lean server serves every test. A host process, `python harness.py serve READY`, starts the
+server and serves any number of tests at once over TCP (`LeanHost`), and each test reaches it
+through a `RemoteLeanSession`. Under Verso's pytest harness, where each test runs in a process of
+its own, the suite's Errata fixture `leanServer` starts the host for the run; otherwise the pytest
+session starts it. Each test gets its own page, relay, and test modules (`TestModules`): a scratch
+module named for the test, and copies of the workspace's fixture modules in a lane that the test
+holds alone while it runs. When a test ends, the editor ends the test's builds and runs and closes
+the documents it opened, which ends their file workers, and the test's scratch module is removed.
 """
 
+import fcntl
+import hashlib
 import json
 import mimetypes
 import os
+import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -29,6 +35,12 @@ REPO = Path(__file__).resolve().parents[2]
 FIXTURE = REPO / "test-projects" / "errata-widget"
 PAGE = Path(__file__).resolve().parent / "page"
 INFOVIEW = REPO / "node_modules" / "@leanprover" / "infoview" / "dist"
+# The directory of the workspace's test modules, the module `WidgetFixtures` in Lean.
+MODULES = FIXTURE / "WidgetFixtures"
+# The workspace's fixture modules, which each test opens as copies in its lane.
+FIXTURE_MODULES = ("BuildError", "Failing", "Passing", "TwinA", "TwinB")
+# The lock files through which tests hold their lanes, one per lane.
+LANE_LOCKS = FIXTURE / ".lake" / "widget-lanes"
 
 
 class LspError(Exception):
@@ -180,22 +192,27 @@ class LspPeer:
         """Sends a notification."""
         self.send({"jsonrpc": "2.0", "method": method, "params": params})
 
-    def end_runs(self):
+    def end_runs(self, modules):
         """
-        Kills the drivers that the server's file workers have started, with the runners and the
-        test executables below them.
+        Kills the drivers that the server's file workers have started for the tests of `modules`, a
+        list of Lean module names, with the runners and the test executables below them.
         """
-        drivers = matching("Errata.run run -E name") & set(descendants(self.pid))
-        kill_trees(drivers)
+        drivers = set()
+        for module in modules:
+            drivers |= matching(rf"Errata\.run run -E .* --interpreted {re.escape(module)} ")
+        kill_trees(drivers & set(descendants(self.pid)))
 
-    def runner_processes(self, decl):
+    def runner_processes(self, decl, modules):
         """
-        The process ids of the processes below this server that run a test named `decl`: the driver
-        that the widget started for it, and the interpreted test executable that runs it.
+        The process ids of the processes below this server that run a test named `decl` in one of
+        `modules`, a list of Lean module names: the driver that the widget started for it, and the
+        interpreted test executable that runs it.
         """
-        runs = matching(rf"run -E name\(={decl}\) ") | matching(
-            rf"errata-interpret .* errata-run \S+ {decl}( |$)"
-        )
+        runs = set()
+        for module in modules:
+            module = re.escape(module)
+            runs |= matching(rf"run -E name\(={decl}\) .*--interpreted {module} ")
+            runs |= matching(rf"errata-interpret .*{module} .*errata-run \S+ {decl}( |$)")
         return sorted(runs & set(descendants(self.pid)))
 
     def _read(self):
@@ -337,43 +354,6 @@ class LeanServer(LspPeer):
             self.stderr.append(line.decode("utf-8", "replace"))
 
 
-class LeanSession:
-    """The Lean server that the tests of a session share, which a test may restart."""
-
-    def __init__(self):
-        """Starts the session's server."""
-        # Where the server's messages go: the relay of the test that is running, if any.
-        self.route = None
-        self.lean = None
-        self.initialize_result = None
-        self.start()
-
-    def start(self):
-        """Starts a server and initializes it."""
-        self.lean = LeanServer(self._on_message)
-        self.initialize_result = self.lean.initialize()
-
-    def restart(self):
-        """Stops the server and starts a new one."""
-        self.lean.stop()
-        self.start()
-
-    def ensure_running(self):
-        """Starts a new server when the last one has exited."""
-        if not self.lean.running:
-            self.restart()
-
-    def stop(self):
-        """Stops the server."""
-        self.lean.stop()
-
-    def _on_message(self, message):
-        """Passes a message from the server to the running test's relay, if any."""
-        route = self.route
-        if route is not None:
-            route(message)
-
-
 class RemoteLeanServer(LspPeer):
     """
     The Lean server of a `LeanHost`, which this process reaches over TCP at `address`, a host and a
@@ -431,7 +411,7 @@ class RemoteLeanServer(LspPeer):
         super()._receive(message)
 
     def close(self):
-        """Ends the connection, which the host then offers to the next test."""
+        """Ends the connection, and the host closes the documents that the connection left open."""
         try:
             self.sock.shutdown(socket.SHUT_RDWR)
         except OSError:
@@ -457,9 +437,12 @@ class RemoteLeanSession:
         self.initialize_result = self.lean.control("restart")["initialize"]
 
     def ensure_running(self):
-        """Starts a new server when the last one has exited."""
+        """
+        Has the host start a new server when the last one has exited. The host starts one server
+        after an exit, however many tests ask it to.
+        """
         if not self.lean.running:
-            self.restart()
+            self.initialize_result = self.lean.control("ensure")["initialize"]
 
     def stop(self):
         """Ends the test's connection to the host."""
@@ -472,60 +455,122 @@ class RemoteLeanSession:
             route(message)
 
 
+def message_uri(message):
+    """The URI of the document that an LSP message is about, if it names one."""
+    params = message.get("params")
+    if not isinstance(params, dict):
+        return None
+    document = params.get("textDocument")
+    if isinstance(document, dict) and isinstance(document.get("uri"), str):
+        return document["uri"]
+    uri = params.get("uri")
+    return uri if isinstance(uri, str) else None
+
+
+class HostClient:
+    """A test that a `LeanHost` serves: its connection, its number, and the documents it has open."""
+
+    def __init__(self, number, conn):
+        """A client over the connection, with no open documents."""
+        self.number = number
+        self.conn = conn
+        self.documents = set()
+        self.connected = True
+        self.send_lock = threading.Lock()
+
+    def send(self, message):
+        """Sends a message to the test while its connection lasts."""
+        data = frame(message)
+        with self.send_lock:
+            if not self.connected:
+                return
+            try:
+                self.conn.sendall(data)
+            except OSError:
+                pass
+
+    def disconnect(self):
+        """Ends the sending of messages to the test."""
+        with self.send_lock:
+            self.connected = False
+
+    def host_id(self, request_id):
+        """The id under which the host passes the client's request `request_id` to the server."""
+        return f"client-{self.number}-{json.dumps(request_id)}"
+
+
 class LeanHost:
     """
     The host of a Lean server that the tests of a run share. It starts the server and initializes
-    it, then serves one test at a time over a TCP connection: it passes the test's messages to the
-    server and the server's messages to the test, and answers the harness's own requests, whose
-    methods begin with `$/harness/`. `hello` and `restart` reply with the server's process id,
-    whether it runs, and its reply to `initialize`, after starting a new server for `restart`;
-    `stderr` replies with the end of the server's stderr; `reset` readies the server for the next
-    test, ending the runs its file workers started and closing the documents that earlier tests left
-    open, or starting a new server when the last one has exited. When the server exits, the test
-    receives an error reply to each of its requests that the server had yet to answer, and, unless
-    the host stopped the server itself, the notification `$/harness/exited` with the end of the
-    server's stderr. While no server runs, the host answers the test's requests with an error at
-    once and drops its notifications.
+    it, then serves any number of tests at once, each over a TCP connection of its own. It passes
+    each test's messages to the server under request ids of its own, and the server's replies to the
+    test that sent the request, with the test's own id. Notifications about a document go to the
+    test that opened it, and other notifications go to every test. When a test's connection ends,
+    the host closes the documents that the test left open. The host answers the harness's own
+    requests, whose methods begin with `$/harness/`: `hello`, `ensure`, and `restart` reply with the
+    server's process id, whether it runs, and its reply to `initialize`, after starting a new server
+    for `restart`, and for `ensure` when the last one has exited; `stderr` replies with the end of
+    the server's stderr. When the server exits, each test receives an error reply to each of its
+    requests that the server had yet to answer, and, unless the host stopped the server itself, the
+    notification `$/harness/exited` with the end of the server's stderr. While no server runs, the
+    host answers the tests' requests with an error at once and drops their notifications.
     """
 
     def __init__(self):
         """Starts the host's server."""
-        self.client = None
-        self.client_lock = threading.Lock()
-        # The documents that tests opened and have not closed, by URI.
-        self.documents = set()
-        # The ids of the test's requests that the server has yet to answer.
-        self.pending = set()
-        self.pending_lock = threading.Lock()
+        # The connected tests by number, the owners of open documents by URI, and the requests that
+        # the server has yet to answer by the host's id, as pairs of the client and its own id.
+        self.clients = {}
+        self.next_client = 0
+        self.owners = {}
+        self.pending = {}
+        self.lock = threading.Lock()
+        # Held while the server starts or stops, so tests that ask at once start one server.
+        self.server_lock = threading.RLock()
         self.restarting = False
         self.lean = None
         self.initialize_result = None
         self.start_server()
 
     def start_server(self):
-        """Starts a server and initializes it."""
-        self.lean = LeanServer(self._from_server, on_exit=self._server_exited)
-        self.initialize_result = self.lean.initialize()
+        """
+        Starts a server and initializes it. The tests' messages reach the new server once it has
+        been initialized.
+        """
+        lean = LeanServer(self._from_server, on_exit=self._server_exited)
+        self.initialize_result = lean.initialize()
+        self.lean = lean
 
     def restart(self):
         """Stops the server, whatever state it is in, and starts a new one."""
-        self.restarting = True
-        try:
-            self.lean.stop()
-        except Exception:  # noqa: BLE001 - a server that failed to stop is gone all the same
-            pass
-        finally:
-            self.restarting = False
-        self.documents.clear()
-        self.start_server()
+        with self.server_lock:
+            self.restarting = True
+            try:
+                self.lean.stop()
+            except Exception:  # noqa: BLE001 - a server that failed to stop is gone all the same
+                pass
+            finally:
+                self.restarting = False
+            with self.lock:
+                self.owners.clear()
+                for client in self.clients.values():
+                    client.documents.clear()
+            self.start_server()
+
+    def ensure(self):
+        """Starts a new server when the last one has exited."""
+        with self.server_lock:
+            if not self.lean.running:
+                self.restart()
 
     def stop(self):
         """Stops the server, whatever state it is in."""
-        self.restarting = True
-        try:
-            self.lean.stop()
-        except Exception:  # noqa: BLE001 - the host exits after this either way
-            pass
+        with self.server_lock:
+            self.restarting = True
+            try:
+                self.lean.stop()
+            except Exception:  # noqa: BLE001 - the host exits after this either way
+                pass
 
     def info(self):
         """The reply to `hello` and `restart`: the server's process id, state, and `initialize`."""
@@ -539,79 +584,99 @@ class LeanHost:
         """The reply to the harness's request `$/harness/METHOD`."""
         if method == "hello":
             return self.info()
+        if method == "ensure":
+            self.ensure()
+            return self.info()
         if method == "restart":
             self.restart()
             return self.info()
         if method == "stderr":
             return {"text": self.lean.stderr_tail()}
-        if method == "reset":
-            if not self.lean.running:
-                self.restart()
-            else:
-                self.lean.end_runs()
-                for uri in self.documents:
-                    self.lean.notify("textDocument/didClose", {"textDocument": {"uri": uri}})
-                self.documents.clear()
-            return self.info()
         raise LspError(f"the host has no request {method}")
 
     def serve(self, conn):
-        """Serves the test at the other end of the connection until it closes the connection."""
+        """
+        Serves the test at the other end of the connection until it closes the connection, then
+        closes the documents that the test left open.
+        """
         reader = conn.makefile("rb")
-        with self.client_lock:
-            self.client = conn
+        with self.lock:
+            client = HostClient(self.next_client, conn)
+            self.next_client += 1
+            self.clients[client.number] = client
         try:
             while (message := read_message(reader)) is not None:
-                self._from_client(message)
+                self._from_client(client, message)
         except (OSError, ValueError, LspError):
             pass
         finally:
-            with self.client_lock:
-                self.client = None
+            client.disconnect()
+            with self.lock:
+                del self.clients[client.number]
+                left_open, client.documents = client.documents, set()
+                for uri in left_open:
+                    if self.owners.get(uri) is client:
+                        del self.owners[uri]
+                for host_id in [h for h, (c, _) in self.pending.items() if c is client]:
+                    del self.pending[host_id]
+            for uri in left_open:
+                try:
+                    self.lean.notify("textDocument/didClose", {"textDocument": {"uri": uri}})
+                except LspError:
+                    pass
             reader.close()
             conn.close()
 
-    def _to_client(self, message):
-        """Sends a message to the connected test, if any."""
-        with self.client_lock:
-            if self.client is not None:
-                try:
-                    self.client.sendall(frame(message))
-                except OSError:
-                    pass
-
     def _from_server(self, message):
-        """Passes a message from the server to the test, and notes a reply as answered."""
+        """
+        Passes a reply from the server to the test whose request it answers, a notification about
+        a document to the test that opened it, and any other notification to every test.
+        """
         if "method" not in message:
-            with self.pending_lock:
-                self.pending.discard(message.get("id"))
-        self._to_client(message)
+            with self.lock:
+                entry = self.pending.pop(message.get("id"), None)
+            if entry is not None:
+                client, request_id = entry
+                client.send({**message, "id": request_id})
+            return
+        uri = message_uri(message)
+        with self.lock:
+            if uri is None:
+                targets = list(self.clients.values())
+            else:
+                owner = self.owners.get(uri)
+                targets = [] if owner is None else [owner]
+        for client in targets:
+            client.send(message)
 
-    def _fail(self, request_id, text):
-        """Answers the test's request with an error whose message is `text`."""
-        self._to_client(
+    def _fail(self, client, request_id, text):
+        """Answers a test's request with an error whose message is `text`."""
+        client.send(
             {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32603, "message": text}}
         )
 
     def _server_exited(self):
         """
-        Fails the test's unanswered requests once the server has exited, and tells the test of the
+        Fails the tests' unanswered requests once the server has exited, and tells the tests of the
         exit unless the host stopped the server itself.
         """
         stderr = self.lean.stderr_tail()
-        with self.pending_lock:
-            unanswered, self.pending = self.pending, set()
-        for request_id in unanswered:
-            self._fail(request_id, f"the Lean server exited; its stderr ends:\n{stderr}")
+        with self.lock:
+            unanswered, self.pending = self.pending, {}
+            clients = list(self.clients.values())
+        for client, request_id in unanswered.values():
+            self._fail(client, request_id, f"the Lean server exited; its stderr ends:\n{stderr}")
         if not self.restarting:
-            self._to_client(
-                {"jsonrpc": "2.0", "method": "$/harness/exited", "params": {"stderr": stderr}}
-            )
+            for client in clients:
+                client.send(
+                    {"jsonrpc": "2.0", "method": "$/harness/exited", "params": {"stderr": stderr}}
+                )
 
-    def _from_client(self, message):
+    def _from_client(self, client, message):
         """
-        Answers the harness's own requests, tracks the documents the test opens and the requests
-        the server has yet to answer, and passes every other message to the server while it runs.
+        Answers the harness's own requests, tracks the documents that the test opens and the
+        requests that the server has yet to answer, and passes every other message to the server
+        while it runs, with the test's request ids replaced by the host's.
         """
         method = message.get("method") or ""
         request_id = message.get("id")
@@ -620,30 +685,39 @@ class LeanHost:
                 reply = {"result": self.control(method.removeprefix("$/harness/"))}
             except Exception as error:  # noqa: BLE001 - every failure is the request's error reply
                 reply = {"error": {"code": -32603, "message": str(error)}}
-            self._to_client({"jsonrpc": "2.0", "id": request_id, **reply})
+            client.send({"jsonrpc": "2.0", "id": request_id, **reply})
             return
+        uri = message_uri(message)
+        with self.lock:
+            if method == "textDocument/didOpen" and uri:
+                client.documents.add(uri)
+                self.owners[uri] = client
+            elif method == "textDocument/didClose" and uri:
+                client.documents.discard(uri)
+                if self.owners.get(uri) is client:
+                    del self.owners[uri]
         params = message.get("params")
-        document = params.get("textDocument") if isinstance(params, dict) else None
-        uri = document.get("uri") if isinstance(document, dict) else None
-        if method == "textDocument/didOpen" and uri:
-            self.documents.add(uri)
-        elif method == "textDocument/didClose" and uri:
-            self.documents.discard(uri)
+        if method == "$/cancelRequest" and isinstance(params, dict) and "id" in params:
+            message = {**message, "params": {**params, "id": client.host_id(params["id"])}}
         is_request = request_id is not None and bool(method)
-        with self.pending_lock:
+        if is_request:
+            host_id = client.host_id(request_id)
+            message = {**message, "id": host_id}
+        with self.lock:
             running = self.lean.running
             if running and is_request:
-                self.pending.add(request_id)
+                self.pending[host_id] = (client, request_id)
         if not running:
             if is_request:
-                self._fail(request_id, self.lean._exited_error())
+                self._fail(client, request_id, self.lean._exited_error())
             return
         try:
             self.lean.send(message)
         except LspError as error:
             if is_request:
-                self.pending.discard(request_id)
-                self._fail(request_id, str(error))
+                with self.lock:
+                    self.pending.pop(host_id, None)
+                self._fail(client, request_id, str(error))
 
 
 def serve(ready):
@@ -682,7 +756,7 @@ def serve(ready):
     written.rename(ready)
     while True:
         conn, _ = listener.accept()
-        host.serve(conn)
+        threading.Thread(target=host.serve, args=(conn,), daemon=True).start()
 
 
 def decl_name(params):
@@ -1023,18 +1097,124 @@ class LspRelay:
         handler.wfile.write(body)
 
 
-class Editor:
+def scratch_key(nodeid):
     """
-    The editor that the tests drive: it opens the workspace's test modules in the Lean server, moves
-    the cursor, edits and saves, and restarts the server, telling the InfoView of each as VS Code
-    would.
+    The part of a scratch module's name that comes from a test's node id: the test's name, with an
+    underscore for each character other than an ASCII letter, a digit, or an underscore, then eight
+    hexadecimal digits of the node id's hash, which tell apart tests of one name in two files.
+    """
+    name = re.sub(r"[^A-Za-z0-9_]", "_", nodeid.rsplit("::", 1)[-1])
+    return f"{name}_{hashlib.sha256(nodeid.encode('utf-8')).hexdigest()[:8]}"
+
+
+def take_lane():
+    """
+    Takes the lowest-numbered lane that no other process holds, and returns its number and the lock
+    file through which this process holds it. The lock ends when the file is closed or the process
+    exits.
+    """
+    LANE_LOCKS.mkdir(parents=True, exist_ok=True)
+    number = 0
+    while True:
+        handle = open(LANE_LOCKS / f"{number}.lock", "w")
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return number, handle
+        except BlockingIOError:
+            handle.close()
+            number += 1
+
+
+def sweep_test_modules():
+    """Removes the scratch modules, the lanes, and the lanes' lock files that tests left behind."""
+    for path in MODULES.glob("Scratch*.lean"):
+        path.unlink(missing_ok=True)
+    for path in MODULES.glob("Lane*"):
+        shutil.rmtree(path, ignore_errors=True)
+    shutil.rmtree(LANE_LOCKS, ignore_errors=True)
+
+
+class TestModules:
+    """
+    The test modules of one test in the widget's workspace, which tests name by their names below
+    `WidgetFixtures`. `Scratch` is the test's own scratch module, `WidgetFixtures.Scratch_KEY`, which
+    the test writes as it goes. Each fixture module is a copy in the test's lane,
+    `WidgetFixtures.LaneN`, which the test holds alone while it runs. A lane's copies stay in place
+    for the next test that holds the lane, so Lake builds each copy once per run.
     """
 
-    def __init__(self, page, relay, session):
-        """An editor on `page` with no open documents, using the relay and the session's server."""
+    # Tells pytest that this class holds no tests, though its name begins with `Test`.
+    __test__ = False
+
+    def __init__(self, key):
+        """The test modules of a test whose scratch key is `key`, in a lane that it now holds."""
+        self.scratch = f"Scratch_{key}"
+        self.lane, self.lease = take_lane()
+
+    def name(self, module):
+        """The name below `WidgetFixtures` of the module that the test calls `module`."""
+        if module == "Scratch":
+            return self.scratch
+        if module in FIXTURE_MODULES:
+            return f"Lane{self.lane}.{module}"
+        return module
+
+    def module_name(self, module):
+        """The Lean name of the module that the test calls `module`."""
+        return f"WidgetFixtures.{self.name(module)}"
+
+    def module_names(self):
+        """The Lean names of the test's modules: its scratch module and its lane's copies."""
+        return [self.module_name(m) for m in ("Scratch", *FIXTURE_MODULES)]
+
+    def path(self, module):
+        """
+        The file of the module that the test calls `module`. A fixture module's copy is written
+        when it is missing or differs from the fixture module.
+        """
+        path = MODULES / (self.name(module).replace(".", "/") + ".lean")
+        if module in FIXTURE_MODULES:
+            text = (MODULES / f"{module}.lean").read_text(encoding="utf-8")
+            if not path.is_file() or path.read_text(encoding="utf-8") != text:
+                path.parent.mkdir(exist_ok=True)
+                path.write_text(text, encoding="utf-8")
+        return path
+
+    def write_scratch(self, body):
+        """
+        Writes the test's scratch module, a test module for the test to change as it goes. The
+        module's text differs from one write to the next, so Lake builds it afresh for each.
+        """
+        header = (
+            "/-\nCopyright (c) 2026 Lean FRO LLC. All rights reserved.\n"
+            "Released under Apache 2.0 license as described in the file LICENSE.\n"
+            "Author: David Thrane Christiansen\n-/\n"
+            "module\n\npublic import Errata\n\nopen Errata\n\npublic section\n\n"
+        )
+        nonce = f"\n-- written by the test harness at {time.time_ns()}\n"
+        self.path("Scratch").write_text(header + body + nonce, encoding="utf-8")
+
+    def release(self):
+        """Removes the test's scratch module and lets another test take the lane."""
+        self.path("Scratch").unlink(missing_ok=True)
+        self.lease.close()
+
+
+class Editor:
+    """
+    The editor that the tests drive: it opens the test's modules in the Lean server, moves the
+    cursor, edits and saves, and restarts the server, telling the InfoView of each as VS Code would.
+    """
+
+    def __init__(self, page, relay, session, modules):
+        """
+        An editor on `page` with no open documents, using the relay, the session's server, and the
+        test's modules.
+        """
         self.page = page
         self.relay = relay
         self.session = session
+        self.modules = modules
         self.documents = {}
         # The harness's own RPC session for each open document, by document URI.
         self.rpc_sessions = {}
@@ -1059,42 +1239,27 @@ class Editor:
 
     def close(self):
         """
-        Ends the test's builds and runs and closes its documents, so the next test starts with the
-        server as it was. A server that fails to do so is restarted, or started by the next test.
+        Ends the test's builds and runs and closes its documents. When the server fails to answer,
+        the host closes the documents as the test's connection ends, and the next test that finds
+        the server gone has the host start a new one.
         """
         self.session.route = None
         try:
-            self.lean.end_runs()
+            self.lean.end_runs(self.modules.module_names())
             for module in self.documents:
                 self.lean.notify(
                     "textDocument/didClose",
                     {"textDocument": {"uri": self.path(module).as_uri()}},
                 )
-        except Exception:  # noqa: BLE001 - after any failure, the server's state is unknown
-            try:
-                self.session.restart()
-            except Exception:  # noqa: BLE001 - the next test starts a server of its own
-                pass
+        except Exception:  # noqa: BLE001 - the host closes what is left when the connection ends
+            pass
         finally:
             self.documents = {}
             self.rpc_sessions = {}
-            scratch = self.path("Scratch")
-            if scratch.exists():
-                scratch.unlink()
 
     def write_scratch(self, body):
-        """
-        Writes the module `WidgetFixtures.Scratch`, a test module for a test to change as it goes. The
-        module's text differs from one test to the next, so Lake builds it afresh for each.
-        """
-        header = (
-            "/-\nCopyright (c) 2026 Lean FRO LLC. All rights reserved.\n"
-            "Released under Apache 2.0 license as described in the file LICENSE.\n"
-            "Author: David Thrane Christiansen\n-/\n"
-            "module\n\npublic import Errata\n\nopen Errata\n\npublic section\n\n"
-        )
-        nonce = f"\n-- written by the test harness at {time.time_ns()}\n"
-        self.path("Scratch").write_text(header + body + nonce, encoding="utf-8")
+        """Writes the test's scratch module with `body` below its header."""
+        self.modules.write_scratch(body)
 
     def call_rpc(self, module, decl, method, params, timeout=120):
         """
@@ -1153,12 +1318,15 @@ class Editor:
         )
 
     def runner_processes(self, decl):
-        """The process ids of the test runners that the server has started for a test named `decl`."""
-        return self.lean.runner_processes(decl)
+        """
+        The process ids of the test runners that the server has started for a test named `decl` in
+        one of the test's modules.
+        """
+        return self.lean.runner_processes(decl, self.modules.module_names())
 
     def path(self, module):
-        """The file of a test module of the workspace, given by its name below `WidgetFixtures`."""
-        return FIXTURE / "WidgetFixtures" / (module.replace(".", "/") + ".lean")
+        """The file of the test's module that the test calls `module`."""
+        return self.modules.path(module)
 
     def open(self, module):
         """Opens the module in the Lean server with the text of its file."""

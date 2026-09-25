@@ -22,7 +22,8 @@ __pycache__
 test-projects/literate-config/lake-manifest.json
 test-projects/literate-multi-root/lake-manifest.json
 test-projects/errata-widget/lake-manifest.json
-test-projects/errata-widget/WidgetFixtures/Scratch.lean
+test-projects/errata-widget/WidgetFixtures/Scratch*.lean
+test-projects/errata-widget/WidgetFixtures/Lane*/
 src/errata-tests/fixtures/*/lake-manifest.json
 # The reports that the `ci` profile of `errata.toml` writes.
 /errata-report.xml

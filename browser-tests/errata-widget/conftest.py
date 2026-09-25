@@ -1,12 +1,15 @@
 """
-Fixtures for the Errata widget tests. The tests share one Lean server: under Verso's pytest harness,
-the server that the Errata fixture `leanServer` hosts for the run, and otherwise one that the pytest
-session starts. Each test gets a fresh page with the InfoView and an editor that connects the page
-to the server.
+Fixtures for the Errata widget tests. The tests share one Lean server, which a host process serves
+to any number of tests at once: under Verso's pytest harness, the host that the Errata fixture
+`leanServer` starts for the run, and otherwise one that the pytest session starts. Each test gets a
+fresh page with the InfoView, test modules of its own, and an editor that connects the page to the
+server.
 """
 
 import json
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -14,8 +17,8 @@ from playwright.sync_api import Page, expect
 
 import harness
 import services
-from harness import FIXTURE, INFOVIEW, Editor, LeanSession, LspRelay, RemoteLeanServer
-from harness import RemoteLeanSession
+from harness import FIXTURE, INFOVIEW, Editor, LspRelay, RemoteLeanSession, TestModules
+from harness import scratch_key, sweep_test_modules
 from widget import EXPECT_TIMEOUT
 
 # Playwright's own timeout for an assertion, which each widget test restores as it ends.
@@ -24,14 +27,16 @@ PLAYWRIGHT_EXPECT_TIMEOUT = 5_000
 
 def check_fixture_workspace():
     """
-    Checks that the InfoView is installed, and removes the manifest of the widget's workspace so
-    that Lake resolves the workspace against Verso's own dependencies.
+    Checks that the InfoView is installed, removes the manifest of the widget's workspace so that
+    Lake resolves the workspace against Verso's own dependencies, and removes the test modules that
+    earlier tests left behind.
     """
     if not INFOVIEW.is_dir():
         raise RuntimeError("the InfoView is missing; run `npm ci` in the repository root first")
     manifest = FIXTURE / "lake-manifest.json"
     if manifest.exists():
         manifest.unlink()
+    sweep_test_modules()
 
 
 def lean_server_setup(context):
@@ -57,37 +62,46 @@ def lean_server_setup(context):
     return f"127.0.0.1:{found}"
 
 
-def lean_server_prepare(address, context):
-    """
-    The prepare of the fixture `leanServer`, which readies the server for the next test: it ends the
-    runs that the server's file workers started and closes the documents that earlier tests left
-    open, or starts a new server when the last one has exited.
-    """
-    lean = RemoteLeanServer(address, lambda message: None)
-    try:
-        lean.control("reset")
-    finally:
-        lean.close()
-
-
 def lean_server_teardown(address, context):
-    """The teardown of the fixture `leanServer`: it stops the host, the server, and their runs."""
+    """
+    The teardown of the fixture `leanServer`: it stops the host, the server, and their runs, and
+    removes the test modules that tests left behind.
+    """
     services.stop(context, "leanServer", group_first=False, grace=20.0)
+    sweep_test_modules()
 
 
-# The Lean server that the tests share. Each test uses it alone among its users, since the tests
-# open documents in one workspace and write its scratch module. Its phases ask for the threads of
-# the server's workers and the builds they start, which run under the grant of the phase that
-# started the server.
+# The Lean server that the tests share. Each test opens documents in modules of its own, ends its
+# runs and closes its documents when it ends, and the host closes what a test's connection left
+# open, so the prepare is trivial. The tests marked `lean_server_alone` use the server alone among
+# its users. Its phases ask for the threads of the server's workers and the builds they start,
+# which run under the grant of the phase that started the server.
 errata_fixtures_decl = {
     "leanServer": {
         "description": "A Lean server in the widget's fixture workspace, which the tests share.",
         "threads": 4,
         "setup": lean_server_setup,
-        "prepare": lean_server_prepare,
         "teardown": lean_server_teardown,
     },
 }
+
+
+def start_local_host(directory):
+    """
+    Starts this suite's harness as the host of a Lean server for a pytest session without the Errata
+    runner, and returns the host's process and address once the host is ready.
+    """
+    ready = directory / "ready.json"
+    proc = subprocess.Popen([sys.executable, harness.__file__, "serve", str(ready)])
+    deadline = time.monotonic() + 300
+    while not ready.is_file():
+        if proc.poll() is not None:
+            raise RuntimeError("the host of the Lean server exited before it was ready")
+        if time.monotonic() > deadline:
+            proc.kill()
+            raise RuntimeError("the host of the Lean server was not ready within 300 s")
+        time.sleep(0.1)
+    return proc, f"127.0.0.1:{json.loads(ready.read_text())['port']}"
 
 
 def errata_fixtures_of(request):
@@ -128,22 +142,43 @@ def browser(request, playwright_instance):
 
 
 @pytest.fixture(scope="session")
-def lean_session(request):
+def lean_host(request, tmp_path_factory):
     """
-    The Lean server of the tests: the server of the Errata fixture `leanServer` under Verso's pytest
-    harness, and otherwise one that this session starts.
+    The address of the host of the tests' Lean server: the host of the Errata fixture `leanServer`
+    under Verso's pytest harness, and otherwise one that this session starts and stops.
     """
     address = errata_fixtures_of(request).get("leanServer")
     if address:
-        session = RemoteLeanSession(address)
-    else:
-        try:
-            check_fixture_workspace()
-        except RuntimeError as error:
-            pytest.fail(str(error))
-        session = LeanSession()
+        yield address
+        return
+    try:
+        check_fixture_workspace()
+        proc, address = start_local_host(tmp_path_factory.mktemp("lean-host"))
+    except RuntimeError as error:
+        pytest.fail(str(error))
+    yield address
+    proc.terminate()
+    proc.wait()
+    sweep_test_modules()
+
+
+@pytest.fixture(scope="session")
+def lean_session(lean_host):
+    """The test's connection to the host of the Lean server, ended when the session ends."""
+    session = RemoteLeanSession(lean_host)
     yield session
     session.stop()
+
+
+@pytest.fixture
+def test_modules(request):
+    """
+    The test's own modules: its scratch module, named for its node id, and its lane. When the test
+    ends, its scratch module is removed and its lane is free for another test.
+    """
+    modules = TestModules(scratch_key(request.node.nodeid))
+    yield modules
+    modules.release()
 
 
 @pytest.fixture
@@ -154,17 +189,28 @@ def relay():
     relay.close()
 
 
+def pytest_configure(config):
+    """Registers the marker of the tests that use the Lean server alone."""
+    config.addinivalue_line(
+        "markers",
+        "lean_server_alone: the test uses the widget's Lean server alone among its users, since it "
+        "stops the server or changes what every run reads",
+    )
+
+
 def pytest_collection_modifyitems(config, items):
     """
     Marks the widget tests `slow`, since each takes several seconds, and marks the tests that use a
-    Lean server as using the Errata fixture `leanServer`.
+    Lean server as using the Errata fixture `leanServer`: alone among its users for the tests marked
+    `lean_server_alone`, and shared with the others otherwise.
     """
     here = Path(__file__).parent
     for item in items:
         if here in Path(item.path).parents:
             item.add_marker(pytest.mark.slow)
             if "lean_session" in item.fixturenames:
-                item.add_marker(pytest.mark.errata_fixture("leanServer"))
+                alone = item.get_closest_marker("lean_server_alone") is not None
+                item.add_marker(pytest.mark.errata_fixture("leanServer", exclusive=alone))
 
 
 @pytest.hookimpl(wrapper=True)
@@ -189,10 +235,16 @@ def print_diagnostics(page, console, session):
 
 
 @pytest.fixture
-def editor(request, page: Page, relay: LspRelay, lean_session: LeanSession):
+def editor(
+    request,
+    page: Page,
+    relay: LspRelay,
+    lean_session: RemoteLeanSession,
+    test_modules: TestModules,
+):
     """
-    The test's editor, started on its page and relay, and closed when the test ends; a failed start
-    or a failed test prints the diagnostics.
+    The test's editor, started on its page, relay, and modules, and closed when the test ends; a
+    failed start or a failed test prints the diagnostics.
     """
     page.set_default_timeout(120_000)
     console = []
@@ -200,7 +252,7 @@ def editor(request, page: Page, relay: LspRelay, lean_session: LeanSession):
         "console", lambda message: console.append(f"{message.type}: {message.text}")
     )
     page.on("pageerror", lambda error: console.append(f"page error: {error}"))
-    editor = Editor(page, relay, lean_session)
+    editor = Editor(page, relay, lean_session, test_modules)
     try:
         editor.start()
     except BaseException:

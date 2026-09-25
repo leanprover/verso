@@ -13,8 +13,12 @@ Lake workspace of its own. Its `errata.toml` gives the setting
 `greeting` a value in the default profile, which the widget's settings
 fields start from.
 
-The browser tests write `WidgetFixtures/Scratch.lean` while they run
-and delete it afterwards.
+Each browser test writes a scratch module of its own,
+`WidgetFixtures/Scratch_KEY.lean`, and deletes it afterwards. The
+tests open copies of the fixture modules in lanes,
+`WidgetFixtures/LaneN/`, one lane per test at a time, so tests that
+run at once share one Lean server without sharing documents. The
+suite removes the lanes when it ends.
 
 ## Running the Browser Tests
 

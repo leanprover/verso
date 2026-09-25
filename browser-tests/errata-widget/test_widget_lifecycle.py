@@ -126,6 +126,7 @@ def test_returning_to_a_finished_test_shows_its_result_as_it_was(editor):
     wait_for_html(widget.root, shown)
 
 
+@pytest.mark.lean_server_alone
 def test_a_result_is_kept_after_the_server_forgets_the_run(editor):
     editor.show("Passing", "copyOrder")
     widget = Widget(editor.page)
@@ -203,6 +204,7 @@ def test_unsaved_changes_block_a_run_and_a_saved_change_marks_the_result(editor)
     expect(widget.run_button).to_be_enabled()
 
 
+@pytest.mark.lean_server_alone
 def test_the_widget_reconnects_after_the_server_restarts(editor):
     editor.show("Passing", "bothStreams")
     widget = Widget(editor.page)
