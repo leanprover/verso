@@ -763,12 +763,15 @@ script run (args) do
   -- the runner's lifeline, so the runner ends when the driver's parent does. The variable stops at
   -- the driver, so a driver that a test starts holds a lifeline of its own. The driver removes
   -- `LEAN_ABORT_ON_PANIC` from the runner's environment, and the runner sets it for every test
-  -- executable.
+  -- executable. The runner has a session of its own, so an interrupt from the terminal reaches the
+  -- driver alone, and the runner learns of it when the lifeline closes, clears its progress
+  -- display, and cancels the run in order.
   let handsOnLifeline := (← IO.getEnv "ERRATA_DRIVER_LIFELINE") == some "1"
   let child ← IO.Process.spawn {
     cmd := runnerPath.toString
     args := #[configFile.toString, workspaceFile.toString] ++ args.toArray
     stdin := if handsOnLifeline then .inherit else .piped
+    setsid := true
     env := #[("LEAN_ABORT_ON_PANIC", none), ("ERRATA_LIFELINE", some "1"),
       ("ERRATA_DRIVER_LIFELINE", none)]
   }
