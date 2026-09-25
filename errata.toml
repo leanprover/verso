@@ -38,6 +38,8 @@ settings.siteDir = { needs = "packageManualSite" }
 [profile.ci]
 inherits = "browser"
 default-filter = 'all() \ (tag(hover_media) & name(firefox))'
+junit = "errata-report.xml"
+markdown = "errata-summary.md"
 
 [profile.ci.settings.VersoTests.Settings]
 checkTeX = "true"

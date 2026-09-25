@@ -96,7 +96,7 @@ jobs:
             - name: Run tests
               if: steps.check-changes.outputs.changed == 'true'
               run: |
-                  lake test -- --test-options --verbose --wfail --profile ci
+                  lake test -- run -P ci --wfail -v
 
             - name: Create branch and open PR
               if: steps.check-changes.outputs.changed == 'true'

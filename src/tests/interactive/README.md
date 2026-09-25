@@ -26,8 +26,8 @@ after the case's file. `lake test` runs them with the rest of Verso's
 tests, and a filter selects them alone:
 
 ```
-lake test -- --test-options --filter 'tag(lsp)'
-lake test -- --test-options --filter 'exe(interactive) & name(=math_hover)'
+lake test -- -E 'tag(lsp)'
+lake test -- -E 'exe(interactive) & name(=math_hover)'
 ```
 
 To run one case by hand, run `./src/tests/interactive/test_single.sh

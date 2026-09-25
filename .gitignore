@@ -24,3 +24,6 @@ test-projects/literate-multi-root/lake-manifest.json
 test-projects/errata-widget/lake-manifest.json
 test-projects/errata-widget/WidgetFixtures/Scratch.lean
 src/errata-tests/fixtures/*/lake-manifest.json
+# The reports that the `ci` profile of `errata.toml` writes.
+/errata-report.xml
+/errata-summary.md

@@ -200,10 +200,12 @@ jobs:
               run: |
                   inkscape --version
 
+            # The `ci` profile of `errata.toml` writes the JUnit report to `errata-report.xml` and
+            # the Markdown summary to `errata-summary.md`, which the steps below publish.
             - name: Run tests
               id: tests
               run: |
-                  lake test -- --test-options --verbose --wfail --junit=errata-report.xml --markdown=errata-summary.md --profile ci
+                  lake test -- run -P ci --wfail -v
 
             - name: Add test results to the job summary
               if: always()
