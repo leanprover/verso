@@ -1188,15 +1188,14 @@ def runnerLifeline : Test := do
   let marker := toString (← IO.rand 0 (2 ^ 30))
   let script ← IO.FS.realPath (harnessDir / "basic.sh")
   IO.FS.withTempDir fun dir => do
-    let config := dir / "config.json"
     let json := dir / "report.json"
     let exe : ExecutableConfig :=
       { name := "basic", command := #["bash", script.toString], env := #[("BASIC_TESTS", "lingers pass")] }
-    IO.FS.writeFile config (Lean.toJson ({ executables := #[exe] } : Config)).compress
+    let (config, workspace) ← ({ executables := #[exe] } : Config).write dir
     let child ← IO.Process.spawn {
       cmd := runnerExe.toString
-      args := #[config.toString, "--json", json.toString, "--grace-period", "500ms",
-        "--set", s!"marker={marker}"]
+      args := #[config.toString, workspace.toString, "--json", json.toString,
+        "--grace-period", "500ms", "--set", s!"marker={marker}"]
       stdin := .piped, stdout := .piped, stderr := .piped
       env := #[("ERRATA_LIFELINE", some "1")]
     }

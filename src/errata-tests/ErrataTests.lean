@@ -421,7 +421,7 @@ private def runReporting (config : Runner.Config) (args : List String) :
     let xml := dir / "report.xml"
     let json := dir / "report.json"
     let md := dir / "report.md"
-    let args := ["config.json", "--junit", xml.toString, "--json", json.toString,
+    let args := ["config.json", "workspace.json", "--junit", xml.toString, "--json", json.toString,
       "--markdown", md.toString] ++ args
     let opts ← match Runner.parseOptions args with
       | .ok opts => pure opts
@@ -1104,7 +1104,8 @@ def driverReadsTomlForms : Test := do
 
 /--
 Settings bound to targets with `{ needs = … }` receive the targets' results. Editing a target's
-input rebuilds the runner's configuration, and leaves the test library alone.
+input rebuilds the workspace's configuration, and leaves the elaborated `errata.toml` and the test
+library alone.
 -/
 @[test]
 def driverBuildsNeededTargets : Test :=
@@ -1113,18 +1114,23 @@ def driverBuildsNeededTargets : Test :=
     let lake (args : Array String) : IO IO.Process.Output :=
       IO.Process.output { cmd := "lake", args, cwd := dir }
     let config := dir / ".lake" / "errata" / "config.json"
+    let workspace := dir / ".lake" / "errata" / "workspace.json"
     let olean := dir / ".lake" / "build" / "lib" / "lean" / "TomlLib.olean"
     let out ← lake #["test"]
     assertExitCode 0 out
     assertContains "1 passed, 0 failed, 0 errors, 0 inconclusive" out.stdout
-    assertContains "stamp.txt" (← IO.FS.readFile config)
+    assertContains "stamp.txt" (← IO.FS.readFile workspace)
     let configBefore := (← config.metadata).modified
+    let workspaceBefore := (← workspace.metadata).modified
     let oleanBefore := (← olean.metadata).modified
     IO.FS.writeFile (dir / "stamp-input.txt") "stamp 2\n"
     let again ← lake #["test"]
     assertExitCode 0 again
-    result "the configuration is rebuilt" do
-      assertTrue ((← config.metadata).modified != configBefore) "config.json was not rewritten"
+    result "the workspace's configuration is rebuilt" do
+      assertTrue ((← workspace.metadata).modified != workspaceBefore)
+        "workspace.json was not rewritten"
+    result "the elaborated errata.toml is not" do
+      assertTrue ((← config.metadata).modified == configBefore) "config.json was rewritten"
     result "the test library is not" do
       assertTrue ((← olean.metadata).modified == oleanBefore) "TomlLib.olean was rebuilt"
 
@@ -1144,9 +1150,9 @@ def driverSelectsProfilesAndExecutables : Test :=
       IO.Process.output { cmd := "lake", args, cwd := dir }
     let stamp := dir / ".lake" / "build" / "stamp.txt"
     let config : TestM Lean.Json := do
-      match Lean.Json.parse (← IO.FS.readFile (dir / ".lake" / "errata" / "config.json")) with
+      match Lean.Json.parse (← IO.FS.readFile (dir / ".lake" / "errata" / "workspace.json")) with
       | .ok j => pure j
-      | .error e => fail s!"config.json is not JSON: {e}"
+      | .error e => fail s!"workspace.json is not JSON: {e}"
     let exeNames (j : Lean.Json) : Array String :=
       ((j.getObjValAs? (Array Lean.Json) "executables").toOption.getD #[]).filterMap fun e =>
         (e.getObjValAs? String "name").toOption
@@ -1211,8 +1217,8 @@ def dependencyTestsHaveTheirOwnExecutable : Test := do
     assertExitCode 0 out
     assertContains "DepLib\n  ok    depTest" out.stdout
     assertContains "<testsuite name=\"DepLib\"" (← IO.FS.readFile junit)
-    let config ← IO.FS.readFile (fixture / ".lake" / "errata" / "config.json")
-    assertContains "dep/.lake/build/bin/errata-test-DepLib" config
+    let workspace ← IO.FS.readFile (fixture / ".lake" / "errata" / "workspace.json")
+    assertContains "dep/.lake/build/bin/errata-test-DepLib" workspace
 
 /--
 A root without a `module` header that imports a module-system child, each with a test, has each
@@ -1349,22 +1355,22 @@ def junitIncludesTestOutputOnFailedNamedResult : Test := do
 @[test]
 def runnerHelpNamesInvocation : Test := do
   IO.FS.withTempDir fun dir => do
-    let config := dir / "config.json"
     let invocation := "lake test -- --test-options"
-    IO.FS.writeFile config (Lean.toJson ({ invocation? := some invocation } : Runner.Config)).compress
+    let (config, workspace) ← ({ invocation? := some invocation } : Runner.Config).write dir
     let out ← captureOutput do
-      discard <| Runner.main [config.toString, "--help"]
+      discard <| Runner.main [config.toString, workspace.toString, "--help"]
     assertContains s!"{invocation} [FLAGS]" out.all
 
 /--
-The runner's command line: the configuration file first, the `-v` forms select the verbosity,
+The runner's command line: the two configuration files first, the `-v` forms select the verbosity,
 declared flags parse, `--set` and `--filter` repeat, and `list` begins the subcommand.
 -/
 @[test]
 def runnerArgParsing : Test := do
-  let parse (args : List String) := Runner.parseOptions ("config.json" :: args)
+  let parse (args : List String) := Runner.parseOptions ("config.json" :: "workspace.json" :: args)
   result "configuration" do
     assertBEq (some "config.json") ((parse []).toOption.map (·.configPath))
+    assertBEq (some "workspace.json") ((parse []).toOption.map (·.workspacePath))
   result "default verbosity" do
     assertBEq (some Verbosity.silent) ((parse []).toOption.map (·.verbosity))
   result "-v" do

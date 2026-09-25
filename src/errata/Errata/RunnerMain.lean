@@ -32,8 +32,10 @@ open ProcessControl
 
 /-- The runner's settings, from its command line. -/
 structure Options where
-  /-- The path of the configuration file. -/
+  /-- The path of the configuration file that {lit}`errata-config` writes. -/
   configPath : String := ""
+  /-- The path of the workspace's configuration file that the driver writes. -/
+  workspacePath : String := ""
   /-- The reporting verbosity. -/
   verbosity : Verbosity := .silent
   /-- Passes {lit}`setting:updateGolden=true` to every test. -/
@@ -145,11 +147,12 @@ where cmd := `[Cli|
       filter : String;         "Run only the tests the filter selects. Repeatable; the filters are joined by union."
 
     ARGS:
-      config : String;         "The configuration file that the driver writes."
+      config : String;         "The configuration file that errata-config writes."
+      workspace : String;      "The workspace's configuration file that the driver writes."
       ...argument : String;    "The `list` subcommand and its filters; see below."
 
     EXTENSIONS:
-      longDescription "With `list FILTER...` after the configuration file, the runner lists the \
+      longDescription "With `list FILTER...` after the configuration files, the runner lists the \
         tests that the filters select, one per line, and runs nothing. No filter selects every \
         test, and the profile's default filter plays no part."
   ]
@@ -225,6 +228,7 @@ def optionsOfParsed (p : Cli.Parsed) (sets filters : Array String := #[]) : Exce
         settings are given with --set NAME=VALUE"
   return {
     configPath := (p.positionalArg? "config").map (·.value) |>.getD "",
+    workspacePath := (p.positionalArg? "workspace").map (·.value) |>.getD "",
     verbosity,
     updateGolden := p.hasFlag "update-golden",
     seed := p.flag? "seed" |>.map (·.as! Nat),
@@ -240,7 +244,7 @@ def optionsOfParsed (p : Cli.Parsed) (sets filters : Array String := #[]) : Exce
   }
 
 /--
-Parses the runner's command line into settings: the configuration file, the declared flags, the
+Parses the runner's command line into settings: the configuration files, the declared flags, the
 repeatable {lit}`--set` and {lit}`--filter`, and the {lit}`list` subcommand with its filters.
 -/
 def parseOptions (args : List String) : Except String Options := do
@@ -919,34 +923,37 @@ def exitWhenStdinCloses (parentIn : IO.FS.Stream) (registry : Registry) (graceMs
   IO.Process.forceExit 1
 
 /--
-The runner's entry point: {lit}`errata-runner <config.json> [options]`, or
-{lit}`errata-runner <config.json> list [FILTER]...`. The configuration's {lit}`invocation`, when it
-has one, names the command in the usage message. When {lit}`ERRATA_LIFELINE` is {lit}`1` in its
-environment, the runner watches its standard input and cancels the run when it closes.
+The runner's entry point: {lit}`errata-runner <config.json> <workspace.json> [options]`, or
+{lit}`errata-runner <config.json> <workspace.json> list [FILTER]...`. The workspace's
+{lit}`invocation`, when it has one, names the command in the usage message. When
+{lit}`ERRATA_LIFELINE` is {lit}`1` in its environment, the runner watches its standard input and
+cancels the run when it closes.
 -/
 def main (args : List String) : IO UInt32 := do
   let invocation ← do
     match args with
-    | path :: _ =>
+    | _ :: path :: _ =>
       if path.startsWith "-" then pure none
       else
-        try pure (← Config.load path).invocation?
+        try pure ((← readJsonFile path).getObjValAs? String "invocation").toOption
         catch _ => pure none
-    | [] => pure none
+    | _ => pure none
   let (sets, filters, rest) ← match takeRepeatable args with
     | .ok r => pure r
     | .error msg =>
       IO.eprintln s!"error: {msg}"
       return 1
-  let cmd := runnerCmd (invocation.getD "errata-runner CONFIG") fun parsed => do
+  let cmd := runnerCmd (invocation.getD "errata-runner CONFIG WORKSPACE") fun parsed => do
     let opts ←
       match optionsOfParsed parsed sets filters with
       | .ok opts => pure opts
       | .error msg =>
         IO.eprintln s!"error: {msg}"
         return 1
+    -- A run needs every target of its profile; the `list` subcommand resolves no setting.
+    let required? := if opts.listFilters?.isSome then none else some opts.profile
     let config ←
-      try Config.load opts.configPath
+      try Config.load opts.configPath opts.workspacePath required?
       catch e =>
         IO.eprintln s!"error: {e}"
         return 1

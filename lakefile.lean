@@ -170,6 +170,17 @@ lean_exe «errata-runner» where
   srcDir := "src/errata"
   root := `ErrataRunner
 
+-- The processing of `errata.toml`, which reads Lake's TOML parser and nothing else of Lake.
+@[default_target]
+lean_lib ErrataConfig where
+  srcDir := "src/errata"
+  roots := #[`ErrataConfig]
+
+-- Validates `errata.toml` and writes the elaborated `.lake/errata/config.json`.
+lean_exe «errata-config» where
+  srcDir := "src/errata"
+  root := `ErrataConfigMain
+
 -- Tests that exercise Errata using Errata itself.
 @[default_target]
 lean_lib ErrataTests where
@@ -279,552 +290,54 @@ private def mainSource (pkg : String) (mods : Array Lean.Name) : String :=
     Errata.Harness.main (getAllTests% {pkg.quote} {" ".intercalate (mods.toList.map (·.toString))}) \
       args (helpers := getAllHelpers%)\n"
 
-/-! The configuration file, `errata.toml`, which the driver validates and elaborates. -/
+/-!
+The configuration file, `errata.toml`, which `errata-config` validates and elaborates into
+`.lake/errata/config.json`. The driver reads from that file the targets that the selected profile
+needs and the test executables that the file adds.
+-/
 
-/-- A problem with `errata.toml`, at the value that it concerns. -/
-private structure TomlProblem where
-  ref : Lean.Syntax
-  msg : String
+/-- An object's fields, or none when the value is not an object. -/
+private def jsonFields (j : Lean.Json) : Array (String × Lean.Json) :=
+  match j.getObj? with
+  | .ok obj => obj.toArray
+  | .error _ => #[]
 
-/-- Validation of `errata.toml`, which gathers every problem it finds. -/
-private abbrev TomlM := StateM (Array TomlProblem)
-
-private def tomlProblem (ref : Lean.Syntax) (msg : String) : TomlM Unit :=
-  modify (·.push ⟨ref, msg⟩)
-
-private def tomlKey (k : Lean.Name) : String := k.toString (escape := false)
-
-/-- What kind of TOML value a value is, for messages. -/
-private def tomlKind : Lake.Toml.Value → String
-  | .string .. => "a string"
-  | .integer .. => "an integer"
-  | .float .. => "a float"
-  | .boolean .. => "a boolean"
-  | .dateTime .. => "a date-time"
-  | .array .. => "an array"
-  | .table .. => "a table"
-
-/-- Reports every key of a table outside `known`. -/
-private def tomlCheckKeys (context : String) (known : List String) (t : Lake.Toml.Table) :
-    TomlM Unit := do
-  for (k, v) in t.items do
-    unless known.contains (tomlKey k) do
-      tomlProblem v.ref s!"unknown key '{tomlKey k}' in {context}"
+/-- A natural-number field of an object, or zero. -/
+private def jsonNat (j : Lean.Json) (key : String) : Nat :=
+  (j.getObjValAs? Nat key).toOption.getD 0
 
 /--
-A filter's text and the position of its string's opening delimiter in `errata.toml`. When the
-string's token decodes to the text, `positions?` holds the line and column of each of the text's
-characters, then of the closing delimiter.
+The distinct targets that the settings of a profile in `config.json` and of its overrides need, each
+with the line and column of its name in `errata.toml`.
 -/
-private structure TomlFilter where
-  text : String
-  line : Nat
-  col : Nat
-  positions? : Option (Array (Nat × Nat)) := none
+private def neededTargets (profile : Lean.Json) : Array (String × Nat × Nat) := Id.run do
+  let overrides := match profile.getObjValD "override" with
+    | .arr os => os
+    | _ => #[]
+  let mut out := #[]
+  for scope in #[profile] ++ overrides do
+    for (_, v) in jsonFields (scope.getObjValD "settings") do
+      if let .ok tgt := v.getObjValAs? String "needs" then
+        unless out.any (·.1 == tgt) do out := out.push (tgt, jsonNat v "line", jsonNat v "col")
+  return out
 
-/-- The value of a setting: a string, or the Lake target whose result is its value. -/
-private inductive TomlSetting where
-  | value (s : String)
-  | needs (tgt : String) (ref : Lean.Syntax)
-
-/-- A per-test override of a profile. -/
-private structure TomlOverride where
-  filter : TomlFilter
-  timeoutMs? : Option Nat := none
-  fixtureTimeoutMs? : Option Nat := none
-  gracePeriodMs? : Option Nat := none
-  slowAfterMs? : Option Nat := none
-  updateGolden? : Option Bool := none
-  settings : Array (String × TomlSetting) := #[]
-
-/-- A profile, as the file gives it and, after inheritance, with its ancestors' values merged. -/
-private structure TomlProfile where
+/-- A test executable that `errata.toml` adds, as `config.json` records it. -/
+private structure AddedExecutable where
   name : String
-  ref : Lean.Syntax := .missing
-  inherits? : Option (String × Lean.Syntax) := none
-  timeoutMs? : Option Nat := none
-  fixtureTimeoutMs? : Option Nat := none
-  gracePeriodMs? : Option Nat := none
-  slowAfterMs? : Option Nat := none
-  jobs? : Option Nat := none
-  updateGolden? : Option Bool := none
-  settings : Array (String × TomlSetting) := #[]
-  overrides : Array TomlOverride := #[]
-  defaultFilter? : Option TomlFilter := none
-
-/-- A test executable that `[[executable]]` adds. -/
-private structure TomlExecutable where
-  name : String
-  ref : Lean.Syntax
   command : Array String
   cwd? : Option String
+  line : Nat
+  col : Nat
 
-/-- What `errata.toml` says, validated. -/
-private structure TomlConfig where
-  defaultFilter? : Option TomlFilter := none
-  executables : Array TomlExecutable := #[]
-  profiles : Array TomlProfile := #[]
-
-/-- The form of a duration, as the driver's and the runner's messages state it. -/
-private def tomlDurationForm : String :=
-  "one or more whole numbers, each followed by one of the units h, m, s, ms, used at most once \
-  each and in that order, such as 90s, 10m, or 2m30s"
-
-/-- The units of a duration, in the order they are written, each with its length in milliseconds. -/
-private def tomlDurationUnits : List (String × Nat) :=
-  [("h", 3600000), ("m", 60000), ("s", 1000), ("ms", 1)]
-
-/--
-A duration in milliseconds: a sequence of components such as `2m30s`, each a whole number followed
-by a unit, with the units `h`, `m`, `s`, and `ms` in that order and each at most once. Whitespace
-around it is ignored, as the runner ignores it.
--/
-private def tomlDurationMs? (s : String) : Option Nat := Id.run do
-  let mut cs := s.trimAscii.copy.toList
-  if cs.isEmpty then return none
-  let mut units := tomlDurationUnits
-  let mut total := 0
-  for _ in tomlDurationUnits do
-    if cs.isEmpty then break
-    let digits := cs.takeWhile Char.isDigit
-    let rest := cs.dropWhile Char.isDigit
-    let unit := String.ofList (rest.takeWhile Char.isAlpha)
-    match units.dropWhile (·.1 != unit) with
-    | (_, scale) :: later =>
-      if digits.isEmpty then return none
-      total := total + (String.ofList digits).toNat! * scale
-      units := later
-      cs := rest.dropWhile Char.isAlpha
-    | [] => return none
-  if cs.isEmpty then some total else none
-
-private def tomlDuration (key : String) (v : Lake.Toml.Value) (positive := false) :
-    TomlM (Option Nat) := do
-  match v with
-  | .string ref s =>
-    match tomlDurationMs? s with
-    | some ms =>
-      if positive && ms == 0 then
-        tomlProblem ref s!"'{key}' must be longer than zero"
-        return none
-      return some ms
-    | none =>
-      tomlProblem ref s!"'{key}' must be a duration of {tomlDurationForm}, and it is {s.quote}"
-      return none
-  | other =>
-    tomlProblem other.ref s!"'{key}' must be a duration string, and it is {tomlKind other}"
-    return none
-
-private def tomlString (key : String) (v : Lake.Toml.Value) : TomlM (Option String) := do
-  match v with
-  | .string _ s => return some s
-  | other =>
-    tomlProblem other.ref s!"'{key}' must be a string, and it is {tomlKind other}"
-    return none
-
-private def tomlBool (key : String) (v : Lake.Toml.Value) : TomlM (Option Bool) := do
-  match v with
-  | .boolean _ b => return some b
-  | other =>
-    tomlProblem other.ref s!"'{key}' must be a boolean, and it is {tomlKind other}"
-    return none
-
-/--
-Decodes a TOML string token by TOML's string rules, with the byte offset in the token where each
-decoded character starts, then the offset of the closing delimiter. Literal strings, `'…'` and
-`'''…'''`, hold their characters as written. Basic strings, `"…"` and `"""…"""`, decode the escapes
-`\b`, `\t`, `\n`, `\f`, `\r`, `\"`, `\\`, `\uXXXX`, and `\UXXXXXXXX`. Multi-line strings drop a
-newline right after their opening delimiter, and in multi-line basic strings a backslash followed by
-whitespace drops that whitespace and the newlines within it.
--/
-private def tomlStringOffsets (token : String) : Option (String × Array Nat) := Id.run do
-  let cs := token.toList.toArray
-  let bytes : Array Nat := cs.foldl (fun acc c => acc.push (acc.back! + c.utf8Size)) #[0]
-  let delim := if token.startsWith "'''" || token.startsWith "\"\"\"" then 3 else 1
-  let basic := token.startsWith "\""
-  if cs.size < 2 * delim then return none
-  let stop := cs.size - delim
-  let mut i := delim
-  if delim == 3 then
-    if cs[i]? == some '\n' then i := i + 1
-    else if cs[i]? == some '\r' && cs[i + 1]? == some '\n' then i := i + 2
-  let mut out := ""
-  let mut offsets : Array Nat := #[]
-  while i < stop do
-    let c := cs[i]!
-    if !basic || c != '\\' then
-      out := out.push c
-      offsets := offsets.push bytes[i]!
-      i := i + 1
-      continue
-    let some e := cs[i + 1]? | return none
-    let simple := [('b', '\x08'), ('t', '\t'), ('n', '\n'), ('f', '\x0C'), ('r', '\r'), ('"', '"'),
-      ('\\', '\\')]
-    if let some (_, d) := simple.find? (·.1 == e) then
-      out := out.push d
-      offsets := offsets.push bytes[i]!
-      i := i + 2
-    else if e == 'u' || e == 'U' then
-      let hex := cs.extract (i + 2) (i + 2 + if e == 'u' then 4 else 8)
-      unless hex.size == (if e == 'u' then 4 else 8) && hex.all Char.isHexDigit do return none
-      let digit (h : Char) :=
-        if h.isDigit then h.toNat - '0'.toNat else h.toLower.toNat - 'a'.toNat + 10
-      out := out.push (Char.ofNat (hex.foldl (fun n h => n * 16 + digit h) 0))
-      offsets := offsets.push bytes[i]!
-      i := i + 2 + hex.size
-    else if delim == 3 && e.isWhitespace then
-      i := i + 1
-      while i < stop && cs[i]!.isWhitespace do i := i + 1
-    else return none
-  return some (out, offsets.push bytes[stop]!)
-
-/--
-A filter string, with the position of its opening delimiter and, when its token decodes to the text
-that Lake read, the position of each of its characters.
--/
-private def tomlFilterOf (fileMap : Lean.FileMap) (key : String) (v : Lake.Toml.Value) :
-    TomlM (Option TomlFilter) := do
-  match v with
-  | .string ref text =>
-    let some start := ref.getPos? | return some { text, line := 0, col := 0 }
-    let p := fileMap.toPosition start
-    let positions? := do
-      let stop ← ref.getTailPos?
-      let token := ({ str := fileMap.source, startPos := start, stopPos := stop } : Substring.Raw)
-      let (decoded, offsets) ← tomlStringOffsets token.toString
-      guard (decoded == text)
-      return offsets.map fun o =>
-        let q := fileMap.toPosition ⟨start.byteIdx + o⟩
-        (q.line, q.column)
-    return some { text, line := p.line, col := p.column, positions? }
-  | other =>
-    tomlProblem other.ref s!"'{key}' must be a string, and it is {tomlKind other}"
-    return none
-
-/--
-The leaves of a settings table below the name `namePrefix`, each with its dotted name: every
-value other than a table, every table with the key `needs`, and every empty table. The other tables
-hold more of a name, and their leaves are named below it.
--/
-private partial def settingLeaves (namePrefix : String) (t : Lake.Toml.Table) :
-    Array (String × Lake.Toml.Value) :=
-  t.items.foldl (init := #[]) fun out (k, v) =>
-    let name := if namePrefix.isEmpty then tomlKey k else s!"{namePrefix}.{tomlKey k}"
-    match v with
-    | .table _ inner =>
-      if inner.items.isEmpty || (inner.find? `needs).isSome then out.push (name, v)
-      else out ++ settingLeaves name inner
-    | _ => out.push (name, v)
-
-/--
-The settings table. Settings' names are their fully qualified declaration names, written as quoted
-dotted keys (`"A.B.c" = …`), bare dotted keys, or keys in nested tables (`[….settings.A.B]` with
-`c = …`); `settingLeaves` flattens nested tables into dotted names. Each value is a string or
-`{ needs = "target" }`, with no coercion, and each name is given once.
--/
-private def tomlSettings (v : Lake.Toml.Value) : TomlM (Array (String × TomlSetting)) := do
-  let .table _ t := v
-    | tomlProblem v.ref s!"'settings' must be a table, and it is {tomlKind v}"
-      return #[]
-  let shape := "a string or { needs = \"target\" }"
-  let mut out := #[]
-  for (name, sv) in settingLeaves "" t do
-    match sv with
-    | .string ref s =>
-      if out.any (·.1 == name) then tomlProblem ref s!"the setting '{name}' is given twice"
-      else out := out.push (name, .value s)
-    | .table ref inner =>
-      match inner.find? `needs with
-      | some (.string r tgt) =>
-        if inner.items.size != 1 then
-          tomlProblem ref s!"the setting '{name}' must be {shape}, and its table has keys \
-            besides 'needs'"
-        else if out.any (·.1 == name) then tomlProblem ref s!"the setting '{name}' is given twice"
-        else out := out.push (name, .needs tgt r)
-      | some other =>
-        tomlProblem other.ref s!"'needs' must name a Lake target as a string, and it is \
-          {tomlKind other}"
-      | none =>
-        tomlProblem ref s!"the setting '{name}' must be {shape}, and it is an empty table"
-    | other =>
-      tomlProblem other.ref s!"the setting '{name}' must be {shape}, and it is {tomlKind other}"
-  return out
-
-/-- The keys of an override. -/
-private def overrideKeys : List String :=
-  ["filter", "timeout", "fixture-timeout", "grace-period", "slow-after", "update-golden", "settings"]
-
-private def tomlOverride (fileMap : Lean.FileMap) (profile : String) (v : Lake.Toml.Value) :
-    TomlM (Option TomlOverride) := do
-  let .table ref t := v
-    | tomlProblem v.ref s!"each override of the profile '{profile}' must be a table, and it is \
-        {tomlKind v}"
-      return none
-  tomlCheckKeys s!"an override of the profile '{profile}'" overrideKeys t
-  let some filterValue := t.find? `filter
-    | tomlProblem ref s!"an override of the profile '{profile}' needs a 'filter'"
-      return none
-  let some filter ← tomlFilterOf fileMap "filter" filterValue | return none
-  let mut o : TomlOverride := { filter }
-  if let some x := t.find? `timeout then o := { o with timeoutMs? := ← tomlDuration "timeout" x true }
-  if let some x := t.find? `«fixture-timeout» then
-    o := { o with fixtureTimeoutMs? := ← tomlDuration "fixture-timeout" x true }
-  if let some x := t.find? `«grace-period» then
-    o := { o with gracePeriodMs? := ← tomlDuration "grace-period" x }
-  if let some x := t.find? `«slow-after» then
-    o := { o with slowAfterMs? := ← tomlDuration "slow-after" x }
-  if let some x := t.find? `«update-golden» then
-    o := { o with updateGolden? := ← tomlBool "update-golden" x }
-  if let some x := t.find? `settings then o := { o with settings := ← tomlSettings x }
-  return some o
-
-/-- The keys of a profile. -/
-private def profileKeys : List String :=
-  ["inherits", "timeout", "fixture-timeout", "grace-period", "slow-after", "jobs", "update-golden",
-    "settings", "override", "default-filter"]
-
-private def tomlProfile (fileMap : Lean.FileMap) (name : String) (v : Lake.Toml.Value) :
-    TomlM (Option TomlProfile) := do
-  let .table ref t := v
-    | tomlProblem v.ref s!"the profile '{name}' must be a table, and it is {tomlKind v}"
-      return none
-  tomlCheckKeys s!"the profile '{name}'" profileKeys t
-  let mut p : TomlProfile := { name, ref }
-  if let some x := t.find? `inherits then
-    if let some parent ← tomlString "inherits" x then p := { p with inherits? := some (parent, x.ref) }
-  if let some x := t.find? `timeout then p := { p with timeoutMs? := ← tomlDuration "timeout" x true }
-  if let some x := t.find? `«fixture-timeout» then
-    p := { p with fixtureTimeoutMs? := ← tomlDuration "fixture-timeout" x true }
-  if let some x := t.find? `«grace-period» then
-    p := { p with gracePeriodMs? := ← tomlDuration "grace-period" x }
-  if let some x := t.find? `«slow-after» then
-    p := { p with slowAfterMs? := ← tomlDuration "slow-after" x }
-  if let some x := t.find? `jobs then
-    match x with
-    | .integer _ n =>
-      if n > 0 then p := { p with jobs? := some n.toNat }
-      else tomlProblem x.ref s!"'jobs' must be a positive integer, and it is {n}"
-    | other => tomlProblem other.ref s!"'jobs' must be a positive integer, and it is {tomlKind other}"
-  if let some x := t.find? `«update-golden» then
-    p := { p with updateGolden? := ← tomlBool "update-golden" x }
-  if let some x := t.find? `settings then p := { p with settings := ← tomlSettings x }
-  if let some x := t.find? `override then
-    match x with
-    | .array _ items =>
-      let mut overrides := #[]
-      for item in items do
-        if let some o ← tomlOverride fileMap name item then overrides := overrides.push o
-      p := { p with overrides }
-    | other =>
-      tomlProblem other.ref s!"'override' must be an array of tables, written [[profile.{name}.override]], \
-        and it is {tomlKind other}"
-  if let some x := t.find? `«default-filter» then
-    p := { p with defaultFilter? := ← tomlFilterOf fileMap "default-filter" x }
-  return some p
-
-private def tomlExecutable (v : Lake.Toml.Value) : TomlM (Option TomlExecutable) := do
-  let .table ref t := v
-    | tomlProblem v.ref s!"each [[executable]] must be a table, and it is {tomlKind v}"
-      return none
-  tomlCheckKeys "an [[executable]]" ["name", "command", "cwd"] t
-  let name? ← match t.find? `name with
-    | some x => tomlString "name" x
-    | none =>
-      tomlProblem ref "an [[executable]] needs a 'name'"
-      pure none
-  let command? ← match t.find? `command with
-    | some (.array r items) =>
-      let mut words := #[]
-      let mut ok := true
-      for item in items do
-        match item with
-        | .string _ s => words := words.push s
-        | other =>
-          tomlProblem other.ref s!"each word of 'command' must be a string, and this one is \
-            {tomlKind other}"
-          ok := false
-      if words.isEmpty && ok then
-        tomlProblem r "'command' must have at least one word"
-        pure none
-      else pure (if ok then some words else none)
-    | some other =>
-      tomlProblem other.ref s!"'command' must be an array of strings, and it is {tomlKind other}"
-      pure none
-    | none =>
-      tomlProblem ref "an [[executable]] needs a 'command'"
-      pure none
-  let cwd? ← match t.find? `cwd with
-    | some x => tomlString "cwd" x
-    | none => pure none
-  let some name := name? | return none
-  let some command := command? | return none
-  return some { name, ref, command, cwd? }
-
-/--
-Applies inheritance: each profile gets its ancestors' values, the nearer ancestor winning per key,
-settings merged per setting, and overrides concatenated with the ancestors' first. `default` is the
-root, which every other profile inherits from unless it names another. The result always has
-`default`.
--/
-private def tomlInherit (profiles : Array TomlProfile) : TomlM (Array TomlProfile) := do
-  let profiles :=
-    if profiles.any (·.name == "default") then profiles else #[{ name := "default" }] ++ profiles
-  let find (name : String) := profiles.find? (·.name == name)
-  let mut out := #[]
-  for p in profiles do
-    if p.name == "default" then
-      if let some (_, r) := p.inherits? then
-        tomlProblem r "the profile 'default' is the root, and it inherits from no other profile"
-    -- The chain from the profile up to the root, nearest first.
-    let mut chain := #[p]
-    let mut cur := p
-    let mut broken := false
-    repeat
-      if cur.name == "default" then break
-      let parentName := (cur.inherits?.map (·.1)).getD "default"
-      let some parent := find parentName
-        | if let some (_, r) := cur.inherits? then
-            if cur.name == p.name then
-              tomlProblem r s!"the profile '{cur.name}' inherits from '{parentName}', which is not a profile"
-          broken := true
-          break
-      if chain.any (·.name == parent.name) then
-        if let some (_, r) := p.inherits? then
-          let names := (chain.map (·.name)).toList ++ [parent.name]
-          tomlProblem r s!"the profiles inherit in a cycle: {" → ".intercalate names}"
-        broken := true
-        break
-      chain := chain.push parent
-      cur := parent
-    if broken then continue
-    -- The root first, so each nearer profile's values replace the farther ones'.
-    let merged := chain.reverse.foldl (init := ({ name := p.name, ref := p.ref } : TomlProfile))
-      fun acc q => {
-        acc with
-        timeoutMs? := q.timeoutMs? <|> acc.timeoutMs?
-        fixtureTimeoutMs? := q.fixtureTimeoutMs? <|> acc.fixtureTimeoutMs?
-        gracePeriodMs? := q.gracePeriodMs? <|> acc.gracePeriodMs?
-        slowAfterMs? := q.slowAfterMs? <|> acc.slowAfterMs?
-        jobs? := q.jobs? <|> acc.jobs?
-        updateGolden? := q.updateGolden? <|> acc.updateGolden?
-        settings := q.settings.foldl (init := acc.settings) fun s (k, v) =>
-          (s.filter (·.1 != k)).push (k, v)
-        overrides := acc.overrides ++ q.overrides
-        defaultFilter? := q.defaultFilter? <|> acc.defaultFilter?
-      }
-    out := out.push merged
-  return out
-
-/-- Validates the whole of `errata.toml`. -/
-private def tomlConfig (fileMap : Lean.FileMap) (t : Lake.Toml.Table) : TomlM TomlConfig := do
-  tomlCheckKeys "errata.toml" ["default-filter", "executable", "profile"] t
-  let mut config : TomlConfig := {}
-  if let some x := t.find? `«default-filter» then
-    config := { config with defaultFilter? := ← tomlFilterOf fileMap "default-filter" x }
-  if let some x := t.find? `executable then
-    match x with
-    | .array _ items =>
-      let mut exes : Array TomlExecutable := #[]
-      for item in items do
-        if let some e ← tomlExecutable item then
-          if exes.any (·.name == e.name) then
-            tomlProblem e.ref s!"the [[executable]] name '{e.name}' is used more than once"
-          else exes := exes.push e
-      config := { config with executables := exes }
-    | other =>
-      tomlProblem other.ref s!"'executable' must be an array of tables, written [[executable]], and \
-        it is {tomlKind other}"
-  if let some x := t.find? `profile then
-    match x with
-    | .table _ profiles =>
-      let mut ps := #[]
-      for (k, v) in profiles.items do
-        if let some p ← tomlProfile fileMap (tomlKey k) v then ps := ps.push p
-      config := { config with profiles := ← tomlInherit ps }
-    | other =>
-      tomlProblem other.ref s!"'profile' must be a table of profiles, written [profile.NAME], and it \
-        is {tomlKind other}"
-  if config.profiles.isEmpty then config := { config with profiles := #[{ name := "default" }] }
-  return config
-
-/-- A problem as `errata.toml:LINE:COL: message`. -/
-private def renderTomlProblem (fileMap : Lean.FileMap) (p : TomlProblem) : String :=
-  match p.ref.getPos? with
-  | some pos =>
-    let q := fileMap.toPosition pos
-    s!"errata.toml:{q.line}:{q.column}: {p.msg}"
-  | none => s!"errata.toml: {p.msg}"
-
-/--
-The elaborated configuration file: what it says, its text, and the build specification of each
-distinct target that a `{ needs = … }` setting names.
--/
-private structure ErrataToml where
-  config : TomlConfig := {}
-  text : String := ""
-  fileMap : Lean.FileMap := default
-  needs : Array (String × BuildSpec) := #[]
-
-/--
-Reads, validates, and elaborates `errata.toml` in the root package's directory, when there is one.
-The result is the elaborated file, or every problem found, each at its position.
--/
-private def loadErrataToml (ws : Workspace) : IO (Except (Array String) ErrataToml) := do
-  let path := ws.root.dir / "errata.toml"
-  unless ← path.pathExists do return .ok {}
-  let text ← IO.FS.readFile path
-  -- TOML's grammar has no byte-order mark, and some editors write one.
-  let text := (text.dropPrefix? "﻿").map (·.copy) |>.getD text
-  let ictx := Lean.Parser.mkInputContext text "errata.toml"
-  let table ← match ← (Lake.Toml.loadToml ictx).toBaseIO with
-    | .ok t => pure t
-    | .error log => return .error (← log.toList.toArray.mapM fun m => m.toString)
-  let (config, problems) := (tomlConfig ictx.fileMap table).run #[]
-  let mut problems := problems
-  -- Each target that a setting needs is resolved now, so that an unknown target is reported before
-  -- anything is built.
-  let mut needs : Array (String × BuildSpec) := #[]
-  let settingsOf (p : TomlProfile) := p.settings ++ p.overrides.flatMap (·.settings)
-  for p in config.profiles do
-    for (_, s) in settingsOf p do
-      let .needs tgt ref := s | continue
-      if needs.any (·.1 == tgt) then continue
-      match ← (parseTargetSpec ws tgt).toBaseIO with
-      | .error e => problems := problems.push ⟨ref, s!"the target '{tgt}' cannot be built: {e}"⟩
-      | .ok specs =>
-        match specs[0]?, specs.size with
-        | some spec, 1 => needs := needs.push (tgt, spec)
-        | _, n => problems := problems.push ⟨ref, s!"the target '{tgt}' names {n} build results, \
-            and a setting needs exactly one"⟩
-  unless problems.isEmpty do
-    let sorted := problems.qsort fun a b =>
-      (a.ref.getPos?.map (·.byteIdx)).getD 0 < (b.ref.getPos?.map (·.byteIdx)).getD 0
-    return .error (sorted.map (renderTomlProblem ictx.fileMap))
-  return .ok { config, text, fileMap := ictx.fileMap, needs }
-
-/-- A filter's text and position as the runner's configuration holds them. -/
-private def filterJson (f : TomlFilter) : Lean.Json :=
-  Lean.Json.mkObj <| [("text", Lean.Json.str f.text), ("file", Lean.Json.str "errata.toml"),
-    ("line", Lean.toJson f.line), ("col", Lean.toJson f.col)] ++
-    (f.positions?.map fun ps => [("positions", Lean.toJson ps)]).getD []
-
-/--
-Settings as JSON, each `{ needs = … }` replaced by the target's result. Settings whose targets
-were not built for this run are left out.
--/
-private def settingsJson (needs : Array (String × String)) (s : Array (String × TomlSetting)) :
-    Lean.Json :=
-  Lean.Json.mkObj <| s.toList.filterMap fun (k, v) =>
-    match v with
-    | .value s => some (k, Lean.Json.str s)
-    | .needs tgt _ => (needs.find? (·.1 == tgt)).map fun (_, path) => (k, Lean.Json.str path)
-
-/-- The targets that a profile's settings and its overrides' settings need. -/
-private def TomlProfile.neededTargets (p : TomlProfile) : Array String :=
-  (p.settings ++ p.overrides.flatMap (·.settings)).filterMap fun (_, s) =>
-    match s with
-    | .needs tgt _ => some tgt
-    | .value _ => none
+/-- The test executables that `errata.toml` adds, from `config.json`. -/
+private def addedExecutables (config : Lean.Json) : Array AddedExecutable :=
+  match config.getObjValD "executables" with
+  | .arr es => es.filterMap fun e => do
+    let name ← (e.getObjValAs? String "name").toOption
+    let command ← (e.getObjValAs? (Array String) "command").toOption
+    return { name, command, cwd? := (e.getObjValAs? String "cwd").toOption,
+             line := jsonNat e "line", col := jsonNat e "col" }
+  | _ => #[]
 
 /--
 The profile that the runner's arguments select with `--profile NAME` or `--profile=NAME`, the last
@@ -844,35 +357,18 @@ private def selectedProfile (runnerArgs : List String) : String := Id.run do
     | [] => break
   return profile
 
-/-- A field that is present only when the value is. -/
-private def optJson [Lean.ToJson α] (key : String) : Option α → List (String × Lean.Json)
-  | some v => [(key, Lean.toJson v)]
-  | none => []
-
-private def profileJson (needs : Array (String × String)) (p : TomlProfile) : Lean.Json :=
-  let overrideJson (o : TomlOverride) : Lean.Json := Lean.Json.mkObj <|
-    [("filter", filterJson o.filter)] ++ optJson "timeout-ms" o.timeoutMs? ++
-    optJson "fixture-timeout-ms" o.fixtureTimeoutMs? ++ optJson "grace-period-ms" o.gracePeriodMs? ++
-    optJson "slow-after-ms" o.slowAfterMs? ++ optJson "update-golden" o.updateGolden? ++
-    [("settings", settingsJson needs o.settings)]
-  Lean.Json.mkObj <|
-    optJson "timeout-ms" p.timeoutMs? ++ optJson "fixture-timeout-ms" p.fixtureTimeoutMs? ++
-    optJson "grace-period-ms" p.gracePeriodMs? ++ optJson "slow-after-ms" p.slowAfterMs? ++
-    optJson "jobs" p.jobs? ++ optJson "update-golden" p.updateGolden? ++
-    [("settings", settingsJson needs p.settings),
-      ("override", Lean.Json.arr (p.overrides.map overrideJson))] ++
-    (match p.defaultFilter? with | some f => [("default-filter", filterJson f)] | none => [])
-
 /--
-The configuration that the driver writes for the runner, as JSON, with the libraries' test
-executables and the executables `tomlExes` that `errata.toml` adds. `partialSelection` says that the
-command line named the libraries or executables to test.
+What the workspace contributes to the run, `.lake/errata/workspace.json`, as JSON: the path of each
+needed target's result, the libraries' test executables and the executables `added` that
+`errata.toml` adds, the directory of Errata's sources, the driver's warnings, and the command that
+the runner's options follow. `partialSelection` says that the command line named the libraries or
+executables to test.
 -/
-private def configJson (executables : Array (String × System.FilePath)) (cwd : System.FilePath)
-    (errataDir : String) (warnings : Array String) (invocation : String) (toml : ErrataToml)
-    (tomlExes : Array TomlExecutable) (needs : Array (String × String))
+private def workspaceJson (needs : Array (String × String))
+    (executables : Array (String × System.FilePath)) (added : Array AddedExecutable)
+    (cwd : System.FilePath) (errataDir : String) (warnings : Array String) (invocation : String)
     (partialSelection : Bool) : Lean.Json :=
-  let tomlExes := tomlExes.map fun e =>
+  let added := added.map fun e =>
     Lean.Json.mkObj [("name", Lean.Json.str e.name),
       ("command", Lean.Json.arr (e.command.map Lean.Json.str)),
       ("cwd", Lean.Json.str (match e.cwd? with
@@ -880,19 +376,15 @@ private def configJson (executables : Array (String × System.FilePath)) (cwd : 
         | none => cwd.toString))]
   Lean.Json.mkObj <| [
     ("protocol", Lean.toJson (1 : Nat)),
+    ("needs", Lean.Json.mkObj (needs.toList.map fun (tgt, path) => (tgt, Lean.Json.str path))),
     ("executables", Lean.Json.arr <| (executables.map fun (name, path) =>
       Lean.Json.mkObj [("name", Lean.Json.str name),
         ("command", Lean.Json.arr #[Lean.Json.str path.toString]),
-        ("cwd", Lean.Json.str cwd.toString)]) ++ tomlExes),
+        ("cwd", Lean.Json.str cwd.toString)]) ++ added),
     ("errataDir", Lean.Json.str errataDir),
     ("warnings", Lean.toJson warnings),
-    ("invocation", Lean.Json.str invocation),
-    ("profiles", Lean.Json.mkObj (toml.config.profiles.toList.map fun p =>
-      (p.name, profileJson needs p)))
-  ] ++ (match toml.config.defaultFilter? with
-    | some f => [("default-filter", filterJson f)]
-    | none => []) ++
-    (if partialSelection then [("partial-selection", Lean.Json.bool true)] else [])
+    ("invocation", Lean.Json.str invocation)
+  ] ++ (if partialSelection then [("partial-selection", Lean.Json.bool true)] else [])
 
 /--
 How the Errata driver (the `Errata.run` script in this file) should be invoked: the command that
@@ -995,15 +487,66 @@ script run (args) do
       IO.eprintln s!"error: {msg}"
       IO.eprintln (usage run withArgs)
       return 1
-  -- The configuration file is checked before anything is built, so that a mistake in it ends
-  -- Discovery at once.
-  let toml ← match ← loadErrataToml ws with
-    | .ok toml => pure toml
-    | .error problems =>
-      for p in problems do IO.eprintln p
-      IO.eprintln s!"error: {ws.root.dir / "errata.toml"} has {problems.size} \
-        {if problems.size == 1 then "problem" else "problems"}"
+  -- The configuration file is elaborated before the tests are built, so that a mistake in it ends
+  -- Discovery at once. Lake writes `config.json` again only when `errata.toml` or `errata-config`
+  -- changes. A failed build is silent, so the problems that `errata-config` reports are relayed.
+  let some configExe := self.findLeanExe? `«errata-config»
+    | IO.eprintln "error: the package that defines the Errata driver has no errata-config"
       return 1
+  let tomlPath := ws.root.dir / "errata.toml"
+  let errataOut := ws.root.dir / defaultLakeDir / "errata"
+  let configFile := errataOut / "config.json"
+  let configProblems ← IO.mkRef ""
+  let elaborated ←
+    try
+      discard <| runBuild do
+        (← configExe.exe.fetch).mapM fun exePath => do
+          addPureTrace (← if ← tomlPath.pathExists then IO.FS.readFile tomlPath else pure "")
+            "errata.toml"
+          buildFileUnlessUpToDate' (text := true) configFile do
+            let out ← IO.Process.output
+              { cmd := exePath.toString, args := #[tomlPath.toString, configFile.toString] }
+            unless out.exitCode == 0 do
+              configProblems.set (out.stdout ++ out.stderr)
+              error "errata-config reported problems"
+      pure true
+    catch _ => pure false
+  unless elaborated do
+    let problems ← configProblems.get
+    if problems.isEmpty then IO.eprintln s!"error: {configFile} could not be written"
+    else IO.eprint problems
+    return 1
+  let config ← match Lean.Json.parse (← IO.FS.readFile configFile) with
+    | .ok j => pure j
+    | .error e =>
+      IO.eprintln s!"error: {configFile} is not JSON: {e}"
+      return 1
+  let added := addedExecutables config
+  -- The targets that the selected profile's settings need are resolved before anything else is
+  -- built, so that an unknown target ends Discovery at once. The `list` subcommand resolves no
+  -- setting, so it needs no target.
+  let wanted :=
+    if args.head? == some "list" then #[]
+    else neededTargets ((config.getObjValD "profiles").getObjValD (selectedProfile runnerArgs))
+  let mut needed : Array (String × BuildSpec) := #[]
+  let mut targetProblems : Array String := #[]
+  for (tgt, line, col) in wanted do
+    match ← (parseTargetSpec ws tgt).toBaseIO with
+    | .error e =>
+      targetProblems := targetProblems.push
+        s!"errata.toml:{line}:{col}: the target '{tgt}' cannot be built: {e}"
+    | .ok specs =>
+      match specs[0]?, specs.size with
+      | some spec, 1 => needed := needed.push (tgt, spec)
+      | _, n =>
+        let msg := s!"errata.toml:{line}:{col}: the target '{tgt}' names {n} build results, and a \
+          setting needs exactly one"
+        targetProblems := targetProblems.push msg
+  unless targetProblems.isEmpty do
+    for p in targetProblems do IO.eprintln p
+    IO.eprintln s!"error: {tomlPath} has {targetProblems.size} \
+      {if targetProblems.size == 1 then "problem" else "problems"}"
+    return 1
   -- The phases are named as they begin at a verbosity that shows passes, which these runner flags
   -- select.
   let verbose := runnerArgs.any fun a =>
@@ -1014,10 +557,10 @@ script run (args) do
   -- Names on the command line may name test executables that `errata.toml` adds. With no names,
   -- every such executable runs.
   let selecting := !libNames.isEmpty
-  let tomlExes :=
-    if selecting then toml.config.executables.filter (libNames.contains ·.name)
-    else toml.config.executables
-  let libNames := libNames.filter fun n => !tomlExes.any (·.name == n)
+  let addedExes :=
+    if selecting then added.filter (libNames.contains ·.name)
+    else added
+  let libNames := libNames.filter fun n => !addedExes.any (·.name == n)
   -- Search the named libraries, or every library in the package by default. A name may be a bare
   -- `Library` in this package or a `package/Library` reaching into a dependency, following Lake's
   -- target syntax.
@@ -1101,32 +644,25 @@ script run (args) do
     if (testLibs.filter (·.1.name == lib.name)).size > 1 then s!"{lib.pkg.prettyName}/{name}"
     else name
   -- Executables that the configuration file adds are named apart from the libraries' executables.
-  for e in toml.config.executables do
+  for e in added do
     if testLibs.any (exeName ·.1 == e.name) then
-      IO.eprintln (renderTomlProblem toml.fileMap
-        ⟨e.ref, s!"the [[executable]] name '{e.name}' is the name of a library's test executable"⟩)
+      IO.eprintln s!"errata.toml:{e.line}:{e.col}: the [[executable]] name '{e.name}' is the name \
+        of a library's test executable"
       return 1
-  -- Build the test executables, the runner, and every target that a setting of the selected profile
-  -- needs, then the runner's configuration. Lake rebuilds the configuration when `errata.toml`, the
-  -- discovery results, the executables, or a needed target change: each needed target's trace flows
-  -- into the continuation that writes the file. The `list` subcommand resolves no setting, so it
-  -- builds no needed target.
-  let wanted :=
-    if args.head? == some "list" then #[]
-    else match toml.config.profiles.find? (·.name == selectedProfile runnerArgs) with
-      | some p => p.neededTargets
-      | none => #[]
-  let needed := toml.needs.filter (wanted.contains ·.1)
   -- Test executables find Errata's shell harness in the directory of Errata's sources.
   let errataDir ← match self.findLeanLib? `Errata with
     | some lib => IO.FS.realPath lib.srcDir
     | none => IO.FS.realPath self.dir
   let rootDir ← IO.FS.realPath ws.root.dir
-  let configFile := ws.root.dir / defaultLakeDir / "errata" / "config.json"
+  let workspaceFile := errataOut / "workspace.json"
   let some runnerExe := self.findLeanExe? `«errata-runner»
     | IO.eprintln "error: the package that defines the Errata driver has no errata-runner"
       return 1
-  let (configPath, runnerPath) ← runBuild do
+  -- Build the test executables, the runner, and every target that a setting of the selected profile
+  -- needs, then `workspace.json`. Lake writes it again when `config.json`, the discovery results,
+  -- the executables, or a needed target change: each needed target's trace flows into the
+  -- continuation that writes the file.
+  let runnerPath ← runBuild do
     let exeJobs ← testLibs.mapM fun (lib, _) => (lib.facet `errataExe).fetch
     let runnerJob ← runnerExe.exe.fetch
     let needJobs ← needed.mapM fun (_, spec) => spec.query .text
@@ -1138,19 +674,20 @@ script run (args) do
           executables := executables.push (exeName lib, ← IO.FS.realPath path)
         let needs := needed.zipWith (fun (tgt, _) value => (tgt, value)) needValues
         -- Tests run from the root package's directory, where `lake test` runs.
-        let content := (configJson executables rootDir errataDir.toString driverWarnings
-          s!"{withArgs} --test-options" toml tomlExes needs selecting).pretty ++ "\n"
-        addPureTrace toml.text "errata.toml"
-        addPureTrace content "Errata runner configuration"
-        buildFileUnlessUpToDate' (text := true) configFile do
-          if let some parent := configFile.parent then IO.FS.createDirAll parent
-          IO.FS.writeFile configFile content
-        return (configFile, runnerPath)
+        let content := (workspaceJson needs executables addedExes rootDir errataDir.toString
+          driverWarnings s!"{withArgs} --test-options" selecting).pretty ++ "\n"
+        addPureTrace (← IO.FS.readFile configFile) "config.json"
+        addPureTrace content "workspace.json"
+        buildFileUnlessUpToDate' (text := true) workspaceFile do
+          IO.FS.createDirAll errataOut
+          IO.FS.writeFile workspaceFile content
+        return runnerPath
   -- The runner's standard input is a lifeline that the driver holds, and `ERRATA_LIFELINE` asks the
   -- runner to end its tests when that pipe closes. The driver removes `LEAN_ABORT_ON_PANIC` from
   -- the runner's environment, and the runner sets it for every test executable.
   let child ← IO.Process.spawn {
-    cmd := runnerPath.toString, args := #[configPath.toString] ++ runnerArgs.toArray
+    cmd := runnerPath.toString
+    args := #[configFile.toString, workspaceFile.toString] ++ runnerArgs.toArray
     stdin := .piped
     env := #[("LEAN_ABORT_ON_PANIC", none), ("ERRATA_LIFELINE", some "1")]
   }
