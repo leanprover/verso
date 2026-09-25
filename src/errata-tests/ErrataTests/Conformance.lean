@@ -2236,8 +2236,8 @@ def runsUnderTheDefaultFileLimit : Test := do
     assertContains "300 passed, 0 failed" r.stdout
 
 /--
-A run whose standard output is a pipe prints its report's lines alone, even when its environment
-names a terminal type: its output has neither terminal sequences nor a running list.
+Runs whose standard output is a pipe print their report's lines alone, even when their environment
+names a terminal type: the output has neither terminal sequences nor a running list.
 -/
 @[test]
 def pipedRunHasNoProgressDisplay : Test := do
@@ -2284,7 +2284,7 @@ def runWithDisplay (tests : List String) : IO (Run × Progress.Frame × String) 
 /--
 The progress display of a run follows the dispatched events: the total is the number of tests that
 the run selects, every one of them completes, tests reported without a process count as failed,
-a fixture phase that failed is counted apart, and the display is erased before the summary.
+failed fixture phases are counted apart, and the display is erased before the summary.
 -/
 @[test]
 def progressDisplayFollowsTheRun : Test := do

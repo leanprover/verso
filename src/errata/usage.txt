@@ -52,8 +52,7 @@ Reporting:
   -vvv, --verbose-docs          Report every result and every test's docstring.
   --color WHEN                  Color the output: auto, always, or never (auto: on a terminal,
                                 unless NO_COLOR is set; CLICOLOR_FORCE forces it).
-  --hide-progress-bar           Print the report's lines alone, without the progress display that a
-                                terminal gets. Run only.
+  --hide-progress-bar           Leave out the progress display on a terminal. Run only.
   -T, --message-format FORMAT   The format of the list: human, oneline, json, or json-pretty
                                 (human). List only.
   --junit PATH                  Write a JUnit XML report to PATH, in place of the profile's junit.

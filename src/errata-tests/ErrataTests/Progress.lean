@@ -25,13 +25,13 @@ def now : Nat := 10000000
 def entry (exe test : String) (agoMs : Nat) (path : Array String := #[]) : Errata.Progress.Entry :=
   { exe, test, path, startMs := now - agoMs }
 
-/-- The frame of the user's example: 125 of 852 tests completed, and two tests running. -/
+/-- A frame with 125 of 852 tests completed and two tests running. -/
 def example1 : Errata.Progress.Frame := {
   total := 852, completed := 125, passed := 123, failed := 2
   running := #[entry "VersoTests" "someMoreTest" 9000, entry "VersoTests" "testtesttest" 744000]
 }
 
-/-- The user's example renders to the count line with its bar and the running list. -/
+/-- The frame {name}`example1` renders to the count line with its bar and the running list. -/
 @[test]
 def rendersTheExample : Test := do
   assertBEq #[
@@ -143,7 +143,7 @@ def blockFitsTheRows : Test := do
   assertBEq 1 (Errata.Progress.render frame now 60 3 false (rows := 3)).size
   assertBEq 3 (Errata.Progress.render frame now 60 3 false (rows := 5)).size
 
-/-- A failed fixture phase shows on the count line, in the singular for one. -/
+/-- Failed fixture phases show on the count line, in the singular for one. -/
 @[test]
 def countsFailedFixtures : Test := do
   assertBEq "1/2 tests completed (1 passed, 0 failed, 1 fixture failed)"
@@ -153,9 +153,9 @@ def countsFailedFixtures : Test := do
     (Errata.Progress.countLine { total := 2, fixturesFailed := 2 } 60 false)
 
 /--
-A display writes its block, erases it above each printed line and draws it again below, and erases
-it for good when it is cleared, leaving the printed lines. It renders one column narrower than the
-terminal.
+The display writes its block, erases it above each printed line and draws it again below, and
+erases it for good when it is cleared, leaving the printed lines. It renders one column narrower
+than the terminal.
 -/
 @[test]
 def displayWritesItsBlock : Test := do
@@ -164,7 +164,7 @@ def displayWritesItsBlock : Test := do
     (size? := some { cols := 61 })
   d.start 2 3 (ticker := false)
   d.print "FAIL Lib x"
-  -- An entry that starts in the future shows an elapsed time of zero.
+  -- Entries that start in the future show an elapsed time of zero.
   let e : Errata.Progress.Entry := { exe := "Lib", test := "t", startMs := (← IO.monoMsNow) + now }
   d.update (·.start e)
   d.clear

@@ -6,8 +6,9 @@ Author: David Thrane Christiansen
 
 /-
 The progress display that the human report keeps below its printed lines on a terminal: the count
-line with its bar, then the running list. A frame holds what the display shows and renders to lines;
-a display owns the terminal, erasing and redrawing the block of lines as the run proceeds.
+line with its bar, then the running list. A frame holds what the display shows, and `render` turns
+it into lines. A display owns the terminal, and erases and redraws the block of lines as the run
+proceeds.
 -/
 module
 
@@ -53,7 +54,7 @@ def Entry.ofPlanned (p : Planned) (startMs : Nat) : Entry :=
 
 /-- What the progress display shows. -/
 structure Frame where
-  /-- The number of tests that the Run phase reports. -/
+  /-- The number of tests that the run selects. -/
   total : Nat := 0
   /-- The number of tests completed. -/
   completed : Nat := 0
@@ -72,9 +73,9 @@ def Frame.start (f : Frame) (e : Entry) : Frame :=
   { f with running := f.running.push e }
 
 /--
-Removes the entry with the given executable, name, and key from the running list. When
-{name}`passed?` holds a value, a test completed, and it counts as passed when the value is true and
-as failed otherwise. Fixture phases give no value and count in neither.
+Removes the entry with the given executable, name, and key from the running list. A value in
+{name}`passed?` marks a completed test, which counts as passed when the value is true and as failed
+when it is false. Fixture phases have no value and change no count.
 -/
 def Frame.finish (f : Frame) (exe test key : String) (passed? : Option Bool) : Frame :=
   let running := match f.running.findIdx? (fun e => e.exe == exe && e.test == test && e.key == key)
@@ -89,10 +90,10 @@ def Frame.finish (f : Frame) (exe test key : String) (passed? : Option Bool) : F
 /--
 The frame after a dispatched event, at {name}`nowMs` on the monotonic clock. Tests and fixture
 phases join the running list when they start and leave it when they end. {name}`fresh` holds the
-results that the event added to the run. A test that ends completes: it passed if all of these
-results passed, and failed otherwise. A fixture phase that ends counts among the failed fixture
-phases if any of them did not pass. Tests that the runner reports without starting a process start
-and end in the same way.
+results that the event added to the run. Tests that end are completed: they count as passed when
+all of these results passed, and as failed otherwise. Fixture phases that end count among the
+failed fixture phases when any of these results did not pass. Tests that the runner reports
+without starting a process also start and end through these events.
 -/
 def Frame.after (f : Frame) (ev : Event) (fresh : Array Result) (nowMs : Nat) : Frame :=
   match ev with
@@ -123,10 +124,10 @@ private def takeChars (n : Nat) (s : String) : String :=
   String.ofList (s.toList.take n)
 
 /--
-The count line: the tests completed out of the total, with those that passed and failed, and the
-failed fixture phases when there are any, then a space and the bar of {lit}`=` and spaces that fills
-the rest of {name}`width`, when at least {name}`minBarWidth` columns remain for it. When the counts
-alone are wider than {name}`width`, they are cut to it, uncolored.
+The count line: the tests completed out of the total, those that passed and those that failed, and
+the failed fixture phases when there are any. When at least {name}`minBarWidth` columns of
+{name}`width` remain, a space and a bar of {lit}`=` and spaces fill them. When the counts alone are
+wider than {name}`width`, they are cut to it, uncolored.
 -/
 def countLine (f : Frame) (width : Nat) (color : Bool) : String :=
   let fixturesWord := if f.fixturesFailed == 1 then "fixture failed" else "fixtures failed"
@@ -152,7 +153,7 @@ def countLine (f : Frame) (width : Nat) (color : Bool) : String :=
 /--
 The line of a running entry: a space, the executable padded to {name}`exeWidth`, two spaces, the
 name with its control characters escaped, and the time since the entry started in parentheses. When
-the line would be wider than {name}`width`, the name is shortened to fit, ending with {lit}`…`; when
+the line would be wider than {name}`width`, the name is shortened to fit, ending with {lit}`…`. When
 no room is left for the name, the whole line is cut to {name}`width`, uncolored.
 -/
 def runningLine (e : Entry) (nowMs width exeWidth : Nat) (color : Bool) : String :=
@@ -181,8 +182,9 @@ elapsed times are measured to, and {name}`exeWidth` is the width of the executab
 words are in the report's styles when {name}`color` is true; the bar has no color.
 
 When {name}`rows` is not zero, the display has at most {name}`rows` less two lines: the count line,
-{lit}`Running:`, and at most {name}`rows` less four entries. When more entries are running, the
-last line that fits reads {lit}`… and N more`, with the number of entries left out.
+{lit}`Running:`, and at most {name}`rows` less four entries. With fewer than four rows, it has as
+many of the first two lines as fit. When more entries are running than fit, the last line that
+fits reads {lit}`… and N more`, with the number of entries left out.
 -/
 def render (f : Frame) (nowMs width exeWidth : Nat) (color : Bool) (rows : Nat := 0) :
     Array String :=
@@ -215,9 +217,9 @@ structure DisplayState where
   frame : Frame := {}
   /-- Whether the display is drawn: from its start until it is cleared. -/
   live : Bool := false
-  /-- Whether clearing the display has ended it. -/
+  /-- Whether the display has been cleared, which ends it. -/
   ended : Bool := false
-  /-- Whether lines printed now leave the block undrawn until the batch that holds it ends. -/
+  /-- Whether a batch is running, which leaves the block undrawn until the batch ends. -/
   held : Bool := false
   /-- The number of lines of the block drawn last, which the next redraw erases. -/
   drawn : Nat := 0
@@ -241,7 +243,7 @@ structure Display where
   /-- The display's state, behind a lock. -/
   state : Std.Mutex DisplayState
 
-/-- How often a live display is redrawn, in milliseconds, so that the elapsed times advance. -/
+/-- The time in milliseconds between two redraws of the ticker, which advance the elapsed times. -/
 def tickMs : UInt32 := 1000
 
 /-- How many redraws of the ticker pass between two readings of the terminal's size. -/
@@ -249,8 +251,9 @@ def ticksPerSizeRead : Nat := 2
 
 /--
 The size of the terminal on standard output. The columns are {lit}`COLUMNS` when it is set to a
-positive number, and the rows are {lit}`LINES` when it is; otherwise both are what {lit}`stty size`
-reports for standard output. Without either, the size is 80 columns and unknown rows.
+positive number, and otherwise what {lit}`stty size` reports for standard output. The rows come
+from {lit}`LINES` or {lit}`stty size` in the same way. When neither gives a value, the columns are
+80 and the rows are unknown.
 -/
 def terminalSize : IO TerminalSize := do
   let fromEnv (name : String) : IO (Option Nat) := do
@@ -259,8 +262,9 @@ def terminalSize : IO TerminalSize := do
   let rows? ← fromEnv "LINES"
   if let (some cols, some rows) := (cols?, rows?) then return { rows, cols }
   let stty : TerminalSize ← try
-    -- `stty` reports the size of its standard input, which the shell makes the standard output
-    -- that the child inherits, and writes it to the piped standard error.
+    -- `stty` reports the size of its standard input to its standard output. The shell makes its
+    -- standard input the inherited standard output and its standard output the piped standard
+    -- error.
     let child ← IO.Process.spawn
       { cmd := "sh", args := #["-c", "stty size <&1 >&2"], stdin := .null, stdout := .inherit
         stderr := .piped }
@@ -286,9 +290,9 @@ def eraseText (n : Nat) : String :=
   if n == 0 then "" else s!"\x1b[{n}A\x1b[J"
 
 /--
-Erases the drawn block and writes {name}`text` in one write, followed by the block again when the
-display is live and no batch holds it. The block is rendered one column narrower than the terminal,
-so a terminal that narrows reflows no line of it.
+Writes {name}`text` in one write. While the display is live, the write first erases the drawn
+block, and it ends with the block drawn again when no batch is running. The block is rendered one
+column narrower than the terminal.
 -/
 private def Display.redraw (d : Display) (text : String) :
     Std.AtomicT DisplayState IO Unit := do
@@ -350,10 +354,11 @@ def Display.clear (d : Display) : IO Unit :=
       d.out.flush
 
 /--
-Draws the display with {name}`total` tests to complete and an executable column {name}`exeWidth`
-wide. When {name}`ticker` is true, a thread redraws the display every second until it is cleared,
-and reads the terminal's size every {name}`ticksPerSizeRead` seconds, outside the display's lock.
-After {name}`Display.clear`, starting draws nothing.
+Reads the terminal's size and draws the display with {name}`total` tests to complete and an
+executable column {name}`exeWidth` wide. When {name}`ticker` is true, a thread redraws the display
+every {name}`tickMs` milliseconds until it is cleared, and reads the terminal's size once every
+{name}`ticksPerSizeRead` redraws, outside the display's lock. After {name}`Display.clear`, starting
+draws nothing.
 -/
 def Display.start (d : Display) (total exeWidth : Nat) (ticker : Bool := true) : IO Unit := do
   d.readSize

@@ -178,8 +178,8 @@ deriving BEq
 
 /--
 The lifelines that the run holds after their invocations have ended, each the write end of an
-invocation's standard input, with what it serves. The processes that a setup or a prepare starts
-inherit its lifeline and end when it closes. A lifeline closes when it is released, and the run
+invocation's standard input, with what it serves. Processes that setups and prepares start inherit
+their lifelines and end when those close. Lifelines close when they are released, and the run
 closes those still held when it ends.
 -/
 structure Lifelines where
@@ -197,7 +197,7 @@ def Lifelines.hold (l : Lifelines) (owner : LifelineOwner) (h : IO.FS.Handle) : 
 def Lifelines.release (l : Lifelines) (owner : LifelineOwner) : BaseIO Unit :=
   l.held.atomically (modify (·.filter (·.1 != owner)))
 
-/-- Drops every held lifeline, which closes them; the run calls it when it ends. -/
+/-- Drops every held lifeline, which closes it. The run calls this when it ends. -/
 def Lifelines.closeAll (l : Lifelines) : BaseIO Unit :=
   l.held.atomically (set (#[] : Array (LifelineOwner × IO.FS.Handle)))
 
@@ -1070,7 +1070,8 @@ format. The Run phase runs the selected tests and the phases of the fixtures the
 scheduler directs, in inventory order as far as the fixtures' claims and the slots of the pool
 allow. The pool has the slots that {lit}`--jobs` or else the profile's {lit}`jobs` gives, or else
 one per CPU available to the runner. When {name}`progress?` gives a progress display, the run
-starts it as the Run phase begins, and the dispatcher keeps it up to date.
+starts it as the Run phase begins, and the dispatcher keeps it up to date. However the run ends, it
+closes the held lifelines and clears the progress display.
 -/
 def execute (config : Config) (opts : Options) (sinks : Sinks)
     (registry : Option Registry := none) (color : Bool := false)

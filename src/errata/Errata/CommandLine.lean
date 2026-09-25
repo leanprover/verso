@@ -294,7 +294,7 @@ def optionSpecs : Array OptionSpec := #[
     help := "Color the output: auto, always, or never (auto: on a terminal, unless NO_COLOR is \
       set; CLICOLOR_FORCE forces it)." },
   { long := "hide-progress-bar", commands := [.run], group := "Reporting"
-    help := "Print the report's lines alone, without the progress display that a terminal gets." },
+    help := "Leave out the progress display on a terminal." },
   { long := "message-format", short? := "-T", value? := "FORMAT", commands := [.list]
     group := "Reporting", help := "The format of the list: human, oneline, json, or json-pretty \
       (human)." },
