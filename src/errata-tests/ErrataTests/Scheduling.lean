@@ -78,6 +78,11 @@ def scenario (seed : UInt64) : Scenario := Id.run do
     let threads := 1 + draw seed [18, t] (pool + 2)
     let missing? := if chance seed [19, t] 10 then some s!"testSetting{t}" else none
     tests := tests.push { fixtures := uses, threads, missing? }
+  -- The queue is in a scheduling order drawn from a seed, grouped by the fixtures each test takes.
+  let keys := (List.range tests.size).toArray.map fun t =>
+    let closure := closureOf fixtures (tests[t]!.fixtures.map (·.1))
+    if closure.isEmpty then s!"test {t}" else s!"fixtures {closure}"
+  tests := (groupedOrder (draw seed [22] (2 ^ 32)) keys).map (tests[·]!)
   let cancelAt? := if chance seed [20] 8 then some (draw seed [21] 30) else none
   return { seed, pool, tests, fixtures, cancelAt? }
 
@@ -311,8 +316,9 @@ def violations (seed : UInt64) : List String := Id.run do
   return s.violations.toList
 
 /--
-The scheduler keeps its rules in random runs, cancelled ones and jobs that take no time included:
-no two exclusive users of a fixture overlap, no shared user overlaps an exclusive one, and exclusive
+The scheduler keeps its rules in random runs whose queues are in scheduling orders drawn from a
+seed, cancelled runs and jobs that take no time included: no two exclusive users of a fixture
+overlap, no shared user overlaps an exclusive one, and exclusive
 users claim a fixture in queue order; the slots in use never exceed the pool, and each grant is the
 request or the whole pool; each test is scheduled once or reported without running, unless the run
 is cancelled first, and runs after its prepares; setups end before their fixtures' users and the
@@ -425,6 +431,45 @@ def doomedTestsSetNothingUp : Test := do
   assertBEq #[Command.spawn (.setup 0) 1 #[]] cmds
   let (_, cmds) := step s (.exited (.setup 0) false)
   assertBEq #[Command.skip (.test 0) (.fixtureFailed 0 .setup), .spawn (.teardown 0) 1 #[]] cmds
+
+/--
+The group keys of twenty tests over three fixtures `A`, `B`, and `C`: some take one fixture, some
+take two, and those that take none each have a key of their own.
+-/
+def orderKeys : Array String :=
+  #["A", "none 1", "B", "A B", "C", "A", "none 6", "B C", "B", "A B", "C", "none 11", "A", "B C",
+    "C", "A B", "B", "none 17", "A", "C"]
+
+/-- Whether the tests with each key stand together in the order. -/
+def groupsContiguous (keys : Array String) (order : Array Nat) : Bool := Id.run do
+  let mut seen : Array String := #[]
+  for i in order do
+    let key := keys[i]!
+    if seen.back? != some key then
+      if seen.contains key then return false
+      seen := seen.push key
+  return true
+
+/--
+The scheduling order drawn from a seed is a permutation of the tests in which the tests of each
+group stand together. The same seed gives the same order and two seeds give different ones, and a
+test in a new group leaves the order of the others unchanged.
+-/
+@[test]
+def groupedOrderIsSeeded : Test := do
+  let one := groupedOrder 1 orderKeys
+  let two := groupedOrder 2 orderKeys
+  assertBEq one (groupedOrder 1 orderKeys)
+  assertTrue (one != two) s!"seeds 1 and 2 gave the same order {one}"
+  for (seed, order) in [(1, one), (2, two)] do
+    result s!"seed {seed}" do
+      assertBEq (List.range orderKeys.size) (order.qsort (· < ·)).toList
+      assertTrue (groupsContiguous orderKeys order) s!"a group is split in {order}"
+      -- A test in a new group, placed seventh in the inventory.
+      let added := groupedOrder seed (orderKeys.insertIdx! 7 "D")
+      let without := added.filterMap fun i =>
+        if i == 7 then none else some (if i > 7 then i - 1 else i)
+      assertBEq order without
 
 /-- Tests that receive a setting with another value than their fixtures did draw a warning. -/
 @[test]

@@ -1097,7 +1097,8 @@ executables that they ruled out, each when it is not zero.
 -/
 @[test]
 def skippedCounts : Test := do
-  let summary (r : Run) : String := r.lines.back?.getD ""
+  let summary (r : Run) : String :=
+    (r.lines.find? (·.trimAscii.copy.startsWith "Summary")).getD ""
   let exe := basic ["pass", "greets", "verdict-fail"]
   result "tests" do
     let r ← runWith #[exe] { nameFilters := #["pass"] }
@@ -1646,24 +1647,27 @@ def stampProblems (lines : Array String) : Array String × Bool := Id.run do
 def fileLines (path : System.FilePath) : IO (Array String) := do
   return ((← IO.FS.readFile path).splitOn "\n").toArray.filter (!·.isEmpty)
 
+/-- A configuration whose default profile starts tests in the order drawn from the run's seed. -/
+def seededOrder : Config := { profiles := #[{ name := "default", order? := some .shuffle }] }
+
 /--
-With two slots, the users of `stamped` alone among its users never overlap one another or its shared
-users, and its shared users run at the same time. The setup comes first, a prepare ends before each
-user starts, and the teardown comes last, once.
+The checks of `exclusiveUsersNeverOverlap` for the product {name}`p` in the order that
+{name}`config` gives, and whether the shared users overlap when {name}`sharedOverlap` is true.
 -/
-@[test]
-def exclusiveUsersNeverOverlap : Test := forEach products fun p => do
+def exclusiveUsersInOrder (p : Product) (config : Config) (sharedOverlap : Bool) : Test := do
   IO.FS.withTempDir fun dir => do
     let stamps := dir / "stamps"
     let fx := p.fixtures
     let r ← p.runTests (fx.exclusive ++ fx.shared)
-      { jobs? := some 2, sets := #[(fx.stampFile, stamps.toString)] }
+      { jobs? := some 2, sets := #[(fx.stampFile, stamps.toString)] } config
     for t in fx.exclusive ++ fx.shared do
       expectOutcome r t (· matches .reported .pass) "a pass"
     let lines ← fileLines stamps
     let (problems, overlapped) := stampProblems lines
-    assertTrue problems.isEmpty "users overlapped" (some ("\n".intercalate problems.toList))
-    assertTrue overlapped s!"the shared users ran one after the other: {lines}"
+    assertTrue problems.isEmpty s!"users overlapped under the seed {r.report.seed}"
+      (some ("\n".intercalate problems.toList))
+    if sharedOverlap then
+      assertTrue overlapped s!"the shared users ran one after the other: {lines}"
     assertBEq (some "setup") lines[0]?
     assertBEq (some "teardown") (lines.back?.bind fun l => (l.splitOn " ")[0]?)
     assertBEq 1 (lines.filter (·.startsWith "setup")).size
@@ -1680,6 +1684,17 @@ def exclusiveUsersNeverOverlap : Test := forEach products fun p => do
     result "the events file has the phases' outcomes" do
       assertTrue (r.events.any fun e => isEvent "outcome" (some ("kind", "fixture")) e &&
         strField e "test" == some fx.stamped) "no outcome of a fixture's phase"
+
+/--
+With two slots, the users of `stamped` alone among its users never overlap one another or its shared
+users, in the inventory's order and in an order drawn from a random run seed. In the inventory's
+order, where the shared users stand next to each other, they run at the same time. The setup comes
+first, a prepare ends before each user starts, and the teardown comes last, once.
+-/
+@[test]
+def exclusiveUsersNeverOverlap : Test := forEach products fun p => do
+  result "the inventory's order" (exclusiveUsersInOrder p {} true)
+  result "a seeded order" (exclusiveUsersInOrder p seededOrder false)
 
 /--
 If a setup fails, its fixture's users are reported as inconclusive without running, with the fixture
@@ -1975,6 +1990,121 @@ def cancelledRunTearsDown : Test := do
     let lines ← fileLines stamps
     assertTrue (lines.back? == some "teardown") s!"no teardown after the cancellation: {lines}"
     assertTrue (!(← json.pathExists)) "no report was written"
+
+/-! # The scheduling order -/
+
+/-- The tests of `basic.sh` that the checks of the scheduling order run, in the inventory's order. -/
+def orderTests : List String :=
+  ["pass", "exclusive-a", "silent", "records", "shared-a", "uses-dependent", "unknown-records",
+    "exclusive-b", "shared-b", "run-id", "greets", "verdict-fail"]
+
+/-- The tests of a run in the order their outcomes were reported, which is the order they started. -/
+def Run.testOrder (r : Run) : Array String :=
+  r.events.filterMap fun e =>
+    if isEvent "outcome" (some ("kind", "test")) e then strField e "test" else none
+
+/--
+Runs {name}`orderTests` with one slot and the given run seed, under the given configuration, with
+`stamped`'s file at {name}`stamps`.
+-/
+def runOrderTests (seed : Nat) (stamps : System.FilePath) (config : Config := {}) : IO Run :=
+  runWith #[basic orderTests] { seed := some seed, sets := #[("stamp-file", stamps.toString)] }
+    config
+
+/--
+Under `order = "shuffle"`, the run's seed draws the order in which tests start: two seeds give two
+orders, the same seed gives the same order, and the users of `stamped` stand together. The human
+report names the run's seed after its summary, and the events file's first record has it.
+-/
+@[test]
+def seedDrawsTheOrder : Test := IO.FS.withTempDir fun dir => do
+  let stamps := dir / "stamps"
+  let one ← runOrderTests 1 stamps seededOrder
+  let two ← runOrderTests 2 stamps seededOrder
+  let again ← runOrderTests 1 stamps seededOrder
+  for r in [one, two, again] do
+    assertBEq (orderTests.toArray.qsort (· < ·)) (r.testOrder.qsort (· < ·))
+    let users := r.testOrder.filterMap fun t =>
+      if ["exclusive-a", "exclusive-b", "shared-a", "shared-b"].contains t then some t else none
+    let first := r.testOrder.findIdx? (users.contains ·) |>.getD 0
+    assertTrue (users == r.testOrder.extract first (first + 4)) s!"split users: {r.testOrder}"
+  assertTrue (one.testOrder != two.testOrder) s!"seeds 1 and 2 gave one order: {one.testOrder}"
+  assertBEq one.testOrder again.testOrder
+  assertTrue (one.lines.any (·.trimAscii.copy == "Seed: 1")) s!"no seed line: {one.lines}"
+  assertTrue (two.lines.any (·.trimAscii.copy == "Seed: 2")) s!"no seed line: {two.lines}"
+  let summary := one.lines.findIdx? (·.trimAscii.copy.startsWith "Summary")
+  let seedLine := one.lines.findIdx? (·.trimAscii.copy.startsWith "Seed:")
+  assertBEq (summary.map (· + 1)) seedLine
+  assertBEq (some 1) (one.events[0]?.bind fun e => (e.getObjValAs? Nat "seed").toOption)
+
+/--
+Without `order`, and with `order = "default"`, tests start in the inventory's order whatever the
+run's seed.
+-/
+@[test]
+def defaultOrderIsTheInventorys : Test := IO.FS.withTempDir fun dir => do
+  let stamps := dir / "stamps"
+  let explicit : Config := { profiles := #[{ name := "default", order? := some .default }] }
+  for (name, seed, config) in [("no order", 1, {}), ("no order", 2, {}),
+      ("order = \"default\"", 2, explicit)] do
+    result s!"{name}, seed {seed}" do
+      let r ← runOrderTests seed stamps config
+      assertBEq orderTests.toArray r.testOrder
+
+/-- A JUnit report with its times removed. -/
+def withoutTimes (xml : String) : String :=
+  "time=\"\"".intercalate ((xml.splitOn "time=\"").mapIdx fun i part =>
+    if i == 0 then part else "\"".intercalate ((part.splitOn "\"").drop 1))
+
+/--
+The JUnit report lists the test cases in the inventory's order whatever order the tests ran and
+ended in: a run with four slots in the order of each of two seeds writes the file that a run with
+one slot in the inventory's order writes, apart from the times, with `stamped`'s setup before its
+first user, each prepare before its test, and the teardown after its last user.
+-/
+@[test]
+def junitInInventoryOrder : Test := IO.FS.withTempDir fun dir => do
+  let stamps := dir / "stamps"
+  -- The tests pass and print nothing that depends on the run's seed.
+  let tests := ["pass", "exclusive-a", "silent", "records", "shared-a", "uses-dependent",
+    "unknown-records", "exclusive-b", "shared-b"]
+  let run (seed jobs : Nat) (config : Config) : IO String := do
+    let r ← runWith #[basic tests]
+      { seed := some seed, jobs? := some jobs, sets := #[("stamp-file", stamps.toString)] } config
+    return withoutTimes (junitReport r.report)
+  let sequential ← run 1 1 {}
+  let one ← run 1 4 seededOrder
+  let two ← run 2 4 seededOrder
+  assertBEq sequential one
+  assertBEq sequential two
+  -- Each case as its name, after its fixture's name for a fixture's phase.
+  let names := (sequential.splitOn "<testcase name=\"").drop 1 |>.map fun s =>
+    let name := (s.splitOn "\"").head!
+    let classname := ((s.splitOn "classname=\"")[1]!.splitOn "\"").head!
+    match classname.dropSuffix? " (fixture)" with
+    | some fixture => s!"{fixture}: {name}"
+    | none => name
+  assertBEq ["pass", "stamped: setup", "stamped: prepare exclusive-a", "exclusive-a", "silent",
+    "records", "records.step", "stamped: prepare shared-a", "shared-a", "dependent: setup",
+    "dependent: prepare uses-dependent", "uses-dependent", "dependent: teardown", "unknown-records",
+    "stamped: prepare exclusive-b", "exclusive-b", "stamped: prepare shared-b", "shared-b",
+    "stamped: teardown"] names
+
+/--
+In the JSON report, a test's own duration is its process's by the runner's clock, which includes
+the time of its named results: a test whose named result sleeps for 300 ms takes at least 300 ms.
+-/
+@[test]
+def testDurationIncludesNamedResults : Test := do
+  let r ← runWith #[basic ["slow-named"]]
+  let json ← IO.ofExcept (Lean.Json.parse (jsonReport r.report))
+  let results ← IO.ofExcept (json.getObjValAs? (Array Json) "results")
+  let own := results.find? fun j =>
+    strField j "test" == some "slow-named" &&
+      (j.getObjValAs? (Array String) "resultPath").toOption == some #[]
+  let some own := own | fail s!"no result of the test: {results}"
+  let ms ← IO.ofExcept (own.getObjValAs? Nat "durationMs")
+  assertTrue (300 ≤ ms) s!"the test took {ms} ms"
 
 /-! # Processes -/
 

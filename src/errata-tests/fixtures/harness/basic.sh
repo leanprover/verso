@@ -11,7 +11,7 @@ tests=(pass fail verdict-fail silent unknown-records mismatch-pass mismatch-fail
        stubborn spawns panics garbled records twice flood lingers greets needs-setting protocol-late
        run-id exclusive-a exclusive-b shared-a shared-b after-setup-failure after-prepare-failure-a
        after-prepare-failure-b before-teardown-failure uses-dependent after-slow-setup uses-threaded
-       threaded-test fails-with-fixture slow-user)
+       threaded-test fails-with-fixture slow-user slow-named)
 # A suite that needs only some of the tests names them here, separated by spaces.
 if [ -n "$BASIC_TESTS" ]; then
   read -r -a tests <<< "$BASIC_TESTS"
@@ -257,6 +257,15 @@ case "$mode" in
         echo "outside"
         record '{"type":"result","id":1,"parent":0,"name":"step"}'
         record '{"type":"result","id":1,"parent":0,"name":"step","status":"pass","duration_ms":1}'
+        record '{"type":"verdict","status":"pass"}'
+        exit 0
+        ;;
+      slow-named)
+        # A named result that sleeps for 300 ms, and reports that time as its own.
+        record '{"type":"protocol","version":1}'
+        record '{"type":"result","id":1,"parent":0,"name":"nap"}'
+        sleep 0.3
+        record '{"type":"result","id":1,"parent":0,"name":"nap","status":"pass","duration_ms":300}'
         record '{"type":"verdict","status":"pass"}'
         exit 0
         ;;
