@@ -1767,7 +1767,7 @@ inconclusive without running, and its teardown still runs, without a value.
 @[test]
 def killedSetupTearsDown : Test := forEach products fun p => do
   let fx := p.fixtures
-  -- The timeout leaves the teardown time to start.
+  -- The timeout includes the product's start time, which the teardown pays as well.
   let config : Config := { profiles := #[{
     name := "default", fixtureTimeoutMs? := some (500 + p.startMs), gracePeriodMs? := some 300 }] }
   let start ← IO.monoMsNow
@@ -1799,10 +1799,10 @@ def fixturesReceiveSettings : Test := forEach products fun p => do
     assertBEq (some "hi") ((setup.settings.find? (·.1 == p.greeting)).map (·.2))
 
 /--
-The runner runs every phase of every fixture a run needs, whether or not the fixture's author wrote
-one: each fixture's setup once, its prepare before each of its users, and its teardown once, each of
-them a pass. The fixture `dependent`, whose prepare and teardown do nothing, and `stamped`, which it
-takes and whose prepare and teardown stamp a file, each serve one user here.
+The runner runs every phase of every fixture that a run needs, trivial phases included: each
+fixture's setup once, its prepare before each of its users, and its teardown once, each of them a
+pass. The fixture `dependent`, whose prepare and teardown are trivial, and `stamped`, which it takes
+and whose prepare and teardown stamp a file, each serve one user here.
 -/
 @[test]
 def everyPhaseRuns : Test := forEach products fun p => do

@@ -725,12 +725,12 @@ def verbosityLevels : Test := do
   assertBEq false Verbosity.verbose.showsAllDocstrings
   assertBEq true Verbosity.superVerbose.showsAllDocstrings
 
-/-- The workspaces in which the self-tests run Verso's driver as a dependency's. -/
+/-- The directory of the workspaces in which the self-tests run Verso's driver as a dependency's. -/
 def fixturesDir : System.FilePath := "src/errata-tests/fixtures"
 
 /--
-Deletes a fixture workspace's manifest and packages directory, so that Lake resolves the workspace
-against the clones of dependencies that it shares with Verso.
+Deletes the manifest and the packages directory of the workspace {name}`ws`, so that Lake resolves
+the workspace against the clones of dependencies that it shares with Verso.
 -/
 def resetWorkspace (ws : System.FilePath) : IO Unit := do
   let manifest := ws / "lake-manifest.json"
@@ -739,9 +739,9 @@ def resetWorkspace (ws : System.FilePath) : IO Unit := do
   if ← packages.isDir then IO.FS.removeDirAll packages
 
 /--
-A fixture whose value is the fixture workspace {name}`name` under {name}`fixturesDir`, and whose
-prepare resets the workspace with {name}`resetWorkspace` before each test that uses it. Its users
-run Lake there, which writes the workspace's manifest and build directory.
+The fixture whose value is the workspace {name}`name` under {name}`fixturesDir`. Its prepare resets
+the workspace with {name}`resetWorkspace` before each test that uses it, and its teardown is
+trivial. Its users run Lake there, which writes the workspace's manifest and build directory.
 -/
 abbrev driverWorkspace (name : String) : Fixture where
   type := System.FilePath
@@ -753,7 +753,7 @@ abbrev driverWorkspace (name : String) : Fixture where
 /-- The workspace that names Verso's driver as its test driver, with many test libraries. -/
 @[fixture] abbrev driverConfigured : Fixture := driverWorkspace "driver-configured"
 
-/-- The workspace that neither names a test driver nor defines a script. -/
+/-- The workspace that only requires Verso, where the driver is reached by its bare name. -/
 @[fixture] abbrev driverBare : Fixture := driverWorkspace "driver-bare"
 
 /-- The workspace with an `Errata.run` script of its own. -/

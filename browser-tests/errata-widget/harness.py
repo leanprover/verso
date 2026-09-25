@@ -5,12 +5,12 @@ connected to it, and an editor that the tests drive in place of VS Code.
 The browser reaches the server through a small HTTP relay. The relay can hold or reject particular
 RPC calls, which lets a test arrange the order in which replies arrive.
 
-One Lean server serves every test in a session. Under Errata, one Lean server serves every test of
-a run: the suite's Errata fixture starts this module as a host process, `python harness.py serve
-READY`, which starts the server and serves one test at a time over TCP (`LeanHost`), and each test
-reaches it through a `RemoteLeanSession`. Each test gets its own page and relay. When a test ends,
-the editor ends the test's builds and runs and closes the documents it opened, which ends their file
-workers.
+One Lean server serves every test of a pytest session. Under Verso's pytest harness, where each test
+runs in a process of its own, one Lean server serves every test of the run: the suite's Errata
+fixture `leanServer` starts this module as a host process, `python harness.py serve READY`, which
+starts the server and serves one test at a time over TCP (`LeanHost`), and each test reaches it
+through a `RemoteLeanSession`. Each test gets its own page and relay. When a test ends, the editor
+ends the test's builds and runs and closes the documents it opened, which ends their file workers.
 """
 
 import json
@@ -116,6 +116,7 @@ class LspPeer:
     """
 
     def __init__(self, reader, writer, on_message, id_prefix):
+        """A peer over the streams, whose reading thread the subclass starts."""
         self.reader = reader
         self.writer = writer
         self.on_message = on_message
@@ -129,6 +130,7 @@ class LspPeer:
 
     @property
     def running(self):
+        """Whether the other end is still there."""
         return not self.exited
 
     def _exited_error(self):
@@ -142,6 +144,7 @@ class LspPeer:
         """Runs once the other end's messages have ended and every waiting request has failed."""
 
     def send(self, message):
+        """Sends a message, and fails with `LspError` once the other end has gone."""
         data = frame(message)
         with self.write_lock:
             try:
@@ -174,6 +177,7 @@ class LspPeer:
         return reply.get("result")
 
     def notify(self, method, params):
+        """Sends a notification."""
         self.send({"jsonrpc": "2.0", "method": method, "params": params})
 
     def end_runs(self):
@@ -195,6 +199,7 @@ class LspPeer:
         return sorted(runs & set(descendants(self.pid)))
 
     def _read(self):
+        """Receives the other end's messages until they end, then fails the waiting requests."""
         try:
             while (message := read_message(self.reader)) is not None:
                 self._receive(message)
@@ -204,6 +209,7 @@ class LspPeer:
         self._ended()
 
     def _receive(self, message):
+        """Answers a request, hands a reply to its waiter, and passes on anything else."""
         request_id = message.get("id")
         if "method" in message and request_id is not None:
             # A request from the server to the editor, such as a capability registration.
@@ -253,7 +259,10 @@ class LeanServer(LspPeer):
     """
 
     def __init__(self, on_message, on_exit=None):
-        # The server's messages that are not replies to the harness go to `on_message`.
+        """
+        Starts the server and its readers. The server's messages that are not replies to the
+        harness go to `on_message`.
+        """
         self.proc = subprocess.Popen(
             ["lake", "env", "lean", "--server"],
             cwd=FIXTURE,
@@ -273,22 +282,28 @@ class LeanServer(LspPeer):
 
     @property
     def running(self):
+        """Whether the server's messages go on and its process has not exited."""
         return not self.exited and self.proc.poll() is None
 
     def stderr_tail(self, lines=100):
+        """The last `lines` lines of the server's stderr."""
         return "".join(self.stderr[-lines:])
 
     def _exited_error(self):
+        """The message of the error that requests receive once the server has exited."""
         return f"the Lean server exited; its stderr ends:\n{self.stderr_tail()}"
 
     def _note(self, text):
+        """Adds a problem of the harness's own to the server's stderr."""
         self.stderr.append(text)
 
     def _ended(self):
+        """Runs `on_exit` once the server's messages have ended."""
         if self.on_exit is not None:
             self.on_exit()
 
     def initialize(self):
+        """Initializes the server for the fixture workspace and returns its reply."""
         result = self.request(
             "initialize",
             {"processId": None, "rootUri": FIXTURE.as_uri(), "capabilities": {}},
@@ -313,9 +328,11 @@ class LeanServer(LspPeer):
 
     @property
     def pid(self):
+        """The process id of the server."""
         return self.proc.pid
 
     def _read_stderr(self):
+        """Collects the server's stderr until it ends."""
         for line in self.proc.stderr:
             self.stderr.append(line.decode("utf-8", "replace"))
 
@@ -324,6 +341,7 @@ class LeanSession:
     """The Lean server that the tests of a session share, which a test may restart."""
 
     def __init__(self):
+        """Starts the session's server."""
         # Where the server's messages go: the relay of the test that is running, if any.
         self.route = None
         self.lean = None
@@ -331,10 +349,12 @@ class LeanSession:
         self.start()
 
     def start(self):
+        """Starts a server and initializes it."""
         self.lean = LeanServer(self._on_message)
         self.initialize_result = self.lean.initialize()
 
     def restart(self):
+        """Stops the server and starts a new one."""
         self.lean.stop()
         self.start()
 
@@ -344,9 +364,11 @@ class LeanSession:
             self.restart()
 
     def stop(self):
+        """Stops the server."""
         self.lean.stop()
 
     def _on_message(self, message):
+        """Passes a message from the server to the running test's relay, if any."""
         route = self.route
         if route is not None:
             route(message)
@@ -360,6 +382,7 @@ class RemoteLeanServer(LspPeer):
     """
 
     def __init__(self, address, on_message):
+        """Connects to the host and starts reading its messages."""
         host, port = address.rsplit(":", 1)
         self.sock = socket.create_connection((host, int(port)))
         super().__init__(
@@ -383,15 +406,24 @@ class RemoteLeanServer(LspPeer):
         return reply
 
     def stderr_tail(self, lines=100):
+        """
+        The end of the server's stderr, as the host reports it, or, when the host gives no answer,
+        as its last `$/harness/exited` notification gave it.
+        """
         try:
             return self.control("stderr", timeout=10)["text"]
         except (LspError, TimeoutError):
             return self.exit_text
 
     def _exited_error(self):
+        """The message of the error that requests receive once the server has exited."""
         return f"the Lean server exited; its stderr ends:\n{self.exit_text}"
 
     def _receive(self, message):
+        """
+        Fails the waiting requests other than control requests when the host reports that the
+        server exited, and receives any other message as a peer does.
+        """
         if message.get("method") == "$/harness/exited":
             self.exit_text = message.get("params", {}).get("stderr", "")
             self._fail_waiters(keep_control=True)
@@ -415,11 +447,13 @@ class RemoteLeanSession:
     """
 
     def __init__(self, address):
+        """Connects to the host and learns the server's reply to `initialize`."""
         self.route = None
         self.lean = RemoteLeanServer(address, self._on_message)
         self.initialize_result = self.lean.control("hello")["initialize"]
 
     def restart(self):
+        """Has the host start a new server."""
         self.initialize_result = self.lean.control("restart")["initialize"]
 
     def ensure_running(self):
@@ -428,9 +462,11 @@ class RemoteLeanSession:
             self.restart()
 
     def stop(self):
+        """Ends the test's connection to the host."""
         self.lean.close()
 
     def _on_message(self, message):
+        """Passes a message from the server to the test's relay, if any."""
         route = self.route
         if route is not None:
             route(message)
@@ -446,12 +482,14 @@ class LeanHost:
     `stderr` replies with the end of the server's stderr; `reset` readies the server for the next
     test, ending the runs its file workers started and closing the documents that earlier tests left
     open, or starting a new server when the last one has exited. When the server exits, the test
-    receives the notification `$/harness/exited` with the end of the server's stderr, and an error
-    reply to each of its requests that the server had yet to answer; while no server runs, the
-    host answers the test's requests with an error at once and drops its notifications.
+    receives an error reply to each of its requests that the server had yet to answer, and, unless
+    the host stopped the server itself, the notification `$/harness/exited` with the end of the
+    server's stderr. While no server runs, the host answers the test's requests with an error at
+    once and drops its notifications.
     """
 
     def __init__(self):
+        """Starts the host's server."""
         self.client = None
         self.client_lock = threading.Lock()
         # The documents that tests opened and have not closed, by URI.
@@ -465,6 +503,7 @@ class LeanHost:
         self.start_server()
 
     def start_server(self):
+        """Starts a server and initializes it."""
         self.lean = LeanServer(self._from_server, on_exit=self._server_exited)
         self.initialize_result = self.lean.initialize()
 
@@ -481,6 +520,7 @@ class LeanHost:
         self.start_server()
 
     def stop(self):
+        """Stops the server, whatever state it is in."""
         self.restarting = True
         try:
             self.lean.stop()
@@ -488,6 +528,7 @@ class LeanHost:
             pass
 
     def info(self):
+        """The reply to `hello` and `restart`: the server's process id, state, and `initialize`."""
         return {
             "pid": self.lean.pid,
             "running": self.lean.running,
@@ -531,6 +572,7 @@ class LeanHost:
             conn.close()
 
     def _to_client(self, message):
+        """Sends a message to the connected test, if any."""
         with self.client_lock:
             if self.client is not None:
                 try:
@@ -539,17 +581,23 @@ class LeanHost:
                     pass
 
     def _from_server(self, message):
+        """Passes a message from the server to the test, and notes a reply as answered."""
         if "method" not in message:
             with self.pending_lock:
                 self.pending.discard(message.get("id"))
         self._to_client(message)
 
     def _fail(self, request_id, text):
+        """Answers the test's request with an error whose message is `text`."""
         self._to_client(
             {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32603, "message": text}}
         )
 
     def _server_exited(self):
+        """
+        Fails the test's unanswered requests once the server has exited, and tells the test of the
+        exit unless the host stopped the server itself.
+        """
         stderr = self.lean.stderr_tail()
         with self.pending_lock:
             unanswered, self.pending = self.pending, set()
@@ -561,6 +609,10 @@ class LeanHost:
             )
 
     def _from_client(self, message):
+        """
+        Answers the harness's own requests, tracks the documents the test opens and the requests
+        the server has yet to answer, and passes every other message to the server while it runs.
+        """
         method = message.get("method") or ""
         request_id = message.get("id")
         if method.startswith("$/harness/"):
@@ -606,8 +658,10 @@ def serve(ready):
     listener = socket.create_server(("127.0.0.1", 0))
 
     def terminate(signum=None, frame=None):
-        # The host stops its server, which joins the server's readers and closes its pipes, and then
-        # exits through `os._exit`, so no finalizer runs with a stream that another thread holds.
+        """
+        Stops the server, which joins the server's readers and closes its pipes, and then exits
+        through `os._exit`, so no finalizer runs with a stream that another thread holds.
+        """
         host.stop()
         os._exit(0)
 
@@ -615,6 +669,7 @@ def serve(ready):
     if os.environ.get("ERRATA_LIFELINE") == "1":
 
         def watch_lifeline():
+            """Waits for the end of standard input, then stops the host."""
             # Unbuffered reads leave no Python file object busy in this thread when the host exits.
             while os.read(0, 4096):
                 pass

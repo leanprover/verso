@@ -94,9 +94,9 @@ def selfCommand (invocation : Array String) : IO (Array String) := do
   if invocation.isEmpty then return #[(← IO.appPath).toString] else return invocation
 
 /--
-The context for a test run with the given settings. The harness's own setting configures it. Tests
-reach their helpers through this test executable's {lit}`errata-helper` mode, which
-{name}`invocation` starts as {name}`selfCommand` describes.
+The context for a test run with the given settings and the thread grant {name}`threads`. The
+harness's own setting configures it. Tests reach their helpers through this test executable's
+{lit}`errata-helper` mode, which {name}`invocation` starts as {name}`selfCommand` describes.
 -/
 def contextOf (settings : Array (String × String)) (threads : Nat := 1)
     (invocation : Array String := #[]) : IO TestContext := do
@@ -453,7 +453,7 @@ lifeline: when the pipe closes, the executable ends its own process group and ex
 command runs by hand with any standard input, {lit}`/dev/null` included. The test itself reads an
 empty standard input. The runner holds the other end of every invocation's standard input until
 the runner itself exits, so a process that a fixture's setup starts and that inherits the setup's
-standard input sees its end when the run ends, however the runner ends.
+standard input reads its end when the run ends, however the runner ends.
 
 The runner also sets {lit}`ERRATA_DIR` to the directory of Errata's sources, where the shell
 harness lives, and {lit}`ERRATA_RUN_ID` to the run's identifier, which is the same for every process

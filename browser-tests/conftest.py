@@ -1,3 +1,12 @@
+"""
+The pytest configuration that every browser suite loads: the command-line options, the pytest
+fixtures for the built site, its HTTP server, and the browsers, and the Errata settings and fixtures
+of the suites. Under Verso's pytest harness, the Errata fixtures start a Playwright server per
+browser and, for a suite whose `--errata-site` names a site, build that site and serve it, once per
+run; the pytest fixtures then read the Errata fixtures' values. Outside the harness, the pytest
+fixtures launch a browser and start a server themselves.
+"""
+
 import fcntl
 import json
 import os
@@ -152,6 +161,7 @@ def site_setup(site):
     """The setup of the fixture `site` for a site of `SITES`, which returns the site's directory."""
 
     def setup(context):
+        """Returns the directory of a site from a setting, or builds the site and returns it."""
         if "setting" in site:
             setting = site["setting"]
             if setting not in context.settings:
@@ -164,7 +174,8 @@ def site_setup(site):
         project = site["project"]
         with project_lock(project):
             print(f"Building the site of {project}...", flush=True)
-            # The manifest follows Verso's, whose clones of the dependencies the project shares.
+            # The project shares Verso's clones of the dependencies, so its manifest follows
+            # Verso's.
             lake(project, "update", "verso")
             if "target" not in site:
                 out = lake(project, "query", ":literateHtml", capture=True)
@@ -202,6 +213,7 @@ def browser_setup(name):
     """
 
     def setup(context):
+        """Starts Playwright's server for the browser and returns its endpoint."""
         state = services.state_dir(context, name)
         state.mkdir(parents=True, exist_ok=True)
         config = state / "launch.json"
@@ -214,6 +226,7 @@ def browser_setup(name):
         )
 
         def endpoint():
+            """The endpoint that the server has printed to its log, or `None` before it has."""
             for line in services.log_of(context, name).splitlines():
                 if line.startswith("ws://"):
                     return line.strip()
@@ -228,6 +241,7 @@ def service_teardown(name):
     """The teardown of a fixture whose setup starts a service, which stops the service."""
 
     def teardown(value, context):
+        """Stops the service, whether or not the setup produced a value."""
         services.stop(context, name)
 
     return teardown
@@ -236,9 +250,9 @@ def service_teardown(name):
 def fixture_declarations(site_name):
     """
     The Errata fixtures of a suite whose site is `site_name` from `SITES`, or of a suite without a
-    site when it is `None`. The fixtures declare setups and teardowns only: each test opens a browser
-    context of its own on its own connection to the browser, and reads the site as it is. A site
-    that the setup builds asks for the threads of a Lake build.
+    site when it is `None`. Their prepares and the site's teardown are trivial: each test opens a
+    browser context of its own on its own connection to the browser, and reads the site as it is. A
+    site that the setup builds asks for the threads of a Lake build.
     """
     decl = {}
     for name in BROWSERS:
@@ -267,6 +281,7 @@ def fixture_declarations(site_name):
 
 
 def pytest_addoption(parser):
+    """Adds the browser suites' command-line options."""
     parser.addoption(
         "--port",
         action="store",
@@ -407,6 +422,7 @@ def server(request):
 
 @pytest.fixture(scope="session")
 def playwright_instance():
+    """Playwright, started once for the session."""
     with sync_playwright() as p:
         yield p
 
@@ -431,6 +447,7 @@ def browser(request, playwright_instance):
 
 @pytest.fixture
 def page(browser):
+    """A new page in the browser, closed when the test ends."""
     page = browser.new_page()
     yield page
     page.close()

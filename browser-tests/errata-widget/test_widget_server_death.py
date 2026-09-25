@@ -15,7 +15,7 @@ CRASH_REPORTS = Path.home() / "Library" / "Logs" / "DiagnosticReports"
 
 
 def python_crash_reports():
-    """The names of the crash reports of Python processes, or `None` where there are none to read."""
+    """The names of the Python processes' crash reports, or `None` where the directory is absent."""
     if not CRASH_REPORTS.is_dir():
         return None
     return {p.name for p in CRASH_REPORTS.glob("Python-*.ips")}
@@ -24,7 +24,7 @@ def python_crash_reports():
 def test_requests_to_a_server_that_died_fail_at_once(editor):
     """
     Once the Lean server has died, the page's requests and the harness's own end in an error within
-    seconds, rather than when their timeouts run out, and no Python process crashes on the way.
+    seconds, well before their timeouts, and no Python process crashes on the way.
     """
     reports = python_crash_reports()
     editor.show("Passing", "streamed")
@@ -43,6 +43,7 @@ def test_requests_to_a_server_that_died_fail_at_once(editor):
     deliver = editor.relay._deliver
 
     def watch(message):
+        """Records a message that the relay delivers to the page, and delivers it."""
         delivered.append(message)
         deliver(message)
 
@@ -57,6 +58,7 @@ def test_requests_to_a_server_that_died_fail_at_once(editor):
     )
 
     def answered():
+        """Whether the page's request has received an error reply."""
         return any(m.get("id") == "after-the-server-died" and "error" in m for m in delivered)
 
     while not answered():

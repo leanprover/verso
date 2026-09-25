@@ -142,9 +142,8 @@ structure State where
   /-- Each test's status. -/
   testStatus : Array TestStatus
   /--
-  The slots that each test holds from its first prepare until it ends: its
-  reservation until it starts, the largest grant among its prepares and itself, and its own grant
-  from then on.
+  The slots that each test holds from its first prepare until it ends: until it starts, its
+  reservation, the largest grant among its prepares and itself; from then on, its own grant.
   -/
   reserved : Array Nat
   /-- Each fixture's status. -/

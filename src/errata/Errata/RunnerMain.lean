@@ -1132,8 +1132,8 @@ def executeAndWrite (config : Config) (opts : Options)
   let events? ← opts.eventsPath.mapM fun p => do
     if let some parent := (p : System.FilePath).parent then IO.FS.createDirAll parent
     IO.FS.Handle.mk p .append
-  -- The dispatcher prints from the threads that watch the tests too, so every line goes to the
-  -- standard output of the caller's thread.
+  -- The dispatcher also prints from the threads that watch the tests, so every line goes to the
+  -- standard output that the calling thread has here.
   let stdout ← IO.getStdout
   let sinks : Sinks := {
     event := fun j => do

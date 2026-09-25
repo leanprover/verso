@@ -50,8 +50,8 @@ def start(context, name, args, cwd=None, watches_lifeline=False):
     Starts the command `args` as the service of the fixture `name`, in a session of its own, with
     its output in the log of its state directory, and returns its process. The directory records
     the process id before this returns. Under the runner's lifeline, the service inherits standard
-    input; a service that stops at the input's end itself says so with `watches_lifeline`, and any
-    other runs behind a guard (`guard`) that stops the service's group there.
+    input. A service that stops by itself at the input's end is started with `watches_lifeline`;
+    any other runs behind a guard (`guard`) that stops the service's group there.
     """
     state = state_dir(context, name)
     state.mkdir(parents=True, exist_ok=True)
@@ -81,8 +81,8 @@ def log_of(context, name):
 
 def alive(pid):
     """
-    Whether a process with the id exists. A service that a chain of invocations started in this
-    process is this process's child, and is reaped here once it has exited.
+    Whether a process with the id `pid` exists. A service that a chain of invocations started in
+    this process is this process's child, and this function reaps it once it has exited.
     """
     try:
         os.waitpid(pid, os.WNOHANG)
@@ -108,9 +108,9 @@ def signal_group(pid, sig):
 def stop(context, name, group_first=True, grace=10.0):
     """
     Stops the service of the fixture `name` and removes its state directory. The service receives a
-    terminate signal, to its whole group when `group_first` is true and to its leader alone
-    otherwise, which then stops what it started itself; after the leader exits, or after `grace`
-    seconds, whatever remains of the group is killed.
+    terminate signal, to its whole group when `group_first` is true and otherwise to its leader
+    alone, which then stops what it started itself. After the leader exits, or after `grace`
+    seconds, this function kills whatever remains of the group.
     """
     state = state_dir(context, name)
     try:
@@ -190,13 +190,14 @@ def guard(args):
     """
     Runs the command `args` in this process's group and exits with its code, and when standard
     input ends, terminates the group, then kills it after a grace period. The guard exits through
-    `os._exit`, with its watching thread still blocked in a read, so no finalizer runs at exit.
+    `os._exit`, which runs no finalizer, while its watching thread may still be blocked in a read.
     """
     child = subprocess.Popen(args, stdin=subprocess.DEVNULL)
     # The guard outlives the terminate signal that it sends its own group, and ends with the child.
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
     def watch():
+        """Waits for the end of standard input, then terminates and kills the group."""
         read_to_end(0)
         group = os.getpgrp()
         signal_group(group, signal.SIGTERM)

@@ -50,11 +50,11 @@ structure LiterateProjects where
   multiRoot : System.FilePath
 
 /--
-Builds the literate HTML of the test project {name}`dir` while it holds the project's build lock,
-the file `.lake/errata-build.lock` there, which the browser suites' site fixtures lock too.
-Discovery has built the root's executables that the build runs, so the build writes to the
-project's own build directory, and the lock keeps two builds from writing it at once. The project's
-toolchain must be the root's, and its manifest is first brought up to date with Verso's.
+Builds the literate HTML of the test project {name}`dir`. It checks that the project's toolchain is
+the root's, then takes the project's build lock, the file `.lake/errata-build.lock` there, which the
+browser suites' site fixtures take too. Under the lock it updates the project's dependency on Verso
+and builds. Discovery has built the root's executables that the build runs, so the build writes to
+the project's own build directory, and the lock keeps two builds from writing it at once.
 -/
 def buildLiterateProject (dir : System.FilePath) : FixtureM Unit := do
   let rootToolchain := (← IO.FS.readFile "lean-toolchain").trimAscii
@@ -74,10 +74,11 @@ def buildLiterateProject (dir : System.FilePath) : FixtureM Unit := do
 
 /--
 The literate test projects, built once for the run. The setup builds each project's literate HTML
-in turn, so the two builds never overlap, and the value names both projects. The projects share
-the root's packages directory, so their builds find Verso's modules in the root's build directory
-up to date; the settings bind the executables that the builds run to Lake targets, which Discovery
-builds before any test starts.
+in turn, so the two builds never overlap, and the value names both projects; the prepare and the
+teardown are trivial. The projects share the root's packages directory, so their builds find
+Verso's modules in the root's build directory up to date. The fixture takes the settings of the
+executables that the builds run, which the profile binds to Lake targets that Discovery builds
+before any test starts.
 -/
 @[fixture (threads := 4)]
 def literateProjects (_ : literateExe) (_ : literateHtmlExe) (_ : literatePlanExe) : Fixture where

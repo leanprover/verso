@@ -1,8 +1,8 @@
 """
-Fixtures for the Errata widget tests. Within a session, tests share one Lean server, and each test
-gets a fresh page with the InfoView and an editor that connects the page to the server. Under
-Verso's pytest harness, the tests of a run share one Lean server, which the Errata fixture
-`leanServer` hosts.
+Fixtures for the Errata widget tests. The tests share one Lean server: under Verso's pytest harness,
+the server that the Errata fixture `leanServer` hosts for the run, and otherwise one that the pytest
+session starts. Each test gets a fresh page with the InfoView and an editor that connects the page
+to the server.
 """
 
 import json
@@ -47,6 +47,7 @@ def lean_server_setup(context):
     )
 
     def port():
+        """The port that the host has written to its ready file, or `None` before it has."""
         try:
             return json.loads(ready.read_text())["port"]
         except (OSError, ValueError, KeyError):
@@ -147,6 +148,7 @@ def lean_session(request):
 
 @pytest.fixture
 def relay():
+    """The relay between the test's page and the Lean server, closed when the test ends."""
     relay = LspRelay()
     yield relay
     relay.close()
@@ -167,6 +169,7 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_makereport(item, call):
+    """Keeps each phase's report on the test item, where the `editor` fixture reads it."""
     report = yield
     setattr(item, "report_" + report.when, report)
     return report
@@ -187,6 +190,10 @@ def print_diagnostics(page, console, session):
 
 @pytest.fixture
 def editor(request, page: Page, relay: LspRelay, lean_session: LeanSession):
+    """
+    The test's editor, started on its page and relay, and closed when the test ends; a failed start
+    or a failed test prints the diagnostics.
+    """
     page.set_default_timeout(120_000)
     console = []
     page.on(
