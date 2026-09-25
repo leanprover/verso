@@ -55,8 +55,10 @@ structure Dispatcher where
   /-- Where actions go. -/
   sinks : Sinks
   /--
-  The progress display, when the run keeps one. The human report's lines of each event then go to
-  the display, which prints them above its block in the same write that updates its frame.
+  The progress display, when the run keeps one. The dispatcher updates its frame as tests and
+  fixture phases start and end, with the lines of the event in one batch, and clears it at the end
+  of the run. The {name}`Sinks.line` of a run with a display is the display's
+  {name}`Progress.Display.print`.
   -/
   progress? : Option Progress.Display := none
 
@@ -70,24 +72,23 @@ def Dispatcher.dispatch (d : Dispatcher) (ev : Event) : IO Unit :=
     let before ← get
     let (s, actions) := step before ev
     set s
-    match d.progress? with
-    | none =>
+    let report : IO Unit :=
       for a in actions do
         match a with
         | .event j => d.sinks.event j
         | .print l => d.sinks.line l
+    match d.progress? with
+    | none => report
     | some p =>
       if ev matches .ended .. then p.clear
-      let mut lines := #[]
-      for a in actions do
-        match a with
-        | .event j => d.sinks.event j
-        | .print l => lines := lines.push l
       -- Only the starts and ends of tests and fixture phases change the frame.
-      if !lines.isEmpty || ev matches .testStarted _ | .testEnded .. then
+      if ev matches .testStarted _ | .testEnded .. then
         let fresh := s.results.extract before.results.size s.results.size
         let now ← IO.monoMsNow
-        p.emit lines (·.after ev fresh now)
+        p.batch do
+          report
+          p.update (·.after ev fresh now)
+      else report
 
 /-- The dispatcher's current state. -/
 def Dispatcher.get (d : Dispatcher) : IO State :=
@@ -178,7 +179,8 @@ deriving BEq
 /--
 The lifelines that the run holds after their invocations have ended, each the write end of an
 invocation's standard input, with what it serves. The processes that a setup or a prepare starts
-inherit its lifeline and end when it closes. Lifelines close when the runner drops them.
+inherit its lifeline and end when it closes. A lifeline closes when it is released, and the run
+closes those still held when it ends.
 -/
 structure Lifelines where
   /-- The held lifelines. -/
@@ -194,6 +196,10 @@ def Lifelines.hold (l : Lifelines) (owner : LifelineOwner) (h : IO.FS.Handle) : 
 /-- Drops the lifelines held for {name}`owner`, which closes them. -/
 def Lifelines.release (l : Lifelines) (owner : LifelineOwner) : BaseIO Unit :=
   l.held.atomically (modify (·.filter (·.1 != owner)))
+
+/-- Drops every held lifeline, which closes them; the run calls it when it ends. -/
+def Lifelines.closeAll (l : Lifelines) : BaseIO Unit :=
+  l.held.atomically (set (#[] : Array (LifelineOwner × IO.FS.Handle)))
 
 /-- What the parts of a run share. -/
 structure RunContext where
@@ -477,15 +483,15 @@ def RunContext.ended (ctx : RunContext) (inv : Invocation) (exit : Exit) (durati
 Settles the lifelines when an invocation ends. Setups' lifelines are held until their fixtures'
 teardowns end, and prepares' until the tests they prepared end. When a teardown ends, the lifeline
 held for its fixture closes, and when a test ends, those held for it close; their own lifelines
-close with them. Held lifelines that remain close when the run's context goes, at the end of the
-run.
+close with them. The run closes the lifelines still held when it ends, with
+{name}`Lifelines.closeAll`.
 -/
 def RunContext.keepLifeline (ctx : RunContext) (inv : Invocation) (g : Group) : BaseIO Unit := do
   let p := inv.planned
-  match p.kind, p.path[1]?, p.path[2]? with
-  | .fixture, some "setup", _ => ctx.lifelines.hold (.fixture p.exe p.test) g.child.stdin
-  | .fixture, some "prepare", some test => ctx.lifelines.hold (.test p.exe test) g.child.stdin
-  | .fixture, some "teardown", _ => ctx.lifelines.release (.fixture p.exe p.test)
+  match p.kind, p.phase?, p.preparedTest? with
+  | .fixture, some .setup, _ => ctx.lifelines.hold (.fixture p.exe p.test) g.child.stdin
+  | .fixture, some .prepare, some test => ctx.lifelines.hold (.test p.exe test) g.child.stdin
+  | .fixture, some .teardown, _ => ctx.lifelines.release (.fixture p.exe p.test)
   | .test, _, _ => ctx.lifelines.release (.test p.exe p.test)
   | _, _, _ => pure ()
 
@@ -725,13 +731,14 @@ def RunContext.plannedJob (ctx : RunContext) (plan : Plan) (job : Scheduler.Job)
     { ctx.planned ctx.config.executables[test.exeIdx]! test r with reproduce }
   | .setup f | .prepare f _ | .teardown f =>
     let (e, fixture, r) := plan.fixtures[f]!
-    let (key, path) := match job with
+    let (key, path, phase, preparedTest?) := match job with
       | .prepare _ t =>
         let name := plan.tests[t]!.1.name
-        (s!"prepare {name}", #[fixture.name, "prepare", name])
-      | .teardown _ => ("teardown", #[fixture.name, "teardown"])
-      | _ => ("setup", #[fixture.name, "setup"])
+        (s!"prepare {name}", #[fixture.name, "prepare", name], FixturePhase.prepare, some name)
+      | .teardown _ => ("teardown", #[fixture.name, "teardown"], .teardown, none)
+      | _ => ("setup", #[fixture.name, "setup"], .setup, none)
     { exe := ctx.config.executables[e]!.name, test := fixture.name, key, kind := .fixture, path
+      phase? := some phase, preparedTest?
       description? := fixture.description?, settings := r.settings
       seed? := (r.settings.find? (·.1 == seedSetting)).map (·.2), reproduce
       slowAfterMs := r.slowAfterMs }
@@ -1100,9 +1107,14 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
     | .error (errors, code) =>
       for e in errors do d.dispatch (.issue { isError := true, message := e })
       return ← finish code
-  IO.FS.withTempDir fun dir => do
+  let lifelines ← Lifelines.new
+  -- However the run ends, the held lifelines close and the progress display is cleared.
+  let closeRun : IO Unit := do
+    lifelines.closeAll
+    if let some p := progress? then p.clear
+  flip tryFinally closeRun <| IO.FS.withTempDir fun dir => do
     let ctx : RunContext := {
-      config, opts, runSeed, runId, dir, dispatcher, registry, lifelines := ← Lifelines.new
+      config, opts, runSeed, runId, dir, dispatcher, registry, lifelines
       listTimeoutMs := opts.timeoutMs? <|> profile.timeoutMs? |>.getD defaultTimeoutMs
       listGracePeriodMs := opts.gracePeriodMs? <|> profile.gracePeriodMs? |>.getD defaultGracePeriodMs
     }
@@ -1233,9 +1245,7 @@ def executeAndWrite (config : Config) (opts : Options)
         stdout.putStrLn l
         stdout.flush
   }
-  let (report, code) ←
-    try execute config opts sinks registry color progress?
-    finally if let some p := progress? then p.clear
+  let (report, code) ← execute config opts sinks registry color progress?
   -- A cancelled run writes no reports.
   if ← registry.cancelled then return ExitCode.other
   if opts.command == .run then writeReports config opts report

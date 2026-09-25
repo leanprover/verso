@@ -40,6 +40,10 @@ structure Planned where
   key : String := ""
   /-- Whether this is a test or a fixture's phase. -/
   kind : Result.Kind := .test
+  /-- The phase, for a fixture's phase. -/
+  phase? : Option FixturePhase := none
+  /-- The name of the test that a prepare prepares. -/
+  preparedTest? : Option String := none
   /-- The components of the test's name, or the fixture's name and the phase, for reports. -/
   path : Array String := #[]
   /-- The test's description from the inventory. -/
