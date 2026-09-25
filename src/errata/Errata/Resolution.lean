@@ -96,6 +96,51 @@ def SourcedFilter.parse (text : String) (source : Filter.Source) : Except String
 def SourcedFilter.at (f : SourcedFilter) (offset : Nat) : String :=
   f.source.at offset
 
+/--
+The tests that a run selects. A test is selected when one of the filter expressions selects it, its
+name contains one of the name filters, no skip pattern is in its name, and the default filter
+selects it; without filter expressions, or without name filters, that part holds for every test.
+-/
+structure Selection where
+  /-- The command line's filter expressions, joined by union. -/
+  filters : Array SourcedFilter := #[]
+  /-- The command line's name filters, joined by union. -/
+  names : Array String := #[]
+  /-- The patterns of {lit}`--skip`. -/
+  skips : Array String := #[]
+  /-- Whether name filters and skip patterns match whole names. -/
+  exact : Bool := false
+  /-- The profile's default filter, which {lit}`default()` stands for in the filter expressions. -/
+  default? : Option SourcedFilter := none
+  /-- Whether the tests are drawn from the default filter. -/
+  useDefault : Bool := true
+deriving Inhabited
+
+/-- Whether a name filter or a skip pattern matches a test's name. -/
+def Selection.nameMatches (s : Selection) (pattern name : String) : Bool :=
+  if s.exact then name == pattern else (name.find? pattern).isSome
+
+/-- Whether the default filter selects a test; a run without one selects every test. -/
+def Selection.defaultSelects (s : Selection) (r : Filter.Record) : Bool :=
+  (s.default?.map (·.expr.eval r)).getD true
+
+/-- Whether the run selects a test. -/
+def Selection.selects (s : Selection) (r : Filter.Record) : Bool :=
+  let d := s.defaultSelects r
+  (s.filters.isEmpty || s.filters.any (·.expr.eval r d)) &&
+    (s.names.isEmpty || s.names.any (s.nameMatches · r.name)) &&
+    !s.skips.any (s.nameMatches · r.name) && (!s.useDefault || d)
+
+/--
+Whether the run can select a test of the executable named {name}`exe`, judged from the executable's
+name alone. The answer is false only when the filter expressions or the default filter select no
+test of any executable with that name, whatever its tests are.
+-/
+def Selection.mayContain (s : Selection) (exe : String) : Bool :=
+  let d := (s.default?.map (·.expr.evalExe exe)).getD (some true)
+  let noFilterSelects := !s.filters.isEmpty && s.filters.all (·.expr.evalExe exe d == some false)
+  !(noFilterSelects || (s.useDefault && d == some false))
+
 /-- What the runner resolves a test's configuration from, besides the test itself. -/
 structure ResolutionContext where
   /-- Values of settings from the command line, in order; the last one for a name counts. -/
@@ -104,6 +149,8 @@ structure ResolutionContext where
   profile : Profile := { name := "default" }
   /-- The profile's overrides, each with its parsed filter. -/
   overrides : Array (SourcedFilter × Override) := #[]
+  /-- The default filter, which {lit}`default()` stands for in the overrides' filters. -/
+  default? : Option SourcedFilter := none
   /-- The command line's timeout, in milliseconds. -/
   timeoutMs? : Option Nat := none
   /-- The command line's grace period, in milliseconds. -/
@@ -155,7 +202,9 @@ profile, and the defaults, with {lit}`--update-golden` over all of them.
 def ResolutionContext.resolve (ctx : ResolutionContext) (exe : String)
     (declared : Array SettingInfo) (t : InventoryTest) : Resolved := Id.run do
   let record := t.record exe
-  let matching := ctx.overrides.filterMap fun (f, o) => if f.expr.eval record then some o else none
+  let dflt := (ctx.default?.map (·.expr.eval record)).getD true
+  let matching := ctx.overrides.filterMap fun (f, o) =>
+    if f.expr.eval record dflt then some o else none
   let fromOverrides {α} (field : Override → Option α) : Option α := matching.findSome? field
   let mut settings := #[]
   let mut missing := #[]
@@ -216,11 +265,13 @@ def ResolutionContext.undeclared (ctx : ResolutionContext) (declared : Array Str
 /--
 The warnings about a filter once the inventory is known, each at the place in the filter's text: a
 {lit}`tag(…)` that matches no test's tag, an {lit}`exe(…)` that names no test executable, and a
-filter that selects no test. Filters made only of {lit}`all()` and {lit}`none()` select what they
-say, so they draw no warning.
+filter that selects no test. Filters made only of {lit}`all()`, {lit}`none()`, and {lit}`default()`
+select what they say, so they draw no warning. {name}`dflt` says whether the default filter selects
+a test.
 -/
 def SourcedFilter.warnings (f : SourcedFilter) (records : Array Filter.Record)
-    (exes : Array String) : Array String := Id.run do
+    (exes : Array String) (dflt : Filter.Record → Bool := fun _ => true) :
+    Array String := Id.run do
   let mut out := #[]
   let atoms := f.expr.atoms
   for (pred, m, span) in atoms do
@@ -233,7 +284,7 @@ def SourcedFilter.warnings (f : SourcedFilter) (records : Array Filter.Record)
       unless exes.any m.matches do
         out := out.push s!"{f.at span.start}: {text} matches no test executable"
     | _ => pure ()
-  unless atoms.isEmpty || records.any f.expr.eval do
+  unless atoms.isEmpty || records.any (fun r => f.expr.eval r (dflt r)) do
     out := out.push s!"{f.at f.expr.span.start}: the filter selects no test"
   return out
 

@@ -239,4 +239,55 @@ def filterPositionsFallBack : Test := do
     assertBEq "errata.toml:1:4: at offset 6 in the filter: expected ')' to end the matcher"
       (e.render (.file "errata.toml" 1 4 #[]))
 
+/--
+A profile names its report files with `junit`, `json`, and `markdown`, each a path, which a profile
+inherits from its ancestors and the runner reads from the elaborated file. A path that is not a
+string, or is empty, is a problem at its position.
+-/
+@[test]
+def reportPathsAreProfileKeys : Test := do
+  let text := "[profile.default]\njunit = \"r.xml\"\n\n[profile.ci]\nmarkdown = \"s.md\"\n\
+    json = \"out/r.json\"\n"
+  match ← ErrataConfig.parse text with
+  | .error problems => fail s!"the file was rejected: {problems}"
+  | .ok f =>
+    let ci ← profileOf f "ci"
+    assertBEq (some "r.xml") ci.junit?
+    assertBEq (some "s.md") ci.markdown?
+    assertBEq (some "out/r.json") ci.json?
+    assertBEq none (← profileOf f "default").markdown?
+    match Runner.Config.ofJson f.toJson (Lean.Json.mkObj [("protocol", 1)]) none with
+    | .error e => fail e
+    | .ok c =>
+      let p? := c.profile? "ci"
+      assertBEq (some (some "r.xml")) (p?.map (·.junitPath?))
+      assertBEq (some (some "s.md")) (p?.map (·.markdownPath?))
+      assertBEq (some (some "out/r.json")) (p?.map (·.jsonPath?))
+  let cases : List (String × String) := [
+    ("[profile.ci]\njunit = 3\n",
+      "errata.toml:2:8: 'junit' must be a path string, and it is an integer"),
+    ("[profile.ci]\nmarkdown = \"\"\n",
+      "errata.toml:2:11: 'markdown' must be a path, and it is the empty string")]
+  for (text, message) in cases do
+    result message do
+      match ← ErrataConfig.parse text with
+      | .ok _ => fail "the file was accepted"
+      | .error problems => assertBEq #[message] problems
+
+/--
+The runner writes the report files at the paths that the profile names, relative to the package's
+directory, and a path on the command line takes the place of the profile's.
+-/
+@[test]
+def reportPathsResolve : Test := do
+  let config : Runner.Config := {
+    packageDir? := some "/pkg"
+    profiles := #[{ name := "ci", junitPath? := some "r.xml", markdownPath? := some "s.md" }] }
+  assertBEq (some "/pkg/r.xml", none, some "/pkg/s.md")
+    (Runner.reportPaths config { profile := "ci" })
+  assertBEq (some "mine.xml", some "j.json", some "/pkg/s.md")
+    (Runner.reportPaths config
+      { profile := "ci", junitPath := some "mine.xml", jsonPath := some "j.json" })
+  assertBEq (none, none, none) (Runner.reportPaths config {})
+
 end ErrataConfigTests

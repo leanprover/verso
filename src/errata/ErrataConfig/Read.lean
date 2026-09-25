@@ -47,6 +47,18 @@ def readString (key : String) (v : Lake.Toml.Value) : CheckM (Option String) := 
     problem other.ref s!"'{key}' must be a string, and it is {kindOf other}"
     return none
 
+/-- A path-valued key's value: a string that is not empty. -/
+def readPath (key : String) (v : Lake.Toml.Value) : CheckM (Option String) := do
+  match v with
+  | .string ref s =>
+    if s.isEmpty then
+      problem ref s!"'{key}' must be a path, and it is the empty string"
+      return none
+    return some s
+  | other =>
+    problem other.ref s!"'{key}' must be a path string, and it is {kindOf other}"
+    return none
+
 /-- A boolean-valued key's value. -/
 def readBool (key : String) (v : Lake.Toml.Value) : CheckM (Option Bool) := do
   match v with
@@ -163,7 +175,7 @@ def readOverride (profile : String) (v : Lake.Toml.Value) : CheckM (Option Overr
 /-- The keys of a profile. -/
 def profileKeys : List String :=
   ["inherits", "timeout", "fixture-timeout", "grace-period", "slow-after", "jobs", "update-golden",
-    "settings", "override", "default-filter"]
+    "settings", "override", "default-filter", "junit", "json", "markdown"]
 
 /-- The profile named {name}`name`, as the file gives it. -/
 def readProfile (name : String) (v : Lake.Toml.Value) : CheckM (Option Profile) := do
@@ -204,6 +216,9 @@ def readProfile (name : String) (v : Lake.Toml.Value) : CheckM (Option Profile) 
         [[profile.{name}.override]], and it is {kindOf other}"
   if let some x := t.find? `«default-filter» then
     p := { p with defaultFilter? := ← readFilter "default-filter" x }
+  if let some x := t.find? `junit then p := { p with junit? := ← readPath "junit" x }
+  if let some x := t.find? `json then p := { p with json? := ← readPath "json" x }
+  if let some x := t.find? `markdown then p := { p with markdown? := ← readPath "markdown" x }
   return some p
 
 /-- A test executable that {lit}`[[executable]]` adds. -/
@@ -300,6 +315,9 @@ def inherit (profiles : Array Profile) : CheckM (Array Profile) := do
           (s.filter (·.1 != k)).push (k, v)
         overrides := acc.overrides ++ q.overrides
         defaultFilter? := q.defaultFilter? <|> acc.defaultFilter?
+        junit? := q.junit? <|> acc.junit?
+        json? := q.json? <|> acc.json?
+        markdown? := q.markdown? <|> acc.markdown?
       }
     out := out.push merged
   return out

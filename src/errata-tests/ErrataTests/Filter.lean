@@ -51,10 +51,37 @@ def filterPrecedence : Test := do
     ("name(a) & (name(b) | name(c))", .and (nm "a") (.or (nm "b") (nm "c") {}) {}),
     ("  tag(x)\t&\n all () ", .and (tg "x") (.all {}) {}),
     ("all() \\ tag(browser)", .diff (.all {}) (tg "browser") {}),
-    ("none()", .none {})]
+    ("none()", .none {}),
+    ("default() | tag(x)", .or (.default {}) (tg "x") {})]
   for (text, expected) in cases do
     result text.quote do
       assertBEq (some expected) (parsed text)
+
+/--
+`default()` selects what the default filter selects, and prints back as itself. Judged from an
+executable's name alone, a filter selects every test of the executable, none of them, or an
+unknown part, which `default()` takes from the default filter's answer.
+-/
+@[test]
+def filterDefaultAndExecutables : Test := do
+  let r : Record := { name := "A.alpha", exe := "Lib" }
+  let some e := (Filter.parse "default() & name(A.)").toOption | fail "does not parse"
+  assertBEq true (e.eval r true)
+  assertBEq false (e.eval r false)
+  assertBEq "default() & name(A.)" e.print
+  let exe (text name : String) (dflt : Option Bool := some true) : Option (Option Bool) :=
+    (Filter.parse text).toOption.map (·.evalExe name dflt)
+  assertBEq (some (some true)) (exe "exe(Lib)" "Lib")
+  assertBEq (some (some false)) (exe "exe(Lib)" "Other")
+  assertBEq (some none) (exe "name(x)" "Lib")
+  assertBEq (some (some false)) (exe "exe(Lib) & name(x)" "Other")
+  assertBEq (some none) (exe "exe(Lib) & name(x)" "Lib")
+  assertBEq (some (some true)) (exe "exe(Lib) | name(x)" "Lib")
+  assertBEq (some none) (exe "exe(Lib) | name(x)" "Other")
+  assertBEq (some (some false)) (exe "all() \\ exe(Lib)" "Lib")
+  assertBEq (some none) (exe "!tag(x)" "Lib")
+  assertBEq (some (some false)) (exe "default()" "Lib" (some false))
+  assertBEq (some none) (exe "default() | exe(Other)" "Lib" none)
 
 /-- A small inventory for evaluating filters. -/
 def records : Array Record := #[

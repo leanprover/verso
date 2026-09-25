@@ -179,28 +179,29 @@ def reportShowsDocstring : Test := do
   let fail := sample "u" (.fail { message := "boom" }) (description? := some "Failing doc.
 Second line.")
   let silent ← captureOutput do discard <| humanReport .silent #[pass, fail]
-  assertContains "FAIL  u: boom\n    Failing doc.\n    Second line.\n" silent.stdout
+  assertContains ("        FAIL [   0.000s] u\n             boom\n             Failing doc.\n" ++
+    "             Second line.\n") silent.stdout
   assertNotContains "Passing doc." silent.stdout
   let verbose ← captureOutput do discard <| humanReport .verbose #[pass]
   assertNotContains "Passing doc." verbose.stdout
   let all ← captureOutput do discard <| humanReport .superVerbose #[pass]
-  assertContains "ok    t" all.stdout
-  assertContains "\n    Passing doc.\n" all.stdout
+  assertContains "        PASS [   0.000s] t\n             Passing doc.\n" all.stdout
 
 /--
-The human-readable report nests tests below their executable and the levels of their paths, printing
-each level once and each test by the last component of its path.
+Each line of the human-readable report has nextest's shape: the status word, right-aligned in twelve
+characters, the duration in seconds in brackets, the executable, and the test's full name. The
+summary line has the same shape, with the counts of the results.
 -/
 @[test]
-def reportNestsByPath : Test := do
-  let at_ (path : Array String) : Result :=
-    { exe := "Lib", test := ".".intercalate path.toList, path, outcome := .reported .pass }
+def reportLinesNameExecutableAndTest : Test := do
+  let at_ (path : Array String) (ms : Nat) : Result :=
+    { exe := "Lib", test := ".".intercalate path.toList, path, outcome := .reported .pass
+      durationMs := ms }
   let out ← captureOutput do
-    discard <| humanReport .verbose
-      #[at_ #["A", "B", "one"], at_ #["A", "B", "two"], at_ #["A", "C", "three"], at_ #["four"]]
-  let lines := out.stdout.splitOn "\n" |>.map fun l => (l.splitOn " (").headD l
-  assertBEq ["Lib", "  A", "    B", "      ok    one", "      ok    two", "    C",
-    "      ok    three", "  ok    four"] (lines.take 8)
+    discard <| humanReport .verbose #[at_ #["A", "B", "one"] 5, at_ #["four"] 12345]
+  assertBEq ["        PASS [   0.005s] Lib A.B.one", "        PASS [  12.345s] Lib four",
+    "     Summary [  12.350s] 2 passed, 0 failed, 0 errors, 0 inconclusive", ""]
+    (out.stdout.splitOn "\n")
 
 /-- An inconclusive test is reported with its reason, its output, and the command that reproduces it. -/
 @[test]
@@ -210,7 +211,8 @@ def reportShowsInconclusive : Test := do
     output := { log := #[.stdout "partial\n"] }, reproduce? := some "exe errata-run out slow"
   }
   let out ← captureOutput do discard <| humanReport .silent #[r]
-  assertContains "INCONCLUSIVE slow: timed out after 1000ms and was terminated" out.stdout
+  assertContains "     TIMEOUT [   0.000s] slow\n             timed out after 1000ms and was \
+    terminated" out.stdout
   assertContains "partial" out.stdout
   assertContains "reproduce: exe errata-run out slow" out.stdout
   assertContains "0 passed, 0 failed, 0 errors, 1 inconclusive" out.stdout
@@ -453,7 +455,7 @@ def warningsReachReports : Test := do
     assertContains "something looks off" md
   result "as an error under --wfail" do
     let (code, xml, _, md) ← runReporting warned ["--wfail"]
-    assertBEq 1 code.toNat
+    assertBEq 100 code.toNat
     assertContains "<error message=" xml
     assertContains "something looks off" xml
     assertContains "## ❌" md
@@ -765,7 +767,8 @@ library has an unsafe one.
 def driverRunsUnsafeTests : Test := do
   for (lib, passed) in [("App", 1), ("AppUnsafe", 2)] do
     result lib do
-      let out ← lakeInFixture (fixturesDir / "driver-configured") #["test", "--", lib]
+      let out ← lakeInFixture (fixturesDir / "driver-configured")
+        #["test", "--", "-E", s!"exe({lib})"]
       assertExitCode 0 out
       assertContains s!"{passed} passed, 0 failed, 0 errors" out.stdout
 
@@ -781,7 +784,7 @@ def driverReportsUnreachableModules : Test := do
   let notice := "modules are not reachable from their library's roots"
   IO.FS.withTempDir fun dir => do
     let junit := dir / "report.xml"
-    let args := #["test", "--", "AppStray", "--test-options", "--junit", junit.toString]
+    let args := #["test", "--", "-E", "exe(AppStray)", "--junit", junit.toString]
     result "A warning is emitted" do
       let out ← lakeInFixture fixture args
       assertExitCode 0 out
@@ -794,7 +797,7 @@ def driverReportsUnreachableModules : Test := do
       assertNotContains "<error" xml
     result "The --wfail flag turns the warning into an error" do
       let out ← lakeInFixture fixture (args.push "--wfail")
-      assertExitCode 1 out
+      assertExitCode 100 out
       assertContains s!"error: these {notice}" out.stderr
       assertContains "1 passed, 0 failed, 0 errors" out.stdout
       assertContains "<error message=" (← IO.FS.readFile junit)
@@ -946,9 +949,10 @@ signal with the panic's message in its output, and the rest of the run goes on. 
 -/
 @[test]
 def driverReportsPanics : Test := do
-  let out ← lakeInFixture (fixturesDir / "driver-configured") #["test", "--", "AppPanic"]
-  assertExitCode 1 out
-  assertContains "INCONCLUSIVE panics: the test executable was ended by signal 6" out.stdout
+  let out ← lakeInFixture (fixturesDir / "driver-configured") #["test", "--", "-E", "exe(AppPanic)"]
+  assertExitCode 100 out
+  assertContains "     SIGABRT [" out.stdout
+  assertContains "\n             the test executable was ended by signal 6" out.stdout
   assertContains "Error: index out of bounds" out.stdout
   assertContains "1 passed, 0 failed, 0 errors, 1 inconclusive" out.stdout
 
@@ -961,42 +965,53 @@ helper from a module it imports.
 def driverRunsHelpers : Test := do
   let fixture := fixturesDir / "driver-configured"
   result "The test runs its helper" do
-    let out ← lakeInFixture fixture #["test", "--", "AppHelper"]
+    let out ← lakeInFixture fixture #["test", "--", "-E", "exe(AppHelper)"]
     assertExitCode 0 out
     assertContains "1 passed, 0 failed, 0 errors, 0 inconclusive" out.stdout
   result "The inventory has no helpers" do
-    let out ← lakeInFixture fixture #["test", "--", "AppHelper", "--test-options", "--list"]
+    let out ← lakeInFixture fixture #["test", "--", "list", "-v", "-E", "exe(AppHelper)"]
     assertExitCode 0 out
     assertContains "runsItsHelper" out.stdout
     assertNotContains "shout" out.stdout
 
 /--
-The `list` subcommand discovers the tests of every library and prints those that its filters select,
-one per line with the executable, the name, the file and line, and the tags. Filters with syntax
-errors are reported at their places, and the command fails.
+The `list` command discovers the tests of the libraries that its filters can select and prints the
+tests that they select: in the one-line format, one per line with the executable, the name, the
+file and line, and the tags; in the human format, each executable followed by its tests; in the
+JSON format, the inventory. Filters with syntax errors are reported at their places, and the
+command fails with the exit code of an invalid filter.
 -/
 @[test]
 def driverListsTests : Test := do
   let fixture := fixturesDir / "driver-configured"
   result "a filter" do
-    let out ← lakeInFixture fixture #["test", "--", "list", "name(#*[Pp]anic*)"]
+    let out ← lakeInFixture fixture
+      #["test", "--", "list", "-T", "oneline", "-E", "name(#*[Pp]anic*)"]
     assertExitCode 0 out
     let lines := out.stdout.splitOn "\n" |>.filter (·.startsWith "AppPanic")
     assertBEq 1 lines.length
     assertContains "panics" (lines.headD "")
     assertContains "AppPanic.lean:" (lines.headD "")
   result "several filters and none" do
-    let two ← lakeInFixture fixture #["test", "--", "list", "exe(App)", "exe(AppUnsafe)"]
+    let two ← lakeInFixture fixture
+      #["test", "--", "list", "--message-format=oneline", "-E", "exe(App)", "-Eexe(AppUnsafe)"]
     assertExitCode 0 two
     assertBEq 3 (two.stdout.splitOn "\n" |>.filter (·.startsWith "App")).length
     let all ← lakeInFixture fixture #["test", "--", "list"]
     assertExitCode 0 all
+    assertContains "\nAppUnsafe:\n    " all.stdout
     assertContains "safeTest" all.stdout
     assertContains "failsAsWritten" all.stdout
+  result "the JSON format" do
+    let out ← lakeInFixture fixture #["test", "--", "list", "-T", "json", "-E", "exe(App)"]
+    assertExitCode 0 out
+    let .ok j := Lean.Json.parse out.stdout | fail s!"not JSON: {out.stdout}"
+    let exes := (j.getObjValAs? (Array Lean.Json) "executables").toOption.getD #[]
+    assertBEq #["App"] (exes.filterMap fun e => (e.getObjValAs? String "name").toOption)
   result "a filter with a syntax error" do
-    let out ← lakeInFixture fixture #["test", "--", "list", "name(x"]
-    assertExitCode 1 out
-    assertContains "list filter 1:6: expected ')' to end the matcher" out.stderr
+    let out ← lakeInFixture fixture #["test", "--", "list", "-E", "name(x"]
+    assertExitCode 94 out
+    assertContains "--filter:6: expected ')' to end the matcher" out.stderr
 
 /-- The workspace for the driver's tests of `errata.toml`, and the variants of the file it tries. -/
 private def tomlFixture : System.FilePath := fixturesDir / "driver-toml"
@@ -1038,23 +1053,24 @@ private def withTomlVariant (name : String) (args : Array String) : IO IO.Proces
 
 /--
 The driver relays the problems that `errata-config` finds in `errata.toml` and reports targets that
-Lake cannot build, each at its position in the file, before it builds any test executable. Errors in
-filters reach the runner with the positions of the filters' characters. `ErrataConfigTests` checks
-the rest of the file's validation in process.
+Lake cannot build, each at its position in the file, before it builds any test executable, with the
+exit code of a setup error. The runner reports errors in filters at the positions of the filters'
+characters, also before any test executable is built, with the exit code of an invalid filter.
+`ErrataConfigTests` checks the rest of the file's validation in process.
 -/
 @[test]
 def driverValidatesToml : Test := do
-  let cases : List (String × String × Bool) := [
-    ("bad-duration", "errata.toml:2:10: 'timeout' must be a duration", true),
-    ("unknown-target", "errata.toml:2:32: the target 'nonexistent' cannot be built:", true),
-    ("filter-basic", "errata.toml:2:53: expected ')' to end the matcher", false)]
-  for (variant, message, beforeBuilding) in cases do
+  let cases : List (String × String × UInt32) := [
+    ("bad-duration", "errata.toml:2:10: 'timeout' must be a duration", 96),
+    ("unknown-target", "errata.toml:2:32: the target 'nonexistent' cannot be built:", 96),
+    ("filter-basic", "errata.toml:2:53: expected ')' to end the matcher", 94)]
+  for (variant, message, code) in cases do
     result variant do
       let out ← withTomlVariant variant #["test"]
-      assertExitCode 1 out
+      assertExitCode code out
       assertTrue ((out.stderr.splitOn message).length == 2)
         s!"the message appears other than once:\n{out.stderr}"
-      if beforeBuilding then assertNotContains "errataExe" out.stdout
+      assertNotContains "errataExe" out.stdout
 
 /--
 Settings bound to targets with `{ needs = … }` receive the targets' results. Editing a target's
@@ -1104,16 +1120,17 @@ def driverBuildsNeededTargets : Test :=
       assertExitCode 0 (← lake #["test"])
       assertTrue ((← config.metadata).modified != configBefore) "config.json was not rewritten"
       let workspaceBefore := (← workspace.metadata).modified
-      assertExitCode 0 (← lake #["test", "--", "--test-options", "--profile", "plain"])
+      assertExitCode 0 (← lake #["test", "--", "-P", "plain"])
       assertTrue ((← workspace.metadata).modified != workspaceBefore)
         "workspace.json was not rewritten"
       assertNotContains "\"stamp\"" (← IO.FS.readFile workspace)
 
 /--
-The driver builds only the targets that the selected profile's settings need. Names on the command
-line select test executables that `errata.toml` adds, as they select libraries, and such executables
-receive the directory of Errata's sources. The runner's configuration says when the command line
-named what to test, and names that match nothing are errors that name both kinds.
+The driver builds only the targets that the selected profile's settings need, and only the test
+executables that the command line's filters can select by their names: the libraries' and the ones
+that `errata.toml` adds, which receive the directory of Errata's sources. The runner's
+configuration says when the filters left some executables out, and a run whose filters leave out
+every executable selects no test.
 -/
 @[test]
 def driverSelectsProfilesAndExecutables : Test :=
@@ -1132,7 +1149,7 @@ def driverSelectsProfilesAndExecutables : Test :=
       ((j.getObjValAs? (Array Lean.Json) "executables").toOption.getD #[]).filterMap fun e =>
         (e.getObjValAs? String "name").toOption
     result "an added executable alone, with the default profile" do
-      let out ← lake #["test", "--", "extra"]
+      let out ← lake #["test", "--", "-E", "exe(extra)"]
       assertExitCode 0 out
       assertContains "1 passed, 0 failed" out.stdout
       assertTrue (!(← stamp.pathExists)) "the default profile needs no target, and the stamp was built"
@@ -1142,29 +1159,54 @@ def driverSelectsProfilesAndExecutables : Test :=
         (j.getObjValAs? String "errataDir").toOption
       assertBEq (some true) (j.getObjValAs? Bool "partial-selection").toOption
     result "a library alone" do
-      discard <| lake #["test", "--", "TomlLib"]
+      discard <| lake #["test", "--", "-E", "exe(TomlLib)"]
       assertBEq #["TomlLib"] (exeNames (← config))
     result "the profile that needs the stamp" do
-      let out ← lake #["test", "--", "--test-options", "--profile", "stamped"]
+      let out ← lake #["test", "--", "-P", "stamped"]
       assertExitCode 0 out
       assertContains "2 passed, 0 failed" out.stdout
       assertTrue (← stamp.pathExists) "the stamp was not built"
       let j ← config
       assertBEq #["TomlLib", "extra"] (exeNames j)
       assertBEq none (j.getObjValAs? Bool "partial-selection").toOption
-    result "an unknown name" do
-      let out ← lake #["test", "--", "Nothing"]
-      assertExitCode 1 out
-      assertContains "no library, and no [[executable]] in errata.toml, matches 'Nothing'" out.stderr
+    result "the profile from the environment" do
+      let out ← IO.Process.output
+        { cmd := "lake", args := #["test", "--", "list", "-v", "-E", "exe(TomlLib)"], cwd := dir
+          env := #[("ERRATA_PROFILE", some "stamped")] }
+      assertExitCode 0 out
+      assertContains "TomlLib.stampFile = \"" out.stdout
+      let plain ← lake #["test", "--", "list", "-v", "-E", "exe(TomlLib)"]
+      assertContains "TomlLib.stampFile: no value" plain.stdout
+    result "a filter that rules out every executable" do
+      let out ← lake #["test", "--", "-E", "exe(Nothing)"]
+      assertExitCode 4 out
+      assertBEq #[] (exeNames (← config))
+      assertContains "no tests to run" out.stderr
 
-/-- The `list` subcommand takes filters only, and an option given to it is an error. -/
+/--
+The runner reads the whole command line before anything is built: an unknown option, an option of
+the other command, and a malformed value end the run with the exit code of a usage error, and an
+unknown profile with the exit code of a setup error. A first argument that is neither `run` nor
+`list` begins the options and filters of a run.
+-/
 @[test]
-def listRejectsOptions : Test := do
-  for opt in ["--profile", "--set", "--test-options", "-v"] do
-    result opt do
-      let out ← withTomlVariant "nested" #["test", "--", "list", "tag(x)", opt]
-      assertExitCode 1 out
-      assertContains s!"the `list` subcommand takes filters only, and {opt} is an option" out.stderr
+def driverChecksCommandLine : Test := do
+  let cases : List (Array String × String × UInt32) := [
+    (#["--golden"], "unknown option '--golden'", 2),
+    (#["list", "--junit", "r.xml"], "--junit is an option of `run`, and the command is `list`", 2),
+    (#["run", "-T", "json"], "-T is an option of `list`, and the command is `run`", 2),
+    (#["--no-tests", "maybe"], "--no-tests expects fail, warn, or pass, and it is 'maybe'", 2),
+    (#["-P", "nosuch"], "the configuration has no profile named nosuch", 96)]
+  for (args, message, code) in cases do
+    result (" ".intercalate args.toList) do
+      let out ← withTomlVariant "nested" (#["test", "--"] ++ args)
+      assertExitCode code out
+      assertContains message out.stderr
+      assertNotContains "errataExe" out.stdout
+  result "an implied run" do
+    let out ← withTomlVariant "nested" #["test", "--", "--no-tests", "warn", "no such test"]
+    assertExitCode 0 out
+    assertContains "warning: no tests to run" out.stderr
 
 /--
 The compile-time commands register their verdicts as tests, so a module that imports only
@@ -1173,27 +1215,25 @@ one `#test_guard` and one `#test_msgs`.
 -/
 @[test]
 def compileTimeImportSuffices : Test := do
-  let out ← lakeInFixture (fixturesDir / "driver-configured") #["test", "--", "AppCompileTime"]
+  let out ← lakeInFixture (fixturesDir / "driver-configured")
+    #["test", "--", "-E", "exe(AppCompileTime)"]
   assertExitCode 0 out
   assertContains "2 passed, 0 failed, 0 errors" out.stdout
 
 /--
-A test in a dependency's library runs in that library's own test executable, which is built in the
-dependency's build directory. The fixture requires the `dep` package, whose `DepLib` library has one
-test.
+The driver selects among the root package's libraries only, so the tests of a dependency's library
+are neither built nor listed, even when a filter names its executable. The fixture requires the
+`dep` package, whose `DepLib` library has one test.
 -/
 @[test]
-def dependencyTestsHaveTheirOwnExecutable : Test := do
+def dependencyLibrariesAreNotSelected : Test := do
   let fixture := fixturesDir / "driver-configured"
-  IO.FS.withTempDir fun dir => do
-    let junit := dir / "report.xml"
-    let out ← lakeInFixture fixture
-      #["test", "--", "dep/DepLib", "--test-options", "-v", "--junit", junit.toString]
-    assertExitCode 0 out
-    assertContains "DepLib\n  ok    depTest" out.stdout
-    assertContains "<testsuite name=\"DepLib\"" (← IO.FS.readFile junit)
-    let workspace ← IO.FS.readFile (fixture / ".lake" / "errata" / "workspace.json")
-    assertContains "dep/.lake/build/bin/errata-test-DepLib" workspace
+  let out ← lakeInFixture fixture #["test", "--", "list", "-E", "exe(DepLib) | exe(App)"]
+  assertExitCode 0 out
+  assertContains "App:" out.stdout
+  assertNotContains "depTest" out.stdout
+  let workspace ← IO.FS.readFile (fixture / ".lake" / "errata" / "workspace.json")
+  assertNotContains "DepLib" workspace
 
 /--
 A root without a `module` header that imports a module-system child, each with a test, has each
@@ -1203,10 +1243,11 @@ The fixture's `AppMixed` library has that shape.
 @[test]
 def mixedDiscoveryRunsEachTestOnce : Test := do
   let out ← lakeInFixture (fixturesDir / "driver-configured")
-    #["test", "--", "AppMixed", "--test-options", "-v"]
+    #["test", "--", "-E", "exe(AppMixed)", "-v"]
   assertExitCode 0 out
-  assertContains "ok    parentTest" out.stdout
-  assertContains "ok    childTest" out.stdout
+  assertContains "PASS [" out.stdout
+  assertContains "] AppMixed parentTest" out.stdout
+  assertContains "] AppMixed childTest" out.stdout
   assertBEq 2 (out.stdout.splitOn "childTest").length
   assertContains "2 passed, 0 failed, 0 errors" out.stdout
 
@@ -1221,9 +1262,10 @@ def driverEnforcesTimeouts : Test := do
   IO.FS.withTempDir fun dir => do
     let junit := dir / "report.xml"
     let out ← lakeInFixture fixture
-      #["test", "--", "AppSlow", "--test-options", "--timeout", "1s", "--junit", junit.toString]
-    assertExitCode 1 out
-    assertContains "INCONCLUSIVE sleeps: timed out after" out.stdout
+      #["test", "--", "run", "-E", "exe(AppSlow)", "--timeout", "1s", "--junit", junit.toString]
+    assertExitCode 100 out
+    assertContains "     TIMEOUT [" out.stdout
+    assertContains "] AppSlow sleeps\n             timed out after" out.stdout
     assertContains "1 passed, 0 failed, 0 errors, 1 inconclusive" out.stdout
     let xml ← IO.FS.readFile junit
     assertContains "type=\"timedOut\"" xml
@@ -1239,13 +1281,13 @@ pass it.
 def instanceIsFixedAtDeclaration : Test := do
   let fixture := fixturesDir / "driver-configured"
   result "a local instance runs the test" do
-    let out ← lakeInFixture fixture #["test", "--", "AppLocalInstance"]
+    let out ← lakeInFixture fixture #["test", "--", "-E", "exe(AppLocalInstance)"]
     assertExitCode 0 out
     assertContains "1 passed, 0 failed, 0 errors" out.stdout
   result "an instance elsewhere does not change the verdict" do
-    let out ← lakeInFixture fixture #["test", "--", "AppShadow"]
-    assertExitCode 1 out
-    assertContains "FAIL  failsAsWritten" out.stdout
+    let out ← lakeInFixture fixture #["test", "--", "-E", "exe(AppShadow)"]
+    assertExitCode 100 out
+    assertContains "] AppShadow failsAsWritten" out.stdout
     assertContains "1 passed, 1 failed, 0 errors" out.stdout
 
 /-- A test that prints, then records a named result that sleeps and fails. -/
@@ -1282,27 +1324,31 @@ def reportShowsTestOutputAboveFailedNamedResult : Test := do
   let results ← resultsOf setupThenFailingCheck
   let failures ← IO.mkRef 0
   let out ← captureOutput do failures.set (← humanReport .silent results)
-  let own := "FAIL  inner: a named result did not pass\n" ++
-    "    SomeFile.lean:42:23\n    output:\n    setup\n"
+  let detail := "             "
+  let own := s!"] inner\n{detail}a named result did not pass\n{detail}SomeFile.lean:42:23\n\
+    {detail}output:\n{detail}setup\n"
   assertContains own out.stdout
   -- The named result follows the test's own result.
-  assertTrue (((out.stdout.splitOn own)[1]?.getD "").startsWith "  FAIL  check: ")
+  let after := (out.stdout.splitOn own)[1]?.getD ""
+  let next := (after.splitOn "\n").headD ""
+  assertTrue (next.startsWith "        FAIL [" && next.endsWith "] inner / check")
     "the named result's line follows the test's output"
   assertContains "0 passed, 2 failed, 0 errors, 0 inconclusive" out.stdout
   assertBEq 2 (← failures.get)
 
-/-- Named results print indented under their test by their own names, siblings included. -/
+/--
+Named results print on status lines of their own, after their test's, named by the test's name and
+the path of the named result.
+-/
 @[test]
-def reportIndentsNamedResultsUnderTheirParent : Test := do
+def reportNamesNamedResultsByPath : Test := do
   let results ← resultsOf do
     result "b" (pure ())
     result "c" (result "d" (pure ()))
   let out ← captureOutput do discard <| humanReport .verbose results
-  assertTrue (out.stdout.startsWith "ok    inner (")
-    "the test's own line comes first"
-  assertContains "\n  ok    b (" out.stdout
-  assertContains "\n  ok    c (" out.stdout
-  assertContains "\n    ok    d (" out.stdout
+  let names := (out.stdout.splitOn "\n").filterMap fun l =>
+    if l.startsWith "        PASS [" then (l.splitOn "] ")[1]? else none
+  assertBEq ["inner", "inner / b", "inner / c", "inner / c / d"] names
 
 /--
 The time of a named result that `expectFail` drops is still the named result's own, so the test's
@@ -1326,15 +1372,23 @@ def junitIncludesTestOutputOnFailedNamedResult : Test := do
   assertContains "<system-out>setup" xml
   assertBEq 1 ((xml.splitOn "<system-out>").length - 1)
 
-/-- The runner's help names the command that its options follow, which the configuration records. -/
+/--
+The runner's usage text names the command that its arguments follow, which the configuration
+records, and lists every option.
+-/
 @[test]
 def runnerHelpNamesInvocation : Test := do
   IO.FS.withTempDir fun dir => do
-    let invocation := "lake test -- --test-options"
+    let invocation := "lake test --"
     let (config, workspace) ← ({ invocation? := some invocation } : Runner.Config).write dir
+    let code ← IO.mkRef (1 : UInt32)
     let out ← captureOutput do
-      discard <| Runner.main [config.toString, workspace.toString, "--help"]
-    assertContains s!"{invocation} [FLAGS]" out.all
+      code.set (← Runner.main [config.toString, workspace.toString, "list", "-h"])
+    assertBEq 0 (← code.get)
+    assertContains s!"\n  {invocation} [run|list] [OPTIONS] [NAME-FILTER]... [-- NAME-FILTER...]\n"
+      out.all
+    for spec in Runner.optionSpecs do
+      assertContains s!"\n  {spec.forms} " out.all
 
 /--
 Settings that need a Lake target receive the path that the workspace's configuration gives for the
@@ -1365,7 +1419,7 @@ def runnerResolvesNeededTargets : Test := do
 
 /--
 The runner's command line: the two configuration files first, the `-v` forms select the verbosity,
-declared flags parse, `--set` and `--filter` repeat, and `list` begins the subcommand.
+options parse, and `--set` and `--filter` repeat.
 -/
 @[test]
 def runnerArgParsing : Test := do
@@ -1395,8 +1449,6 @@ def runnerArgParsing : Test := do
     assertTrue ((parse ["--junit"]) matches .error _)
   result "events path" do
     assertBEq (some (some "e.jsonl")) ((parse ["--events", "e.jsonl"]).toOption.map (·.eventsPath))
-  result "list" do
-    assertBEq (some true) ((parse ["--list"]).toOption.map (·.list))
   result "timeout and grace period" do
     let opts := (parse ["--timeout", "90s", "--grace-period", "250ms"]).toOption
     assertBEq (some (some 90000)) (opts.map (·.timeoutMs?))
@@ -1408,7 +1460,8 @@ def runnerArgParsing : Test := do
   result "malformed timeout rejected" do
     assertTrue ((parse ["--timeout", "soon"]) matches .error _)
   result "one job" do
-    assertBEq (some 1) ((parse ["--jobs", "1"]).toOption.map (·.jobs))
+    for form in [["--jobs", "1"], ["-j", "1"], ["-j1"], ["--test-threads=1"]] do
+      assertBEq (some 1) ((parse form).toOption.map (·.jobs))
   result "more jobs rejected" do
     assertTrue ((parse ["--jobs", "2"]) matches .error _)
   result "no jobs rejected" do
@@ -1426,29 +1479,125 @@ def runnerArgParsing : Test := do
   result "profile" do
     assertBEq (some "default") ((parse []).toOption.map (·.profile))
     assertBEq (some "ci") ((parse ["--profile", "ci"]).toOption.map (·.profile))
+    assertBEq (some "ci") ((parse ["-P", "ci"]).toOption.map (·.profile))
+    assertBEq (some "ci") ((parse ["-Pci"]).toOption.map (·.profile))
+  result "profile from the environment" do
+    let withEnv (args : List String) (env : String) :=
+      Runner.parseOptions ("c" :: "w" :: args) (some env) |>.toOption.map (·.profile)
+    assertBEq (some "nightly") (withEnv [] "nightly")
+    assertBEq (some "ci") (withEnv ["-P", "ci"] "nightly")
+    assertBEq (some "default") (withEnv [] "")
   result "filters" do
-    let opts := (parse ["--filter", "name(a)", "--filter=tag(slow)"]).toOption
-    assertBEq (some #["name(a)", "tag(slow)"]) (opts.map (·.filters))
-  result "the list subcommand" do
-    let opts := (parse ["list", "name(a)", "exe(B)"]).toOption
-    assertBEq (some (some #["name(a)", "exe(B)"])) (opts.map (·.listFilters?))
-    assertBEq (some none) ((parse []).toOption.map (·.listFilters?))
-  result "the list subcommand with an option" do
-    for opts in [["--profile", "ci"], ["--set", "a=b"], ["--filter", "tag(x)"], ["-v"]] do
-      match parse (["list", "tag(x)"] ++ opts) with
-      | .error m => assertContains "the `list` subcommand takes filters only" m
-      | .ok _ => fail s!"{opts} was accepted"
-  result "options after -- rejected" do
-    assertTrue ((parse ["--", "--golden", "on"]) matches .error _)
-  result "unknown flag rejected" do
-    assertTrue ((parse ["--golden", "on"]) matches .error _)
-  result "panic flags rejected" do
-    assertTrue ((parse ["--ignore-panics"]) matches .error _)
-    assertTrue ((parse ["--exit-on-panic"]) matches .error _)
-  result "misplaced library name diagnosed" do
-    match parse ["--verbose", "ErrataTests"] with
-    | .error msg => assertContains "ErrataTests" msg
-    | .ok _ => assertTrue false "expected an error"
+    let opts :=
+      (parse ["--filter", "name(a)", "--filter=tag(slow)", "-E", "exe(B)", "-Etag(c)"]).toOption
+    assertBEq (some #["name(a)", "tag(slow)", "exe(B)", "tag(c)"]) (opts.map (·.filters))
+  result "the default filter" do
+    assertBEq (some false) ((parse []).toOption.map (·.ignoreDefaultFilter))
+    assertBEq (some true) ((parse ["--ignore-default-filter"]).toOption.map (·.ignoreDefaultFilter))
+  result "name filters, --exact, and --skip" do
+    let opts := (parse ["alpha", "--skip", "slow", "--exact", "beta", "--skip=gamma", "--", "-v",
+      "delta"]).toOption
+    assertBEq (some #["alpha", "beta", "-v", "delta"]) (opts.map (·.nameFilters))
+    assertBEq (some #["slow", "gamma"]) (opts.map (·.skips))
+    assertBEq (some true) (opts.map (·.exact))
+    assertBEq (some Verbosity.silent) (opts.map (·.verbosity))
+  result "the command" do
+    assertBEq (some Runner.Command.run) ((parse []).toOption.map (·.command))
+    assertBEq (some Runner.Command.run) ((parse ["run", "x"]).toOption.map (·.command))
+    assertBEq (some Runner.Command.list) ((parse ["list", "x"]).toOption.map (·.command))
+    assertBEq (some #["x"]) ((parse ["list", "x"]).toOption.map (·.nameFilters))
+    -- Only the first argument names the command; anywhere else, the words are name filters.
+    assertBEq (some #["x", "list"]) ((parse ["x", "list"]).toOption.map (·.nameFilters))
+    assertBEq (some #["run"]) ((parse ["run", "run"]).toOption.map (·.nameFilters))
+    assertBEq (some #["list"]) ((parse ["-v", "list"]).toOption.map (·.nameFilters))
+  result "--no-tests" do
+    assertBEq (some Runner.NoTests.fail) ((parse []).toOption.map (·.noTests))
+    assertBEq (some Runner.NoTests.warn) ((parse ["--no-tests", "warn"]).toOption.map (·.noTests))
+    assertBEq (some Runner.NoTests.pass) ((parse ["--no-tests=pass"]).toOption.map (·.noTests))
+  result "--color" do
+    assertBEq (some Runner.ColorChoice.auto) ((parse []).toOption.map (·.color))
+    assertBEq (some Runner.ColorChoice.always)
+      ((parse ["--color", "always"]).toOption.map (·.color))
+    assertBEq (some Runner.ColorChoice.never) ((parse ["--color=never"]).toOption.map (·.color))
+  result "the message format" do
+    let format (args : List String) := (parse ("list" :: args)).toOption.map (·.messageFormat)
+    assertBEq (some Runner.MessageFormat.human) (format [])
+    assertBEq (some Runner.MessageFormat.oneline) (format ["-T", "oneline"])
+    assertBEq (some Runner.MessageFormat.json) (format ["--message-format", "json"])
+    assertBEq (some Runner.MessageFormat.jsonPretty) (format ["-Tjson-pretty"])
+  result "help" do
+    assertBEq (some true) ((parse ["-h"]).toOption.map (·.help))
+    assertBEq (some true) ((parse ["list", "--help"]).toOption.map (·.help))
+
+/--
+The driver builds only the test executables that a run can select, judged by their names: the
+filter expressions and the default filter can rule an executable out, and name filters and
+`--skip` patterns never do.
+-/
+@[test]
+def selectionRulesOutExecutables : Test := do
+  let sf (text : String) : TestM Runner.SourcedFilter := do
+    match Runner.SourcedFilter.parse text (.argument "--filter") with
+    | .ok f => pure f
+    | .error e => fail e
+  let lib := "Lib"
+  let other := "browser-search"
+  let mayContain (s : Runner.Selection) : Array Bool := #[s.mayContain lib, s.mayContain other]
+  assertBEq #[true, true] (mayContain {})
+  assertBEq #[true, false] (mayContain { filters := #[← sf "exe(Lib)"] })
+  assertBEq #[true, true] (mayContain { filters := #[← sf "exe(Lib)", ← sf "name(x)"] })
+  assertBEq #[true, true] (mayContain { names := #["x"], skips := #["y"] })
+  let browserless ← sf "all() \\ exe(browser-*)"
+  assertBEq #[true, false] (mayContain { default? := some browserless })
+  assertBEq #[true, true] (mayContain { default? := some browserless, useDefault := false })
+  let notDefault ← sf "!default()"
+  assertBEq #[false, true]
+    (mayContain { default? := some browserless, useDefault := false, filters := #[notDefault] })
+  assertBEq #[false, false]
+    (mayContain { default? := some browserless, filters := #[← sf "!default()"] })
+
+/-- Every command line that the runner rejects, with its message. -/
+@[test]
+def runnerArgRejections : Test := do
+  let cases : List (List String × String) := [
+    (["--golden", "on"], "unknown option '--golden'"),
+    (["-x"], "unknown option '-x'"),
+    (["--list"], "unknown option '--list'"),
+    (["--test-options"], "unknown option '--test-options'"),
+    (["--ignore-panics"], "unknown option '--ignore-panics'"),
+    (["--exit-on-panic"], "unknown option '--exit-on-panic'"),
+    (["--wfail=yes"], "--wfail takes no value"),
+    (["--junit"], "--junit expects PATH"),
+    (["-E"], "-E expects EXPR"),
+    (["--junit="], "--junit expects a path"),
+    (["--seed", "x"], "--seed expects a whole number, and it is 'x'"),
+    (["--timeout", "soon"], "invalid duration 'soon'"),
+    (["--timeout", "0s"], "--timeout must be longer than zero"),
+    (["-j", "0"], "-j 0 is invalid: at least one test must be able to run"),
+    (["--jobs", "2"], "--jobs 2: only 1 is supported"),
+    (["--no-tests", "maybe"], "--no-tests expects fail, warn, or pass, and it is 'maybe'"),
+    (["--color", "sometimes"], "--color expects auto, always, or never, and it is 'sometimes'"),
+    (["list", "-T", "yaml"],
+      "-T expects human, oneline, json, or json-pretty, and it is 'yaml'"),
+    (["--set", "golden"], "--set golden: expected NAME=VALUE"),
+    (["--set", "=v"], "--set =v: the setting's name is empty"),
+    (["-P", ""], "-P expects the name of a profile"),
+    (["-P", "a", "--profile", "b"], "--profile is given more than once"),
+    (["--seed", "1", "--seed", "2"], "--seed is given more than once"),
+    (["list", "--junit", "r.xml"], "--junit is an option of `run`, and the command is `list`"),
+    (["list", "--wfail"], "--wfail is an option of `run`, and the command is `list`"),
+    (["list", "-j", "1"], "-j is an option of `run`, and the command is `list`"),
+    (["list", "--no-tests", "pass"], "--no-tests is an option of `run`, and the command is `list`"),
+    (["-T", "json"], "-T is an option of `list`, and the command is `run`")]
+  for (args, message) in cases do
+    result (" ".intercalate args) do
+      match Runner.parseOptions ("config.json" :: "workspace.json" :: args) with
+      | .error m => assertContains message m
+      | .ok _ => fail s!"{args} was accepted"
+  result "no configuration files" do
+    match Runner.parseOptions [] with
+    | .error m => assertContains "expected the configuration file" m
+    | .ok _ => fail "accepted"
 
 /--
 The Lean harness reads the settings among its arguments, reads its own `updateGolden`, and reaches
@@ -1533,35 +1682,38 @@ def harnessListsAndRuns : Test := do
       assertBEq 2 (← code.get)
       assertContains "no helper is named M.other" printed.stderr
 
-/-- A run that discovers nothing fails: a test tool with no tests is a broken setup, not a pass. -/
+/--
+A run that selects no test fails by default, with the exit code 4: a test tool with no tests to run
+is a broken setup, not a pass.
+-/
 @[test]
 def emptyRunFails : Test := do
   let code ← IO.mkRef (0 : UInt32)
   let out ← captureOutput do
     code.set (← Runner.executeAndWrite {} {})
-  assertContains "no tests were discovered" out.all
-  assertBEq 1 (← code.get).toNat
+  assertContains "no tests to run" out.all
+  assertBEq 4 (← code.get).toNat
 
 /--
-Every report records a run that discovered nothing as a failed run: JUnit has a "Test run" suite
+Every report records a run that selected nothing as a failed run: JUnit has a "Test run" suite
 with an error case, the JSON object lists the issue, and the Markdown headline is red.
 -/
 @[test]
 def emptyRunReachesReports : Test := do
   let (code, xml, json, md) ← runReporting {} []
-  assertBEq 1 code.toNat
+  assertBEq 4 code.toNat
   result "JUnit" do
     assertContains "<testsuite name=\"Test run\"" xml
-    assertContains "<error message=\"no tests were discovered\"" xml
+    assertContains "<error message=\"no tests to run" xml
   result "JSON" do
     let .ok j := Lean.Json.parse json | fail "the JSON report does not parse"
     let .ok issues := j.getObjValAs? (Array Lean.Json) "issues" | fail "no issues field"
     assertBEq 1 issues.size
     assertBEq (some "error") (issues[0]!.getObjValAs? String "level").toOption
-    assertContains "no tests were discovered" ((issues[0]!.getObjValAs? String "message").toOption.getD "")
+    assertContains "no tests to run" ((issues[0]!.getObjValAs? String "message").toOption.getD "")
   result "Markdown" do
     assertContains "## ❌" md
-    assertContains "no tests were discovered" md
+    assertContains "no tests to run" md
 
 /-- At silent verbosity the report hides passes but shows failures and the summary line. -/
 @[test]
@@ -1569,15 +1721,114 @@ def reportSilent : Test := do
   let pass := sample "t" .pass
   let fail := sample "u" (.fail { message := "boom" })
   let out ← captureOutput do discard <| humanReport .silent #[pass, fail]
-  assertContains "FAIL  u: boom" out.stdout
+  assertContains "        FAIL [   0.000s] u\n             boom\n" out.stdout
   assertContains "1 passed, 1 failed, 0 errors, 0 inconclusive" out.stdout
-  assertBEq 1 (out.stdout.splitOn "ok    ").length
+  assertBEq 1 (out.stdout.splitOn "PASS [").length
 
 /-- At verbose verbosity the report shows passes too. -/
 @[test]
 def reportVerbose : Test := do
   let out ← captureOutput do discard <| humanReport .verbose #[sample "t" .pass]
-  assertContains "ok    t" out.stdout
+  assertContains "        PASS [   0.000s] t\n" out.stdout
+
+/--
+The status word of each outcome, as nextest writes it where nextest has the outcome: `PASS`, `SLOW`,
+`FAIL`, `TIMEOUT`, the signal's name, and `XFAIL` for a test executable that could not start; an
+error verdict is `ERROR`, and the other inconclusive outcomes are `INCONCLUSIVE`.
+-/
+@[test]
+def statusWords : Test := do
+  let word (outcome : Outcome) (slow := false) : String :=
+    (statusWord { exe := "", test := "t", outcome, slow }).1
+  assertBEq "PASS" (word (.reported .pass))
+  assertBEq "SLOW" (word (.reported .pass) (slow := true))
+  assertBEq "FAIL" (word (.reported (.fail { message := "m" })) (slow := true))
+  assertBEq "ERROR" (word (.reported (.error "m")))
+  assertBEq "TIMEOUT" (word (.inconclusive (.timedOut 5 true)))
+  assertBEq "SIGABRT" (word (.inconclusive (.signaled 6)))
+  assertBEq "SIGSEGV" (word (.inconclusive (.signaled 11)))
+  assertBEq "SIGKILL" (word (.inconclusive (.signaled 9)))
+  assertBEq "ABORT SIG 40" (word (.inconclusive (.signaled 40)))
+  assertBEq "XFAIL" (word (.inconclusive (.spawnFailed "m")))
+  assertBEq "INCONCLUSIVE" (word (.inconclusive (.exitedWithoutVerdict 3)))
+  assertBEq "INCONCLUSIVE" (word (.inconclusive (.settingMissing "s")))
+
+/-- Whether escape sequences appear in a text. -/
+private def hasEscapes (s : String) : Bool := s.contains '\x1b'
+
+/--
+Under `--color always` the human-readable report colors each status word and the summary as nextest
+does: bold green for a pass, bold yellow for a slow pass, bold red for everything that did not pass,
+bold magenta for the executable, bold blue for the test's name with its namespaces in cyan, and
+bold counts. Without color, and in the report files, no escape sequence appears.
+-/
+@[test]
+def reportColors : Test := do
+  let r (test : String) (outcome : Outcome) (slow := false) : Result :=
+    { exe := "Lib", test, path := test.splitOn "." |>.toArray, outcome, slow }
+  let results := #[r "A.ok" (.reported .pass), r "slow" (.reported .pass) (slow := true),
+    r "f" (.reported (.fail { message := "m" })), r "e" (.reported (.error "m")),
+    r "t" (.inconclusive (.timedOut 5 true)), r "s" (.inconclusive (.signaled 11)),
+    r "i" (.inconclusive (.exitedWithoutVerdict 3))]
+  let lines (color : Bool) : Array String := Id.run do
+    let mut h : HumanReporter := { verbosity := .verbose, color }
+    let mut out := #[]
+    for res in results do
+      let (h', ls) := h.test #[res]
+      h := h'
+      out := out ++ ls
+    return out.push (h.summary 1500 (some 2))
+  -- The status lines, without the lines that explain an outcome below them.
+  let colored := (lines true).filter (!·.startsWith "             ")
+  let esc (code text : String) := s!"\x1b[{code}m{text}\x1b[0m"
+  let expected := [
+    esc "32;1" "        PASS", esc "33;1" "        SLOW", esc "31;1" "        FAIL",
+    esc "31;1" "       ERROR", esc "31;1" "     TIMEOUT", esc "31;1" "     SIGSEGV",
+    esc "31;1" "INCONCLUSIVE"]
+  for (word, i) in expected.zipIdx do
+    assertTrue (colored[i]!.startsWith word) s!"line {i}: {colored[i]!.quote}"
+  assertContains s!"{esc "35;1" "Lib"} {esc "36" "A."}{esc "34;1" "ok"}" colored[0]!
+  let summary := colored.back!
+  assertTrue (summary.startsWith (esc "31;1" "     Summary")) summary.quote
+  assertContains s!"{esc "1" "2"} {esc "32;1" "passed"}" summary
+  assertContains s!"{esc "1" "1"} {esc "31;1" "failed"}" summary
+  assertContains s!"{esc "1" "2"} {esc "33;1" "skipped"}" summary
+  assertTrue (!(lines false).any hasEscapes) "no escape sequence without color"
+  let report : RunReport := { results, seed := 0 }
+  assertTrue (!hasEscapes (junitReport report) && !hasEscapes (jsonReport report) &&
+    !hasEscapes (markdownReport report)) "no escape sequence in the report files"
+
+/--
+With `--color auto`, the output is colored on a terminal, unless `NO_COLOR` is set and not empty,
+and `CLICOLOR_FORCE` set to anything but `0` colors it anywhere; `always` and `never` decide alone.
+Output that is not a terminal, such as captured output, is not colored.
+-/
+@[test]
+def colorChoice : Test := do
+  let env (vars : List (String × String)) (name : String) : Option String := vars.lookup name
+  assertBEq true (Runner.colorOf .auto (env []) true)
+  assertBEq false (Runner.colorOf .auto (env []) false)
+  assertBEq false (Runner.colorOf .auto (env [("NO_COLOR", "1")]) true)
+  assertBEq true (Runner.colorOf .auto (env [("NO_COLOR", "")]) true)
+  assertBEq true (Runner.colorOf .auto (env [("CLICOLOR_FORCE", "1")]) false)
+  assertBEq false (Runner.colorOf .auto (env [("CLICOLOR_FORCE", "0")]) false)
+  assertBEq true (Runner.colorOf .auto (env [("CLICOLOR_FORCE", "1"), ("NO_COLOR", "1")]) false)
+  assertBEq true (Runner.colorOf .always (env [("NO_COLOR", "1")]) false)
+  assertBEq false (Runner.colorOf .never (env [("CLICOLOR_FORCE", "1")]) true)
+  let force ← IO.getEnv "CLICOLOR_FORCE"
+  let noColor ← IO.getEnv "NO_COLOR"
+  let decided ← IO.mkRef true
+  discard <| captureOutput do decided.set (← Runner.useColor .auto)
+  let vars := (force.map ("CLICOLOR_FORCE", ·)).toList ++ (noColor.map ("NO_COLOR", ·)).toList
+  assertBEq (Runner.colorOf .auto (env vars) false) (← decided.get)
+  result "a run under --color never and --color always" do
+    let config : Runner.Config := { executables := #[passingExe] }
+    let out (color : Bool) : TestM String := do
+      let o ← captureOutput do
+        discard <| Runner.executeAndWrite config { verbosity := .verbose } (color := color)
+      return o.stdout
+    assertTrue (!hasEscapes (← out false)) "no escape sequence"
+    assertContains "\x1b[32;1m        PASS\x1b[0m" (← out true)
 
 /--
 Characters that XML 1.0 forbids are replaced with the canonical replacement character in the JUnit
@@ -1613,11 +1864,11 @@ def junitOmitsEmptyOutput : Test := do
 def reportTruncates : Test := do
   let many := (Array.range 60).map fun i => sample "many" .pass (resultPath := #[s!"case {i}"])
   let quiet ← captureOutput do discard <| humanReport .quiet many
-  assertBEq 51 (quiet.stdout.splitOn "ok    ").length
-  -- The summary lines up with the named results' rows, which are one level deep.
-  assertContains "\n      (... and 10 more passed)" quiet.stdout
+  assertBEq 51 (quiet.stdout.splitOn "PASS [").length
+  -- The count of the rest lines up with the text below the status lines.
+  assertContains "\n             (... and 10 more passed)" quiet.stdout
   let verbose ← captureOutput do discard <| humanReport .verbose many
-  assertBEq 61 (verbose.stdout.splitOn "ok    ").length
+  assertBEq 61 (verbose.stdout.splitOn "PASS [").length
   assertBEq 1 (verbose.stdout.splitOn "(... and").length
 
 /--
@@ -1630,8 +1881,7 @@ def reportTruncationShowsFailures : Test := do
     let v : Verdict := if i == 55 then .fail { message := "boom" } else .pass
     sample "many" v (resultPath := #[s!"case {i}"])
   let quiet ← captureOutput do discard <| humanReport .quiet many
-  -- The named results have no parent line, so the failure is named in full.
-  assertContains "\nFAIL  many.case 55: boom" quiet.stdout
+  assertContains "\n        FAIL [   0.000s] many / case 55\n             boom" quiet.stdout
   assertContains "(... and 9 more passed)" quiet.stdout
 
 /-- `humanReport` returns the number of failures, errors, and inconclusive results. -/

@@ -6,9 +6,9 @@ Author: David Thrane Christiansen
 
 /-
 Filters over the inventory: the predicates `name(…)`, `file(…)`, `exe(…)`, and `tag(…)`, the
-constants `all()` and `none()`, and the operators `|`, `&`, `\`, and `!`. Filters are parsed in
-three layers: the expression, the text of each predicate's matcher with its escapes, and, for a glob
-matcher, the glob. Every node of a parsed filter has its span in the filter's text.
+constants `all()` and `none()`, `default()` for the profile's default filter, and the operators
+`|`, `&`, `\`, and `!`. Filters are parsed in three layers: the expression, the text of each
+predicate's matcher with its escapes, and, for a glob matcher, the glob. Every node of a parsed filter has its span in the filter's text.
 -/
 module
 
@@ -387,6 +387,8 @@ inductive Expr where
   | all (span : Span)
   /-- No test. -/
   | none (span : Span)
+  /-- The tests that the profile's default filter selects. -/
+  | default (span : Span)
   /-- The tests that the operand leaves out. -/
   | not (e : Expr) (span : Span)
   /-- The tests that both operands select. -/
@@ -399,13 +401,15 @@ deriving Repr, Inhabited, DecidableEq
 
 /-- The span of a filter node. -/
 def Expr.span : Expr → Span
-  | .atom _ _ s | .all s | .none s | .not _ s | .and _ _ s | .diff _ _ s | .or _ _ s => s
+  | .atom _ _ s | .all s | .none s | .default s | .not _ s | .and _ _ s | .diff _ _ s
+  | .or _ _ s => s
 
 /-- The filter with every span replaced by the empty span at zero, for comparing structure alone. -/
 def Expr.forgetSpans : Expr → Expr
   | .atom p m _ => .atom p m {}
   | .all _ => .all {}
   | .none _ => .none {}
+  | .default _ => .default {}
   | .not e _ => .not e.forgetSpans {}
   | .and a b _ => .and a.forgetSpans b.forgetSpans {}
   | .diff a b _ => .diff a.forgetSpans b.forgetSpans {}
@@ -423,8 +427,11 @@ structure Record where
   tags : Array String := #[]
 deriving Repr, Inhabited
 
-/-- Whether the filter selects the test. -/
-def Expr.eval (e : Expr) (r : Record) : Bool :=
+/--
+Whether the filter selects the test. {name}`dflt` is whether the default filter selects it, which is
+what {lit}`default()` stands for.
+-/
+def Expr.eval (e : Expr) (r : Record) (dflt : Bool := true) : Bool :=
   match e with
   | .atom .name m _ => m.matches r.name
   | .atom .file m _ => m.matches r.file
@@ -432,15 +439,47 @@ def Expr.eval (e : Expr) (r : Record) : Bool :=
   | .atom .tag m _ => r.tags.any m.matches
   | .all _ => true
   | .none _ => false
-  | .not e _ => !e.eval r
-  | .and a b _ => a.eval r && b.eval r
-  | .diff a b _ => a.eval r && !b.eval r
-  | .or a b _ => a.eval r || b.eval r
+  | .default _ => dflt
+  | .not e _ => !e.eval r dflt
+  | .and a b _ => a.eval r dflt && b.eval r dflt
+  | .diff a b _ => a.eval r dflt && !b.eval r dflt
+  | .or a b _ => a.eval r dflt || b.eval r dflt
+
+/--
+Whether the filter can select a test of the executable named {name}`exe`, when only the executable's
+name is known: {lean}`some true` when it selects every test of the executable, {lean}`some false`
+when it selects none, and {lean}`none` when that depends on the tests. {name}`dflt` is the same
+answer for the default filter.
+-/
+def Expr.evalExe (e : Expr) (exe : String) (dflt : Option Bool := some true) : Option Bool :=
+  match e with
+  | .atom .exe m _ => some (m.matches exe)
+  | .atom _ _ _ => Option.none
+  | .all _ => some true
+  | .none _ => some false
+  | .default _ => dflt
+  | .not e _ => (e.evalExe exe dflt).map (!·)
+  | .and a b _ => and3 (a.evalExe exe dflt) (b.evalExe exe dflt)
+  | .diff a b _ => and3 (a.evalExe exe dflt) ((b.evalExe exe dflt).map (!·))
+  | .or a b _ => (and3 ((a.evalExe exe dflt).map (!·)) ((b.evalExe exe dflt).map (!·))).map (!·)
+where
+  /-- Conjunction of two answers that may be unknown: false when either is false. -/
+  and3 : Option Bool → Option Bool → Option Bool
+    | some false, _ | _, some false => some false
+    | some true, some true => some true
+    | _, _ => Option.none
+
+/-- The span of the first {lit}`default()` in the filter, if it has one. -/
+def Expr.defaultSpan? : Expr → Option Span
+  | .default s => some s
+  | .atom .. | .all _ | .none _ => Option.none
+  | .not e _ => e.defaultSpan?
+  | .and a b _ | .diff a b _ | .or a b _ => a.defaultSpan? <|> b.defaultSpan?
 
 /-- Every atom of the filter, in the order of the text. -/
 def Expr.atoms : Expr → Array (Predicate × Matcher × Span)
   | .atom p m s => #[(p, m, s)]
-  | .all _ | .none _ => #[]
+  | .all _ | .none _ | .default _ => #[]
   | .not e _ => e.atoms
   | .and a b _ | .diff a b _ | .or a b _ => a.atoms ++ b.atoms
 
@@ -583,19 +622,19 @@ mutual
       expect '('
       let m ← matcher pred
       return .atom pred m { start, stop := ← get }
-    if w == "all" || w == "none" then
+    if w == "all" || w == "none" || w == "default" then
       skipWs
       expect '('
       expect ')'
       let span := { start, stop := ← get }
-      return if w == "all" then .all span else .none span
+      return if w == "all" then .all span else if w == "none" then .none span else .default span
     if w.isEmpty then
       match ← peek with
       | some c =>
         fail start s!"expected a filter, such as name(…), tag(…), all(), or '(', and found {showChar c}"
       | none => fail start "expected a filter, such as name(…), tag(…), all(), or '('"
     fail start s!"unknown predicate '{w}'; the predicates are name, file, exe, and tag, and the \
-      constants are all() and none()"
+      constants are all(), none(), and default()"
 
   /-- Reads a complement, or an atom. -/
   private partial def unary (depth : Nat) : P Expr := do
@@ -689,6 +728,7 @@ where
       | .atom p m _ => (2, s!"{p.keyword}({m.print p})")
       | .all _ => (2, "all()")
       | .none _ => (2, "none()")
+      | .default _ => (2, "default()")
       | .not e _ => (2, "!" ++ printAt e 2)
       | .and a b _ => (1, s!"{printAt a 1} & {printAt b 2}")
       | .diff a b _ => (1, s!"{printAt a 1} \\ {printAt b 2}")

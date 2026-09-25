@@ -63,7 +63,8 @@ def Profile.toJson (p : Profile) : Json :=
     optField "jobs" p.jobs? ++ optField "update-golden" p.updateGolden? ++
     [("settings", settingsToJson p.settings),
       ("override", Json.arr (p.overrides.map (·.toJson)))] ++
-    (match p.defaultFilter? with | some f => [("default-filter", f.toJson)] | none => [])
+    (match p.defaultFilter? with | some f => [("default-filter", f.toJson)] | none => []) ++
+    optField "junit" p.junit? ++ optField "json" p.json? ++ optField "markdown" p.markdown?
 
 /-- An added test executable as an object, with its position in the file. -/
 def Executable.toJson (e : Executable) : Json :=

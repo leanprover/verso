@@ -9,7 +9,8 @@ packagesDir = "../../../../.lake/packages"
 name = "verso"
 path = "../../../.."
 
-# A dependency with tests of its own, selected as `dep/DepLib`.
+# A dependency with tests of its own, which the driver leaves out: it selects among the root
+# package's libraries only.
 [[require]]
 name = "dep"
 path = "../dep"

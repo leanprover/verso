@@ -38,10 +38,15 @@ def basic (tests : List String) : ExecutableConfig where
   command := #["bash", (harnessDir / "basic.sh").toString]
   env := #[("BASIC_TESTS", " ".intercalate tests)]
 
-/-- What a run reported: the report, the lines of its events file, and its human-readable lines. -/
+/--
+What a run reported: the report, its exit code, the lines of its events file, and its
+human-readable lines.
+-/
 structure Run where
   /-- The report. -/
   report : RunReport
+  /-- The exit code. -/
+  code : UInt32
   /-- The events, in the order the dispatcher sent them. -/
   events : Array Json
   /-- The lines of the human-readable report. -/
@@ -63,9 +68,9 @@ def runWith (exes : Array ExecutableConfig) (opts : Options := {}) (config : Con
   let events ← IO.mkRef #[]
   let lines ← IO.mkRef #[]
   let dir := config.errataDir? <|> some (← errataDir).toString
-  let report ← execute { config with executables := exes, errataDir? := dir } opts
+  let (report, code) ← execute { config with executables := exes, errataDir? := dir } opts
     { event := fun j => events.modify (·.push j), line := fun l => lines.modify (·.push l) }
-  return { report, events := ← events.get, lines := ← lines.get }
+  return { report, code, events := ← events.get, lines := ← lines.get }
 
 /-- The outcome of the test with the given name. -/
 def Run.outcome? (r : Run) (test : String) : Option Outcome :=
@@ -372,7 +377,7 @@ def undeclaredSettingRejected : Test := do
 
 /--
 Settings' declared defaults reach the tests that take them when nothing else gives a value, and the
-test prints it. `--list` shows the default and what the test receives, and the command line wins
+test prints it. `list -v` shows the default and what the test receives, and the command line wins
 over the default.
 -/
 @[test]
@@ -382,8 +387,8 @@ def declaredDefaultReachesTest : Test := forEach products fun p => do
   expectOutcome r p.greets.test (· matches .reported .pass) "a pass"
   assertTrue (res.settings.contains (p.greeting, "hello")) s!"the settings are {res.settings}"
   assertContains "hello" res.output.stdout
-  result "--list shows it" do
-    let r ← p.run #[p.greets] { list := true, seed := some 7 }
+  result "list -v shows it" do
+    let r ← p.run #[p.greets] { command := .list, verbosity := .quiet, seed := some 7 }
     assertTrue (r.lines.contains s!"  {p.greeting} (default \"hello\")") s!"{r.lines}"
     assertTrue (r.lines.contains s!"        {p.greeting} = \"hello\"") s!"{r.lines}"
     assertTrue r.report.results.isEmpty "nothing ran"
@@ -396,7 +401,7 @@ def declaredDefaultReachesTest : Test := forEach products fun p => do
 
 /--
 The test that the shell scripts call `greets` receives its settings as arguments, in the order it
-takes them, with the seed that the runner derives, and `--list` shows the derived seed.
+takes them, with the seed that the runner derives, and `list -v` shows the derived seed.
 -/
 @[test]
 def settingsArriveInOrder : Test := forEach scriptedProducts fun p => do
@@ -406,11 +411,11 @@ def settingsArriveInOrder : Test := forEach scriptedProducts fun p => do
   assertBEq s!"received setting:Errata.seed={seed}\nreceived setting:greeting=hello\n"
     res.output.stdout
   assertBEq #[("Errata.seed", seed), ("greeting", "hello")] res.settings
-  result "--list shows the seed" do
-    let r ← p.runTests #["greets"] { list := true, seed := some 7 }
+  result "list -v shows the seed" do
+    let r ← p.runTests #["greets"] { command := .list, verbosity := .quiet, seed := some 7 }
     assertTrue (r.lines.contains s!"        Errata.seed = \"{seed}\"") s!"{r.lines}"
-  result "--list without a run seed" do
-    let r ← p.runTests #["greets"] { list := true }
+  result "list -v without a run seed" do
+    let r ← p.runTests #["greets"] { command := .list, verbosity := .quiet }
     assertTrue (r.lines.contains "        Errata.seed: derived from the run's seed") s!"{r.lines}"
 
 /-! # Checks of the scripted products -/
@@ -518,7 +523,7 @@ def timeoutEndsTests : Test := forEach scriptedProducts fun p => do
     let config : Config := { executables := #[p.exe], errataDir? := some (← errataDir).toString }
     discard <| captureOutput do
       code.set (← executeAndWrite config opts)
-    assertBEq 1 (← code.get)
+    assertBEq ExitCode.testRunFailed (← code.get)
     let xml ← IO.FS.readFile junit
     result "terminated" do
       assertContains "type=\"timedOut\"" xml
@@ -807,27 +812,130 @@ def unknownProfile : Test := do
   assertTrue r.report.results.isEmpty "no test ran"
   let some issue := r.report.issues.find? (·.isError) | fail "no error"
   assertContains "no profile named nightly; its profiles are default, ci" issue.message
+  assertBEq ExitCode.setupError r.code
 
 /--
-The profile's default filter selects the tests to run unless the command line gives filters, which
-are joined by union.
+The command line's filter expressions, joined by union, select from the tests that the profile's
+default filter selects, unless `--ignore-default-filter` draws them from the whole inventory; in a
+filter expression, `default()` stands for the default filter. A filter with a syntax error, and a
+default filter that contains `default()`, end the run with the exit code of an invalid filter.
 -/
 @[test]
 def defaultFilterAndCommandLine : Test := do
   let config : Config := { profiles := #[{ name := "default", defaultFilter? := some { text := "tag(slow)" } }] }
   let ran (r : Run) : Array String := r.report.results.map (·.test)
+  let quick : Options := { timeoutMs? := some 300, gracePeriodMs? := some 100 }
   result "the default filter" do
-    let r ← runWith #[basic ["pass", "sleeps"]] { timeoutMs? := some 300, gracePeriodMs? := some 100 } config
+    let r ← runWith #[basic ["pass", "sleeps"]] quick config
     assertBEq #["sleeps"] (ran r)
-  result "the command line's filters" do
+  result "the command line's filters, within the default filter" do
     let r ← runWith #[basic ["pass", "fail", "sleeps"]]
-      { filters := #["name(=pass)", "name(=fail)"] } config
+      { quick with filters := #["name(=pass)", "name(=sleeps)"] } config
+    assertBEq #["sleeps"] (ran r)
+  result "--ignore-default-filter" do
+    let r ← runWith #[basic ["pass", "fail", "sleeps"]]
+      { filters := #["name(=pass)", "name(=fail)"], ignoreDefaultFilter := true } config
     assertBEq #["pass", "fail"] (ran r)
+  result "default() in a filter" do
+    let r ← runWith #[basic ["pass", "fail", "sleeps"]]
+      { quick with filters := #["default() | name(=pass)"], ignoreDefaultFilter := true } config
+    assertBEq #["pass", "sleeps"] (ran r)
   result "a filter with a syntax error" do
     let r ← runWith #[basic ["pass"]] { filters := #["name(pass"] }
     assertTrue r.report.results.isEmpty "no test ran"
     let some issue := r.report.issues.find? (·.isError) | fail "no error"
     assertBEq "--filter:9: expected ')' to end the matcher" issue.message
+    assertBEq ExitCode.invalidFilter r.code
+  result "default() in the default filter" do
+    let dflt : FilterText := { text := "all() \\ default()" }
+    let config : Config := { profiles := #[{ name := "default", defaultFilter? := some dflt }] }
+    let r ← runWith #[basic ["pass"]] {} config
+    assertTrue r.report.results.isEmpty "no test ran"
+    assertBEq #["configuration:8: default() stands for the default filter, so the default filter \
+      cannot contain it"] (r.report.issues.map (·.message))
+    assertBEq ExitCode.invalidFilter r.code
+
+/--
+Name filters select the tests whose names contain one of them, and `--skip` leaves out the tests
+whose names contain one of its patterns; under `--exact`, both match whole names. The name filters
+select from what the filter expressions select.
+-/
+@[test]
+def nameFiltersAndSkip : Test := do
+  let exe := basic ["pass", "fail", "greets", "verdict-fail"]
+  let ran (opts : Options) : IO (Array String) := do
+    return (← runWith #[exe] opts).report.results.map (·.test)
+  assertBEq #["fail", "verdict-fail"] (← ran { nameFilters := #["fail"] })
+  assertBEq #["pass", "fail", "verdict-fail"] (← ran { nameFilters := #["fail", "pass"] })
+  assertBEq #["fail"] (← ran { nameFilters := #["fail"], exact := true })
+  assertBEq #["pass", "greets"] (← ran { skips := #["fail"] })
+  assertBEq #["pass", "greets", "verdict-fail"] (← ran { skips := #["fail"], exact := true })
+  assertBEq #["verdict-fail"] (← ran { nameFilters := #["fail"], filters := #["name(verdict)"] })
+
+/--
+A run that selects no test fails with the exit code 4 under `--no-tests fail`, the default; under
+`--no-tests warn` it succeeds with a warning, which `--wfail` makes fail as `fail` does; under
+`--no-tests pass` it succeeds without an issue.
+-/
+@[test]
+def noTestsToRun : Test := do
+  let none' : Options := { nameFilters := #["nothing has this name"] }
+  result "fail" do
+    let r ← runWith #[basic ["pass"]] none'
+    assertBEq ExitCode.noTestsRun r.code
+    assertBEq #[(true, noTestsMessage)] (r.report.issues.map fun i => (i.isError, i.message))
+  result "warn" do
+    let r ← runWith #[basic ["pass"]] { none' with noTests := .warn }
+    assertBEq ExitCode.ok r.code
+    assertBEq #[(false, "no tests to run")] (r.report.issues.map fun i => (i.isError, i.message))
+  result "warn under --wfail" do
+    let r ← runWith #[basic ["pass"]] { none' with noTests := .warn, wfail := true }
+    assertBEq ExitCode.noTestsRun r.code
+  result "pass" do
+    let r ← runWith #[basic ["pass"]] { none' with noTests := .pass }
+    assertBEq ExitCode.ok r.code
+    assertTrue r.report.issues.isEmpty "no issue"
+  result "a run with tests" do
+    assertBEq ExitCode.ok (← runWith #[basic ["pass"]]).code
+    assertBEq ExitCode.testRunFailed (← runWith #[basic ["pass", "fail"]]).code
+
+/--
+The `list` command selects as a run does and runs nothing. Its human format names each executable
+with a colon and its tests below it, indented by four spaces; the one-line format has a line per
+test with the executable, the name, the file, and the tags; the JSON format holds the inventory with
+what each test receives.
+-/
+@[test]
+def listFormats : Test := do
+  let exe := basic ["pass", "greets", "sleeps"]
+  let dflt : FilterText := { text := "!tag(slow)" }
+  let config : Config := { profiles := #[{ name := "default", defaultFilter? := some dflt }] }
+  let listed (format : MessageFormat) : TestM Run := do
+    let r ← runWith #[exe] { command := .list, messageFormat := format, seed := some 7 } config
+    assertTrue r.report.results.isEmpty "nothing ran"
+    assertBEq ExitCode.ok r.code
+    return r
+  result "human" do
+    assertBEq #["basic:", "    pass", "    greets"] (← listed .human).lines
+  result "oneline" do
+    assertBEq #["basic  pass    basic.sh  [shell]", "basic  greets  basic.sh  [shell]"]
+      (← listed .oneline).lines
+  result "json" do
+    let r ← listed .json
+    let some text := r.lines[0]? | fail "no output"
+    let .ok j := Json.parse text | fail s!"not JSON: {text}"
+    assertBEq (some 2) (j.getObjValAs? Nat "selected").toOption
+    assertBEq (some 1) (j.getObjValAs? Nat "skipped").toOption
+    let some tests := (do
+        let exes ← (j.getObjValAs? (Array Json) "executables").toOption
+        (exes[0]?.bind fun e => (e.getObjValAs? (Array Json) "tests").toOption)) | fail "no tests"
+    assertBEq #["pass", "greets"] (tests.filterMap (strField · "name"))
+    let greets := tests[1]!
+    let settings := greets.getObjValD "settings"
+    assertBEq (some "hello") (settings.getObjValAs? String "greeting").toOption
+  result "json-pretty" do
+    let r ← listed .jsonPretty
+    assertTrue (r.lines.any (·.contains '\n')) "the JSON is indented over several lines"
 
 /--
 The source of a filter of {name}`length` characters in a one-line string of {name}`path` whose
@@ -956,15 +1064,16 @@ def resolutionPrecedence : Test := do
     assertBEq false r.updateGolden
 
 /--
-Tests that run longer than `slow-after` are marked slow in the human report, and their outcomes
-stand.
+Tests that run longer than `slow-after` are marked slow in the human report, whose status word for a
+slow pass is `SLOW`, and their outcomes stand.
 -/
 @[test]
 def slowTestsAreMarked : Test := do
   let config : Config := { profiles := #[{ name := "default", slowAfterMs? := some 0 }] }
   let r ← runWith #[basic ["pass"]] { verbosity := .verbose } config
   expectOutcome r "pass" (· matches .reported .pass) "a pass"
-  assertTrue (r.lines.any fun l => l.endsWith "[slow]") s!"no line is marked slow: {r.lines}"
+  assertTrue (r.lines.any fun l => l.startsWith "        SLOW [" && l.endsWith "basic pass")
+    s!"no line is marked slow: {r.lines}"
   assertTrue ((r.result? "pass").map (·.slow) == some true) "the result is slow"
 
 /--
@@ -1026,6 +1135,11 @@ def missingCommand : Test := do
   let r ← runWith #[{ name := "absent", command := #["./no-such-test-executable"] }]
   let some issue := r.report.issues.find? (·.isError) | fail "no error"
   assertContains "absent could not list its tests: it could not be started" issue.message
+  assertBEq ExitCode.listFailed r.code
+  result "under list" do
+    let r ← runWith #[{ name := "absent", command := #["./no-such-test-executable"] }]
+      { command := .list }
+    assertBEq ExitCode.listFailed r.code
 
 /--
 A signal that ends a test executable while it lists its tests stops the run with a message that

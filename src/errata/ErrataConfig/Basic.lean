@@ -133,8 +133,14 @@ structure Profile where
   settings : Array (String × SettingValue) := #[]
   /-- The per-test overrides, in order. -/
   overrides : Array Override := #[]
-  /-- The filter that selects the tests to run when the command line gives none. -/
+  /-- The filter that the tests to run are drawn from, unless the command line ignores it. -/
   defaultFilter? : Option FilterString := none
+  /-- The path of the JUnit XML report, relative to the package's directory. -/
+  junit? : Option String := none
+  /-- The path of the JSON report, relative to the package's directory. -/
+  json? : Option String := none
+  /-- The path of the Markdown report, relative to the package's directory. -/
+  markdown? : Option String := none
 deriving Inhabited
 
 /-- A test executable that {lit}`[[executable]]` adds. -/

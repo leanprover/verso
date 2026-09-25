@@ -54,21 +54,105 @@ def Tally.of (results : Array Result) : Tally := results.foldl Tally.add {}
 /-- The number of results that did not pass. -/
 def Tally.notPassed (t : Tally) : Nat := t.failed + t.errors + t.inconclusive
 
-/-- The summary line of the human-readable report. -/
-def Tally.summary (t : Tally) : String :=
-  s!"{t.passed} passed, {t.failed} failed, {t.errors} errors, {t.inconclusive} inconclusive"
+/-! # Terminal styles -/
 
 /--
-The state of the human-readable reporter between tests: the verbosity, the executable and the
-levels of the path last printed, so that the next test's lines nest under them, and the tally so far.
+The styles of the human-readable output on a terminal, with the colors of nextest's reporter: green
+for a pass, red for anything that did not pass, yellow for a slow test and for tests left out, bold
+for counts, magenta for the executable, and blue for a test's name, whose enclosing namespaces are
+cyan.
 -/
+inductive Style where
+  /-- A pass: bold green. -/
+  | pass
+  /-- A failure, an error, or an inconclusive outcome: bold red. -/
+  | fail
+  /-- A slow test, or tests left out of the run: bold yellow. -/
+  | slow
+  /-- A count: bold. -/
+  | count
+  /-- A test executable's name: bold magenta. -/
+  | exe
+  /-- The enclosing namespaces of a test's name: cyan. -/
+  | namespaces
+  /-- The last component of a test's name: bold blue. -/
+  | testName
+deriving Repr, Inhabited, DecidableEq
+
+/-- The parameters of the style's ANSI escape sequence, as nextest's color library writes them. -/
+def Style.code : Style → String
+  | .pass => "32;1"
+  | .fail => "31;1"
+  | .slow => "33;1"
+  | .count => "1"
+  | .exe => "35;1"
+  | .namespaces => "36"
+  | .testName => "34;1"
+
+/-- Text in the style when {name}`color` is true, and the text alone otherwise. -/
+def Style.paint (s : Style) (color : Bool) (text : String) : String :=
+  if color && !text.isEmpty then s!"\x1b[{s.code}m{text}\x1b[0m" else text
+
+/-- Text padded on the left with spaces to at least {name}`width` characters. -/
+def padLeft (width : Nat) (text : String) : String :=
+  "".pushn ' ' (width - text.length) ++ text
+
+/--
+A duration in milliseconds as nextest brackets it: seconds with three decimals, right-aligned in
+eight characters.
+-/
+def bracketedDuration (ms : Nat) : String :=
+  let frac := toString (ms % 1000)
+  s!"[{padLeft 8 s!"{ms / 1000}.{"".pushn '0' (3 - frac.length)}{frac}"}s]"
+
+/--
+The name of a signal by its number, as the system's headers spell it without the {lit}`SIG`
+prefix. The numbers from 1 to 15 that POSIX systems share, and those that differ between macOS and
+Linux, are named for the system that the runner runs on.
+-/
+def signalName? (signal : Nat) : Option String :=
+  match signal with
+  | 1 => "HUP" | 2 => "INT" | 3 => "QUIT" | 4 => "ILL" | 5 => "TRAP" | 6 => "ABRT"
+  | 7 => if System.Platform.isOSX then "EMT" else "BUS"
+  | 8 => "FPE" | 9 => "KILL"
+  | 10 => if System.Platform.isOSX then "BUS" else "USR1"
+  | 11 => "SEGV"
+  | 12 => if System.Platform.isOSX then "SYS" else "USR2"
+  | 13 => "PIPE" | 14 => "ALRM" | 15 => "TERM"
+  | _ => none
+
+/--
+The word that the status line of a result begins with, and its style. The words are nextest's where
+the outcome is one nextest has: {lit}`PASS`, {lit}`SLOW` for a slow pass, {lit}`FAIL`,
+{lit}`TIMEOUT`, the signal's name such as {lit}`SIGABRT`, and {lit}`XFAIL` for a test executable
+that could not be started. An error verdict is {lit}`ERROR`, and the other inconclusive outcomes
+are {lit}`INCONCLUSIVE`.
+-/
+def statusWord (r : Result) : String × Style :=
+  match r.outcome with
+  | .reported .pass => if r.slow then ("SLOW", .slow) else ("PASS", .pass)
+  | .reported (.fail _) => ("FAIL", .fail)
+  | .reported (.error _) => ("ERROR", .fail)
+  | .inconclusive (.timedOut ..) => ("TIMEOUT", .fail)
+  | .inconclusive (.signaled s) =>
+    ((signalName? s).map ("SIG" ++ ·) |>.getD s!"ABORT SIG {s}", .fail)
+  | .inconclusive (.spawnFailed _) => ("XFAIL", .fail)
+  | .inconclusive _ => ("INCONCLUSIVE", .fail)
+
+/-- The width that the status word is right-aligned in, as nextest aligns it. -/
+private def statusWidth : Nat := 12
+
+/-- The indentation of the lines below a status line, which start under its duration. -/
+private def detailIndent : String := "".pushn ' ' (statusWidth + 1)
+
+/-! # The human-readable report -/
+
+/-- The state of the human-readable reporter between tests: what to print, and the tally so far. -/
 structure HumanReporter where
   /-- How much to print. -/
   verbosity : Verbosity
-  /-- The executable whose heading was printed last. -/
-  exe? : Option String := none
-  /-- The levels of the path printed last, below the executable. -/
-  levels : Array String := #[]
+  /-- Whether the lines are colored for a terminal. -/
+  color : Bool := false
   /-- The counts of the results reported so far. -/
   tally : Tally := {}
 deriving Repr, Inhabited
@@ -76,51 +160,80 @@ deriving Repr, Inhabited
 /-- How many results of one test are printed at {name}`Verbosity.quiet` before the rest are counted. -/
 private def truncationCap : Nat := 50
 
-/-- The label of a result's status on its line. -/
-private def statusTag : Outcome → String
-  | .reported .pass => "ok   "
-  | .reported (.fail _) => "FAIL "
-  | .reported (.error _) => "ERROR"
-  | .inconclusive _ => "INCONCLUSIVE"
+/--
+A test's name in its styles: when the name ends with the last component of its path, the part
+before that component in the style of namespaces and the component in the style of names, and
+otherwise the whole name in the style of names.
+-/
+def styleTestName (color : Bool) (name : String) (path : Array String) : String :=
+  let last := path.back?.getD name
+  if !last.isEmpty && name.endsWith last then
+    Style.namespaces.paint color (name.dropEnd last.length).copy ++
+      Style.testName.paint color last
+  else Style.testName.paint color name
 
 /--
-The lines of one result: its status line, its docstring when shown, and for anything but a pass,
-what explains it, its captured output, and the command that reproduces it. {name}`lead` is the
-indentation of the status line, and {name}`label` is the name printed on it.
+A result's name in its styles: the test's name, then the path of its named result, separated by
+{lit}` / `.
 -/
-private def resultLines (verbosity : Verbosity) (r : Result) (lead label : String) :
-    Array String := Id.run do
-  let detail := lead ++ "    "
-  let mut out := #[]
-  let slow := if r.slow then " [slow]" else ""
-  let headline := match r.outcome with
-    | .reported .pass => s!"{lead}{statusTag r.outcome} {label} ({r.durationMs}ms){slow}"
-    | .reported (.fail f) => s!"{lead}{statusTag r.outcome} {label}{slow}: {f.message}"
-    | .reported (.error m) => s!"{lead}{statusTag r.outcome} {label}{slow}: {m}"
-    | .inconclusive reason => s!"{lead}{statusTag r.outcome} {label}{slow}: {reason.describe}"
-  out := out.push headline
-  if verbosity.showsAllDocstrings || !r.outcome.isPass then
-    if let some d := r.description? then out := out.push (indentLines d detail)
+private def styledName (color : Bool) (r : Result) : String :=
+  r.resultPath.foldl (init := styleTestName color r.test r.path) fun acc part =>
+    acc ++ " / " ++ Style.testName.paint color part
+
+/--
+The lines of one result: its status line, with nextest's shape (the status word, the duration in
+brackets, the executable, and the name), then what explains an outcome other than a pass, its
+docstring when shown, its captured output, and the command that reproduces it.
+-/
+private def resultLines (h : HumanReporter) (r : Result) : Array String := Id.run do
+  let (word, style) := statusWord r
+  let exe := if r.exe.isEmpty then "" else Style.exe.paint h.color r.exe ++ " "
+  let mut out := #[s!"{style.paint h.color (padLeft statusWidth word)} \
+    {bracketedDuration r.durationMs} {exe}{styledName h.color r}"]
+  let detail (text : String) := indentLines text.trimAsciiEnd.copy detailIndent
   match r.outcome with
   | .reported .pass => pure ()
+  | .reported (.fail f) => out := out.push (detail f.message)
+  | .reported (.error m) => out := out.push (detail m)
+  | .inconclusive reason => out := out.push (detail reason.describe)
+  if h.verbosity.showsAllDocstrings || !r.outcome.isPass then
+    if let some d := r.description? then out := out.push (detail d)
+  match r.outcome with
   | .reported (.fail f) =>
-    if let some l := f.location? then out := out.push (indentLines l.text detail)
-    if let some d := f.detail? then out := out.push (indentLines d detail)
+    if let some l := f.location? then out := out.push (detail l.text)
+    if let some d := f.detail? then out := out.push (detail d)
   | .inconclusive (.verdictMismatch _ (.fail f)) =>
-    out := out.push (indentLines s!"reported: {f.message}" detail)
-  | .inconclusive (.verdictMismatch _ (.error m)) =>
-    out := out.push (indentLines s!"reported: {m}" detail)
+    out := out.push (detail s!"reported: {f.message}")
+  | .inconclusive (.verdictMismatch _ (.error m)) => out := out.push (detail s!"reported: {m}")
   | _ => pure ()
   unless r.outcome.isPass do
     unless r.output.isEmpty do
-      out := out.push (indentLines s!"output:\n{dropFinalNewline r.output.all}" detail)
-    if let some cmd := r.reproduce? then out := out.push (indentLines s!"reproduce: {cmd}" detail)
+      out := out.push (detail s!"output:\n{dropFinalNewline r.output.all}")
+    if let some cmd := r.reproduce? then out := out.push (detail s!"reproduce: {cmd}")
   return out
 
 /--
-Reports the results of one test: the test's own result first, then its named results. The lines are
-nested below the test executable and the levels of the test's path, which are printed when they
-differ from the previous test's. A test without a path is listed directly below its executable.
+The summary line of the human-readable report, in nextest's shape: {lit}`Summary`, the run's
+duration in brackets, and the counts of results by outcome, then the number of tests that the
+filters left out when it is known.
+-/
+def HumanReporter.summary (h : HumanReporter) (elapsedMs : Nat) (skipped? : Option Nat := none) :
+    String :=
+  let t := h.tally
+  let c := h.color
+  let count (n : Nat) (word : String) (s : Style) :=
+    s!"{Style.count.paint c (toString n)} {s.paint c word}"
+  let style : Style :=
+    if t.notPassed > 0 then .fail else if t.passed == 0 then .slow else .pass
+  let counts := [count t.passed "passed" .pass, count t.failed "failed" .fail,
+    count t.errors "errors" .fail, count t.inconclusive "inconclusive" .fail] ++
+    (skipped?.map (count · "skipped" .slow)).toList
+  s!"{style.paint c (padLeft statusWidth "Summary")} {bracketedDuration elapsedMs} \
+    {", ".intercalate counts}"
+
+/--
+Reports the results of one test: the test's own result first, then its named results, each on a
+status line of its own that names the executable and the test.
 
 Failures, errors, and inconclusive results are printed at every verbosity.
 {name}`Verbosity.quiet` adds passing results, printing at most a fixed number of lines per test and
@@ -130,14 +243,13 @@ summarizing the rest. {name}`Verbosity.verbose` shows all results, and
 def HumanReporter.test (h : HumanReporter) (results : Array Result) :
     HumanReporter × Array String := Id.run do
   let h := { h with tally := results.foldl Tally.add h.tally }
-  let some root := results[0]? | return (h, #[])
+  if results.isEmpty then return (h, #[])
   let v := h.verbosity
   -- Which results are printed: failures always, and passes when the verbosity shows them, up to the
   -- cap when it truncates.
   let mut shown : Array Result := #[]
   let mut count := 0
   let mut more := 0
-  let mut moreDepth := 0
   for r in results do
     if !r.outcome.isPass then
       shown := shown.push r
@@ -145,47 +257,19 @@ def HumanReporter.test (h : HumanReporter) (results : Array Result) :
     else if v.showsPasses then
       if v.truncates && count ≥ truncationCap then
         more := more + 1
-        moreDepth := r.resultPath.size
       else
         shown := shown.push r
         count := count + 1
   if shown.isEmpty then return (h, #[])
-  let mut out : Array String := #[]
-  let mut h := h
-  -- The executable's heading, and the levels of the path above the test.
-  let exe := root.exe
-  if h.exe? != some exe then
-    unless exe.isEmpty do out := out.push exe
-    h := { h with exe? := some exe, levels := #[] }
-  let base := if exe.isEmpty then 0 else 1
-  let levels := root.path.pop
-  let common := (levels.zip h.levels).takeWhile (fun (a, b) => a == b) |>.size
-  for i in [common : levels.size] do
-    out := out.push ("".pushn ' ' (2 * (base + i)) ++ levels[i]!)
-  h := { h with levels }
-  let depth := base + levels.size
-  let label := root.path.back?.getD root.test
-  -- The printed results that enclose the current position, outermost first.
-  let mut context : Array (Array String) := #[]
-  for r in shown do
-    context := context.popWhile fun top =>
-      !(top.size < r.resultPath.size && top.isPrefixOf r.resultPath)
-    let parentShown :=
-      if let some top := context.back? then top.size + 1 == r.resultPath.size else false
-    let nest := if parentShown then r.resultPath.size else 0
-    let lead := "".pushn ' ' (2 * (depth + nest))
-    let name := match r.resultPath.back? with
-      | some last => if parentShown then last else s!"{label}.{".".intercalate r.resultPath.toList}"
-      | none => label
-    out := out ++ resultLines v r lead name
-    context := context.push r.resultPath
+  let mut out : Array String := shown.flatMap (resultLines h)
   if more > 0 then
-    out := out.push s!"{"".pushn ' ' (2 * (depth + moreDepth) + 4)}(... and {more} more passed)"
+    out := out.push s!"{detailIndent}(... and {more} more passed)"
   return (h, out)
 
 /--
-Prints a human-readable report of results that were gathered in one place, and returns the number
-of results that did not pass. The results of one test are contiguous, the test's own first.
+Prints a human-readable report of results that were gathered in one place, uncolored, and returns
+the number of results that did not pass. The results of one test are contiguous, the test's own
+first. The summary's duration is the sum of the results' durations.
 -/
 def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
   let mut h : HumanReporter := { verbosity }
@@ -200,7 +284,7 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
     h := h'
     for l in lines do IO.println l
     i := j
-  IO.println h.tally.summary
+  IO.println (h.summary (results.foldl (· + ·.durationMs) 0))
   return h.tally.notPassed
 
 /--

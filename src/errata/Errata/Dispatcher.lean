@@ -72,8 +72,11 @@ inductive Event where
   | unreadable (exe test : String) (message : String)
   /-- A test executable's process has ended, after {name}`durationMs` milliseconds. -/
   | testEnded (exe test : String) (exit : Exit) (durationMs : Nat)
-  /-- The run is over. The human report prints its summary when {name}`summary` is true. -/
-  | ended (timeMs : Nat) (summary : Bool)
+  /--
+  The run is over. The human report prints its summary when {name}`summary` is true, with the number
+  of tests that the filters left out when {name}`skipped?` gives it.
+  -/
+  | ended (timeMs : Nat) (summary : Bool) (skipped? : Option Nat)
 deriving Inhabited
 
 /-- What the dispatcher asks of the reporters. -/
@@ -120,6 +123,8 @@ structure State where
   human : HumanReporter
   /-- Whether warnings count as errors. -/
   wfail : Bool := false
+  /-- When the run started, in milliseconds since the epoch. -/
+  startMs : Nat := 0
   /-- The tests that are running. -/
   running : Array Running := #[]
   /-- The results of the tests that have finished, in the order they finished. -/
@@ -335,9 +340,10 @@ def step (s : State) : Event → State × Array Action
       let s := { s with
         running := s.running.eraseIdx! i, results := s.results ++ results, human }
       (s, #[.event (outcomeEvent r.planned outcome durationMs)] ++ lines.map .print)
-  | .ended timeMs summary =>
+  | .ended timeMs summary skipped? =>
     let t := s.human.tally
-    (s, (if summary then #[.print t.summary] else #[]) ++ #[.event (Json.mkObj [("type", Json.str "end"),
+    let line := s.human.summary (timeMs - s.startMs) skipped?
+    (s, (if summary then #[.print line] else #[]) ++ #[.event (Json.mkObj [("type", Json.str "end"),
       ("time_ms", ToJson.toJson timeMs), ("passed", ToJson.toJson t.passed),
       ("failed", ToJson.toJson t.failed), ("errors", ToJson.toJson t.errors),
       ("inconclusive", ToJson.toJson t.inconclusive)])])

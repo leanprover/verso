@@ -93,8 +93,14 @@ structure Profile where
   settings : Array (String × String) := #[]
   /-- The per-test overrides, in order, those of the profile's ancestors first. -/
   overrides : Array Override := #[]
-  /-- The filter that selects the tests to run when the command line gives none. -/
+  /-- The filter that the tests to run are drawn from, unless the command line ignores it. -/
   defaultFilter? : Option FilterText := none
+  /-- The path of the JUnit XML report, relative to the package's directory. -/
+  junitPath? : Option String := none
+  /-- The path of the JSON report, relative to the package's directory. -/
+  jsonPath? : Option String := none
+  /-- The path of the Markdown report, relative to the package's directory. -/
+  markdownPath? : Option String := none
 deriving Repr, Inhabited, DecidableEq
 
 /-- The runner's configuration. -/
@@ -110,20 +116,20 @@ structure Config where
   errataDir? : Option String := none
   /-- The driver's warnings about the run, reported as issues with the run as a whole. -/
   warnings : Array String := #[]
-  /-- The command that the runner's options follow, such as {lit}`lake test -- --test-options`. -/
+  /-- The command that the runner's arguments follow, such as {lit}`lake test --`. -/
   invocation? : Option String := none
+  /-- The package's directory, which the profile's report paths are relative to. -/
+  packageDir? : Option String := none
   /--
   The profiles, by name. If the configuration has no {lit}`default` profile, then that profile is
   empty.
   -/
   profiles : Array Profile := #[]
-  /--
-  The filter that selects the tests to run when neither the profile nor the command line gives one.
-  -/
+  /-- The default filter of every profile that gives none of its own. -/
   defaultFilter? : Option FilterText := none
   /--
-  Whether the driver was given the names of libraries or executables to test, so that the run may
-  have only some of the package's test executables.
+  Whether the driver left out some of the package's test executables, because the command line's
+  filters rule them out.
   -/
   partialSelection : Bool := false
 deriving Repr, Inhabited, DecidableEq
@@ -235,6 +241,9 @@ def Profile.fromJson? (name : String) (resolve : NeedsResolver) (j : Json) :
     settings := ← settingsField resolve j
     overrides
     defaultFilter? := ← configField j "default-filter"
+    junitPath? := ← configField j "junit"
+    jsonPath? := ← configField j "json"
+    markdownPath? := ← configField j "markdown"
   }
 
 instance : ToJson Profile where
@@ -244,7 +253,8 @@ instance : ToJson Profile where
     Protocol.opt "jobs" p.jobs? ++ Protocol.opt "update-golden" p.updateGolden? ++
     (if p.settings.isEmpty then [] else [("settings", settingsToJson p.settings)]) ++
     (if p.overrides.isEmpty then [] else [("override", ToJson.toJson p.overrides)]) ++
-    Protocol.opt "default-filter" p.defaultFilter?
+    Protocol.opt "default-filter" p.defaultFilter? ++ Protocol.opt "junit" p.junitPath? ++
+    Protocol.opt "json" p.jsonPath? ++ Protocol.opt "markdown" p.markdownPath?
 
 /--
 Decodes the profiles: an object from names to profiles. {name}`resolve` gives the result of each
@@ -310,6 +320,7 @@ def Config.ofJson (config workspace : Json) (required? : Option String) : Except
     errataDir? := ← configField workspace "errataDir"
     warnings := (← configField workspace "warnings").getD #[]
     invocation? := ← configField workspace "invocation"
+    packageDir? := ← configField workspace "packageDir"
     profiles
     defaultFilter? := ← configField config "default-filter"
     partialSelection := (← configField workspace "partial-selection").getD false
@@ -330,6 +341,7 @@ def Config.workspaceJson (c : Config) : Json :=
     (match c.errataDir? with | some d => [("errataDir", Json.str d)] | none => []) ++
     [("warnings", ToJson.toJson c.warnings)] ++
     (match c.invocation? with | some i => [("invocation", Json.str i)] | none => []) ++
+    (match c.packageDir? with | some d => [("packageDir", Json.str d)] | none => []) ++
     (if c.partialSelection then [("partial-selection", Json.bool true)] else [])
 
 /-- Writes {lit}`config.json` and {lit}`workspace.json` for the configuration into {name}`dir`. -/

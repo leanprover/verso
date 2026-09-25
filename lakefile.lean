@@ -346,29 +346,12 @@ private def addedExecutables (config : Lean.Json) : Array AddedExecutable :=
   | _ => #[]
 
 /--
-The profile that the runner's arguments select with `--profile NAME` or `--profile=NAME`, the last
-one winning, or `default`.
--/
-private def selectedProfile (runnerArgs : List String) : String := Id.run do
-  let mut profile := "default"
-  let mut rest := runnerArgs
-  repeat
-    match rest with
-    | "--profile" :: name :: more =>
-      profile := name
-      rest := more
-    | arg :: more =>
-      if let some name := arg.dropPrefix? "--profile=" then profile := name.copy
-      rest := more
-    | [] => break
-  return profile
-
-/--
 What the workspace contributes to the run, `.lake/errata/workspace.json`, as JSON: the path of each
 needed target's result, the libraries' test executables and the executables `added` that
-`errata.toml` adds, the directory of Errata's sources, the driver's warnings, and the command that
-the runner's options follow. `partialSelection` says that the command line named the libraries or
-executables to test.
+`errata.toml` adds, the directory of Errata's sources, the driver's warnings, the command that the
+runner's arguments follow, and the package's directory, `cwd`, where tests run and which report
+paths in `errata.toml` are relative to. `partialSelection` says that the command line's filters
+ruled out some of the package's test executables.
 -/
 private def workspaceJson (needs : Array (String × String))
     (executables : Array (String × System.FilePath)) (added : Array AddedExecutable)
@@ -389,7 +372,8 @@ private def workspaceJson (needs : Array (String × String))
         ("cwd", Lean.Json.str cwd.toString)]) ++ added),
     ("errataDir", Lean.Json.str errataDir),
     ("warnings", Lean.toJson warnings),
-    ("invocation", Lean.Json.str invocation)
+    ("invocation", Lean.Json.str invocation),
+    ("packageDir", Lean.Json.str cwd.toString)
   ] ++ (if partialSelection then [("partial-selection", Lean.Json.bool true)] else [])
 
 /--
@@ -419,50 +403,36 @@ private def driverInvocation (ws : Workspace) (self : Package) : LakeT IO (Strin
     else found.name
   return (s!"lake run {spec}", s!"lake run {spec}")
 
-/--
-Splits driver arguments at the `--test-options` marker into library names and runner passthrough
-arguments. Library names precede the marker and may not look like options; everything after the
-marker goes to the runner.
+/-!
+The driver's exit codes for the problems it finds itself, the same as the runner's
+(`Errata.Runner.ExitCode`), which this file cannot import.
 -/
-private def splitArgs (withArgs : String) (args : List String) :
-    Except String (List String × List String) :=
-  let (names, rest) :=
-    match args.span (· != "--test-options") with
-    | (names, _ :: after) => (names, after)
-    | (names, []) => (names, [])
-  match names.find? (·.startsWith "-") with
-  | some opt =>
-    .error s!"unexpected option '{opt}': arguments before the `--test-options` marker name the \
-      libraries to test. Put runner options after the marker, \
-      e.g. `{withArgs} --test-options {opt}`."
-  | none => .ok (names, rest)
+
+/-- `errata.toml` or a target that a setting needs is wrong. -/
+private def setupErrorCode : UInt32 := 96
+
+/-- A test executable, the runner, or a needed target could not be built. -/
+private def buildFailedCode : UInt32 := 101
 
 /--
-Usage information for the driver, in terms of the commands that invoke it.
+What the runner's planning mode says about the command line: whether it printed the usage text, the
+profile, the test executables that the filters do not rule out, whether the targets of the
+profile's settings are needed, and whether the phases are named as they begin.
 -/
-private def usage (run withArgs : String) : String :=
-  let forms := #[
-    (run, "run every test in the package"),
-    (s!"{withArgs} LIBRARY...", "run the tests in the given libraries"),
-    (s!"{withArgs} LIBRARY... --test-options OPTION...", "pass runner options after the marker"),
-    (s!"{withArgs} list [FILTER...]", "list the tests that the filters select")]
-  let width := forms.foldl (fun w (form, _) => max w form.length) 0
-  let formLines := forms.map fun (form, what) =>
-    s!"  {form.pushn ' ' (width + 2 - form.length)}{what}"
-  s!"Errata test runner\n\n\
-    Usage:\n{"\n".intercalate formLines.toList}\n\n\
-    Tokens before `--test-options` name libraries, or test executables that `errata.toml` adds with\n\
-    [[executable]]. A library is a bare `Library` in this package or a `package/Library` reaching\n\
-    into a dependency. Without names, every library and every added executable runs. Everything\n\
-    after the marker goes to the test runner.\n\n\
-    With `list` as the first argument, the driver discovers the tests of every library and prints\n\
-    one line per test that the filters select: its executable, name, file and line, and tags. No\n\
-    filter selects every test, and several are joined by union. A library is selected with\n\
-    `exe(Library)`, and the profile's default filter plays no part.\n\n\
-    The configuration file `errata.toml`, in the package's directory, gives the tests' settings\n\
-    and the runner's profiles.\n\n\
-    The runner documents its own options, including how to give a test's settings values:\n  \
-    {withArgs} --test-options --help\n"
+private structure Plan where
+  help : Bool
+  profile : String
+  executables : Array String
+  needs : Bool
+  phases : Bool
+
+/-- The plan that the runner wrote as JSON. -/
+private def Plan.ofJson (j : Lean.Json) : Plan where
+  help := (j.getObjValAs? Bool "help").toOption.getD false
+  profile := (j.getObjValAs? String "profile").toOption.getD "default"
+  executables := (j.getObjValAs? (Array String) "executables").toOption.getD #[]
+  needs := (j.getObjValAs? Bool "needs").toOption.getD true
+  phases := (j.getObjValAs? Bool "phases").toOption.getD false
 
 -- The script's name is the one `driverInvocation` looks up.
 @[test_driver]
@@ -471,28 +441,8 @@ script run (args) do
   let some self := ws.findPackageByKey? __name__
     | IO.eprintln "error: the package that defines the Errata driver is not in the workspace"
       return 1
-  let (run, withArgs) ← driverInvocation ws self
-  -- Answer the driver's own `--help` before discovering or building anything. A `--help` after the
-  -- marker asks for the runner's options, so it goes to the runner along with the other arguments.
-  if (args.takeWhile (· != "--test-options")).any (fun a => a == "--help" || a == "-h") then
-    IO.println (usage run withArgs)
-    return 0
-  -- `list` as the first argument lists the tests of every library that the filters after it select.
-  let (libNames, runnerArgs) ←
-    if args.head? == some "list" then
-      -- Filters begin with a predicate, a constant, `!`, or `(`, never with `-`.
-      if let some opt := args.tail.find? (·.startsWith "-") then
-        IO.eprintln s!"error: the `list` subcommand takes filters only, and {opt} is an option; \
-          `list` applies exactly the filters it is given"
-        IO.eprintln (usage run withArgs)
-        return 1
-      pure ([], args)
-    else match splitArgs withArgs args with
-    | .ok result => pure result
-    | .error msg =>
-      IO.eprintln s!"error: {msg}"
-      IO.eprintln (usage run withArgs)
-      return 1
+  -- Every argument belongs to the runner, which reads the command line.
+  let (_, withArgs) ← driverInvocation ws self
   -- The configuration file is elaborated before the tests are built, so that a mistake in it ends
   -- Discovery at once. Lake writes `config.json` again only when `errata.toml` or `errata-config`
   -- changes. A failed build is silent, so the problems that `errata-config` reports are relayed.
@@ -519,21 +469,52 @@ script run (args) do
     catch _ => pure false
   unless elaborated do
     let problems ← configProblems.get
-    if problems.isEmpty then IO.eprintln s!"error: {configFile} could not be written"
-    else IO.eprint problems
-    return 1
+    if problems.isEmpty then
+      IO.eprintln s!"error: {configFile} could not be written"
+      return buildFailedCode
+    IO.eprint problems
+    return setupErrorCode
   let config ← match Lean.Json.parse (← IO.FS.readFile configFile) with
     | .ok j => pure j
     | .error e =>
       IO.eprintln s!"error: {configFile} is not JSON: {e}"
-      return 1
+      return setupErrorCode
   let added := addedExecutables config
+  -- The runner reads the command line, so it is built first. Its planning mode checks the command
+  -- line, the profile, and the filters, and names the test executables that the filters can select
+  -- by the executables' names alone; only the libraries among them are built. The candidates are
+  -- the root package's libraries and the executables that `errata.toml` adds.
+  let some runnerExe := self.findLeanExe? `«errata-runner»
+    | IO.eprintln "error: the package that defines the Errata driver has no errata-runner"
+      return 1
+  let runnerPath ←
+    try runBuild runnerExe.exe.fetch
+    catch e =>
+      IO.eprintln s!"error: the Errata runner could not be built: {e}"
+      return buildFailedCode
+  let libName (lib : Lake.LeanLib) : String := lib.name.toString (escape := false)
+  let candidates := ws.root.leanLibs.map libName ++ added.map (·.name)
+  let planFile := errataOut / "plan.json"
+  let request := Lean.Json.mkObj [("config", Lean.Json.str configFile.toString),
+    ("invocation", Lean.Json.str withArgs), ("executables", Lean.toJson candidates)]
+  let planned ← (← IO.Process.spawn {
+    cmd := runnerPath.toString
+    args := #["errata-plan", request.compress, planFile.toString] ++ args.toArray
+    env := #[("LEAN_ABORT_ON_PANIC", none)]
+  }).wait
+  unless planned == 0 do return planned
+  let plan ← match Lean.Json.parse (← IO.FS.readFile planFile) with
+    | .ok j => pure (Plan.ofJson j)
+    | .error e =>
+      IO.eprintln s!"error: {planFile} is not JSON: {e}"
+      return 1
+  if plan.help then return 0
   -- The targets that the selected profile's settings need are resolved before anything else is
-  -- built, so that an unknown target ends Discovery at once. The `list` subcommand resolves no
-  -- setting, so it needs no target.
+  -- built, so that an unknown target ends Discovery at once. A listing that shows no settings
+  -- needs no target.
   let wanted :=
-    if args.head? == some "list" then #[]
-    else neededTargets ((config.getObjValD "profiles").getObjValD (selectedProfile runnerArgs))
+    if plan.needs then neededTargets ((config.getObjValD "profiles").getObjValD plan.profile)
+    else #[]
   let mut needed : Array (String × BuildSpec) := #[]
   let mut targetProblems : Array String := #[]
   for (tgt, line, col) in wanted do
@@ -552,75 +533,43 @@ script run (args) do
     for p in targetProblems do IO.eprintln p
     IO.eprintln s!"error: {tomlPath} has {targetProblems.size} \
       {if targetProblems.size == 1 then "problem" else "problems"}"
-    return 1
-  -- The phases are named as they begin at a verbosity that shows passes, which these runner flags
-  -- select.
-  let verbose := runnerArgs.any fun a =>
-    ["-v", "--verbose", "-vv", "--verbose-all", "-vvv", "--verbose-docs"].contains a
-  if verbose then
+    return setupErrorCode
+  if plan.phases then
     IO.println "== Discovery"
     (← IO.getStdout).flush
-  -- Names on the command line may name test executables that `errata.toml` adds. With no names,
-  -- every such executable runs.
-  let selecting := !libNames.isEmpty
-  let addedExes :=
-    if selecting then added.filter (libNames.contains ·.name)
-    else added
-  let libNames := libNames.filter fun n => !addedExes.any (·.name == n)
-  -- Search the named libraries, or every library in the package by default. A name may be a bare
-  -- `Library` in this package or a `package/Library` reaching into a dependency, following Lake's
-  -- target syntax.
-  let candidates := ws.root.leanLibs
-  let libs ←
-    if !selecting then pure candidates
-    else do
-      let mut chosen : Array Lake.LeanLib := #[]
-      for spec in libNames do
-        let lib? ←
-          match spec.splitOn "/" with
-          | [libName] => pure (candidates.find? (·.name == libName.toName))
-          | [pkgName, libName] =>
-            let pkgName := if pkgName.startsWith "@" then pkgName.drop 1 else pkgName
-            let pkg? := if pkgName.isEmpty then some ws.root else ws.findPackageByName? pkgName.toName
-            match pkg? with
-            | some pkg => pure (pkg.findLeanLib? libName.toName)
-            | none =>
-              IO.eprintln s!"error: no package named '{pkgName}'"
-              return 1
-          | _ =>
-            IO.eprintln s!"error: invalid library spec '{spec}' (expected `Library` or `package/Library`)"
-            return 1
-        match lib? with
-        | some lib => chosen := chosen.push lib
-        | none =>
-          IO.eprintln s!"error: no library, and no [[executable]] in errata.toml, matches '{spec}'"
-          return 1
-      pure chosen
+  let addedExes := added.filter (plan.executables.contains ·.name)
+  let libs := ws.root.leanLibs.filter (plan.executables.contains <| libName ·)
+  let partialSelection := plan.executables.size < candidates.size
   -- Build every module in the selected libraries; their compiled `.olean` headers are authoritative
   -- on which modules carry tests.
-  let (modInfos, libMods) ← runBuild do
-    let mut oleanJobs := #[]
-    let mut infos : Array (Lean.Name × System.FilePath) := #[]
-    let mut libMods : Array (Lake.LeanLib × Array Lean.Name) := #[]
-    for lib in libs do
-      let mods ← (← lib.modules.fetch).await
-      libMods := libMods.push (lib, mods.map (·.name))
-      for m in mods do
-        oleanJobs := oleanJobs.push (← m.olean.fetch)
-        infos := infos.push (m.name, m.oleanFile)
-    pure <| (Job.collectArray oleanJobs).map (sync := true) fun _ => (infos, libMods)
+  let built ← try
+      let r ← runBuild do
+        let mut oleanJobs := #[]
+        let mut infos : Array (Lean.Name × System.FilePath) := #[]
+        let mut libMods : Array (Lake.LeanLib × Array Lean.Name) := #[]
+        for lib in libs do
+          let mods ← (← lib.modules.fetch).await
+          libMods := libMods.push (lib, mods.map (·.name))
+          for m in mods do
+            oleanJobs := oleanJobs.push (← m.olean.fetch)
+            infos := infos.push (m.name, m.oleanFile)
+        pure <| (Job.collectArray oleanJobs).map (sync := true) fun _ => (infos, libMods)
+      pure (some r)
+    catch e =>
+      IO.eprintln s!"error: the test libraries could not be built: {e}"
+      pure none
+  let some (modInfos, libMods) := built | return buildFailedCode
   -- A test module is one whose `.olean` records a test.
   let mut testMods : Array Lean.Name := #[]
   for (moduleName, oleanFile) in modInfos do
     if (← moduleInfo oleanFile).hasTests then testMods := testMods.push moduleName
   -- A module that sits under a library's roots without being reachable from them is never built, so
-  -- any tests it defines are silently left out. A library is checked when it was named on the
-  -- command line, since naming it declares that its tests are expected, or when its built modules
-  -- carry tests. That is a configuration slip rather than a test failure, so it is a warning that
-  -- the runner reports alongside the results, and the run goes ahead.
+  -- any tests it defines are silently left out. A library is checked when its built modules carry
+  -- tests. That is a configuration slip rather than a test failure, so it is a warning that the
+  -- runner reports alongside the results, and the run goes ahead.
   let mut unreachable : Array (Lake.LeanLib × Array Lean.Name) := #[]
   for (lib, mods) in libMods do
-    if !libNames.isEmpty || mods.any (testMods.contains ·) then
+    if mods.any (testMods.contains ·) then
       let known := mods.foldl (init := Lean.NameSet.empty) (·.insert ·)
       let missed ← unreachableModules lib known
       unless missed.isEmpty do unreachable := unreachable.push (lib, missed)
@@ -643,57 +592,50 @@ script run (args) do
     if let some parent := file.parent then IO.FS.createDirAll parent
     let changed ← if ← file.pathExists then pure ((← IO.FS.readFile file) != src) else pure true
     if changed then IO.FS.writeFile file src
-  -- An executable is named after its library, and after its package too when two selected
-  -- libraries share a name.
-  let exeName (lib : Lake.LeanLib) : String :=
-    let name := lib.name.toString (escape := false)
-    if (testLibs.filter (·.1.name == lib.name)).size > 1 then s!"{lib.pkg.prettyName}/{name}"
-    else name
-  -- Executables that the configuration file adds are named apart from the libraries' executables.
+  -- An executable is named after its library. Executables that the configuration file adds are
+  -- named apart from the libraries' executables.
   for e in added do
-    if testLibs.any (exeName ·.1 == e.name) then
+    if ws.root.leanLibs.any (libName · == e.name) then
       IO.eprintln s!"errata.toml:{e.line}:{e.col}: the [[executable]] name '{e.name}' is the name \
-        of a library's test executable"
-      return 1
+        of a library of the package"
+      return setupErrorCode
   -- Test executables find Errata's shell harness in the directory of Errata's sources.
   let errataDir ← match self.findLeanLib? `Errata with
     | some lib => IO.FS.realPath lib.srcDir
     | none => IO.FS.realPath self.dir
   let rootDir ← IO.FS.realPath ws.root.dir
   let workspaceFile := errataOut / "workspace.json"
-  let some runnerExe := self.findLeanExe? `«errata-runner»
-    | IO.eprintln "error: the package that defines the Errata driver has no errata-runner"
-      return 1
-  -- Build the test executables, the runner, and every target that a setting of the selected profile
-  -- needs, then `workspace.json`. Lake writes it again when `config.json`, the discovery results,
-  -- the executables, or a needed target change: each needed target's trace flows into the
-  -- continuation that writes the file.
-  let runnerPath ← runBuild do
-    let exeJobs ← testLibs.mapM fun (lib, _) => (lib.facet `errataExe).fetch
-    let runnerJob ← runnerExe.exe.fetch
-    let needJobs ← needed.mapM fun (_, spec) => spec.query .text
-    (Job.collectArray needJobs).bindM fun needValues => do
-    (Job.collectArray exeJobs).bindM fun exePaths => do
-      runnerJob.mapM fun runnerPath => do
+  -- Build the test executables and every target that a setting of the selected profile needs, then
+  -- `workspace.json`. Lake writes it again when `config.json`, the discovery results, the
+  -- executables, or a needed target change: each needed target's trace flows into the continuation
+  -- that writes the file.
+  try
+    runBuild do
+      let exeJobs ← testLibs.mapM fun (lib, _) => (lib.facet `errataExe).fetch
+      let needJobs ← needed.mapM fun (_, spec) => spec.query .text
+      (Job.collectArray needJobs).bindM fun needValues => do
+      (Job.collectArray exeJobs).mapM fun exePaths => do
         let mut executables := #[]
         for ((lib, _), path) in testLibs.zip exePaths do
-          executables := executables.push (exeName lib, ← IO.FS.realPath path)
+          executables := executables.push (libName lib, ← IO.FS.realPath path)
         let needs := needed.zipWith (fun (tgt, _) value => (tgt, value)) needValues
         -- Tests run from the root package's directory, where `lake test` runs.
         let content := (workspaceJson needs executables addedExes rootDir errataDir.toString
-          driverWarnings s!"{withArgs} --test-options" selecting).pretty ++ "\n"
+          driverWarnings withArgs partialSelection).pretty ++ "\n"
         addPureTrace (← IO.FS.readFile configFile) "config.json"
         addPureTrace content "workspace.json"
         buildFileUnlessUpToDate' (text := true) workspaceFile do
           IO.FS.createDirAll errataOut
           IO.FS.writeFile workspaceFile content
-        return runnerPath
+  catch e =>
+    IO.eprintln s!"error: the test executables could not be built: {e}"
+    return buildFailedCode
   -- The runner's standard input is a lifeline that the driver holds, and `ERRATA_LIFELINE` asks the
   -- runner to end its tests when that pipe closes. The driver removes `LEAN_ABORT_ON_PANIC` from
   -- the runner's environment, and the runner sets it for every test executable.
   let child ← IO.Process.spawn {
     cmd := runnerPath.toString
-    args := #[configFile.toString, workspaceFile.toString] ++ runnerArgs.toArray
+    args := #[configFile.toString, workspaceFile.toString] ++ args.toArray
     stdin := .piped
     env := #[("LEAN_ABORT_ON_PANIC", none), ("ERRATA_LIFELINE", some "1")]
   }
