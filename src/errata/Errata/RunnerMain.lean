@@ -480,7 +480,8 @@ clock after every bounded read of the result file. Once the test executable has 
 processes that it started have the pipe grace to release its output pipes, and then its process
 group is swept. If the invocation bounds its runtime, as it does when the slot pool has more than
 one slot, the environment sets {lit}`LEAN_NUM_THREADS` to the thread grant, and the processes that
-the test executable starts inherit it; with one slot, the sole process and what it starts use the
+the test executable starts inherit it; with one slot, the environment leaves the variable unset,
+whatever the runner's own environment holds, and the sole process and what it starts use the
 machine. {name}`n` numbers the result file. Teardowns, which {name}`teardown` marks, start after a
 cancellation too.
 -/
@@ -492,7 +493,7 @@ def RunContext.launch (ctx : RunContext) (inv : Invocation) (n : Nat) (teardown 
   IO.FS.writeFile file ""
   let start ← IO.monoMsNow
   let env := ctx.env exe ++
-    (if inv.boundRuntime then #[("LEAN_NUM_THREADS", some (toString inv.threads))] else #[])
+    #[("LEAN_NUM_THREADS", if inv.boundRuntime then some (toString inv.threads) else none)]
   let spawned ←
     try
       let some cmd := exe.command[0]? | throw <| .userError "the command is empty"
@@ -978,10 +979,11 @@ human-readable report's lines go to the sinks; the report files are the caller's
 {name}`color` is true.
 
 Filters with syntax errors and unknown profiles end the run before the List phase. The List phase
-lists every executable, then checks the configuration against the inventory: values that the command line gives to settings that no executable declares
-are errors, and those that the profile gives are warnings; the filters are evaluated, with a warning
-for each atom and each filter that selects nothing. The configuration's filters draw these warnings
-only when the run has every test executable of the package. The {lit}`list` command then prints the
+lists every executable, then checks the configuration against the inventory: values that the
+command line gives to settings that no executable declares are errors, and those that the profile
+gives are warnings; the filters are evaluated, with a warning for each atom and each filter that
+selects nothing. The configuration's filters draw these warnings only when the run has every test
+executable of the package. The {lit}`list` command then prints the
 selected tests in its message format. The Run phase runs the selected tests and the phases of the
 fixtures they use as the scheduler directs, in inventory order as far as the fixtures' claims and
 the slots of the pool allow. The pool has the slots that {lit}`--jobs` or else the profile's
