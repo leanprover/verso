@@ -23,6 +23,7 @@ import ErrataTests.Filter
 import ErrataTests.WidgetState
 import ErrataTests.Resources
 import ErrataTests.Scheduling
+import ErrataTests.Progress
 import ErrataTests.Defaults
 import ErrataTests.Defaults.Marked
 
@@ -1636,6 +1637,11 @@ def runnerArgParsing : Test := do
     assertBEq (some Runner.ColorChoice.always)
       ((parse ["--color", "always"]).toOption.map (·.color))
     assertBEq (some Runner.ColorChoice.never) ((parse ["--color=never"]).toOption.map (·.color))
+  result "--hide-progress-bar" do
+    assertBEq (some false) ((parse []).toOption.map (·.hideProgressBar))
+    assertBEq (some true) ((parse ["--hide-progress-bar"]).toOption.map (·.hideProgressBar))
+    assertBEq (some true)
+      ((parse ["run", "--hide-progress-bar", "x"]).toOption.map (·.hideProgressBar))
   result "the message format" do
     let format (args : List String) := (parse ("list" :: args)).toOption.map (·.messageFormat)
     assertBEq (some Runner.MessageFormat.human) (format [])
@@ -1707,6 +1713,9 @@ def runnerArgRejections : Test := do
     (["list", "--junit", "r.xml"], "--junit is an option of `run`, and the command is `list`"),
     (["list", "--wfail"], "--wfail is an option of `run`, and the command is `list`"),
     (["list", "-j", "1"], "-j is an option of `run`, and the command is `list`"),
+    (["list", "--hide-progress-bar"],
+      "--hide-progress-bar is an option of `run`, and the command is `list`"),
+    (["--hide-progress-bar=yes"], "--hide-progress-bar takes no value"),
     (["list", "--no-tests", "pass"], "--no-tests is an option of `run`, and the command is `list`"),
     (["-T", "json"], "-T is an option of `list`, and the command is `run`")]
   for (args, message) in cases do

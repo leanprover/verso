@@ -164,6 +164,8 @@ structure Options where
   noTests : NoTests := .fail
   /-- When the human-readable output is colored. -/
   color : ColorChoice := .auto
+  /-- Whether a run leaves out the progress display that it keeps on a terminal. -/
+  hideProgressBar : Bool := false
   /-- The format of what {lit}`list` prints. -/
   messageFormat : MessageFormat := .human
   /--
@@ -291,6 +293,8 @@ def optionSpecs : Array OptionSpec := #[
   { long := "color", value? := "WHEN", group := "Reporting"
     help := "Color the output: auto, always, or never (auto: on a terminal, unless NO_COLOR is \
       set; CLICOLOR_FORCE forces it)." },
+  { long := "hide-progress-bar", commands := [.run], group := "Reporting"
+    help := "Print the report's lines alone, without the progress display that a terminal gets." },
   { long := "message-format", short? := "-T", value? := "FORMAT", commands := [.list]
     group := "Reporting", help := "The format of the list: human, oneline, json, or json-pretty \
       (human)." },
@@ -463,6 +467,7 @@ def applyOption (opts : Options) (g : GivenOption) : Except String Options := do
     | "always" => return { opts with color := .always }
     | "never" => return { opts with color := .never }
     | _ => throw s!"{g.written} expects auto, always, or never, and it is '{value}'"
+  | "hide-progress-bar" => return { opts with hideProgressBar := true }
   | "message-format" =>
     match value with
     | "human" => return { opts with messageFormat := .human }

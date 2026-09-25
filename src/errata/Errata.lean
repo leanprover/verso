@@ -39,6 +39,7 @@ public import Errata.RunnerConfig
 public import Errata.Resolution
 public import Errata.Dispatcher
 public import Errata.Scheduler
+public import Errata.Progress
 public import Errata.RunnerMain
 
 set_option doc.verso true
