@@ -2146,12 +2146,12 @@ def recordsOfType (lines : Array String) (type : String) : Array Json :=
 
 /--
 The interpreted product lists from the {lit}`.olean` files only when {lit}`@[setting]` evaluated
-the default of every setting that it lists, and imports the modules otherwise; either way it lists
-what an import lists. In {lit}`ErrataTests.Defaults`, a default that calls a function of another
-module, one that reads a value an {lit}`initialize` declaration holds, and one of a setting that
-{lit}`attribute [setting]` marks in another module are left to the import, and both products list
-them with the values that the tests receive. A test that {lit}`attribute [test]` marks in another
-module than its declaration's lists its declaration's line.
+the default of every setting that it lists and the files record every test's range, and imports the
+modules otherwise; either way it lists what an import lists. {lit}`ErrataTests.Defaults` has a
+default that calls a function of another module, one that reads a value an {lit}`initialize`
+declaration holds, and one of a setting that {lit}`attribute [setting]` marks in another module; the
+listing lists each with the value that the tests receive. A test that {lit}`attribute [test]` marks
+in another module than its declaration's lists its declaration's line.
 -/
 @[test]
 def interpretedListingFallsBackToAnImport : Test := do
@@ -2175,7 +2175,9 @@ def interpretedListingFallsBackToAnImport : Test := do
       ("ErrataTests.Defaults.initialized", "initial"),
       ("ErrataTests.Defaults.markedElsewhere", "d")] defaults
   result "a test marked in another module" do
-    let lines ← interpretedList #["ErrataTests.Defaults"]
+    assertTrue (← unsafe OleanListing.listed? #[`ErrataTests.Defaults.Marked]).isNone
+      "the listing read a test without a range from the .olean file"
+    let lines ← interpretedList #["ErrataTests.Defaults.Marked"]
     let some t := (recordsOfType lines "test").find? fun t =>
         strField t "name" == some "ErrataTests.Defaults.testMarkedElsewhere"
       | fail "the test is not listed" (some ("\n".intercalate lines.toList))

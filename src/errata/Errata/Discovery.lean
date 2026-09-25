@@ -84,8 +84,9 @@ meta def recordTest (decl : Name) (tags : Array String := #[]) (threads? : Optio
   let reachedFixtures :=
     reachedFixtureDecls (fixtureExt.getState (← getEnv)) (fixtures.map (·.decl))
   let file ← getFileName
-  -- An imported declaration's ranges are in its own module's data already, while those of this
-  -- module's declarations are complete when the module is written (`TestDecl.withRange`).
+  -- An imported declaration's ranges are in its own module's data, when that data is loaded, while
+  -- those of this module's declarations are complete when the module is written
+  -- (`TestDecl.withRange`).
   let location? ← if ((← getEnv).getModuleIdxFor? decl).isSome then
       (← findDeclarationRanges? decl).mapM fun r =>
         pure { file, startPos := r.range.pos, endPos := r.range.endPos : Location }

@@ -40,8 +40,6 @@ def initialized : Setting where
 
 attribute [setting] markedElsewhere
 
-attribute [test] testMarkedElsewhere
-
 /-- Receives the default that calls a function of another module. -/
 @[test]
 def receivesImported (s : imported) : Test := assertBEq "n3" s

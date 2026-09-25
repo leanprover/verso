@@ -109,9 +109,9 @@ structure TestDecl where
   -/
   file : String
   /--
-  The test's declaration range, paired with the file above: recorded when
-  the attribute is applied for a declaration of another module, and when the module's
-  {lit}`.olean` file is written for one of its own.
+  The test's declaration range, paired with the file above, when it is known: for a declaration of
+  another module, when the attribute is applied and that module's ranges are loaded, and for one of
+  this module's own, when the module's {lit}`.olean` file is written.
   -/
   location? : Option Location := none
   /-- The test's docstring, rendered as Markdown, captured when the attribute is applied. -/

@@ -24,6 +24,7 @@ import ErrataTests.WidgetState
 import ErrataTests.Resources
 import ErrataTests.Scheduling
 import ErrataTests.Defaults
+import ErrataTests.Defaults.Marked
 
 open Errata
 
