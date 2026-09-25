@@ -161,7 +161,8 @@ The inventory of the tests that the modules in {name}`modules` record, each modu
 the fixtures that the tests reach, read from the modules' {lit}`.olean` files with no import. Each
 test is as {name}`testInfoOf` gives it at the declaration range that the file records.
 -/
-unsafe def listedOf (modules : Array Name) : IO (Array Errata.TestInfo × Array Errata.FixtureInfo) := do
+unsafe def listedOf (modules : Array Name) :
+    IO (Array Errata.TestInfo × Array Errata.FixtureInfo) := do
   let mut seen : NameSet := {}
   let mut tests := #[]
   let mut fixtures := #[]
@@ -170,7 +171,8 @@ unsafe def listedOf (modules : Array Name) : IO (Array Errata.TestInfo × Array 
     if seen.contains module then continue
     seen := seen.insert module
     for test in ← recordedTests module do
-      let location := test.location?.getD { file := test.file, startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ }
+      let location :=
+        test.location?.getD { file := test.file, startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ }
       tests := tests.push (testInfoOf module test location)
       for f in test.reachedFixtures do
         unless fixtureNames.contains f.name do

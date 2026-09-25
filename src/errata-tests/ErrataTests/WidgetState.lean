@@ -290,4 +290,98 @@ def recordsOfOtherKinds : Test := do
   assertBEq #["db"] (d.steps.map (·.fixture))
   assertTrue (d.phase == .done .noTest) s!"the run is {d.phase.name}"
 
+/--
+The workspace's libraries hold modules as Lake decides it, and the last library that holds a module
+is its library.
+-/
+@[test]
+def librariesHoldModules : Test := do
+  let libs := LibraryModules.ofWorkspaceJson <| Json.mkObj [("libraries", Json.arr #[
+    Json.mkObj [("name", Json.str "App"), ("roots", Lean.toJson #["App"]),
+      ("globs", Lean.toJson #["App"])],
+    Json.mkObj [("name", Json.str "Tests"), ("roots", Lean.toJson #["Tests"]),
+      ("globs", Lean.toJson #["Tests.+"])],
+    Json.mkObj [("name", Json.str "Quoted"), ("roots", Lean.toJson #["Quoted"]),
+      ("globs", Lean.toJson #["Quoted.*"])],
+    Json.mkObj [("name", Json.str "Both"), ("roots", Lean.toJson #["App"]),
+      ("globs", Lean.toJson #["App.*"])]])]
+  assertBEq (some "Both") (libraryOf libs `App)
+  assertBEq (some "Both") (libraryOf libs `App.Sub)
+  assertBEq (some "Tests") (libraryOf libs `Tests.A.B)
+  assertBEq none (libraryOf libs `Tests)
+  assertBEq (some "Quoted") (libraryOf libs (Harness.moduleNameOf "Quoted.«1st»"))
+  assertBEq none (libraryOf libs `Other)
+
+/-- A profile of the given name with a default filter, settings, and overrides. -/
+def profileOf (name : String) (defaultFilter? : Option String := none)
+    (settings : Array (String × String) := #[])
+    (overrides : Array (String × Array (String × String)) := #[]) : Runner.Profile :=
+  { name, defaultFilter? := defaultFilter?.map ({ text := · }), settings
+    overrides := overrides.map fun (f, s) => { filter := { text := f }, settings := s } }
+
+/--
+The widget offers the profiles whose default filters select the test, with the values that the test
+receives from each, the first matching override's before the profile's own. When no profile selects
+the test, it offers the default profile as the fallback.
+-/
+@[test]
+def profilesOfferedForATest : Test := do
+  let config : Runner.Config := {
+    profiles := #[
+      profileOf "default" (some "all() \\ tag(browser)") #[("greeting", "hi"), ("strict", "no")]
+        #[("tag(slow)", #[("greeting", "slowly")]), ("all()", #[("greeting", "later")])],
+      profileOf "browser" (some "tag(browser)") #[("greeting", "click")],
+      profileOf "ci" none #[("greeting", "ci")] #[("exe(App) & default()", #[("extra", "1")])]]
+  }
+  let plain : Filter.Record := { name := "T.plain", exe := "App" }
+  let slow : Filter.Record := { plain with name := "T.slow", tags := #["slow"] }
+  let browser : Filter.Record := { plain with name := "T.browser", tags := #["browser"] }
+  result "a plain test" do
+    let choices := profileChoices config plain
+    assertBEq #["default", "ci"] (choices.map (·.name))
+    assertBEq #[("greeting", "later"), ("strict", "no")] choices[0]!.values
+    assertBEq #[("greeting", "ci"), ("extra", "1")] choices[1]!.values
+  result "the first matching override" do
+    assertBEq #[("greeting", "slowly"), ("strict", "no")] (profileChoices config slow)[0]!.values
+  result "a browser test" do
+    let choices := profileChoices config browser
+    assertBEq #["browser", "ci"] (choices.map (·.name))
+    assertBEq #[("greeting", "click")] choices[0]!.values
+  result "the fallback" do
+    -- `default()` in an override's filter stands for the default filter, which leaves the test out.
+    let only : Runner.Config := { profiles := #[profileOf "default" (some "tag(browser)")
+      #[("greeting", "hi")] #[("default()", #[("greeting", "never")]),
+        ("all()", #[("greeting", "anyway")])]] }
+    assertBEq #[{ name := "default", fallback := true, values := #[("greeting", "anyway")]
+      : ProfileChoice }] (profileChoices only plain)
+  result "no profiles" do
+    assertBEq #[{ name := "default" : ProfileChoice }] (profileChoices {} plain)
+
+/-- The widget's run names the profile, and sets the default filter aside for the fallback. -/
+@[test]
+def driverArgsOfAProfile : Test := do
+  let r : DriverRequest :=
+    { module := `M, test := "M.t", eventsPath := "e", script := "p/Errata.run" }
+  assertBEq #["script", "run", "p/Errata.run", "run", "-E", "name(=M.t)", "--interpreted", "M",
+    "--events", "e", "-j", "1"] (driverArgs r)
+  let args := driverArgs { r with profile? := some "ci", settings := #[("a", "b")] }
+  assertBEq #["-P", "ci", "--set", "a=b"] (args.extract 12 args.size)
+  let args := driverArgs { r with profile? := some "default", ignoreDefaultFilter := true }
+  assertBEq #["-P", "default", "--ignore-default-filter"] (args.extract 12 args.size)
+
+/--
+The package that defines the driver's script is the one whose directory holds {lit}`Errata.olean` on
+the search path, found through the workspace's manifest. Without a manifest, the script's name
+stands alone.
+-/
+@[test]
+def driverScriptOfTheWorkspace : Test := do
+  let olean : System.FilePath := ".lake/build/lib/lean"
+  assertBEq "verso/Errata.run" (← driverScript [olean] ".")
+  assertBEq "Errata.run" (← driverScript [".lake/packages/plausible/.lake/build/lib/lean"] ".")
+  IO.FS.withTempDir fun dir => do
+    assertBEq "Errata.run" (← driverScript [olean] dir)
+  assertTrue (isPathPrefix "/a/b" "/a/b/c") "a directory above"
+  assertTrue (!isPathPrefix "/a/bc" "/a/b/c") "a sibling"
+
 end ErrataTests.WidgetState

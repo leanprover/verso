@@ -231,6 +231,9 @@ meta initialize
         version
         location? := declared?.filter (·.endPos.line != 0) <|> commandLocation?
         settings := (test?.map (·.settings)).getD #[] |>.map declaredSetting
+        module := ← getMainModule
+        file := (test?.map (·.file)).getD ""
+        tags := (test?.map (·.tags)).getD #[]
       }
       let props := pure <| json% {
         decl: $(Errata.nameToJson decl),

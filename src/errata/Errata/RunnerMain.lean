@@ -977,8 +977,8 @@ human-readable report's lines go to the sinks; the report files are the caller's
 {lit}`protocol` line of the events file is sent first. The human-readable report is colored when
 {name}`color` is true.
 
-Filters with syntax errors and unknown profiles end the run before the List phase. The List phase lists every executable, then checks the configuration
-against the inventory: values that the command line gives to settings that no executable declares
+Filters with syntax errors and unknown profiles end the run before the List phase. The List phase
+lists every executable, then checks the configuration against the inventory: values that the command line gives to settings that no executable declares
 are errors, and those that the profile gives are warnings; the filters are evaluated, with a warning
 for each atom and each filter that selects nothing. The configuration's filters draw these warnings
 only when the run has every test executable of the package. The {lit}`list` command then prints the

@@ -183,7 +183,16 @@ function shellWord(text) {
  *            profileValue?: string, needs?: string}} SettingField a setting that the test takes,
  *   with the value that the profile gives it, or the target whose result the profile gives it
  * @typedef {{name: string, value: string}} SettingValue
+ * @typedef {{name: string, fallback?: boolean, fields: SettingField[]}} ProfileOption a profile
+ *   offered for the test's runs, with the values that the test receives from it; a fallback
+ *   profile's default filter leaves the test out, and its runs set that filter aside
  */
+
+// How a profile is named in the profile menu.
+/** @param option {ProfileOption} */
+function profileLabel(option) {
+    return option.fallback ? option.name + " (fallback)" : option.name;
+}
 
 // The text that a setting's field shows while the reader has left it as the profile gives it: the
 // profile's value, or blank when it gives none.
@@ -1095,13 +1104,22 @@ function TestRun(props) {
     const [edited, setEdited] = React.useState(false);
     // The seed for property tests as typed, or blank to generate a random seed.
     const [seed, setSeed] = React.useState("");
-    // The settings that the test takes, with the values that the profile gives them, as the server
-    // last reported them, and the text of each field that the reader has changed, by name. A field
-    // shows the profile's value until the reader changes it, and its reset button returns it there.
-    const [settingFields, setSettingFields] = React.useState(/** @type {SettingField[]} */ ([]));
+    // The profiles offered for the test's runs, each with the test's settings and the values that it
+    // gives them, as the server last reported them; the settings as the server reported them for a
+    // workspace whose configuration it has not read yet; the profile of the next run; and the text of
+    // each field that the reader has changed, by name. A field shows the chosen profile's value until
+    // the reader changes it, and its reset button returns it there.
+    const [profileOptions, setProfileOptions] = React.useState(/** @type {ProfileOption[]} */ ([]));
+    const [plainFields, setPlainFields] = React.useState(/** @type {SettingField[]} */ ([]));
+    const [profile, setProfile] = React.useState(/** @type {string | null} */ (null));
     const [settingValues, setSettingValues] = React.useState(
         /** @type {Record<string, string>} */ ({}),
     );
+    const chosenProfile =
+        profileOptions.find(function (p) {
+            return p.name === profile;
+        }) || null;
+    const settingFields = chosenProfile ? chosenProfile.fields : plainFields;
     // Whether the run settings are shown, behind the gear button.
     const [settingsOpen, setSettingsOpen] = React.useState(false);
     // The error from the last cancel that failed, shown while the run it was meant to stop goes on.
@@ -1188,15 +1206,28 @@ function TestRun(props) {
         );
     }
 
-    // Asks the server for the test's settings and the values that the profile gives them. A field
-    // that the reader has left shows the profile's value as it now is, and a field the reader has
-    // changed keeps its text.
+    // Asks the server for the test's settings, the profiles offered for its runs, and the values
+    // that each profile gives the settings. A field that the reader has left shows the chosen
+    // profile's value as it now is, and a field the reader has changed keeps its text. The chosen
+    // profile stays chosen while it is offered, and otherwise the server's first choice is taken.
     function loadSettings() {
         rsRef.current.call("Errata.Widget.testSettings", { decl: props.decl }).then(
             function (reply) {
                 if (!alive.current) return;
                 const fields = (reply && reply.fields) || [];
-                setSettingFields(fields);
+                /** @type {ProfileOption[]} */
+                const offered = (reply && reply.profiles) || [];
+                setProfileOptions(offered);
+                setPlainFields(fields);
+                setProfile(function (current) {
+                    if (
+                        offered.some(function (p) {
+                            return p.name === current;
+                        })
+                    )
+                        return current;
+                    return offered.length ? reply.profile : null;
+                });
                 setSettingValues(function (values) {
                     /** @type {Record<string, string>} */
                     const next = {};
@@ -1382,6 +1413,7 @@ function TestRun(props) {
     // What the settings hold, named in the gear's tooltip so a run's settings show while the popup
     // is closed.
     const settingsSummary = (seedSet ? ["seed " + seedText] : [])
+        .concat(chosenProfile && chosenProfile.name !== "default" ? ["profile " + profile] : [])
         .concat(sent.length ? ["settings " + settingsCommandLine(sent)] : [])
         .join(", ");
 
@@ -1441,6 +1473,7 @@ function TestRun(props) {
         };
         if (seedSet) request.seed = seedText;
         if (sent.length) request.settings = sent;
+        if (chosenProfile) request.profile = chosenProfile.name;
         rsRef.current.call("Errata.Widget.startTest", request).then(
             function () {
                 if (gen.current !== myGen) return;
@@ -1713,6 +1746,42 @@ function TestRun(props) {
                   }),
                   "Expand named results",
               ),
+              // The profiles whose default filters select the test, or the default profile as the
+              // fallback when none does. The fields show the chosen profile's values.
+              profileOptions.length
+                  ? e(
+                        "label",
+                        { style: { ...settingRow, marginTop: "4px" } },
+                        "Profile",
+                        e(
+                            "select",
+                            {
+                                value: profile || "",
+                                disabled: running,
+                                title: "The profile of errata.toml that the run uses",
+                                onChange: function (ev) {
+                                    setProfile(ev.target.value);
+                                },
+                                style: { fontFamily: monoFont },
+                            },
+                            profileOptions.map(function (option) {
+                                return e(
+                                    "option",
+                                    { key: option.name, value: option.name },
+                                    profileLabel(option),
+                                );
+                            }),
+                        ),
+                    )
+                  : null,
+              chosenProfile && chosenProfile.fallback
+                  ? e(
+                        "div",
+                        { style: { marginTop: "4px", fontSize: dimSize } },
+                        "No profile's default filter selects this test, so the run sets the " +
+                            "default filter aside.",
+                    )
+                  : null,
               settingFields.length
                   ? e("div", { style: { ...settingRow, marginTop: "4px" } }, "Settings:")
                   : null,

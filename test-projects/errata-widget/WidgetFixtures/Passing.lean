@@ -131,3 +131,11 @@ def readsSettings (word : greeting) (strict? : Option strict) : Test := do
   IO.println s!"greeting: {word}"
   if strict?.getD false then
     fail "strict was set"
+
+/--
+Tagged `manual`, which every profile's default filter leaves out, so a run of it sets the default
+filter aside.
+-/
+@[test (tags := manual)]
+def manualOnly : Test :=
+  IO.println "ran by hand"

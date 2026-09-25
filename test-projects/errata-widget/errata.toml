@@ -1,4 +1,15 @@
 # The configuration of the widget's runs. The default profile gives the setting `greeting` a value
-# of its own, which the widget's settings fields start from.
+# of its own, which the widget's settings fields start from. Every profile leaves out the tests
+# tagged `manual`.
+[profile.default]
+default-filter = "all() \\ tag(manual)"
+
 [profile.default.settings]
 greeting = "good day"
+
+# A second profile, which the widget offers beside the default one, with a greeting of its own.
+[profile.ci]
+inherits = "default"
+
+[profile.ci.settings]
+greeting = "good evening"

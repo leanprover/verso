@@ -373,20 +373,33 @@ private def interpretedExecutable (ws : Workspace) (interpreter : System.FilePat
     ("LEAN_SYSROOT", ws.lakeEnv.lean.sysroot.toString)]
 
 /--
+The modules of the libraries `libs`, as JSON: each library's name, its roots, and its globs in
+Lake's notation (`M`, `M.+`, or `M.*`), from which the editor widget finds the library, and so the
+test executable, of a test's module.
+-/
+private def libraryModulesJson (libs : Array Lake.LeanLib) : Lean.Json :=
+  Lean.Json.arr <| libs.map fun lib => Lean.Json.mkObj [
+    ("name", Lean.Json.str (lib.name.toString (escape := false))),
+    ("roots", Lean.toJson (lib.config.roots.map (·.toString))),
+    ("globs", Lean.toJson (lib.config.globs.map (·.toString)))]
+
+/--
 What the workspace contributes to the run, `.lake/errata/workspace.json`, as JSON: the path of each
 needed target's result, the libraries' test executables and the executables `added` that
 `errata.toml` adds, the directory of Errata's sources, the driver's warnings, the command that the
-runner's arguments follow, and the package's directory, `cwd`, where tests run and which report
-paths in `errata.toml` are relative to. `known` names every test executable that the package can
-have, and `ruledOut` those among them that the command line's filters ruled out before building.
-Of those, `testLibraries` are the libraries known to have tests, and `addedOut` the executables that
-`errata.toml` adds. The selection is partial when some executable is ruled out or when `someTests`
-says that the executables run only some of their tests.
+runner's arguments follow, the package's directory, `cwd`, where tests run and which report paths in
+`errata.toml` are relative to, and the modules of the package's libraries, `libraries`. `known`
+names every test executable that the package can have, and `ruledOut` those among them that the
+command line's filters ruled out before building. Of those, `testLibraries` are the libraries known
+to have tests, and `addedOut` the executables that `errata.toml` adds. The selection is partial when
+some executable is ruled out or when `someTests` says that the executables run only some of their
+tests.
 -/
 private def workspaceJson (needs : Array (String × String))
     (executables : Array LibraryExecutable) (added : Array AddedExecutable)
     (cwd : System.FilePath) (errataDir : String) (warnings : Array String) (invocation : String)
-    (known ruledOut testLibraries addedOut : Array String) (someTests : Bool) : Lean.Json :=
+    (known ruledOut testLibraries addedOut : Array String) (someTests : Bool)
+    (libraries : Lean.Json) : Lean.Json :=
   let added := added.map fun e =>
     Lean.Json.mkObj [("name", Lean.Json.str e.name),
       ("command", Lean.Json.arr (e.command.map Lean.Json.str)),
@@ -410,7 +423,8 @@ private def workspaceJson (needs : Array (String × String))
     ("knownExecutables", Lean.toJson known),
     ("ruledOut", Lean.toJson ruledOut),
     ("skippedTestLibraries", Lean.toJson testLibraries),
-    ("skippedExecutables", Lean.toJson addedOut)
+    ("skippedExecutables", Lean.toJson addedOut),
+    ("libraries", libraries)
   ] ++ (if ruledOut.isEmpty && !someTests then [] else [("partial-selection", Lean.Json.bool true)])
 
 /--
@@ -733,7 +747,8 @@ script run (args) do
         -- Tests run from the root package's directory, where `lake test` runs.
         let content := (workspaceJson needs executables addedExes rootDir errataDir.toString
           driverWarnings withArgs candidates ruledOut skippedTestLibs
-          (added.map (·.name) |>.filter ruledOut.contains) !interpreted.isEmpty).pretty ++ "\n"
+          (added.map (·.name) |>.filter ruledOut.contains) (!interpreted.isEmpty)
+          (libraryModulesJson ws.root.leanLibs)).pretty ++ "\n"
         addPureTrace (← IO.FS.readFile configFile) "config.json"
         addPureTrace content "workspace.json"
         buildFileUnlessUpToDate' (text := true) workspaceFile do

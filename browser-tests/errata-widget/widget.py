@@ -107,6 +107,11 @@ class Widget:
         return self.page.get_by_title(f"Value of {name}", exact=True)
 
     @property
+    def profile_menu(self) -> Locator:
+        """The menu of the profiles offered for the test's runs, in the open settings popup."""
+        return self.page.get_by_title("The profile of errata.toml that the run uses")
+
+    @property
     def setting_rows(self) -> Locator:
         """The rows of the test's settings in the open settings popup."""
         return self.page.locator(".tooltip-content [role=group]")

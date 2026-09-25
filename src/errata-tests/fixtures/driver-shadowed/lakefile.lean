@@ -9,6 +9,9 @@ package app where
 
 require verso from "../../../.."
 
+-- A test, which the editor widget's invocation of Verso's driver runs.
+lean_lib Shadowed
+
 namespace Errata
 script run (_args) do
   return 0

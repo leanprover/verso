@@ -788,6 +788,27 @@ def driverHelpNamesInvocation (bare : driverBare) (configured : driverConfigured
       assertContains s!"\n  {run} " out.stdout
 
 /--
+The editor widget runs Errata's driver by the package that defines it. In `driver-shadowed`, whose
+root package has an `Errata.run` script of its own, the script is `verso/Errata.run`, found from the
+search path that Lake gives the workspace, and the widget's invocation runs the test there.
+-/
+@[test]
+def widgetRunsErrataDriver (shadowed : driverShadowed) : Test := do
+  let env ← lakeIn shadowed #["env", "printenv", "LEAN_PATH"]
+  assertExitCode 0 env
+  let leanPath := System.SearchPath.parse env.stdout.trimAscii.copy
+  let script ← Widget.driverScript leanPath shadowed
+  assertBEq "verso/Errata.run" script
+  IO.FS.withTempDir fun dir => do
+    let eventsPath := (← IO.FS.realPath dir) / "events.jsonl"
+    let out ← lakeIn shadowed
+      (Widget.driverArgs { module := `Shadowed, test := "reached", eventsPath, script })
+    assertExitCode 0 out
+    let outcomes := (← IO.FS.readFile eventsPath).splitOn "\n" |>.filter fun l =>
+      (l.find? "\"type\":\"outcome\"").isSome && (l.find? "\"test\":\"reached\"").isSome
+    assertBEq 1 outcomes.length
+
+/--
 The driver runs `unsafe` tests. The fixture's `App` library has only safe tests, and its `AppUnsafe`
 library has an unsafe one.
 -/

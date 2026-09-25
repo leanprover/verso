@@ -152,3 +152,59 @@ def test_the_seed_goes_to_the_seed_setting_and_has_no_field_of_its_own(editor):
     widget.run_button.click()
     widget.wait_for_verdict("Passed")
     expect(widget.seed_badge).to_have_text("Seed 12345")
+
+
+def run_once_for_the_configuration(widget: Widget):
+    """
+    Runs the shown test, so that the driver has elaborated the workspace's configuration, whose
+    profiles the widget then offers.
+    """
+    widget.run_button.click()
+    widget.wait_for_verdict("Passed")
+
+
+def test_switching_profiles_changes_the_prefilled_values(editor):
+    editor.show("Passing", "readsSettings")
+    widget = Widget(editor.page)
+    run_once_for_the_configuration(widget)
+    widget.gear.click()
+    expect(widget.profile_menu).to_have_value("default")
+    expect(widget.profile_menu.locator("option")).to_have_text(["default", "ci"])
+    expect(widget.setting_field("greeting")).to_have_value("good day")
+    widget.profile_menu.select_option("ci")
+    expect(widget.setting_field("greeting")).to_have_value("good evening")
+    widget.profile_menu.select_option("default")
+    expect(widget.setting_field("greeting")).to_have_value("good day")
+    # A value that the reader typed stays when the profile changes.
+    widget.setting_field("greeting").fill("hi")
+    widget.profile_menu.select_option("ci")
+    expect(widget.setting_field("greeting")).to_have_value("hi")
+
+
+def test_a_run_under_a_profile_passes_it_to_the_driver(editor):
+    editor.show("Passing", "readsSettings")
+    widget = Widget(editor.page)
+    run_once_for_the_configuration(widget)
+    widget.gear.click()
+    widget.profile_menu.select_option("ci")
+    editor.page.keyboard.press("Escape")
+    expect(widget.gear).to_have_attribute("title", "Run settings (profile ci)")
+    widget.run_button.click()
+    widget.wait_for_verdict("Passed")
+    # The field was left as the profile gives it, so the greeting comes from `-P ci` alone.
+    expect_exact_text(widget.output, "greeting: good evening\n")
+
+
+def test_a_test_that_no_profile_selects_runs_under_the_default_as_the_fallback(editor):
+    editor.show("Passing", "readsSettings")
+    widget = Widget(editor.page)
+    run_once_for_the_configuration(widget)
+    editor.move_to("Passing", "manualOnly")
+    expect(widget.title).to_contain_text("manualOnly")
+    widget.gear.click()
+    expect(widget.profile_menu.locator("option")).to_have_text(["default (fallback)"])
+    expect(editor.page.get_by_text("No profile's default filter selects this test")).to_be_visible()
+    editor.page.keyboard.press("Escape")
+    widget.run_button.click()
+    widget.wait_for_verdict("Passed")
+    expect_exact_text(widget.output, "ran by hand\n")

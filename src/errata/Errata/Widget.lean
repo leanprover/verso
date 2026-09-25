@@ -11,6 +11,7 @@ public meta import Errata.NameJson
 public meta import Errata.WidgetState
 public meta import Errata.ProcessControl
 public meta import Errata.RunnerConfig
+public meta import Errata.WidgetWorkspace
 
 public section
 
@@ -49,6 +50,12 @@ meta structure TestNote where
   location? : Option Location := none
   /-- The settings that the test takes, in the order of its parameters. -/
   settings : Array DeclaredSetting := #[]
+  /-- The module that defines the test. -/
+  module : Name := .anonymous
+  /-- The test's source file, as its test executable lists it. -/
+  file : String := ""
+  /-- The test's tags. -/
+  tags : Array String := #[]
 
 /-- The live and finished runs, keyed by the test's declaration so a run survives re-elaboration. -/
 meta initialize runRegistry : IO.Ref (Std.HashMap Name RunState) ← IO.mkRef {}
@@ -93,6 +100,8 @@ meta structure StartRequest where
   seed? : Option String := none
   /-- Values for the test's settings, which the run passes to the driver with {lit}`--set`. -/
   settings : Array SettingValue := #[]
+  /-- The profile of the run, which the run passes to the driver with {lit}`-P`, if any. -/
+  profile? : Option String := none
   /--
   The identifier that the widget chose for the run, which later replies about the run include, so
   the widget can recognize the run it asked for.
@@ -102,10 +111,13 @@ meta structure StartRequest where
 meta instance : ToJson StartRequest where
   toJson r := Json.mkObj <|
     [("decl", r.decl), ("module", r.module), ("version", toJson r.version)] ++
-    Json.opt "seed" r.seed? ++
+    Json.opt "seed" r.seed? ++ Json.opt "profile" r.profile? ++
     [("settings", toJson r.settings), ("runId", toJson r.runId)]
 
-/-- The {lit}`settings` field may be absent, and every other field but {lit}`seed` is required. -/
+/--
+The {lit}`settings` field may be absent, and every other field but {lit}`seed` and {lit}`profile` is
+required.
+-/
 meta instance : FromJson StartRequest where
   fromJson? j := do
     return {
@@ -116,6 +128,7 @@ meta instance : FromJson StartRequest where
       settings := ← match j.getObjVal? "settings" with
         | .ok v => fromJson? v
         | .error _ => pure #[]
+      profile? := ← fromJson? (j.getObjValD "profile")
       runId := ← j.getObjValAs? _ "runId"
     }
 
@@ -273,38 +286,7 @@ private meta def runnerFailure (code : UInt32) (output : String) : RunOutcome :=
 }
 
 /-- The name of the setting that holds the seed for property tests. -/
-private meta def seedSetting : String := "Errata.seed"
-
-/-- What a run of one test asks of the driver. -/
-meta structure DriverRequest where
-  /-- The module that defines the test. -/
-  module : Name
-  /-- The test's name, as its test executable names it. -/
-  test : String
-  /-- The file for the runner's events. -/
-  eventsPath : System.FilePath := ""
-  /-- The seed for property tests, when the widget gives one. -/
-  seed? : Option Nat := none
-  /-- Whether the test takes the seed setting, which then receives the seed. -/
-  takesSeed : Bool := false
-  /-- Values for the test's settings. -/
-  settings : Array (String × String) := #[]
-
-/--
-The arguments with which {lit}`lake` runs the driver for one test. The driver is the script
-{lit}`Errata.run`, which Lake finds by its name among the workspace's packages. The arguments name
-the test's module, which runs through the interpreted product of the Lean harness, a filter that
-selects the test by its name, the file for the runner's events, the seed, and the settings' values.
-If the test takes the seed setting, the seed is that setting's value; otherwise the runner receives
-it as the run's seed.
--/
-meta def driverArgs (r : DriverRequest) : Array String :=
-  let seed := match r.seed? with
-    | some n => if r.takesSeed then #["--set", s!"{seedSetting}={n}"] else #["--seed", toString n]
-    | none => #[]
-  #["script", "run", "Errata.run", "run", "-E", s!"name(={Filter.escapeText r.test})",
-    "--interpreted", r.module.toString, "--events", r.eventsPath.toString] ++
-    seed ++ r.settings.flatMap fun (k, v) => #["--set", s!"{k}={v}"]
+private meta def seedSetting : String := Runner.seedSetting
 
 /--
 How long to wait, in milliseconds, for the driver's output pipes to close once the driver has
@@ -486,65 +468,122 @@ meta structure SettingField where
   needs? : Option String := none
 deriving Lean.FromJson, Lean.ToJson
 
-/-- The reply to a request for a test's settings. -/
-meta structure SettingsReply where
-  /-- The profile whose values fill the fields. -/
-  profile : String
-  /-- A field for each setting that the test takes, other than the seed, in parameter order. -/
+/-- A profile that the widget offers for a test's runs, with a field for each of its settings. -/
+meta structure ProfileOption where
+  /-- The profile's name. -/
+  name : String
+  /--
+  Whether the profile's default filter leaves the test out, so that a run under it sets the default
+  filter aside. Only the {lit}`default` profile is offered so, when no profile selects the test.
+  -/
+  fallback : Bool := false
+  /-- A field for each setting that the test takes, other than the seed, with the profile's values. -/
   fields : Array SettingField
 deriving Lean.FromJson, Lean.ToJson
 
-/-- The profile that the widget's runs use. -/
-private meta def widgetProfile : String := "default"
+/-- The reply to a request for a test's settings. -/
+meta structure SettingsReply where
+  /--
+  The profile whose values fill the fields at first: {lit}`default` when it is offered, and
+  otherwise the first profile offered.
+  -/
+  profile : String
+  /-- A field for each setting that the test takes, other than the seed, in parameter order. -/
+  fields : Array SettingField
+  /--
+  The profiles offered for the test's runs, as {name}`profileChoices` orders them. There are none
+  until the driver has elaborated the workspace's configuration, and runs then use the default
+  profile.
+  -/
+  profiles : Array ProfileOption := #[]
+deriving Lean.FromJson, Lean.ToJson
+
+/-- The directory where the driver writes the configuration that it elaborates. -/
+private meta def configurationDir : IO System.FilePath :=
+  return (← IO.currentDir) / ".lake" / "errata"
 
 /--
-The values that the profile named {name}`profile` gives settings, from the configuration that the
-driver last elaborated in the workspace's {lit}`.lake/errata`, or none when it has written none.
+The configuration that the driver last elaborated in the workspace's {lit}`.lake/errata`, with the
+modules of the root package's libraries, or {lean}`none` when it has written none.
 -/
-private meta def profileValues (profile : String) : IO (Array (String × String)) := do
-  let dir := (← IO.currentDir) / ".lake" / "errata"
+private meta def lastConfiguration : IO (Option (Runner.Config × Array LibraryModules)) := do
+  let dir ← configurationDir
   try
     let config ← Runner.Config.load (dir / "config.json") (dir / "workspace.json")
-    return ((config.profile? profile).map (·.settings)).getD #[]
-  catch _ => return #[]
+    let workspace ← Runner.readJsonFile (dir / "workspace.json")
+    return some (config, LibraryModules.ofWorkspaceJson workspace)
+  catch _ => return none
 
 /--
 The settings to which the profile named {name}`profile` gives the result of a Lake target, with the
 target, from the configuration that the driver last elaborated, or none when it has written none.
 -/
 private meta def profileNeeds (profile : String) : IO (Array (String × String)) := do
-  let path := (← IO.currentDir) / ".lake" / "errata" / "config.json"
   try
-    let config ← Runner.readJsonFile path
+    let config ← Runner.readJsonFile ((← configurationDir) / "config.json")
     let settings := (config.getObjValD "profiles").getObjValD profile |>.getObjValD "settings"
     let .ok fields := settings.getObj? | return #[]
     return fields.toArray.filterMap fun (k, v) =>
       (v.getObjValAs? String "needs").toOption.map (k, ·)
   catch _ => return #[]
 
+/--
+The test as a filter sees it: its name, file, and tags, and the test executable of the library that
+{name}`libraries` says holds its module, or the empty name when none does.
+-/
+private meta def testRecord (declName : Name) (note : TestNote)
+    (libraries : Array LibraryModules) : Filter.Record :=
+  { name := (privateToUserName declName).toString, file := note.file
+    exe := (libraryOf libraries note.module).getD "", tags := note.tags }
+
+/--
+The profiles that the widget offers for runs of the test {name}`declName`, from the configuration
+that the driver last elaborated, or none when it has written none.
+-/
+private meta def profileChoicesOf (declName : Name) : IO (Array ProfileChoice) := do
+  let some note := (← testNotes.get).get? declName | return #[]
+  let some (config, libraries) ← lastConfiguration | return #[]
+  return profileChoices config (testRecord declName note libraries)
+
+/--
+The fields for the settings {name}`declared`, other than the seed, with the values that a profile
+gives them and the targets whose results it gives them.
+-/
+private meta def fieldsOf (declared : Array DeclaredSetting)
+    (values needs : Array (String × String)) : Array SettingField :=
+  declared.filter (·.name != seedSetting) |>.map fun s => {
+    name := s.name, optional := s.optional, description? := s.description?, default? := s.default?
+    profileValue? := (values.findRev? (·.1 == s.name)).map (·.2)
+    needs? := (needs.find? (·.1 == s.name)).map (·.2)
+  }
+
 open Server in
 /--
-Server RPC method that gives the fields for a test's settings: for each setting that the test takes,
-other than the seed, its name, description, and declared default, whether it is optional, and the
-value that the profile gives it, or the target whose result the profile gives it.
+Server RPC method that gives the fields for a test's settings and the profiles that its runs can
+use. The profiles offered are those whose default filters select the test, or the {lit}`default`
+profile as the fallback when none does. For each profile and each setting that the test takes, other than
+the seed, a field gives the setting's name, description, and declared default, whether it is
+optional, and the value that the test receives from the profile, which is the first matching
+override's or else the profile's own, or the target whose result the profile gives it.
 -/
 @[server_rpc_method]
 meta def testSettings (req : RunRef) : RequestM (RequestTask SettingsReply) := do
   let declName ← decodeDecl req.decl
   let declared := (((← testNotes.get).get? declName).map (·.settings)).getD #[]
-  let values ← profileValues widgetProfile
-  let needs ← profileNeeds widgetProfile
-  let fields := declared.filter (·.name != seedSetting) |>.map fun s => {
-    name := s.name, optional := s.optional, description? := s.description?, default? := s.default?
-    profileValue? := (values.findRev? (·.1 == s.name)).map (·.2)
-    needs? := (needs.find? (·.1 == s.name)).map (·.2)
-  }
-  return RequestTask.pure { profile := widgetProfile, fields }
+  let profiles ← (← profileChoicesOf declName).mapM fun c => do
+    return { name := c.name, fallback := c.fallback
+             fields := fieldsOf declared c.values (← profileNeeds c.name) : ProfileOption }
+  let first? := profiles.find? (·.name == "default") <|> profiles[0]?
+  return RequestTask.pure {
+    profile := (first?.map (·.name)).getD "default"
+    fields := (first?.map (·.fields)).getD (fieldsOf declared #[] #[])
+    profiles }
 
 open Server in
 /--
 Server RPC method that starts running a test: the driver builds its saved source and runs it, and
-the run's output streams in.
+the run's output streams in. The driver is the script of the package whose directory holds the
+{lit}`Errata` modules on the search path, and the run uses the profile that the request names.
 -/
 @[server_rpc_method]
 meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
@@ -570,10 +609,19 @@ meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
   let previous? ← runRegistry.modifyGet fun runs => (runs.get? declName, runs.insert declName state)
   if let some previous := previous? then discard <| previous.apply .cancel
   forgetOldRuns
+  let leanPath := System.SearchPath.parse ((← IO.getEnv "LEAN_PATH").getD "") ++
+    (← searchPathRef.get)
+  -- A profile that leaves the test out is offered only as the fallback, whose runs set the default
+  -- filter aside.
+  let ignoreDefaultFilter ← match req.profile? with
+    | some p => pure <| (← profileChoicesOf declName).any (fun c => c.name == p && c.fallback)
+    | none => pure false
   let request : DriverRequest := {
     module, test := (privateToUserName declName).toString, seed?
     takesSeed := note?.any (·.settings.any (·.name == seedSetting))
     settings := req.settings.map fun s => (s.name, s.value)
+    script := ← driverScript leanPath (← IO.currentDir)
+    profile? := req.profile?, ignoreDefaultFilter
   }
   -- The task spends most of its time blocked on the driver, so it has its own thread.
   let _ ← IO.asTask (prio := .dedicated) do

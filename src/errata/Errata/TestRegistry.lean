@@ -160,9 +160,9 @@ def testLocation [Monad m] [MonadEnv m] [MonadLiftT BaseIO m] (test : TestDecl) 
   }
 
 /--
-The test with its declaration range from the environment, when the environment holds one. The declaration
-ranges of a module's own declarations are complete once the module is elaborated, which is when its
-{lit}`.olean` file is written.
+The test with its declaration range from the environment, when the environment holds one. The
+declaration ranges of a module's own declarations are complete once the module is elaborated, which
+is when its {lit}`.olean` file is written.
 -/
 def TestDecl.withRange (env : Environment) (test : TestDecl) : TestDecl :=
   if test.location?.isSome then test
