@@ -77,21 +77,40 @@ structure Options where
   listFilters? : Option (Array String) := none
 deriving Repr, Inhabited
 
+/-- The form of a duration, as the driver's and the runner's messages state it. -/
+def durationForm : String :=
+  "one or more whole numbers, each followed by one of the units h, m, s, ms, used at most once \
+  each and in that order, such as 90s, 10m, or 2m30s"
+
+/-- The units of a duration, in the order they are written, each with its length in milliseconds. -/
+def durationUnits : List (String × Nat) :=
+  [("h", 3600000), ("m", 60000), ("s", 1000), ("ms", 1)]
+
 /--
-Parses a duration: a natural number followed by {lit}`ms`, {lit}`s`, {lit}`m`, or {lit}`h`. The
-result is in milliseconds.
+Parses a duration: a sequence of components such as {lit}`2m30s`, each a whole number followed by a
+unit, with the units {lit}`h`, {lit}`m`, {lit}`s`, and {lit}`ms` in that order and each at most
+once. Whitespace around it is ignored. The result is in milliseconds.
 -/
-def parseDuration (s : String) : Except String Nat :=
+def parseDuration (s : String) : Except String Nat := Id.run do
   let s := s.trimAscii.copy
-  let num (digits : String) (scale : Nat) : Except String Nat :=
-    match digits.toNat? with
-    | some n => .ok (n * scale)
-    | none => .error s!"invalid duration '{s}': expected a number followed by ms, s, m, or h"
-  if let some d := s.dropSuffix? "ms" then num d.copy 1
-  else if let some d := s.dropSuffix? "s" then num d.copy 1000
-  else if let some d := s.dropSuffix? "m" then num d.copy 60000
-  else if let some d := s.dropSuffix? "h" then num d.copy 3600000
-  else .error s!"invalid duration '{s}': expected a number followed by ms, s, m, or h"
+  let err := .error s!"invalid duration '{s}': expected {durationForm}"
+  let mut cs := s.toList
+  if cs.isEmpty then return err
+  let mut units := durationUnits
+  let mut total := 0
+  for _ in durationUnits do
+    if cs.isEmpty then break
+    let digits := cs.takeWhile Char.isDigit
+    let rest := cs.dropWhile Char.isDigit
+    let unit := String.ofList (rest.takeWhile Char.isAlpha)
+    match units.dropWhile (·.1 != unit) with
+    | (_, scale) :: later =>
+      if digits.isEmpty then return err
+      total := total + (String.ofList digits).toNat! * scale
+      units := later
+      cs := rest.dropWhile Char.isAlpha
+    | [] => return err
+  if cs.isEmpty then .ok total else err
 
 open Cli in
 /--
@@ -119,7 +138,7 @@ where cmd := `[Cli|
       wfail;                   "Fail the run if warnings are logged."
       jobs : Nat;              "How many tests may run at once (1)."
       list;                    "List the settings and the tests that would run, and run nothing."
-      timeout : String;        "How long a test may run before it is stopped, such as 90s or 10m (10m)."
+      timeout : String;        "How long a test may run before it is stopped, such as 90s or 2m30s (10m)."
       "grace-period" : String; "How long a stopped test has before it is killed (10s)."
       set : String;            "Give a setting a value, as NAME=VALUE. Repeatable."
       profile : String;        "The profile of the configuration file to run with (default)."

@@ -1054,6 +1054,9 @@ def driverValidatesToml : Test := do
     ("cycle", ["errata.toml:2:11: the profiles inherit in a cycle: a → b → a",
       "errata.toml:5:11: the profiles inherit in a cycle: b → a → b"]),
     ("bad-duration", ["errata.toml:2:10: 'timeout' must be a duration"]),
+    ("misordered-duration", ["errata.toml:2:10: 'timeout' must be a duration of one or more whole \
+      numbers, each followed by one of the units h, m, s, ms, used at most once each and in that \
+      order, such as 90s, 10m, or 2m30s, and it is \"30s2m\""]),
     ("unknown-target", ["errata.toml:2:32: the target 'nonexistent' cannot be built:"]),
     ("bad-executable", ["errata.toml:3:10: 'command' must have at least one word"])]
   for (variant, messages) in cases do
@@ -1067,7 +1070,8 @@ def driverValidatesToml : Test := do
 /--
 A setting's name may be written as nested tables as well as a quoted dotted key, and the driver
 reads a file that begins with a byte-order mark and durations with spaces around them. A filter in a
-multi-line string is reported at its line and column in the file.
+multi-line string is reported at its line and column in the file. A compound duration such as
+`2m30s` reaches the runner's configuration as its total in milliseconds.
 -/
 @[test]
 def driverReadsTomlForms : Test := do
@@ -1080,6 +1084,19 @@ def driverReadsTomlForms : Test := do
     let out ← withTomlVariant "multiline-filter" #["test"]
     assertExitCode 1 out
     assertContains "errata.toml:4:8: expected ')' to end the matcher" out.stderr
+  result "a compound duration" do
+    IO.FS.withTempDir fun dir => do
+      copyFixture tomlFixture dir
+      IO.FS.writeFile (dir / "errata.toml")
+        (← IO.FS.readFile (tomlFixture / "variants" / "compound-duration.toml"))
+      let out ← IO.Process.output { cmd := "lake", args := #["test"], cwd := dir }
+      assertExitCode 0 out
+      let j ← match Lean.Json.parse (← IO.FS.readFile (dir / ".lake" / "errata" / "config.json")) with
+        | .ok j => pure j
+        | .error e => fail s!"config.json is not JSON: {e}"
+      assertBEq (some 150000)
+        (j.getObjValAs? Lean.Json "profiles" >>= (·.getObjValAs? Lean.Json "default")
+          >>= (·.getObjValAs? Nat "timeout-ms")).toOption
 
 /--
 A setting bound to a target with `{ needs = … }` receives the target's result. Editing the target's

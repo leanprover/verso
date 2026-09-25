@@ -360,18 +360,38 @@ private structure TomlConfig where
   executables : Array TomlExecutable := #[]
   profiles : Array TomlProfile := #[]
 
+/-- The form of a duration, as the driver's and the runner's messages state it. -/
+private def tomlDurationForm : String :=
+  "one or more whole numbers, each followed by one of the units h, m, s, ms, used at most once \
+  each and in that order, such as 90s, 10m, or 2m30s"
+
+/-- The units of a duration, in the order they are written, each with its length in milliseconds. -/
+private def tomlDurationUnits : List (String × Nat) :=
+  [("h", 3600000), ("m", 60000), ("s", 1000), ("ms", 1)]
+
 /--
-A duration, `N` followed by `ms`, `s`, `m`, or `h`, in milliseconds. Whitespace around it is ignored,
-as the runner ignores it.
+A duration in milliseconds: a sequence of components such as `2m30s`, each a whole number followed
+by a unit, with the units `h`, `m`, `s`, and `ms` in that order and each at most once. Whitespace
+around it is ignored, as the runner ignores it.
 -/
-private def tomlDurationMs? (s : String) : Option Nat :=
-  let s := s.trimAscii.copy
-  let num (d : String) (scale : Nat) := d.toNat?.map (· * scale)
-  if let some d := s.dropSuffix? "ms" then num d.copy 1
-  else if let some d := s.dropSuffix? "s" then num d.copy 1000
-  else if let some d := s.dropSuffix? "m" then num d.copy 60000
-  else if let some d := s.dropSuffix? "h" then num d.copy 3600000
-  else none
+private def tomlDurationMs? (s : String) : Option Nat := Id.run do
+  let mut cs := s.trimAscii.copy.toList
+  if cs.isEmpty then return none
+  let mut units := tomlDurationUnits
+  let mut total := 0
+  for _ in tomlDurationUnits do
+    if cs.isEmpty then break
+    let digits := cs.takeWhile Char.isDigit
+    let rest := cs.dropWhile Char.isDigit
+    let unit := String.ofList (rest.takeWhile Char.isAlpha)
+    match units.dropWhile (·.1 != unit) with
+    | (_, scale) :: later =>
+      if digits.isEmpty then return none
+      total := total + (String.ofList digits).toNat! * scale
+      units := later
+      cs := rest.dropWhile Char.isAlpha
+    | [] => return none
+  if cs.isEmpty then some total else none
 
 private def tomlDuration (key : String) (v : Lake.Toml.Value) (positive := false) :
     TomlM (Option Nat) := do
@@ -384,8 +404,7 @@ private def tomlDuration (key : String) (v : Lake.Toml.Value) (positive := false
         return none
       return some ms
     | none =>
-      tomlProblem ref s!"'{key}' must be a duration, such as \"90s\", \"10m\", \"500ms\", or \"1h\", \
-        and it is {s.quote}"
+      tomlProblem ref s!"'{key}' must be a duration of {tomlDurationForm}, and it is {s.quote}"
       return none
   | other =>
     tomlProblem other.ref s!"'{key}' must be a duration string, and it is {tomlKind other}"

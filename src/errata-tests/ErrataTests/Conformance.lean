@@ -761,14 +761,24 @@ def signalExitCodes : Test := do
   assertBEq none (signalOfExitCode? 1)
   assertBEq none (signalOfExitCode? 128)
 
-/-- Durations are written with a unit. -/
+/--
+A duration is a sequence of whole numbers with units, in the order `h`, `m`, `s`, `ms` and each unit
+at most once. A malformed duration's error states the accepted form.
+-/
 @[test]
 def durations : Test := do
-  assertBEq (some 1000) (parseDuration "1s").toOption
-  assertBEq (some 600000) (parseDuration "10m").toOption
-  assertBEq (some 250) (parseDuration "250ms").toOption
-  assertTrue (parseDuration "10" matches .error _)
-  assertTrue (parseDuration "fast" matches .error _)
+  let valid : List (String × Nat) := [
+    ("1s", 1000), ("10m", 600000), ("250ms", 250), ("90s", 90000), ("0s", 0), ("2m30s", 150000),
+    ("1h30m", 5400000), ("1s500ms", 1500), ("1h2m3s4ms", 3723004), (" 2m30s ", 150000)]
+  for (text, ms) in valid do
+    result text do
+      assertBEq (some ms) (parseDuration text).toOption
+  let invalid := ["10", "fast", "30s2m", "2m2m", "2 m", "2.5m", "m", "", "1msms", "1s1ms1s"]
+  for text in invalid do
+    result (if text.isEmpty then "the empty string" else text) do
+      match parseDuration text with
+      | .ok ms => fail s!"parsed as {ms}ms"
+      | .error e => assertContains durationForm e
 
 /-- CPU lists count ranges and single CPUs. -/
 @[test]

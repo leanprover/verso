@@ -1,0 +1,5 @@
+[profile.default]
+timeout = "2m30s"
+
+[profile.default.settings]
+"TomlLib.stampFile" = { needs = "stamp" }
