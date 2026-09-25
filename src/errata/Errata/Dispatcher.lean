@@ -235,15 +235,17 @@ def nodeResults (p : Planned) (nodes : Array Node) : Array Result := Id.run do
     }
   return out
 
-/-- The results of a finished test: its own, then its named results. -/
+/--
+The results of a finished test: its own, whose duration is the process's by the runner's clock, then
+its named results, each with its own duration.
+-/
 def testResults (r : Running) (exit : Exit) (durationMs : Nat) : Array Result :=
   let p := r.planned
   let outcome := mergeOutcome r.verdict? r.unreadable? exit
   let named := nodeResults p r.nodes
-  let inside := named.foldl (· + ·.durationMs) 0
   let own : Result := {
     exe := p.exe, test := p.test, path := p.path, kind := p.kind, outcome
-    durationMs := durationMs - inside
+    durationMs
     output := { log := r.output }
     description? := p.description?
     reproduce? := if outcome.isPass || exit matches .settingMissing _ then none else some p.reproduce
