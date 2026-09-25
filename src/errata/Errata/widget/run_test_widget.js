@@ -33,12 +33,12 @@ function cacheResult(declKey, entry) {
     }
 }
 
-// The editor theme's test-result colours, with fallbacks for a page outside VS Code, keyed by the
-// statuses that the runner's events name. They are the colours of the theme's test icons, so they
-// show the verdict on the status glyph while the label beside it keeps the editor's text colour. A
+// The editor theme's test-result colors, with fallbacks for a page outside VS Code, keyed by the
+// statuses that the runner's events name. They are the colors of the theme's test icons, so they
+// show the verdict on the status glyph while the label beside it keeps the editor's text color. A
 // failure within an `expectFail` is a failure that the test wanted, so it keeps the failure's glyph
-// in the muted colour of a skipped test. An inconclusive outcome is no verdict at all, and it takes
-// the colour of a warning.
+// in the muted color of a skipped test. An inconclusive outcome has no verdict, and it takes the
+// color of a warning.
 const STATUS_COLORS = {
     pass: "var(--vscode-testing-iconPassed, #2e7d32)",
     fail: "var(--vscode-testing-iconFailed, #c62828)",
@@ -103,14 +103,14 @@ const INVALID_PARAMS = -32602;
 
 const monoFont = "var(--vscode-editor-font-family, monospace)";
 
-// The editor theme's colour for secondary text: the badges, hints, and the output summary. The
+// The editor theme's color for secondary text: the badges, hints, and the output summary. The
 // theme keeps it legible against the InfoView's background.
 const dimColor = "var(--vscode-descriptionForeground, #717171)";
 
-// The editor theme's colour for errors: a run that could not start, and a rejected seed.
+// The editor theme's color for errors: a run that could not start, and a rejected seed.
 const errorColor = "var(--vscode-errorForeground, #c62828)";
 
-// The editor theme's colour for warnings: the issues that the runner reported about the run.
+// The editor theme's color for warnings: the issues that the runner reported about the run.
 const warningColor = "var(--vscode-editorWarning-foreground, #bf8803)";
 
 // The size of the text that accompanies a result rather than stating it: the badges, the hints, the
@@ -704,8 +704,8 @@ function NamedResult(props) {
         "details",
         {
             open,
-            // The browser reports a change that the widget made as a toggle too, and only a toggle
-            // away from what the widget drew is the reader's.
+            // The browser also reports a change that the widget made as a toggle. Only a toggle
+            // away from what the widget drew comes from the reader.
             onToggle: /** @param ev {React.SyntheticEvent<HTMLDetailsElement>} */ function (ev) {
                 if (ev.currentTarget.open !== open)
                     props.onOpenChange(props.id, ev.currentTarget.open);
@@ -770,7 +770,7 @@ function NamedResult(props) {
  *              "building", and "running", as the server reports
  *   done       a finished run's outcome (live or restored from the session cache)
  *   cancelled  the run was stopped before it produced an outcome
- *   failed     the run could not be carried out at all
+ *   failed     the test could not be run at all
  *
  * Every state past idle carries the run's output so far and its timings. The server records the
  * timings per run, so they survive the widget being remounted while the run continues. `startTime`
@@ -1012,9 +1012,9 @@ function step(st, ev) {
             // shown. Zero-valued fields in a reply mean "no news"; the server's values otherwise win.
             const shown = fieldsOf(st);
             const other = isOtherRun(shown, res);
-            // A run that the widget has settled, done, cancelled, or refused, stays as it is until
-            // a reply about another run arrives, and a reply about it that is still going is news
-            // from before it settled.
+            // A run that the widget has settled (done, cancelled, or refused) stays as it is until
+            // a reply about another run arrives. A reply that says the settled run is still going
+            // was sent before it settled.
             if (!res.done && !other && st.tag !== "idle" && st.tag !== "running") return st;
             const prev = other ? blankFields() : shown;
             // The run's start on the client's clock is set once, from the first reply about the

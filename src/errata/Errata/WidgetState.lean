@@ -263,7 +263,7 @@ structure RunData where
   execStartTime : Nat := 0
   /-- The outcome that the runner reported for the test, which the run ends with. -/
   outcome? : Option RunOutcome := none
-  /-- Kills the driver's process group, while the driver has yet to be found to have exited. -/
+  /-- Kills the driver's process group, until the server finds that the driver has exited. -/
   kill? : Option (IO Unit) := none
   /--
   Whether the driver has exited. What is left of the events file is then read to its end, and the
@@ -307,12 +307,14 @@ inductive Change where
 
 /--
 The transition that a change makes: the run afterwards and an action to perform once the change is
-in place, or {lean}`none` for a change outside the phases that admit it, and the run then stays as
-it was. A run waits for the lock, builds, and runs, in that order; output, results, steps, issues,
-and outcomes arrive only while the run is live; a run ends once, cancelled or done; a cancel's
-action is the driver's kill, and a cancel applies only until the driver has exited, after which the
-events file decides the outcome; and only a live run is armed, so the caller of an arm after a
-cancel ends the driver itself.
+in place. A change outside the phases that admit it gives {lean}`none`, and the run stays as it was.
+
+ * A run waits for the lock, builds, and runs, in that order.
+ * Output, results, steps, issues, and outcomes arrive only while the run is live.
+ * A run ends once, cancelled or done.
+ * A cancel's action is the driver's kill. A cancel applies only until the driver has exited, and
+   the events file then decides the outcome.
+ * Only a live run is armed. If an arm follows a cancel, the caller ends the driver itself.
 -/
 def RunData.apply (d : RunData) : Change → Option (RunData × Option (IO Unit))
   | .locked t =>
@@ -397,15 +399,15 @@ def RunState.cancelNamed (s : RunState) (runId : String) : IO Bool :=
 /-- The run's phase. -/
 def RunState.phase (s : RunState) : BaseIO Phase := return (← s.data.get).phase
 
-/-- The fields of a JSON object, or none. -/
+/-- The field {name}`key` of a JSON object, or none when it is absent or has another type. -/
 private def fieldOf? [FromJson α] (j : Json) (key : String) : Option α :=
   (j.getObjValAs? α key).toOption
 
 /--
 The report of a result from a {lit}`result` record of the events file, with its location as the
 editor counts it. A location that is {Lean.Doc.name}`own?`, the test's own declaration, is left
-out: a named result that failed because a result inside it did reports the test's declaration, and
-the result inside it has the place of the failed check.
+out. If a result inside a named result fails, the named result reports the test's declaration, and
+the result inside it reports the place of the failed check.
 -/
 def ResultNode.ofRecord (cache : SourceLines) (own? : Option Location) (j : Json) :
     IO ResultNode := do
@@ -467,12 +469,12 @@ def Step.ofRecord (j : Json) : Step :=
 
 /--
 The changes that one record of the runner's events file makes to the run of the test named
-{name}`test`. The runner's {lit}`List` phase ends the building; the test's {lit}`start`,
-{lit}`output`, and {lit}`result` records drive the display; its {lit}`outcome` is the result, and a
-fixture phase's {lit}`outcome` is a step; an {lit}`issue` is kept with the run; {lit}`end` ends
-the run. Records about other tests change nothing. {name}`now` stands in for the time of a phase
-record that gives none, and {name}`own?` is the test's declaration, as
-{name}`RunOutcome.ofRecord` uses it.
+{name}`test`. The {lit}`phase` record of the List or the Run phase ends the building. The test's
+{lit}`start`, {lit}`output`, and {lit}`result` records drive the display. The test's
+{lit}`outcome` is the result, and a fixture phase's {lit}`outcome` is a step. An {lit}`issue` is
+kept with the run, and {lit}`end` ends the run. Records about other tests change nothing.
+{name}`now` stands in for the time of a phase record that gives none, and {name}`own?` is the
+test's declaration, as {name}`RunOutcome.ofRecord` uses it.
 -/
 def changesOfRecord (cache : SourceLines) (test : String) (now : Nat) (own? : Option Location)
     (j : Json) : IO (Array Change) := do

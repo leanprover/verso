@@ -237,7 +237,7 @@ meta def noteTest (declName : Name) (note : TestNote) : IO Unit := do
   testNotes.modify (·.insert declName note)
   dropRun declName (onlyIf := (·.version != note.version))
 
-/-- The number of characters of the driver's output that are kept to report a failed run. -/
+/-- The number of characters from the end of the driver's output that a failed run reports. -/
 private meta def detailLimit : Nat := 4000
 
 /--
@@ -291,11 +291,12 @@ meta structure DriverRequest where
   settings : Array (String × String) := #[]
 
 /--
-The arguments with which {lit}`lake` runs the driver, the script {lit}`Errata.run` found by its name
-among the workspace's packages, for one test, and the runner writes its events: the test's module
-through the interpreted product, a filter that selects the test by its name, and the
-seed and the settings' values. A seed goes to the seed setting when the test takes it, and otherwise
-to the runner as the run's seed.
+The arguments with which {lit}`lake` runs the driver for one test. The driver is the script
+{lit}`Errata.run`, which Lake finds by its name among the workspace's packages. The arguments name
+the test's module, which runs through the interpreted product of the Lean harness, a filter that
+selects the test by its name, the file for the runner's events, the seed, and the settings' values.
+If the test takes the seed setting, the seed is that setting's value; otherwise the runner receives
+it as the run's seed.
 -/
 meta def driverArgs (r : DriverRequest) : Array String :=
   let seed := match r.seed? with
@@ -318,8 +319,8 @@ private meta def outputKept : Nat := 64000
 Runs the test through the driver and applies the changes that the runner's events make to
 {name}`state`. The run waits for the workspace's build lock and holds it until the runner begins its
 Run phase, by which time the driver has built the test's module and written its configuration, so
-another run in the workspace builds while this one's test runs. The driver's process group is the
-run's kill. The driver's standard input is a lifeline that this process holds, and
+another run in the workspace builds while this one's test runs. The run's kill ends the driver's
+process group. The driver's standard input is a lifeline that this process holds, and
 {lit}`ERRATA_DRIVER_LIFELINE` asks the driver to hand it on to the runner, so the runner and the
 tests end when this process does. What the driver writes, Lake's build log and the runner's report,
 is kept for the message of a driver that fails before the runner ends the run. {name}`own?` is the

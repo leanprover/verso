@@ -9,10 +9,9 @@ The conformance suite: the runner, driven as a library, runs test executables an
 their tests ended. The checks that apply to any test executable run against the products of every
 harness: a script that speaks the protocol by itself, a script on Errata's shell harness, a pytest
 suite on Verso's pytest harness, this library's own Lean test executable, and this library's tests
-through the interpreted product of the Lean harness. The checks that need a
-scripted behavior, such as a test that sleeps forever or contradicts its exit code, run against the
-two shell scripts. Each test executable under `fixtures/harness` shows the runner one way that a test
-can end.
+through the interpreted product of the Lean harness. The checks that need a scripted behavior, such
+as a test that sleeps forever or contradicts its exit code, run against the two shell scripts. Each
+test executable under `fixtures/harness` shows the runner one way that a test can end.
 -/
 module
 

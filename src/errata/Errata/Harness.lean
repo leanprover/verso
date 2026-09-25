@@ -209,7 +209,7 @@ def runHelperNamed (helpers : Array Helper) (name : String) (args : List String)
     return 2
 
 /--
-Carries out one invocation of a test executable, and returns its exit code. {lit}`errata-list`
+Performs one invocation of a test executable, and returns its exit code. {lit}`errata-list`
 writes the inventory; {lit}`errata-run` runs the named test, with the settings that follow its name;
 {lit}`errata-helper` runs the named helper from {name}`helpers` with the arguments that follow its
 name; anything else prints the usage message. A test reaches its helpers through

@@ -35,12 +35,16 @@ def sizesOf (d : RunData) : List Nat :=
   [d.chunks.size, d.results.size, d.steps.size, d.issues.size, d.execStartTime, d.buildMs]
 
 /--
-What is wrong with the transition from {name}`d` by the change named {name}`name`, if anything. A
-run that is over stays as it is; the driver's exit clears the kill and changes nothing else; a
-cancel applies to a live run whose driver is still running, and its action is the kill that the run
-holds; a run ends once and keeps its outcome; only a live run whose driver is still running is
-armed; only the lock ends the waiting and only the List phase ends the building; and an outcome
-arrives once.
+What is wrong with the transition from {name}`d` by the change named {name}`name`, if anything.
+
+ * A run that is over stays as it is.
+ * The driver's exit clears the kill and changes nothing else.
+ * A cancel applies to a live run whose driver is still running, and its action is the kill that
+   the run holds.
+ * A run ends once and keeps its outcome.
+ * Only a live run whose driver is still running is armed.
+ * Only the lock ends the waiting, and only the List phase ends the building.
+ * An outcome arrives once.
 -/
 def problem (d : RunData) (name : String) (c : Change) : Option String :=
   let after := d.apply c

@@ -125,7 +125,7 @@ def strict : Setting where
     | "false" => some false
     | _ => none
 
-/-- Writes its greeting, and fails when `strict` is set. -/
+/-- Writes its greeting, and fails when `strict` is `true`. -/
 @[test]
 def readsSettings (word : greeting) (strict? : Option strict) : Test := do
   IO.println s!"greeting: {word}"
