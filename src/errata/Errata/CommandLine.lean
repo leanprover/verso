@@ -130,8 +130,12 @@ structure Options where
   eventsPath : Option String := none
   /-- Fails the run if warnings are logged. -/
   wfail : Bool := false
-  /-- How many tests may run at once. -/
-  jobs : Nat := 1
+  /--
+  How many slots the run's pool has, so how many tests that each take one may run at once. It takes
+  precedence over the profile's value; with neither, the pool has as many slots as the runner has
+  CPUs available.
+  -/
+  jobs? : Option Nat := none
   /--
   How long a test may run before it is terminated, in milliseconds. It takes precedence over the
   configuration's value.
@@ -270,7 +274,7 @@ def optionSpecs : Array OptionSpec := #[
   { long := "grace-period", value? := "DURATION", group := "Configuration"
     help := "How long a stopped test has before it is killed (10s)." },
   { long := "test-threads", short? := "-j", aliases := ["jobs"], value? := "N", commands := [.run]
-    group := "Running", help := "How many tests may run at once (1)." },
+    group := "Running", help := "How many tests may run at once (the CPUs available)." },
   { long := "no-tests", value? := "ACTION", commands := [.run], group := "Running"
     help := "What a run that selects no test does: fail, warn, or pass (fail)." },
   { long := "update-golden", commands := [.run], group := "Running"
@@ -441,8 +445,7 @@ def applyOption (opts : Options) (g : GivenOption) : Except String Options := do
   | "test-threads" =>
     let some n := value.toNat? | throw s!"{g.written} expects a whole number, and it is '{value}'"
     if n == 0 then throw s!"{g.written} 0 is invalid: at least one test must be able to run"
-    unless n == 1 do throw s!"{g.written} {n}: only 1 is supported"
-    return { opts with jobs := n }
+    return { opts with jobs? := some n }
   | "no-tests" =>
     match value with
     | "fail" => return { opts with noTests := .fail }

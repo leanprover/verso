@@ -977,15 +977,15 @@ human-readable report's lines go to the sinks; the report files are the caller's
 {lit}`protocol` line of the events file is sent first. The human-readable report is colored when
 {name}`color` is true.
 
-Filters with syntax errors, unknown profiles, and profiles whose {lit}`jobs` is above one end the
-run before the List phase. The List phase lists every executable, then checks the configuration
+Filters with syntax errors and unknown profiles end the run before the List phase. The List phase lists every executable, then checks the configuration
 against the inventory: values that the command line gives to settings that no executable declares
 are errors, and those that the profile gives are warnings; the filters are evaluated, with a warning
 for each atom and each filter that selects nothing. The configuration's filters draw these warnings
 only when the run has every test executable of the package. The {lit}`list` command then prints the
 selected tests in its message format. The Run phase runs the selected tests and the phases of the
 fixtures they use as the scheduler directs, in inventory order as far as the fixtures' claims and
-the slots of {lit}`jobs` allow.
+the slots of the pool allow. The pool has the slots that {lit}`--jobs` or else the profile's
+{lit}`jobs` gives, or else one per CPU available to the runner.
 -/
 def execute (config : Config) (opts : Options) (sinks : Sinks)
     (registry : Option Registry := none) (color : Bool := false) : IO (RunReport × UInt32) := do
@@ -1015,11 +1015,6 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
   let some profile := config.profile? opts.profile
     | d.dispatch (.issue { isError := true, message := unknownProfile config opts.profile })
       finish ExitCode.setupError
-  if let some jobs := profile.jobs? then
-    unless jobs == 1 do
-      d.dispatch (.issue { isError := true, message := s!"the profile {profile.name} sets jobs to \
-        {jobs}: only 1 is supported" })
-      return ← finish ExitCode.setupError
   let (selection, overrides) ← match parseSelection config opts profile with
     | .ok fs => pure fs
     | .error (errors, code) =>
@@ -1031,7 +1026,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
       listTimeoutMs := opts.timeoutMs? <|> profile.timeoutMs? |>.getD defaultTimeoutMs
       listGracePeriodMs := opts.gracePeriodMs? <|> profile.gracePeriodMs? |>.getD defaultGracePeriodMs
     }
-    d.dispatch (.phase "List" (← Protocol.nowMs))
+    d.dispatch (.phase "List" (← Protocol.nowMs) none)
     let some listings ← listAll ctx | finish ExitCode.listFailed
     let inventory := listings.flatMap (·.tests)
     let exeName (t : InventoryTest) : String := config.executables[t.exeIdx]!.name
@@ -1080,8 +1075,14 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
       | .fail => d.dispatch (.issue { isError := true, message := noTestsMessage })
       | .warn => d.dispatch (.issue { isError := false, message := "no tests to run" })
       | .pass => pure ()
-    d.dispatch (.phase "Run" (← Protocol.nowMs))
-    let plan := ctx.fixturePlan opts.jobs listings resolution selected
+    let pool ← match opts.jobs? <|> profile.jobs? with
+      | some n => pure (max n 1)
+      | none =>
+        let (n, warning?) ← availableParallelism
+        if let some w := warning? then d.dispatch (.issue { isError := false, message := w })
+        pure n
+    d.dispatch (.phase "Run" (← Protocol.nowMs) (some pool))
+    let plan := ctx.fixturePlan pool listings resolution selected
     for w in plan.settingConflicts do
       d.dispatch (.issue { isError := false, message := w })
     ctx.runScheduled plan

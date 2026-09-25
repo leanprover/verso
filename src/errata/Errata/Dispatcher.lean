@@ -73,8 +73,8 @@ Something that happened during a run. A test or a fixture's phase is named by it
 test's or fixture's name, and its key (see {name}`Planned.key`).
 -/
 inductive Event where
-  /-- A phase of the run has begun. -/
-  | phase (name : String) (timeMs : Nat)
+  /-- A phase of the run has begun; the Run phase names the number of slots in its pool. -/
+  | phase (name : String) (timeMs : Nat) (slots? : Option Nat)
   /-- An issue with the run as a whole. -/
   | issue (issue : RunReport.Issue)
   /-- A test or a fixture's phase is about to be started. -/
@@ -323,19 +323,24 @@ private def Running.addRecord (r : Running) (rec : Protocol.Record) : Running :=
 
 /--
 The line with which the human-readable report names a phase as it begins, at a verbosity that shows
-passes.
+passes, with the number of slots in the pool when the phase has one.
 -/
-def phaseLine (name : String) : String := s!"== {name}"
+def phaseLine (name : String) (slots? : Option Nat) : String :=
+  match slots? with
+  | some 1 => s!"== {name} (1 slot)"
+  | some n => s!"== {name} ({n} slots)"
+  | none => s!"== {name}"
 
 /--
 Handles one event: the new state, and what the reporters and the events file receive. An event about
 a test that is not running comes from a process that outlived its test, and it is ignored.
 -/
 def step (s : State) : Event → State × Array Action
-  | .phase name timeMs =>
-    let event := Action.event (Json.mkObj [("type", Json.str "phase"), ("name", Json.str name),
-      ("time_ms", ToJson.toJson timeMs)])
-    (s, if s.human.verbosity.showsPasses then #[event, .print (phaseLine name)] else #[event])
+  | .phase name timeMs slots? =>
+    let event := Action.event (Json.mkObj ([("type", Json.str "phase"), ("name", Json.str name),
+      ("time_ms", ToJson.toJson timeMs)] ++ (slots?.map (("slots", ToJson.toJson ·))).toList))
+    (s, if s.human.verbosity.showsPasses then #[event, .print (phaseLine name slots?)]
+      else #[event])
   | .issue issue =>
     let issue := if s.wfail then { issue with isError := true } else issue
     ({ s with issues := s.issues.push issue }, #[.event (Json.mkObj

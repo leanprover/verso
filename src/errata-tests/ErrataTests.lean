@@ -1552,11 +1552,12 @@ def runnerArgParsing : Test := do
     assertBEq (some none) ((parse []).toOption.map (·.timeoutMs?))
   result "malformed timeout rejected" do
     assertTrue ((parse ["--timeout", "soon"]) matches .error _)
-  result "one job" do
-    for form in [["--jobs", "1"], ["-j", "1"], ["-j1"], ["--test-threads=1"]] do
-      assertBEq (some 1) ((parse form).toOption.map (·.jobs))
-  result "more jobs rejected" do
-    assertTrue ((parse ["--jobs", "2"]) matches .error _)
+  result "jobs" do
+    for (form, n) in [(["--jobs", "1"], 1), (["-j", "4"], 4), (["-j8"], 8),
+        (["--test-threads=64"], 64)] do
+      assertBEq (some (some n)) ((parse form).toOption.map (·.jobs?))
+  result "no jobs given" do
+    assertBEq (some none) ((parse []).toOption.map (·.jobs?))
   result "no jobs rejected" do
     assertTrue ((parse ["--jobs", "0"]) matches .error _)
   result "zero timeout rejected" do
@@ -1671,7 +1672,6 @@ def runnerArgRejections : Test := do
     (["--timeout", "soon"], "invalid duration 'soon'"),
     (["--timeout", "0s"], "--timeout must be longer than zero"),
     (["-j", "0"], "-j 0 is invalid: at least one test must be able to run"),
-    (["--jobs", "2"], "--jobs 2: only 1 is supported"),
     (["--no-tests", "maybe"], "--no-tests expects fail, warn, or pass, and it is 'maybe'"),
     (["--color", "sometimes"], "--color expects auto, always, or never, and it is 'sometimes'"),
     (["list", "-T", "yaml"],

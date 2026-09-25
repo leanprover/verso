@@ -39,7 +39,7 @@ Configuration:
   --grace-period DURATION       How long a stopped test has before it is killed (10s).
 
 Running:
-  -j, --test-threads, --jobs N  How many tests may run at once (1). Run only.
+  -j, --test-threads, --jobs N  How many tests may run at once (the CPUs available). Run only.
   --no-tests ACTION             What a run that selects no test does: fail, warn, or pass (fail).
                                 Run only.
   --update-golden               Rewrite the expected files of golden checks. Run only.

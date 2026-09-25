@@ -61,13 +61,14 @@ def errataDir : IO System.FilePath := IO.FS.realPath "src/errata"
 /--
 Runs the given test executables with the runner, collecting what it reports. {name}`config` gives
 the rest of the configuration; the directory of Errata's sources is this workspace's unless it names
-another.
+another. The pool has one slot unless {name}`opts` gives it more.
 -/
 def runWith (exes : Array ExecutableConfig) (opts : Options := {}) (config : Config := {}) :
     IO Run := do
   let events ← IO.mkRef #[]
   let lines ← IO.mkRef #[]
   let dir := config.errataDir? <|> some (← errataDir).toString
+  let opts := { opts with jobs? := opts.jobs? <|> some 1 }
   let (report, code) ← execute { config with executables := exes, errataDir? := dir } opts
     { event := fun j => events.modify (·.push j), line := fun l => lines.modify (·.push l) }
   return { report, code, events := ← events.get, lines := ← lines.get }
@@ -847,7 +848,7 @@ def reproductionLine : Test := do
     result "a pass has none" do
       assertTrue ((r.result? p.passes.test).bind (·.reproduce?)).isNone
     result "with two slots, the line bounds the runtime's threads" do
-      let r ← p.run #[p.fails] { jobs := 2 }
+      let r ← p.run #[p.fails] { jobs? := some 2 }
       let some cmd := (r.result? p.fails.test).bind (·.reproduce?) | fail "no reproduction line"
       assertContains "LEAN_NUM_THREADS=1 " cmd
   forEach scriptedProducts fun p => do
@@ -1654,7 +1655,7 @@ def exclusiveUsersNeverOverlap : Test := forEach products fun p => do
     let stamps := dir / "stamps"
     let fx := p.fixtures
     let r ← p.runTests (fx.exclusive ++ fx.shared)
-      { jobs := 2, sets := #[(fx.stampFile, stamps.toString)] }
+      { jobs? := some 2, sets := #[(fx.stampFile, stamps.toString)] }
     for t in fx.exclusive ++ fx.shared do
       expectOutcome r t (· matches .reported .pass) "a pass"
     let lines ← fileLines stamps
@@ -1837,7 +1838,7 @@ def threadGrants : Test := forEach products fun p => do
   let fx := p.fixtures
   for (jobs, grant) in [(2, 2), (4, 3)] do
     result s!"with {jobs} slots" do
-      let r ← p.runTests #[fx.usesThreaded] { jobs }
+      let r ← p.runTests #[fx.usesThreaded] { jobs? := some jobs }
       let setup ← expectPhase r fx.threaded #[fx.threaded, "setup"] (·.isPass) "a pass"
       assertContains s!"threads: {grant}; LEAN_NUM_THREADS: {grant}" setup.output.all
   if let some test := fx.threadedTest? then
@@ -1845,7 +1846,7 @@ def threadGrants : Test := forEach products fun p => do
       IO.FS.withTempDir fun dir => do
         let stamps := dir / "stamps"
         let r ← p.runTests (#[fx.shared[0]!, test] ++ fx.shared.extract 1)
-          { jobs := 2, sets := #[(fx.stampFile, stamps.toString)] }
+          { jobs? := some 2, sets := #[(fx.stampFile, stamps.toString)] }
         let some res := r.result? test | fail "no result"
         assertContains "threads: 2; LEAN_NUM_THREADS: 2" res.output.all
         let lines ← fileLines stamps
@@ -1855,13 +1856,15 @@ def threadGrants : Test := forEach products fun p => do
 
 /--
 Every invocation receives a thread grant: tests that ask for nothing receive {lit}`threads:1`. With
-two slots they also receive {lit}`LEAN_NUM_THREADS=1`; with one slot the variable is absent.
+two slots they also receive {lit}`LEAN_NUM_THREADS=1`; with one slot the variable is as the runner
+found it in its own environment.
 -/
 @[test]
 def defaultThreadGrant : Test := forEach products fun p => do
-  for (jobs, shown) in [(1, "LEAN_NUM_THREADS: \n"), (2, "LEAN_NUM_THREADS: 1\n")] do
+  let inherited := (← IO.getEnv "LEAN_NUM_THREADS").getD ""
+  for (jobs, shown) in [(1, s!"LEAN_NUM_THREADS: {inherited}\n"), (2, "LEAN_NUM_THREADS: 1\n")] do
     result s!"with {jobs} slots" do
-      let r ← p.run #[p.printsRunId] { jobs }
+      let r ← p.run #[p.printsRunId] { jobs? := some jobs }
       let some res := r.result? p.printsRunId.test | fail "no result"
       assertContains shown res.output.stdout
       unless p.name == pytestProduct.name do
