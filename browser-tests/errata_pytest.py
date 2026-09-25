@@ -35,11 +35,12 @@ optionally `fixtures`, the names of fixtures declared before it that it takes; o
 produced none. The context has the attributes `settings` and `fixtures`, dictionaries from names to
 values, `threads`, and `config`, the pytest configuration of the loaded suite, which holds the
 suite's command-line options. The prepare and the teardown are trivial when the dictionary leaves
-them out. `errata-list` records the trivial phases in a file beside its OUT, and an
-`errata-fixture` invocation of such a phase whose OUT is in the same directory succeeds before
-pytest is imported, so it costs the interpreter alone. Tests take fixtures through the marker `errata_fixture(NAME)`, which uses the fixture
-alone among its users, or `errata_fixture(NAME, exclusive=False)`, which shares it with other shared
-users, and read the values through the `errata_fixtures` fixture, a dictionary from names to values.
+them out. Under the runner, which sets `ERRATA_RUN_ID`, `errata-list` records the trivial phases in
+a file named by the run beside its OUT, and an `errata-fixture` invocation of such a phase in the
+same run succeeds before pytest is imported, so it costs the interpreter alone. Tests take fixtures
+through the marker `errata_fixture(NAME)`, which uses the fixture alone among its users, or
+`errata_fixture(NAME, exclusive=False)`, which shares it with other shared users, and read the
+values through the `errata_fixtures` fixture, a dictionary from names to values.
 
 pytest's own output, and what a test prints, goes to standard output and standard error, which the
 runner captures as the test's output; the records go only to OUT.
@@ -66,11 +67,17 @@ def write_record(out, record):
 
 def trivial_phases_path(pytest_args, out_path):
     """
-    The file in which a listing records the trivial phases of the suite's fixtures: beside the
-    listing's output, in the runner's directory for the run's result files, named by the pytest
-    arguments and the working directory, so that the fixture phases of the same run find it.
+    The file in which a listing records the trivial phases of the suite's fixtures, or `None` when
+    the runner did not start this process. The file is beside the output file that the runner gives,
+    in its directory for the run's result files, and is named by the run's identifier, the working
+    directory, and the pytest arguments, so that the fixture phases of the same run, and only they,
+    find it.
     """
-    digest = hashlib.sha256(json.dumps([os.getcwd(), pytest_args]).encode()).hexdigest()[:16]
+    run_id = os.environ.get("ERRATA_RUN_ID", "")
+    if not run_id:
+        return None
+    key = json.dumps([run_id, os.getcwd(), pytest_args])
+    digest = hashlib.sha256(key.encode()).hexdigest()[:16]
     return os.path.join(os.path.dirname(os.path.abspath(out_path)), f"errata-pytest-{digest}.json")
 
 
@@ -90,8 +97,11 @@ def answer_trivial_phase(argv):
     if len(link) < 4 or link[0] != "errata-fixture" or link[3] not in OPTIONAL_PHASES:
         return None
     out_path, name, phase = link[1], link[2], link[3]
+    path = trivial_phases_path(argv[:mode_at], out_path)
+    if path is None:
+        return None
     try:
-        with open(trivial_phases_path(argv[:mode_at], out_path), encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             trivial = json.load(f)
     except (OSError, ValueError):
         return None
@@ -561,13 +571,14 @@ def list_tests(pytest_args, out_path):
         for record in plugin.records:
             write_record(out, record)
     path = trivial_phases_path(pytest_args, out_path)
-    try:
-        with open(path + ".tmp", "w", encoding="utf-8") as f:
-            json.dump(plugin.trivial, f)
-        os.replace(path + ".tmp", path)
-    except OSError:
-        # Without the record, every phase runs through pytest.
-        pass
+    if path is not None:
+        try:
+            with open(path + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(plugin.trivial, f)
+            os.replace(path + ".tmp", path)
+        except OSError:
+            # Without the record, every phase runs through pytest.
+            pass
     return 0
 
 
