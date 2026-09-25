@@ -185,7 +185,7 @@ function shellWord(text) {
  * @typedef {{name: string, value: string}} SettingValue
  * @typedef {{name: string, fallback?: boolean, fields: SettingField[]}} ProfileOption a profile
  *   offered for the test's runs, with the values that the test receives from it; a fallback
- *   profile's default filter leaves the test out, and its runs set that filter aside
+ *   profile's default filter leaves the test out, which a run of the one test sets aside
  */
 
 // How a profile is named in the profile menu.

@@ -83,8 +83,15 @@ meta def recordTest (decl : Name) (tags : Array String := #[]) (threads? : Optio
   let docstring? ← findDocString? (← getEnv) decl
   let reachedFixtures :=
     reachedFixtureDecls (fixtureExt.getState (← getEnv)) (fixtures.map (·.decl))
+  let file ← getFileName
+  -- An imported declaration's ranges are in its own module's data already, while those of this
+  -- module's declarations are complete when the module is written (`TestDecl.withRange`).
+  let location? ← if ((← getEnv).getModuleIdxFor? decl).isSome then
+      (← findDeclarationRanges? decl).mapM fun r =>
+        pure { file, startPos := r.range.pos, endPos := r.range.endPos : Location }
+    else pure none
   modifyEnv (testExt.addEntry · {
-    name := decl, run, isUnsafe := val.safety == .unsafe, file := ← getFileName, docstring?,
+    name := decl, run, isUnsafe := val.safety == .unsafe, file, location?, docstring?,
     tags, threads?, settings, fixtures, reachedFixtures
   })
 
@@ -187,11 +194,14 @@ meta def widgetRangeSyntax (decl : Name) (attrStx : Syntax) : AttrM Syntax := do
 
 /--
 A setting that a test takes, as the widget offers a field for it: its name, whether it is optional,
-its docstring, and its declared default.
+its docstring, and its declared default, as {lit}`@[setting]` recorded it or else evaluated here,
+or {lean}`none` in its place when evaluating it fails.
 -/
-meta def declaredSetting (use : SettingUse) : Errata.Widget.DeclaredSetting :=
-  { name := settingNameOf use.decl, optional := use.optional, description? := use.description?,
-    default? := use.default? }
+meta def declaredSetting (use : SettingUse) : AttrM Errata.Widget.DeclaredSetting := do
+  let default? ← if use.defaultEvaluated then pure use.default?
+    else pure ((← (evaluatedDefault? use.decl).run').join)
+  return { name := settingNameOf use.decl, optional := use.optional,
+           description? := use.description?, default? }
 
 /-- Marks a definition as a test, discovered and run by the Errata test runner. -/
 meta initialize
@@ -230,7 +240,7 @@ meta initialize
       Errata.Widget.noteTest decl {
         version
         location? := declared?.filter (·.endPos.line != 0) <|> commandLocation?
-        settings := (test?.map (·.settings)).getD #[] |>.map declaredSetting
+        settings := ← (test?.map (·.settings)).getD #[] |>.mapM declaredSetting
         module := ← getMainModule
         file := (test?.map (·.file)).getD ""
         tags := (test?.map (·.tags)).getD #[]
@@ -301,15 +311,16 @@ syntax testModules := ident ("." "*")?
 
 /--
 The settings that a test or fixture takes, as a test executable's entries list them: each with its
-docstring as its description and its declared default, as {lit}`@[setting]` recorded them.
+docstring as its description and a reference to its declared default, which is read from the
+setting's value when the test executable runs.
 -/
 meta def settingRefs (uses : Array SettingUse) : TermElabM (Array Term) :=
   uses.mapM fun use => do
-    let quoteOpt (s? : Option String) : TermElabM Term := match s? with
-      | some s => `(some $(quote s))
+    let docStx ← match use.description? with
+      | some doc => `(some $(quote doc))
       | none => `((none : Option String))
     `({ name := $(quote (settingNameOf use.decl)), optional := $(quote use.optional),
-        description? := $(← quoteOpt use.description?), default? := $(← quoteOpt use.default?)
+        description? := $docStx, default? := Errata.Setting.default? @$(mkCIdent use.decl)
         : Errata.SettingRef })
 
 /--
@@ -318,8 +329,8 @@ named modules, and expands to the array of {name}`TestEntry` values that run the
 trailing {lit}`.*` also names every imported module below it. Even if a module is named more than
 once, its tests are not duplicated. Each module must be imported so its tests are reachable. Each
 test is named by its fully qualified declaration name, and its entry lists its tags, the settings it
-takes, each with its description and its declared default, and the fixtures it takes, each exclusive
-or shared. Unsafe tests are wrapped in {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
+takes, each with its description and a reference to its declared default, and the fixtures it takes,
+each exclusive or shared. Unsafe tests are wrapped in {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
 -/
 syntax (name := getAllTests) "getAllTests%" str testModules* : term
 

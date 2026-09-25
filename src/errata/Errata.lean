@@ -31,6 +31,8 @@ public import Errata.Property
 public import Errata.Protocol
 public import Errata.ProcessControl
 public import Errata.Harness
+public import Errata.OleanListing
+public import Errata.SettingType
 public import Errata.Filter
 public import Errata.CommandLine
 public import Errata.RunnerConfig

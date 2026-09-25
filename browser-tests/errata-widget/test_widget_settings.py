@@ -3,9 +3,12 @@ The fields for the settings that a test declares, which start with the values th
 the fixture workspace's `errata.toml` gives them.
 """
 
+import shutil
+
 import pytest
 from playwright.sync_api import expect
 
+from harness import FIXTURE
 from widget import Widget, expect_exact_text
 
 pytestmark = pytest.mark.errata_widget
@@ -193,6 +196,21 @@ def test_a_run_under_a_profile_passes_it_to_the_driver(editor):
     widget.wait_for_verdict("Passed")
     # The field was left as the profile gives it, so the greeting comes from `-P ci` alone.
     expect_exact_text(widget.output, "greeting: good evening\n")
+
+
+def test_a_first_run_runs_a_test_that_the_default_filter_leaves_out(editor):
+    # With no configuration that the driver elaborated, the workspace is as a fresh checkout has
+    # it: the widget offers no profile, and the run sets the default filter aside.
+    shutil.rmtree(FIXTURE / ".lake" / "errata", ignore_errors=True)
+    editor.show("Passing", "manualOnly")
+    widget = Widget(editor.page)
+    widget.gear.click()
+    expect(widget.seed_field).to_be_visible()
+    expect(widget.profile_menu).to_have_count(0)
+    editor.page.keyboard.press("Escape")
+    widget.run_button.click()
+    widget.wait_for_verdict("Passed")
+    expect_exact_text(widget.output, "ran by hand\n")
 
 
 def test_a_test_that_no_profile_selects_runs_under_the_default_as_the_fallback(editor):

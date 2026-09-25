@@ -23,6 +23,7 @@ import ErrataTests.Filter
 import ErrataTests.WidgetState
 import ErrataTests.Resources
 import ErrataTests.Scheduling
+import ErrataTests.Defaults
 
 open Errata
 

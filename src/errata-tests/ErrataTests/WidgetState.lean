@@ -357,30 +357,45 @@ def profilesOfferedForATest : Test := do
   result "no profiles" do
     assertBEq #[{ name := "default" : ProfileChoice }] (profileChoices {} plain)
 
-/-- The widget's run names the profile, and sets the default filter aside for the fallback. -/
+/--
+The widget's run selects its one test with the default filter set aside, and names the profile when
+the widget chose one.
+-/
 @[test]
 def driverArgsOfAProfile : Test := do
   let r : DriverRequest :=
     { module := `M, test := "M.t", eventsPath := "e", script := "p/Errata.run" }
-  assertBEq #["script", "run", "p/Errata.run", "run", "-E", "name(=M.t)", "--interpreted", "M",
-    "--events", "e", "-j", "1"] (driverArgs r)
+  assertBEq #["script", "run", "p/Errata.run", "run", "-E", "name(=M.t)", "--ignore-default-filter",
+    "--interpreted", "M", "--events", "e"] (driverArgs r)
   let args := driverArgs { r with profile? := some "ci", settings := #[("a", "b")] }
-  assertBEq #["-P", "ci", "--set", "a=b"] (args.extract 12 args.size)
-  let args := driverArgs { r with profile? := some "default", ignoreDefaultFilter := true }
-  assertBEq #["-P", "default", "--ignore-default-filter"] (args.extract 12 args.size)
+  assertBEq #["-P", "ci", "--set", "a=b"] (args.extract 11 args.size)
 
 /--
 The package that defines the driver's script is the one whose directory holds {lit}`Errata.olean` on
-the search path, found through the workspace's manifest. Without a manifest, the script's name
-stands alone.
+the search path, found through the workspace's manifest: the root package when the file lies in its
+own build directory, and a dependency when it lies in the dependency's directory. Elsewhere, or
+without a manifest, the script's name stands alone.
 -/
 @[test]
 def driverScriptOfTheWorkspace : Test := do
-  let olean : System.FilePath := ".lake/build/lib/lean"
-  assertBEq "verso/Errata.run" (← driverScript [olean] ".")
-  assertBEq "Errata.run" (← driverScript [".lake/packages/plausible/.lake/build/lib/lean"] ".")
+  assertBEq "verso/Errata.run" (← driverScript [".lake/build/lib/lean"] ".")
+  IO.FS.withTempDir fun ws => do
+    IO.FS.writeFile (ws / "lake-manifest.json") <| Json.compress <| Json.mkObj [
+      ("name", Json.str "app"), ("lakeDir", Json.str ".lake"),
+      ("packages", Json.arr #[Json.mkObj [("name", Json.str "dep"), ("dir", Json.str "dep")]])]
+    let place (dir : System.FilePath) : IO System.FilePath := do
+      IO.FS.createDirAll dir
+      IO.FS.writeFile (dir / "Errata.olean") ""
+      return dir
+    let rootLib ← place (ws / ".lake" / "build" / "lib" / "lean")
+    let depLib ← place (ws / "dep" / ".lake" / "build" / "lib" / "lean")
+    let elsewhere ← place (ws / "vendored" / "lib")
+    result "the root's library" do assertBEq "app/Errata.run" (← driverScript [rootLib] ws)
+    result "a dependency" do assertBEq "dep/Errata.run" (← driverScript [depLib] ws)
+    result "no package" do assertBEq "Errata.run" (← driverScript [elsewhere] ws)
   IO.FS.withTempDir fun dir => do
-    assertBEq "Errata.run" (← driverScript [olean] dir)
+    result "no manifest" do
+      assertBEq "Errata.run" (← driverScript [".lake/build/lib/lean"] dir)
   assertTrue (isPathPrefix "/a/b" "/a/b/c") "a directory above"
   assertTrue (!isPathPrefix "/a/bc" "/a/b/c") "a sibling"
 

@@ -11,6 +11,7 @@ take as parameters of the setting's type.
 module
 
 public import Errata.TestM
+public import Errata.SettingType
 public import Errata.SettingAttribute
 
 public section
@@ -19,28 +20,6 @@ set_option linter.missingDocs true
 set_option doc.verso true
 
 namespace Errata
-
-/--
-A setting: a value that the configuration file or the command line gives as a string, and that a test
-takes as a parameter of the setting's {name (full := Setting.type)}`type`. Declarations of this type
-marked {lit}`@[setting]` declare settings, and their docstrings describe them.
--/
-structure Setting where
-  /-- The type of the value that a test receives. -/
-  type : Type
-  /-- Parses a value from the string that the configuration gives, or rejects it. -/
-  fromString : String → Option type
-  /--
-  The value that a test receives when neither the command line nor the configuration gives one,
-  parsed by {name (full := Setting.fromString)}`fromString` like any other value.
-  -/
-  default? : Option String := none
-
-/--
-Settings stand for the types of their values, so a parameter {lit}`(x : S)` has the type
-{lit}`S.type`.
--/
-instance : CoeSort Setting Type := ⟨Setting.type⟩
 
 /-- A setting that a test takes, as a test executable lists it. -/
 structure SettingRef where

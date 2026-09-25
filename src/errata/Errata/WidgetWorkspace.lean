@@ -32,18 +32,20 @@ def isPathPrefix (dir path : System.FilePath) : Bool :=
   d.length ≤ p.length && p.take d.length == d
 
 /--
-The packages of the workspace at {name}`workspace`, each with its directory, from its
-{lit}`lake-manifest.json`: the root package at {name}`workspace`, each package that the manifest
-names by its directory, and each package cloned into the manifest's packages directory. Directories
-that are absent on disk are left out, and the rest are resolved to real paths.
+The packages of the workspace at {name}`workspace`, from its {lit}`lake-manifest.json`, each with a
+directory that holds its build: for the root package, its own build directory in its Lake directory,
+and for each other package, its directory, which the manifest names or which is its clone in the
+manifest's packages directory. Directories that are absent on disk are left out, and the rest are
+resolved to real paths.
 -/
 def manifestPackages (workspace : System.FilePath) : IO (Array (String × System.FilePath)) := do
   let manifest ← try Runner.readJsonFile (workspace / "lake-manifest.json") catch _ => return #[]
   let packagesDir : System.FilePath :=
     (manifest.getObjValAs? String "packagesDir").toOption.getD ".lake/packages"
+  let lakeDir : System.FilePath := (manifest.getObjValAs? String "lakeDir").toOption.getD ".lake"
   let mut out := #[]
   if let .ok root := manifest.getObjValAs? String "name" then
-    out := out.push (root, workspace)
+    out := out.push (root, workspace / lakeDir / "build")
   for entry in (manifest.getObjValAs? (Array Json) "packages").toOption.getD #[] do
     let some name := (entry.getObjValAs? String "name").toOption | continue
     let dir : System.FilePath := match (entry.getObjValAs? String "dir").toOption with
@@ -60,10 +62,11 @@ def manifestPackages (workspace : System.FilePath) : IO (Array (String × System
 /--
 The script with which Lake runs Errata's driver in the workspace at {name}`workspace`, qualified by
 the package that defines it, such as {lit}`verso/Errata.run`, so that a script of the same name in
-the root package leaves it in place. The package is the one whose directory holds the first
-{lit}`Errata.olean` on the search path {name}`leanPath`, the deepest when packages nest; its name
-comes from the workspace's {lit}`lake-manifest.json`. When no package is found, the script is named
-{lit}`Errata.run` alone, which Lake looks up in the root package first.
+the root package leaves it in place. The package is the one whose directory, as
+{name}`manifestPackages` gives it, holds the first {lit}`Errata.olean` on the search path
+{name}`leanPath`, the deepest when directories nest: the root package when the file lies in the
+root's own build directory, as it does when Errata is a library of the root package. When no
+package holds it, the script is named {lit}`Errata.run` alone.
 -/
 def driverScript (leanPath : List System.FilePath) (workspace : System.FilePath) : IO String := do
   let some oleanDir ← leanPath.findM? fun dir => (dir / "Errata.olean").pathExists
@@ -97,16 +100,14 @@ structure DriverRequest where
   script : String := "Errata.run"
   /-- The profile of the run, when the widget names one. -/
   profile? : Option String := none
-  /-- Whether the run sets the profile's default filter aside, as a fallback profile's runs do. -/
-  ignoreDefaultFilter : Bool := false
 
 /--
 The arguments with which {lit}`lake` runs the driver for one test. The driver is the request's
 script, named with the package that defines it. The arguments name the test's module, which runs
-through the interpreted product of the Lean harness, a filter that selects the test by its name, the
-file for the runner's events, the profile, the seed, and the settings' values. The run has one slot,
-so the test's runtime threads are left as they are. If the test takes the seed setting, the seed is
-that setting's value; otherwise the runner receives it as the run's seed.
+through the interpreted product of the Lean harness, a filter that selects the test by its name with
+the profile's default filter set aside, since the run is of that one test, the file for the runner's
+events, the profile, the seed, and the settings' values. If the test takes the seed setting, the
+seed is that setting's value; otherwise the runner receives it as the run's seed.
 -/
 def driverArgs (r : DriverRequest) : Array String :=
   let seed := match r.seed? with
@@ -114,11 +115,12 @@ def driverArgs (r : DriverRequest) : Array String :=
       if r.takesSeed then #["--set", s!"{Runner.seedSetting}={n}"] else #["--seed", toString n]
     | none => #[]
   let profile := match r.profile? with
-    | some p => #["-P", p] ++ (if r.ignoreDefaultFilter then #["--ignore-default-filter"] else #[])
+    | some p => #["-P", p]
     | none => #[]
   #["script", "run", r.script, "run", "-E", s!"name(={Filter.escapeText r.test})",
-    "--interpreted", r.module.toString, "--events", r.eventsPath.toString, "-j", "1"] ++
-    profile ++ seed ++ r.settings.flatMap fun (k, v) => #["--set", s!"{k}={v}"]
+    "--ignore-default-filter", "--interpreted", r.module.toString, "--events",
+    r.eventsPath.toString] ++ profile ++ seed ++
+    r.settings.flatMap fun (k, v) => #["--set", s!"{k}={v}"]
 
 /-- A library of the workspace's root package, with the roots and globs that give its modules. -/
 structure LibraryModules where
@@ -173,10 +175,7 @@ def libraryOf (libs : Array LibraryModules) (mod : Lean.Name) : Option String :=
 structure ProfileChoice where
   /-- The profile's name. -/
   name : String
-  /--
-  Whether the profile's default filter leaves the test out, so that a run under it sets the default
-  filter aside.
-  -/
+  /-- Whether the profile's default filter leaves the test out, as the fallback's does. -/
   fallback : Bool := false
   /--
   The values that the test receives from the profile: for each setting, the first override that
@@ -209,8 +208,7 @@ def profileValues (profile : Runner.Profile) (record : Filter.Record) (dflt : Bo
 The profiles of {name}`config` that a run of the test {name}`record` can use: those whose default
 filter selects the test, or that have none, the {lit}`default` profile first and the others in the
 configuration's order. When none selects the test, the one choice is the {lit}`default` profile,
-marked as the fallback, whose runs set the default filter aside. A default filter that cannot be
-read selects nothing.
+marked as the fallback. A default filter that cannot be read selects nothing.
 -/
 def profileChoices (config : Runner.Config) (record : Filter.Record) : Array ProfileChoice :=
   let names := #["default"] ++ config.profileNames.filter (· != "default")

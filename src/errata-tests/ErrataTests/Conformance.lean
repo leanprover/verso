@@ -1856,13 +1856,12 @@ def threadGrants : Test := forEach products fun p => do
 
 /--
 Every invocation receives a thread grant: tests that ask for nothing receive {lit}`threads:1`. With
-two slots they also receive {lit}`LEAN_NUM_THREADS=1`; with one slot the variable is as the runner
-found it in its own environment.
+two slots they also receive {lit}`LEAN_NUM_THREADS=1`; with one slot the variable is absent,
+whatever the runner's own environment holds.
 -/
 @[test]
 def defaultThreadGrant : Test := forEach products fun p => do
-  let inherited := (← IO.getEnv "LEAN_NUM_THREADS").getD ""
-  for (jobs, shown) in [(1, s!"LEAN_NUM_THREADS: {inherited}\n"), (2, "LEAN_NUM_THREADS: 1\n")] do
+  for (jobs, shown) in [(1, "LEAN_NUM_THREADS: \n"), (2, "LEAN_NUM_THREADS: 1\n")] do
     result s!"with {jobs} slots" do
       let r ← p.run #[p.printsRunId] { jobs? := some jobs }
       let some res := r.result? p.printsRunId.test | fail "no result"
@@ -2127,6 +2126,68 @@ def interpretedInventoryIsCompiledInventory : Test := do
     for (c, i) in compiledLines.zip interpretedLines do
       assertBEq c i
     assertBEq compiledLines.length interpretedLines.length
+
+/-- The lines of the list file that the interpreted product writes for {name}`modules`. -/
+def interpretedList (modules : Array String) (chained : Bool := false) : TestM (Array String) := do
+  IO.FS.withTempDir fun dir => do
+    let out := dir / "list.jsonl"
+    -- A chain imports the modules, as every invocation but a lone `errata-list` does.
+    let chain := if chained then #[";", "errata-list", (dir / "again.jsonl").toString] else #[]
+    let r ← IO.Process.output {
+      cmd := interpreter.toString
+      args := modules ++ #["--", "errata-list", out.toString] ++ chain
+      env := #[("LEAN_PATH", some interpreterLeanPath)] }
+    assertExitCode 0 r
+    return ((← IO.FS.readFile out).splitOn "\n").toArray
+
+/-- The records of the given type in the lines of a list file, decoded. -/
+def recordsOfType (lines : Array String) (type : String) : Array Json :=
+  lines.filterMap fun l => (Json.parse l).toOption.filter (strField · "type" == some type)
+
+/--
+The interpreted product lists from the {lit}`.olean` files only when {lit}`@[setting]` evaluated
+the default of every setting that it lists, and imports the modules otherwise; either way it lists
+what an import lists. In {lit}`ErrataTests.Defaults`, a default that calls a function of another
+module, one that reads a value an {lit}`initialize` declaration holds, and one of a setting that
+{lit}`attribute [setting]` marks in another module are left to the import, and both products list
+them with the values that the tests receive. A test that {lit}`attribute [test]` marks in another
+module than its declaration's lists its declaration's line.
+-/
+@[test]
+def interpretedListingFallsBackToAnImport : Test := do
+  interpretedProduct.check
+  Lean.initSearchPath (← Lean.findSysroot) (System.SearchPath.parse interpreterLeanPath)
+  result "the .olean files suffice" do
+    let some _ ← unsafe OleanListing.listed? #[`ErrataTests.Settings, `ErrataTests.Resources]
+      | fail "the listing needed an import"
+    let fromFiles ← interpretedList #["ErrataTests.Settings", "ErrataTests.Resources"]
+    let imported ←
+      interpretedList #["ErrataTests.Settings", "ErrataTests.Resources"] (chained := true)
+    assertBEq imported fromFiles
+  result "an import is needed" do
+    assertTrue (← unsafe OleanListing.listed? #[`ErrataTests.Defaults]).isNone
+      "the listing read unevaluated defaults from the .olean file"
+  result "the defaults listed" do
+    let lines ← interpretedList #["ErrataTests.Defaults"]
+    let defaults := (recordsOfType lines "setting").map fun s =>
+      ((strField s "name").getD "", (strField s "default").getD "")
+    assertBEq #[("ErrataTests.Defaults.imported", "n3"),
+      ("ErrataTests.Defaults.initialized", "initial"),
+      ("ErrataTests.Defaults.markedElsewhere", "d")] defaults
+  result "a test marked in another module" do
+    let lines ← interpretedList #["ErrataTests.Defaults"]
+    let some t := (recordsOfType lines "test").find? fun t =>
+        strField t "name" == some "ErrataTests.Defaults.testMarkedElsewhere"
+      | fail "the test is not listed" (some ("\n".intercalate lines.toList))
+    assertTrue ((t.getObjValAs? Nat "line").toOption.any (· > 0)) s!"{t.compress}"
+  result "the tests receive the defaults" do
+    let p := { interpretedProduct with
+      exe.command := #[interpreter.toString, "ErrataTests.Defaults", "--"] }
+    let tests := #["receivesImported", "receivesInitialized", "receivesMarkedElsewhere"].map
+      (s!"ErrataTests.Defaults.{·}")
+    let r ← p.runTests tests
+    for test in tests do
+      expectOutcome r test (· matches .reported .pass) "a pass"
 
 /--
 A test executable of the Lean harness, run by hand without {lit}`ERRATA_LIFELINE` and with

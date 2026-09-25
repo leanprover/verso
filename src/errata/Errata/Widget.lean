@@ -473,8 +473,8 @@ meta structure ProfileOption where
   /-- The profile's name. -/
   name : String
   /--
-  Whether the profile's default filter leaves the test out, so that a run under it sets the default
-  filter aside. Only the {lit}`default` profile is offered so, when no profile selects the test.
+  Whether the profile is offered as the fallback: the {lit}`default` profile, when no profile's
+  default filter selects the test.
   -/
   fallback : Bool := false
   /-- A field for each setting that the test takes, other than the seed, with the profile's values. -/
@@ -491,9 +491,10 @@ meta structure SettingsReply where
   /-- A field for each setting that the test takes, other than the seed, in parameter order. -/
   fields : Array SettingField
   /--
-  The profiles offered for the test's runs, as {name}`profileChoices` orders them. There are none
-  until the driver has elaborated the workspace's configuration, and runs then use the default
-  profile.
+  The profiles offered for the test's runs, as {name}`profileChoices` gives them: those whose
+  default filters select the test, or the {lit}`default` profile alone, marked as the fallback, when
+  none does. There are none until the driver has elaborated the workspace's configuration, and runs
+  then use the default profile.
   -/
   profiles : Array ProfileOption := #[]
 deriving Lean.FromJson, Lean.ToJson
@@ -561,9 +562,9 @@ open Server in
 /--
 Server RPC method that gives the fields for a test's settings and the profiles that its runs can
 use. The profiles offered are those whose default filters select the test, or the {lit}`default`
-profile as the fallback when none does. For each profile and each setting that the test takes, other than
-the seed, a field gives the setting's name, description, and declared default, whether it is
-optional, and the value that the test receives from the profile, which is the first matching
+profile as the fallback when none does. For each profile and each setting that the test takes,
+other than the seed, a field gives the setting's name, description, and declared default, whether
+it is optional, and the value that the test receives from the profile, which is the first matching
 override's or else the profile's own, or the target whose result the profile gives it.
 -/
 @[server_rpc_method]
@@ -611,17 +612,12 @@ meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
   forgetOldRuns
   let leanPath := System.SearchPath.parse ((← IO.getEnv "LEAN_PATH").getD "") ++
     (← searchPathRef.get)
-  -- A profile that leaves the test out is offered only as the fallback, whose runs set the default
-  -- filter aside.
-  let ignoreDefaultFilter ← match req.profile? with
-    | some p => pure <| (← profileChoicesOf declName).any (fun c => c.name == p && c.fallback)
-    | none => pure false
   let request : DriverRequest := {
     module, test := (privateToUserName declName).toString, seed?
     takesSeed := note?.any (·.settings.any (·.name == seedSetting))
     settings := req.settings.map fun s => (s.name, s.value)
     script := ← driverScript leanPath (← IO.currentDir)
-    profile? := req.profile?, ignoreDefaultFilter
+    profile? := req.profile?
   }
   -- The task spends most of its time blocked on the driver, so it has its own thread.
   let _ ← IO.asTask (prio := .dedicated) do

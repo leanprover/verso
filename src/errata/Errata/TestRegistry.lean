@@ -31,8 +31,8 @@ def settingNameOf (decl : Name) : String :=
 
 /--
 A setting that a test or a fixture takes as a parameter, with the setting's docstring and declared
-default as {lit}`@[setting]` recorded them, so that a test executable lists the setting from this
-record alone.
+default as {lit}`@[setting]` recorded them, so that the interpreted product lists the setting from
+this record alone when the default was evaluated.
 -/
 structure SettingUse where
   /-- The declaration of the setting, which {lit}`@[setting]` marks. -/
@@ -41,8 +41,14 @@ structure SettingUse where
   optional : Bool
   /-- The setting's docstring in Markdown. -/
   description? : Option String := none
-  /-- The setting's declared default. -/
+  /--
+  The setting's declared default, when
+  {name (full := SettingUse.defaultEvaluated)}`defaultEvaluated` says that {lit}`@[setting]`
+  evaluated it.
+  -/
   default? : Option String := none
+  /-- Whether {lit}`@[setting]` evaluated the declared default. -/
+  defaultEvaluated : Bool := false
 deriving Inhabited, Repr, BEq
 
 /-- A fixture that a test takes as a parameter. -/
@@ -97,10 +103,15 @@ structure TestDecl where
   run : Name
   /-- Whether the action is unsafe, as it is when the test is. -/
   isUnsafe : Bool
-  /-- The source file that defines the test. -/
+  /--
+  The source file of the module that marks the test, which is the one that defines it unless
+  {lit}`attribute [test]` marks a declaration of another module.
+  -/
   file : String
   /--
-  The test's declaration range in its source file, which the module's {lit}`.olean` file records.
+  The test's declaration range, paired with the file above: recorded when
+  the attribute is applied for a declaration of another module, and when the module's
+  {lit}`.olean` file is written for one of its own.
   -/
   location? : Option Location := none
   /-- The test's docstring, rendered as Markdown, captured when the attribute is applied. -/
@@ -160,9 +171,8 @@ def testLocation [Monad m] [MonadEnv m] [MonadLiftT BaseIO m] (test : TestDecl) 
   }
 
 /--
-The test with its declaration range from the environment, when the environment holds one. The
-declaration ranges of a module's own declarations are complete once the module is elaborated, which
-is when its {lit}`.olean` file is written.
+The test with its declaration range from the environment, when the test has none recorded and the
+environment holds one. The module's {lit}`.olean` file records each test with the result.
 -/
 def TestDecl.withRange (env : Environment) (test : TestDecl) : TestDecl :=
   if test.location?.isSome then test
@@ -222,8 +232,13 @@ structure SettingDecl where
   file : String
   /-- The setting's docstring in Markdown, which describes it in the inventory. -/
   docstring? : Option String := none
-  /-- The setting's declared default, read from its value when {lit}`@[setting]` is applied. -/
+  /--
+  The setting's declared default, read from its value when {lit}`@[setting]` is applied, when
+  {name (full := SettingDecl.defaultEvaluated)}`defaultEvaluated` says it evaluated there.
+  -/
   default? : Option String := none
+  /-- Whether the declared default evaluated when {lit}`@[setting]` was applied. -/
+  defaultEvaluated : Bool := false
 deriving Inhabited
 
 /-- The name of a setting: its fully qualified declaration name. -/

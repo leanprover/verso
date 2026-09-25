@@ -55,44 +55,26 @@ def helperType : Expr :=
 
 /--
 The settings that a test or fixture takes, each with its docstring as its description and its
-declared default, as {lit}`@[setting]` recorded them.
+declared default, read from the setting's value.
 -/
-def settingRefsOf (uses : Array Errata.SettingUse) : Array Errata.SettingRef :=
-  uses.map fun use => {
-    name := Errata.settingNameOf use.decl, optional := use.optional
-    description? := use.description?, default? := use.default? }
-
-/--
-A recorded test of the module {name}`module` at {name}`location`, as {lit}`getAllTests%` lists it:
-the settings are as {name}`settingRefsOf` gives them, each fixture is exclusive or shared, and the
-threads are those that the test asks for.
--/
-def testInfoOf (module : Name) (test : Errata.TestDecl) (location : Errata.Location) :
-    Errata.TestInfo :=
-  let userName := privateToUserName test.name
-  { package := "", moduleName := module.toString
-    name := userName.toString
-    path := userName.components.map (·.toString (escape := false)) |>.toArray
-    location, docstring? := test.docstring?, tags := test.tags
-    settings := settingRefsOf test.settings
-    fixtures := test.fixtures.map fun use =>
-      { name := Errata.settingNameOf use.decl, exclusive := use.exclusive }
-    threads? := test.threads? }
-
-/-- A recorded fixture, as {lit}`getAllFixtures%` lists it. -/
-def fixtureInfoOf (f : Errata.FixtureDecl) : Errata.FixtureInfo :=
-  { name := Errata.settingNameOf f.name, docstring? := f.docstring?
-    settings := settingRefsOf f.settings, fixtures := f.fixtures.map Errata.settingNameOf
-    threads? := f.threads? }
+unsafe def settingRefsOf (uses : Array Errata.SettingUse) : MetaM (Array Errata.SettingRef) :=
+  uses.mapM fun use => do
+    let default? ← evalExpr (Option String) (mkApp (mkConst ``Option [.zero]) (mkConst ``String))
+      (mkApp (mkConst ``Errata.Setting.default?) (mkConst use.decl)) (safety := .unsafe)
+    return { name := Errata.settingNameOf use.decl, optional := use.optional
+             description? := use.description?, default? }
 
 /--
 The test entry for a recorded test of the module {name}`module`, as {lit}`getAllTests%` builds it:
-{name}`testInfoOf` with the action, which is the recorded definition, evaluated by name.
+the test as {name}`Errata.OleanListing.testInfoOf` gives it, with the settings as
+{name}`settingRefsOf` gives them and the action, which is the recorded definition, evaluated by
+name.
 -/
 unsafe def entryOf (module : Name) (test : Errata.TestDecl) : MetaM Errata.TestEntry := do
   let run ← evalExpr (Array (String × String) → Array (String × String) → Errata.TestM Unit)
     runType (mkConst test.run) (safety := .unsafe)
-  return { testInfoOf module test (← Errata.testLocation test) with run }
+  let info := Errata.OleanListing.testInfoOf module test (← Errata.testLocation test)
+  return { info with settings := ← settingRefsOf test.settings, run }
 
 /--
 The tests that the modules in {name}`modules` record, each module read once. Every module must be
@@ -132,7 +114,8 @@ unsafe def fixturesOf : MetaM (Array Errata.FixtureEntry) := do
         Option String → Errata.FixtureM (Option String))
       fixtureRunType (mkConst f.run) (safety := .unsafe)
     let range ← findDeclarationRanges? f.name
-    return { fixtureInfoOf f with
+    return { Errata.OleanListing.fixtureInfoOf f with
+      settings := ← settingRefsOf f.settings
       location := {
         file := f.file
         startPos := (range.map (·.range.pos)).getD ⟨0, 0⟩
@@ -144,41 +127,6 @@ unsafe def fixturesOf : MetaM (Array Errata.FixtureEntry) := do
 /-- The tables of the modules in {name}`modules`, read from the current environment. -/
 unsafe def tablesOf (modules : Array Name) : MetaM Tables := do
   return { entries := ← testsOf modules, helpers := ← helpersOf, fixtures := ← fixturesOf }
-
-/--
-The tests that the module's {lit}`.olean` file records, read from the file's entries of
-{name}`Errata.testExt`. The file's memory stays mapped for the rest of the process, since the
-records point into it.
--/
-unsafe def recordedTests (module : Name) : IO (Array Errata.TestDecl) := do
-  let (data, _) ← readModuleData (← findOLean module)
-  match data.entries.find? (·.1 == Errata.testExt.name) with
-  | some (_, entries) => return unsafeCast entries
-  | none => return #[]
-
-/--
-The inventory of the tests that the modules in {name}`modules` record, each module read once, and of
-the fixtures that the tests reach, read from the modules' {lit}`.olean` files with no import. Each
-test is as {name}`testInfoOf` gives it at the declaration range that the file records.
--/
-unsafe def listedOf (modules : Array Name) :
-    IO (Array Errata.TestInfo × Array Errata.FixtureInfo) := do
-  let mut seen : NameSet := {}
-  let mut tests := #[]
-  let mut fixtures := #[]
-  let mut fixtureNames : NameSet := {}
-  for module in modules do
-    if seen.contains module then continue
-    seen := seen.insert module
-    for test in ← recordedTests module do
-      let location :=
-        test.location?.getD { file := test.file, startPos := ⟨0, 0⟩, endPos := ⟨0, 0⟩ }
-      tests := tests.push (testInfoOf module test location)
-      for f in test.reachedFixtures do
-        unless fixtureNames.contains f.name do
-          fixtureNames := fixtureNames.insert f.name
-          fixtures := fixtures.push (fixtureInfoOf f)
-  return (tests, fixtures)
 
 /-- The usage message of the interpreted product. -/
 def usage : String :=
@@ -199,9 +147,10 @@ def splitArgs (args : List String) : Option (Array Name × List String) :=
 
 /--
 Runs the harness over the modules with the arguments after {lit}`--`. A lone {lit}`errata-list`
-reads the inventory from the modules' {lit}`.olean` files; every other invocation imports the
-modules and reads the tables from the environment. The modules are found through the search path
-that {lit}`LEAN_PATH` gives.
+reads the inventory from the modules' {lit}`.olean` files when every default it lists was recorded
+there (see {name}`Errata.OleanListing.listed?`); every other invocation, and such a listing
+otherwise, imports the modules and reads the tables from the environment. The modules are found
+through the search path that {lit}`LEAN_PATH` gives.
 -/
 unsafe def interpret (args : List String) : IO UInt32 := do
   let some (modules, harnessArgs) := splitArgs args
@@ -209,9 +158,9 @@ unsafe def interpret (args : List String) : IO UInt32 := do
       return 2
   initSearchPath (← findSysroot)
   if let ["errata-list", outPath] := harnessArgs then
-    let (tests, fixtures) ← listedOf modules
-    Errata.Harness.writeInventory tests (← IO.FS.Handle.mk outPath .append) fixtures
-    return 0
+    if let some (tests, fixtures) ← Errata.OleanListing.listed? modules then
+      Errata.Harness.writeInventory tests (← IO.FS.Handle.mk outPath .append) fixtures
+      return 0
   enableInitializersExecution
   let imports := #[{ module := `Errata : Import }] ++ modules.map ({ module := · })
   let env ← importModules imports {} (loadExts := true)
@@ -231,7 +180,8 @@ fixtures that every imported module records, and runs {name}`Errata.Harness.main
 arguments after {lit}`--`. Every mode of the harness behaves as it does in a library's compiled test
 executable; the helpers of tests and fixture phases run through this same command and modules. A
 lone {lit}`errata-list` writes the same inventory from the modules' {lit}`.olean` files, which
-record each test with its declaration range, its settings, and the fixtures it reaches.
+record each test with its declaration range, its settings, and the fixtures it reaches, unless a
+listed setting's default was not evaluated when {lit}`@[setting]` was applied.
 -/
 public def main (args : List String) : IO UInt32 := do
   try interpretImpl args catch e => do

@@ -107,9 +107,9 @@ def contextOf (settings : Array (String × String)) (threads : Nat := 1)
 
 /--
 Adds the fixture named {name}`name` from {name}`byName` to {name}`order`, the fixtures added so far
-with their names, after the fixtures it takes, each once. Fixtures take no fixture that takes them,
-so the walk ends.
+with their names, after the fixtures it takes, each once.
 -/
+-- A fixture is marked seen before the fixtures it takes are added, so a fixture is visited once.
 partial def addFixtureAfterItsFixtures (byName : Std.HashMap String FixtureInfo) (name : String)
     (order : Array FixtureInfo × Std.HashSet String) : Array FixtureInfo × Std.HashSet String :=
   let (out, seen) := order
