@@ -709,31 +709,33 @@ private def parseDOption (arg : String) (opts : Options) : IO Options := do
   | [name, value] =>
     let name := String.toName name.copy
     let value := value.copy
-    let decl ← getOptionDecl name
-    match decl.defValue with
-    | .ofBool _ =>
-      match value with
-      | "true" => return opts.setBool name true
-      | "false" => return opts.setBool name false
-      | _ => throw <| .userError s!"Invalid boolean value for option {name}: {value}"
-    | .ofNat _ =>
-      if let some n := value.toNat? then
-        return opts.insert name (DataValue.ofNat n)
-      else
-        throw <| .userError s!"Invalid natural number value for option {name}: {value}"
-    | .ofInt _ =>
-      if let some n := value.toInt? then
-        return opts.insert name (DataValue.ofInt n)
-      else
-        throw <| .userError s!"Invalid integer value for option {name}: {value}"
-    | .ofString _ =>
-      -- No quote removal needed: the shell removes quotes and interprets escapes before we see the
-      -- value
+    if let some decl := (← getOptionDecls).find? name then
+      match decl.defValue with
+      | .ofBool _ =>
+        match value with
+        | "true" => return opts.setBool name true
+        | "false" => return opts.setBool name false
+        | _ => throw <| .userError s!"Invalid boolean value for option {name}: {value}"
+      | .ofNat _ =>
+        if let some n := value.toNat? then
+          return opts.insert name (DataValue.ofNat n)
+        else
+          throw <| .userError s!"Invalid natural number value for option {name}: {value}"
+      | .ofInt _ =>
+        if let some n := value.toInt? then
+          return opts.insert name (DataValue.ofInt n)
+        else
+          throw <| .userError s!"Invalid integer value for option {name}: {value}"
+      | .ofString _ =>
+        -- No quote removal needed: the shell removes quotes and interprets escapes before we see the
+        -- value
+        return opts.insert name (DataValue.ofString value)
+      | .ofName _ =>
+        return opts.insert name (DataValue.ofName (String.toName value))
+      | .ofSyntax _ =>
+        throw <| .userError s!"Cannot set syntax-valued option {name} via -D flag"
+    else
       return opts.insert name (DataValue.ofString value)
-    | .ofName _ =>
-      return opts.insert name (DataValue.ofName (String.toName value))
-    | .ofSyntax _ =>
-      throw <| .userError s!"Cannot set syntax-valued option {name} via -D flag"
   | _ => throw <| .userError s!"Invalid -D option: {arg}"
 
 def Config.fromArgs (args : List String) : IO Config := go {mod := ""} args
