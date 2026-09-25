@@ -8,13 +8,13 @@ require illuminate from git "https://github.com/leanprover/illuminate"@"main"
 require Cli from git "https://github.com/leanprover/lean4-cli"@"main"
 
 package verso where
-  precompileModules := true
   leanOptions := #[⟨`experimental.module, true⟩]
 
 @[default_target]
 lean_lib VersoUtil where
   srcDir := "src/verso-util"
   roots := #[`VersoUtil]
+  precompileLibrary := true
 
 input_dir staticWeb where
   text := true
@@ -28,33 +28,39 @@ lean_lib Verso where
   srcDir := "src/verso"
   roots := #[`Verso]
   needs := #[staticWeb, vendorJs]
+  precompileLibrary := true
 
 @[default_target]
 lean_lib MultiVerso where
   srcDir := "src/multi-verso"
   roots := #[`MultiVerso]
+  precompileLibrary := true
 
 @[default_target]
 lean_lib VersoSearch where
   srcDir := "src/verso-search"
   -- Rebuild search when JS on disk changes
   needs := #[staticWeb]
+  precompileLibrary := true
 
 @[default_target]
 lean_lib VersoBlog where
   srcDir := "src/verso-blog"
   roots := #[`VersoBlog]
+  precompileLibrary := true
 
 @[default_target]
 lean_lib VersoManual where
   srcDir := "src/verso-manual"
   roots := #[`VersoManual]
   needs := #[staticWeb]
+  precompileLibrary := true
 
 @[default_target]
 lean_lib VersoIlluminate where
   srcDir := "src/verso-illuminate"
   roots := #[`VersoIlluminate]
+  precompileLibrary := true
 
 input_file tutorialDefaultCss where
   text := true
@@ -65,6 +71,7 @@ lean_lib VersoTutorial where
   srcDir := "src/verso-tutorial"
   roots := #[`VersoTutorial]
   needs := #[tutorialDefaultCss]
+  precompileLibrary := true
 
 input_file ghSetupLiteratePages where
   text := true
@@ -81,6 +88,7 @@ lean_exe «verso» where
 lean_lib VersoServe where
   roots := #[`VersoServe]
   srcDir := "src/verso-serve"
+  precompileLibrary := true
 
 @[default_target]
 lean_exe «verso-serve» where
@@ -91,6 +99,7 @@ lean_exe «verso-serve» where
 lean_lib VersoLiterate where
   roots := #[`VersoLiterate]
   srcDir := "src/verso-literate"
+  precompileLibrary := true
 
 @[default_target]
 lean_exe «verso-literate» where
@@ -102,6 +111,7 @@ lean_exe «verso-literate» where
 lean_lib VersoLiterateCode where
   srcDir := "src/verso-literate-code"
   roots := #[`VersoLiterateCode]
+  precompileLibrary := true
 
 input_file «verso-html-css» where
   text := true
