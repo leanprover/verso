@@ -1037,70 +1037,23 @@ private def withTomlVariant (name : String) (args : Array String) : IO IO.Proces
     IO.Process.output { cmd := "lake", args, cwd := dir }
 
 /--
-The driver checks `errata.toml` before it builds any test executable, and reports each problem at
-its position in the file: a TOML syntax error, a setting that is neither a string nor
-`{ needs = … }` whether its name is a quoted key or nested tables, an unknown key, profiles that
-inherit in a cycle, a malformed duration, an unknown target, and a malformed `[[executable]]`.
+The driver relays the problems that `errata-config` finds in `errata.toml` and reports targets that
+Lake cannot build, each at its position in the file, before it builds any test executable. Errors in
+filters reach the runner with the positions of the filters' characters. `ErrataConfigTests` checks
+the rest of the file's validation in process.
 -/
 @[test]
 def driverValidatesToml : Test := do
-  let cases : List (String × List String) := [
-    ("syntax", ["errata.toml:1:16:"]),
-    ("wrong-type", ["errata.toml:2:22: the setting 'TomlLib.stampFile' must be a string or \
-      { needs = \"target\" }, and it is an integer"]),
-    ("nested-wrong-type", ["errata.toml:2:20: the setting 'TomlLib.stampFile' must be a string or \
-      { needs = \"target\" }, and it is a boolean"]),
-    ("unknown-key", ["errata.toml:3:9: unknown key 'flavor' in the profile 'default'"]),
-    ("cycle", ["errata.toml:2:11: the profiles inherit in a cycle: a → b → a",
-      "errata.toml:5:11: the profiles inherit in a cycle: b → a → b"]),
-    ("bad-duration", ["errata.toml:2:10: 'timeout' must be a duration"]),
-    ("misordered-duration", ["errata.toml:2:10: 'timeout' must be a duration of one or more whole \
-      numbers, each followed by one of the units h, m, s, ms, used at most once each and in that \
-      order, such as 90s, 10m, or 2m30s, and it is \"30s2m\""]),
-    ("unknown-target", ["errata.toml:2:32: the target 'nonexistent' cannot be built:"]),
-    ("bad-executable", ["errata.toml:3:10: 'command' must have at least one word"])]
-  for (variant, messages) in cases do
+  let cases : List (String × String × Bool) := [
+    ("bad-duration", "errata.toml:2:10: 'timeout' must be a duration", true),
+    ("unknown-target", "errata.toml:2:32: the target 'nonexistent' cannot be built:", true),
+    ("filter-basic", "errata.toml:2:53: expected ')' to end the matcher", false)]
+  for (variant, message, beforeBuilding) in cases do
     result variant do
       let out ← withTomlVariant variant #["test"]
       assertExitCode 1 out
-      for m in messages do
-        assertContains m out.stderr
-      assertNotContains "errataExe" out.stdout
-
-/--
-Settings' names may be written as nested tables as well as quoted dotted keys, and the driver reads
-a file that begins with a byte-order mark and durations with spaces around them. Errors in filters
-are reported at the line and column in the file of the character where they were found, in each of
-TOML's four forms of string, past escapes and a dropped first newline. Compound durations such as
-`2m30s` reach the runner's configuration as their totals in milliseconds.
--/
-@[test]
-def driverReadsTomlForms : Test := do
-  result "nested tables, a byte-order mark, and a duration with spaces" do
-    for variant in ["nested", "bom"] do
-      let out ← withTomlVariant variant #["test"]
-      assertExitCode 0 out
-      assertContains "1 passed, 0 failed, 0 errors, 0 inconclusive" out.stdout
-  let filterCases := [("filter-literal", "2:33"), ("filter-basic", "2:53"),
-    ("filter-ml-literal", "4:8"), ("multiline-filter", "4:8"), ("filter-ml-continued", "4:8")]
-  for (variant, place) in filterCases do
-    result variant do
-      let out ← withTomlVariant variant #["test"]
-      assertExitCode 1 out
-      assertContains s!"errata.toml:{place}: expected ')' to end the matcher" out.stderr
-  result "a compound duration" do
-    IO.FS.withTempDir fun dir => do
-      copyFixture tomlFixture dir
-      IO.FS.writeFile (dir / "errata.toml")
-        (← IO.FS.readFile (tomlFixture / "variants" / "compound-duration.toml"))
-      let out ← IO.Process.output { cmd := "lake", args := #["test"], cwd := dir }
-      assertExitCode 0 out
-      let j ← match Lean.Json.parse (← IO.FS.readFile (dir / ".lake" / "errata" / "config.json")) with
-        | .ok j => pure j
-        | .error e => fail s!"config.json is not JSON: {e}"
-      assertBEq (some 150000)
-        (j.getObjValAs? Lean.Json "profiles" >>= (·.getObjValAs? Lean.Json "default")
-          >>= (·.getObjValAs? Nat "timeout-ms")).toOption
+      assertContains message out.stderr
+      if beforeBuilding then assertNotContains "errataExe" out.stdout
 
 /--
 Settings bound to targets with `{ needs = … }` receive the targets' results. Editing a target's

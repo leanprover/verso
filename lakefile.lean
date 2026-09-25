@@ -187,6 +187,12 @@ lean_lib ErrataTests where
   srcDir := "src/errata-tests"
   roots := #[`ErrataTests]
 
+-- Tests of the processing of `errata.toml`, in process.
+@[default_target]
+lean_lib ErrataConfigTests where
+  srcDir := "src/errata-tests"
+  roots := #[`ErrataConfigTests]
+
 -- The directory below a package's Lake directory where the Errata driver writes the generated
 -- sources of the test executables of that package's libraries.
 def errataRunnerDir : System.FilePath := defaultLakeDir / "errata-runner"
