@@ -680,8 +680,9 @@ A filter with a syntax error, an unknown profile, or a profile's {lit}`jobs` abo
 before the List phase. The List phase lists every executable, then checks the configuration against
 the inventory: a value that the command line gives to a setting that no executable declares is an
 error, and one that the profile gives is a warning; the filters are evaluated, with a warning for
-each atom and each filter that selects nothing. The Run phase runs the selected tests in inventory
-order.
+each atom and each filter that selects nothing. The configuration's filters draw these warnings only
+when the run has every test executable of the package. The Run phase runs the selected tests in
+inventory order.
 -/
 def execute (config : Config) (opts : Options) (sinks : Sinks)
     (registry : Option Registry := none) : IO RunReport := do
@@ -746,7 +747,13 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
     if undeclared.any (·.commandLine) then return ← finish
     let records := inventory.map fun t => t.record (exeName t)
     let exes := config.executables.map (·.name)
-    for f in selecting ++ overrides.map (·.1) do
+    -- The configuration's filters serve every executable of the package, so they are checked
+    -- against the inventory only when the run has all of them. The command line's always are.
+    let fromCommandLine := !opts.filters.isEmpty
+    let checked :=
+      (if fromCommandLine || !config.partialSelection then selecting else #[]) ++
+      (if config.partialSelection then #[] else overrides.map (·.1))
+    for f in checked do
       for w in f.warnings records exes do
         d.dispatch (.issue { isError := false, message := w })
     let chosen := Filter.unionOf (selecting.map (·.expr))

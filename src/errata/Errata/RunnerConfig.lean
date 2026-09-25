@@ -111,6 +111,11 @@ structure Config where
   profiles : Array Profile := #[]
   /-- The filter that selects the tests to run when neither the profile nor the command line gives one. -/
   defaultFilter? : Option FilterText := none
+  /--
+  Whether the run has some of the package's test executables: the driver was given the names of
+  libraries or executables to test.
+  -/
+  partialSelection : Bool := false
 deriving Repr, Inhabited, DecidableEq
 
 /-- The profile with the given name. The {lit}`default` profile always exists. -/
@@ -257,6 +262,7 @@ instance : FromJson Config where
       invocation? := ← configField j "invocation"
       profiles
       defaultFilter? := ← configField j "default-filter"
+      partialSelection := (← configField j "partial-selection").getD false
     }
 
 instance : ToJson Config where
@@ -267,7 +273,8 @@ instance : ToJson Config where
     (match c.invocation? with | some i => [("invocation", Json.str i)] | none => []) ++
     (if c.profiles.isEmpty then []
       else [("profiles", Json.mkObj (c.profiles.toList.map fun p => (p.name, ToJson.toJson p)))]) ++
-    Protocol.opt "default-filter" c.defaultFilter?
+    Protocol.opt "default-filter" c.defaultFilter? ++
+    (if c.partialSelection then [("partial-selection", Json.bool true)] else [])
 
 /-- Reads a configuration file, checking that its version is the one this runner reads. -/
 def Config.load (path : System.FilePath) : IO Config := do

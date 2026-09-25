@@ -1110,7 +1110,8 @@ def driverBuildsNeededTargets : Test :=
 /--
 The driver builds only the targets that the selected profile's settings need. A name on the command
 line selects a test executable that `errata.toml` adds, as it selects a library, and such an
-executable receives the directory of Errata's sources.
+executable receives the directory of Errata's sources. The runner's configuration says when the run
+has some of the executables, and a name that matches nothing is an error that names both kinds.
 -/
 @[test]
 def driverSelectsProfilesAndExecutables : Test :=
@@ -1137,6 +1138,7 @@ def driverSelectsProfilesAndExecutables : Test :=
       assertBEq #["extra"] (exeNames j)
       assertBEq (some (← IO.FS.realPath "src/errata").toString)
         (j.getObjValAs? String "errataDir").toOption
+      assertBEq (some true) (j.getObjValAs? Bool "partial-selection").toOption
     result "a library alone" do
       discard <| lake #["test", "--", "TomlLib"]
       assertBEq #["TomlLib"] (exeNames (← config))
@@ -1145,7 +1147,13 @@ def driverSelectsProfilesAndExecutables : Test :=
       assertExitCode 0 out
       assertContains "2 passed, 0 failed" out.stdout
       assertTrue (← stamp.pathExists) "the stamp was not built"
-      assertBEq #["TomlLib", "extra"] (exeNames (← config))
+      let j ← config
+      assertBEq #["TomlLib", "extra"] (exeNames j)
+      assertBEq none (j.getObjValAs? Bool "partial-selection").toOption
+    result "an unknown name" do
+      let out ← lake #["test", "--", "Nothing"]
+      assertExitCode 1 out
+      assertContains "no library, and no [[executable]] in errata.toml, matches 'Nothing'" out.stderr
 
 /-- The `list` subcommand takes filters only, and rejects an option instead of ignoring it. -/
 @[test]

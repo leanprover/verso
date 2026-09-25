@@ -784,11 +784,13 @@ private def profileJson (needs : Array (String × String)) (p : TomlProfile) : L
 
 /--
 The configuration that the driver writes for the runner, as JSON, with the libraries' test
-executables and the executables `tomlExes` that `errata.toml` adds.
+executables and the executables `tomlExes` that `errata.toml` adds. `partialSelection` says that the
+command line named the libraries or executables to test.
 -/
 private def configJson (executables : Array (String × System.FilePath)) (cwd : System.FilePath)
     (errataDir : String) (warnings : Array String) (invocation : String) (toml : ErrataToml)
-    (tomlExes : Array TomlExecutable) (needs : Array (String × String)) : Lean.Json :=
+    (tomlExes : Array TomlExecutable) (needs : Array (String × String))
+    (partialSelection : Bool) : Lean.Json :=
   let tomlExes := tomlExes.map fun e =>
     Lean.Json.mkObj [("name", Lean.Json.str e.name),
       ("command", Lean.Json.arr (e.command.map Lean.Json.str)),
@@ -808,7 +810,8 @@ private def configJson (executables : Array (String × System.FilePath)) (cwd : 
       (p.name, profileJson needs p)))
   ] ++ (match toml.config.defaultFilter? with
     | some f => [("default-filter", filterJson f)]
-    | none => [])
+    | none => []) ++
+    (if partialSelection then [("partial-selection", Lean.Json.bool true)] else [])
 
 /--
 How the Errata driver (the `Errata.run` script in this file) should be invoked: the command that
@@ -960,7 +963,7 @@ script run (args) do
         match lib? with
         | some lib => chosen := chosen.push lib
         | none =>
-          IO.eprintln s!"error: no library matches '{spec}'"
+          IO.eprintln s!"error: no library, and no [[executable]] in errata.toml, matches '{spec}'"
           return 1
       pure chosen
   -- Build every module in the selected libraries; their compiled `.olean` headers are authoritative
@@ -1055,7 +1058,7 @@ script run (args) do
         let needs := needed.zipWith (fun (tgt, _) value => (tgt, value)) needValues
         -- Tests run from the root package's directory, where `lake test` runs.
         let content := (configJson executables rootDir errataDir.toString driverWarnings
-          s!"{withArgs} --test-options" toml tomlExes needs).pretty ++ "\n"
+          s!"{withArgs} --test-options" toml tomlExes needs selecting).pretty ++ "\n"
         addPureTrace toml.text "errata.toml"
         addPureTrace content "Errata runner configuration"
         buildFileUnlessUpToDate' (text := true) configFile do

@@ -110,6 +110,8 @@ structure Running where
   verdict? : Option Protocol.VerdictInfo := none
   /-- Why the result file could not be read, if it could not. -/
   unreadable? : Option String := none
+  /-- Whether a record of the result file has arrived. -/
+  sawRecord : Bool := false
 deriving Inhabited
 
 /-- The dispatcher's state. -/
@@ -246,8 +248,8 @@ private def Running.addOutput (r : Running) (result : Nat) (o : Output) : Runnin
     else { r with nodes := r.nodes.modify i fun n => { n with output := n.output.push o } }
   | none => { r with output := r.output.push o }
 
-/-- Takes in a record from a test executable's result file. -/
-private def Running.addRecord (r : Running) : Protocol.Record → Running
+/-- Takes in a record from a test executable's result file, whatever its place in the file. -/
+private def Running.addKnownRecord (r : Running) : Protocol.Record → Running
   | .output stream? text? _ result? =>
     let text := text?.getD ""
     let o : Output := if stream? == some "stderr" then .stderr text else .stdout text
@@ -270,6 +272,17 @@ private def Running.addRecord (r : Running) : Protocol.Record → Running
       { r with unreadable? := r.unreadable? <|> some "the result file holds two verdict records" }
     else { r with verdict? := some info }
   | _ => r
+
+/--
+Takes in a record from a test executable's result file. The first record must be the
+{lit}`protocol` record; any other makes the result file unreadable.
+-/
+private def Running.addRecord (r : Running) (rec : Protocol.Record) : Running :=
+  let first := !r.sawRecord && !(rec matches .protocol _)
+  let unreadable? :=
+    if first then r.unreadable? <|> some "the result file does not begin with a protocol record"
+    else r.unreadable?
+  { r with sawRecord := true, unreadable? }.addKnownRecord rec
 
 /--
 The line with which the human-readable report names a phase as it begins, at a verbosity that shows
