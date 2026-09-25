@@ -451,7 +451,9 @@ reads itself, with no declaration, to rewrite golden files. When the environment
 {lit}`ERRATA_LIFELINE` is {lit}`1`, as the runner sets it, the executable's standard input is its
 lifeline: when the pipe closes, the executable ends its own process group and exits. Otherwise the
 command runs by hand with any standard input, {lit}`/dev/null` included. The test itself reads an
-empty standard input.
+empty standard input. The runner holds the other end of every invocation's standard input until
+the runner itself exits, so a process that a fixture's setup starts and that inherits the setup's
+standard input sees its end when the run ends, however the runner ends.
 
 The runner also sets {lit}`ERRATA_DIR` to the directory of Errata's sources, where the shell
 harness lives, and {lit}`ERRATA_RUN_ID` to the run's identifier, which is the same for every process

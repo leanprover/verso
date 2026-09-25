@@ -35,8 +35,7 @@ optionally `fixtures`, the names of fixtures declared before it that it takes; o
 produced none. The context has the attributes `settings` and `fixtures`, dictionaries from names to
 values, `threads`, and `config`, the pytest configuration of the loaded suite, which holds the
 suite's command-line options. If a fixture declares no prepare or teardown, that phase does
-nothing, and the inventory marks a fixture without a prepare, before whose users the runner then
-runs none. Tests take fixtures through the marker `errata_fixture(NAME)`, which uses the fixture
+nothing. Tests take fixtures through the marker `errata_fixture(NAME)`, which uses the fixture
 alone among its users, or `errata_fixture(NAME, exclusive=False)`, which shares it with other shared
 users, and read the values through the `errata_fixtures` fixture, a dictionary from names to values.
 
@@ -344,9 +343,6 @@ class ListPlugin:
                 record["fixtures"] = list(info["fixtures"])
             if "threads" in info:
                 record["threads"] = int(info["threads"])
-            if info.get("prepare") is None:
-                # The runner then starts no prepare before the fixture's users.
-                record["prepare"] = False
             fixture_records.append(record)
         for name, info in declared.items():
             if name in used:

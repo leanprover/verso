@@ -30,8 +30,6 @@ structure FixtureSpec where
   threads : Nat := 1
   /-- The mandatory setting that has no value, when the fixture's setup cannot run without it. -/
   missing? : Option String := none
-  /-- Whether the fixture has a prepare, which runs before each test that uses it. -/
-  prepares : Bool := true
 deriving Repr, Inhabited, DecidableEq
 
 /-- A test, as the scheduler sees it. Tests are numbered by their positions in the queue. -/
@@ -143,7 +141,11 @@ structure State where
   closures : Array (Array Nat)
   /-- Each test's status. -/
   testStatus : Array TestStatus
-  /-- The slots that each test holds from its first prepare until it ends. -/
+  /--
+  The slots that each test holds from its first prepare until it ends: its
+  reservation until it starts, the largest grant among its prepares and itself, and its own grant
+  from then on.
+  -/
   reserved : Array Nat
   /-- Each fixture's status. -/
   fixtureStatus : Array FixtureStatus
@@ -232,11 +234,14 @@ def State.failFixture (s : State) (f : Nat) (phase : FixturePhase) (invoked : Bo
         s := { s with fixtureStatus := s.fixtureStatus.set! g (.failed f phase false) }
   return s
 
-/-- The slots that a test holds from its first prepare to its end. -/
+/--
+The slots that a test holds from its first prepare until it starts: the largest grant among its
+prepares and itself. From its start to its end it holds its own grant.
+-/
 def State.reservation (s : State) (t : Nat) : Nat :=
   let test := s.tests[t]!
   test.fixtures.foldl (init := s.grant test.threads) fun r (f, _) =>
-    if s.fixtures[f]!.prepares then max r (s.grant s.fixtures[f]!.threads) else r
+    max r (s.grant s.fixtures[f]!.threads)
 
 /-- Ends a test: releases its claims and its slots, and counts it out of its fixtures' users. -/
 def State.endTest (s : State) (t : Nat) : State := Id.run do
@@ -254,21 +259,23 @@ def State.endTest (s : State) (t : Nat) : State := Id.run do
   return { s with testStatus := s.testStatus.set! t .done }
 
 /--
-The command that starts a test's next step: the prepare of the first of its fixtures from the one at
-{name}`next` on that has a prepare, or the test.
+The command that starts a test's next step: the prepare of its fixture at {name}`next`, or the test.
 -/
 def State.nextStep (s : State) (t : Nat) (next : Nat) : State × Command :=
   let test := s.tests[t]!
-  let next := (List.range' next (test.fixtures.size - next)).find? (fun i =>
-    s.fixtures[test.fixtures[i]!.1]!.prepares) |>.getD test.fixtures.size
   match test.fixtures[next]? with
   | some (f, _) =>
     let values := s.valuesOf (#[f] ++ s.fixtures[f]!.deps)
     ({ s with testStatus := s.testStatus.set! t (.preparing next) },
       .spawn (.prepare f t) (s.grant s.fixtures[f]!.threads) values)
   | none =>
-    ({ s with testStatus := s.testStatus.set! t .running },
-      .spawn (.test t) (s.grant test.threads) (s.valuesOf (test.fixtures.map (·.1))))
+    -- The test keeps the slots of its own grant, and frees those that only its prepares needed.
+    let keep := s.grant test.threads
+    let held := s.reserved[t]!
+    ({ s with
+        testStatus := s.testStatus.set! t .running
+        free := s.free + (held - keep), reserved := s.reserved.set! t (min held keep) },
+      .spawn (.test t) keep (s.valuesOf (test.fixtures.map (·.1))))
 
 /--
 Whether a fixture's teardown may start: its setup was invoked, it has not been torn down, no

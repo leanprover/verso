@@ -1536,10 +1536,6 @@ def pytestHarness : Test := do
     -- The inventory lists the fixtures that some test uses.
     assertBEq #["stamped", "setup-fails", "prepare-fails", "teardown-fails", "dependent",
       "slow-setup", "threaded"] fixtures
-    -- The fixtures without a prepare say so, and the others leave the field out.
-    let unprepared := records.filter (isEvent "fixture") |>.filterMap fun r =>
-      if (r.getObjValAs? Bool "prepare").toOption == some false then strField r "name" else none
-    assertBEq #["setup-fails", "teardown-fails", "dependent", "slow-setup", "threaded"] unprepared
     let shared ← find "test_shared_a"
     assertBEq (some "[{\"exclusive\":false,\"name\":\"stamped\"}]")
       ((shared.getObjVal? "fixtures").toOption.map (·.compress))
@@ -1793,6 +1789,35 @@ def fixturesReceiveSettings : Test := forEach products fun p => do
     assertContains s!"hi and {stamps}" res.output.all
     let setup ← expectPhase r fx.dependent #[fx.dependent, "setup"] (·.isPass) "a pass"
     assertBEq (some "hi") ((setup.settings.find? (·.1 == p.greeting)).map (·.2))
+
+/--
+The runner runs every phase of every fixture a run needs, whether or not the fixture's author wrote
+one: each fixture's setup once, its prepare before each of its users, and its teardown once, each of
+them a pass. The fixture `dependent`, whose prepare and teardown do nothing, and `stamped`, which it
+takes and whose prepare and teardown stamp a file, each serve one user here.
+-/
+@[test]
+def everyPhaseRuns : Test := forEach products fun p => do
+  IO.FS.withTempDir fun dir => do
+    let fx := p.fixtures
+    let users := #[fx.usesDependent, fx.exclusive[0]!]
+    let r ← p.runTests users
+      { sets := #[(p.greeting, "hi"), (fx.stampFile, (dir / "stamps").toString)] }
+    for t in users do
+      expectOutcome r t (· matches .reported .pass) "a pass"
+    let phases (f : String) : Array (Array String) :=
+      (r.report.results.filter fun res =>
+        res.kind == .fixture && res.test == f && res.resultPath.isEmpty).map (·.path)
+    assertBEq #[#[fx.dependent, "setup"], #[fx.dependent, "prepare", fx.usesDependent],
+      #[fx.dependent, "teardown"]] (phases fx.dependent)
+    let stamped := phases fx.stamped
+    assertBEq 1 (stamped.filter (·[1]? == some "setup")).size
+    assertBEq 1 (stamped.filter (·[1]? == some "teardown")).size
+    for t in users do
+      if fx.usesDependent != t then
+        assertTrue (stamped.contains #[fx.stamped, "prepare", t]) s!"no prepare of stamped for {t}"
+    for path in phases fx.dependent ++ stamped do
+      discard <| expectPhase r path[0]! path (·.isPass) "a pass"
 
 /--
 Fixture phases and tests that ask for threads receive the grant as {lit}`threads:N` and as

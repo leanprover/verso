@@ -68,8 +68,6 @@ structure InventoryFixture where
   fixtures : Array String := #[]
   /-- The number of hardware threads that the fixture's phases ask for, when it asks. -/
   threads? : Option Nat := none
-  /-- Whether the fixture has a prepare, which runs before each test that uses it. -/
-  prepares : Bool := true
 deriving Repr, Inhabited
 
 /-- What the List phase gathered from one test executable. -/
