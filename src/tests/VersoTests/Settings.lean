@@ -33,6 +33,12 @@ def versoExe : Setting where
   type := System.FilePath
   fromString s := some s
 
+/-- The built `verso-literate` executable, which writes a module's literate JSON. -/
+@[setting]
+def literateExe : Setting where
+  type := System.FilePath
+  fromString s := some s
+
 /-- The built `verso-literate-html` executable. -/
 @[setting]
 def literateHtmlExe : Setting where

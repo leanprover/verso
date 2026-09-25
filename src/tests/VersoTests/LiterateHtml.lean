@@ -13,7 +13,83 @@ set_option maxRecDepth 1024
 namespace VersoTests.LiterateHtml
 
 open Errata
-open VersoTests.Settings (literateHtmlExe literatePlanExe)
+open VersoTests.Settings (literateExe literateHtmlExe literatePlanExe)
+
+/--
+The variables that Lake sets for the processes it starts, which a Lake of another workspace must
+not inherit. Clearing out {lit}`DYLD_LIBRARY_PATH` and {lit}`LD_LIBRARY_PATH` also keeps the
+toolchain that Elan selects from loading the wrong shared libraries.
+-/
+def lakeVars : Array String :=
+  #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
+    "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
+    "LEAN_GITHASH",
+    "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
+
+/--
+Runs Lake with {name}`args` in the test project {name}`dir`, on the root's toolchain, with the
+variables of {name}`lakeVars` removed from its environment.
+-/
+def lakeInProject (dir : System.FilePath) (args : Array String) : IO IO.Process.Output := do
+  let toolchain := (← IO.FS.readFile "lean-toolchain").trimAscii.toString
+  IO.Process.output {
+    cmd := "elan"
+    args := #["run", "--install", toolchain, "lake"] ++ args
+    cwd := dir
+    env := lakeVars.map (·, none)
+  }
+
+/--
+The two literate test projects, as paths relative to the root: `literate-config`, a single library
+with a configuration file's worth of features, and `literate-multi-root`, two libraries.
+-/
+structure LiterateProjects where
+  /-- The directory of `literate-config`. -/
+  config : System.FilePath
+  /-- The directory of `literate-multi-root`. -/
+  multiRoot : System.FilePath
+
+/--
+Builds the literate HTML of the test project {name}`dir` while it holds the project's build lock,
+the file `.lake/errata-build.lock` there, which the browser suites' site fixtures lock too. The
+project's toolchain must be the root's, and its manifest is first brought up to date with Verso's.
+-/
+def buildLiterateProject (dir : System.FilePath) : FixtureM Unit := do
+  let rootToolchain := (← IO.FS.readFile "lean-toolchain").trimAscii
+  let testToolchain := (← IO.FS.readFile (dir / "lean-toolchain")).trimAscii
+  unless rootToolchain == testToolchain do
+    failHere s!"{dir}/lean-toolchain ({testToolchain}) does not match the root's lean-toolchain \
+      ({rootToolchain})"
+  IO.FS.createDirAll (dir / ".lake")
+  let lock ← IO.FS.Handle.mk (dir / ".lake" / "errata-build.lock") .append
+  lock.lock
+  try
+    IO.println s!"Building the literate HTML of {dir}..."
+    assertExitCode 0 (← lakeInProject dir #["update", "verso"])
+    assertExitCode 0 (← lakeInProject dir #["build", ":literateHtml"])
+  finally
+    lock.unlock
+
+/--
+The literate test projects, built once for the run. The setup builds each project's literate HTML
+in turn, so the two builds never overlap, and the value names both projects. The projects share
+the root's packages directory, so their builds find Verso's modules in the root's build directory
+up to date; the settings bind the executables that the builds run to Lake targets, which Discovery
+builds before any test starts.
+-/
+@[fixture (threads := 4)]
+def literateProjects (_ : literateExe) (_ : literateHtmlExe) (_ : literatePlanExe) : Fixture where
+  type := LiterateProjects
+  toString p := s!"{p.config}|{p.multiRoot}"
+  fromString s := match s.splitOn "|" with
+    | [config, multiRoot] => some { config, multiRoot }
+    | _ => none
+  setup := do
+    let projects : LiterateProjects :=
+      { config := "test-projects/literate-config", multiRoot := "test-projects/literate-multi-root" }
+    buildLiterateProject projects.config
+    buildLiterateProject projects.multiRoot
+    return projects
 
 private def cleanDir (dir : System.FilePath) : IO Unit := do
   if ← dir.pathExists then
@@ -294,24 +370,19 @@ When a docstring contains an extension that has no handler, the conversion logs 
 the fallback content instead of aborting the build.
 
 `LitConfig.UserExt` defines a `@[doc_role]` whose payload type is unhandled. The resulting document
-node has the marker text `"THIS IS THE FALLBACK"` as a fallback. Building the `:literateHtml` Lake
-facet exercises both the conversion fallback (which logs the warning) and the HTML rendering path
-(which recurses into the children); this test then searches the build output for the warning and the
-generated HTML for the marker text.
+node has the marker text `"THIS IS THE FALLBACK"` as a fallback. The fixture's build of the
+`:literateHtml` Lake facet exercises both the conversion fallback (which logs the warning) and the
+HTML rendering path (which recurses into the children). Querying the facet replays the build's log;
+this test searches the log for the warning and the generated HTML for the marker text.
 -/
-private def testUnknownExtensionFallback : Test := do
-  let result ← IO.Process.output {
-    cmd := "lake"
-    args := #["build", ":literateHtml"]
-    cwd := "test-projects/literate-config"
-  }
+private def testUnknownExtensionFallback (projectDir : System.FilePath) : Test := do
+  let result ← lakeInProject projectDir #["query", ":literateHtml"]
   if result.exitCode != 0 then
-    fail s!"lake build :literateHtml failed (exit {result.exitCode}):\nstdout: {result.stdout}\nstderr: {result.stderr}"
-  assertContains "No inline handler for LitConfig.UserExt.FallbackPayload" result.stdout
-    s!"Expected warning about unhandled extension in build output, got stdout: {result.stdout}\nstderr: {result.stderr}"
+    fail s!"lake query :literateHtml failed (exit {result.exitCode}):\nstdout: {result.stdout}\nstderr: {result.stderr}"
+  assertContains "No inline handler for LitConfig.UserExt.FallbackPayload" result.stderr
+    s!"Expected warning about unhandled extension in the build's log, got stdout: {result.stdout}\nstderr: {result.stderr}"
   let htmlFile : System.FilePath :=
-    "test-projects/literate-config" / ".lake" / "build" / "literate-html"
-      / "LitConfig" / "UserExt" / "index.html"
+    projectDir / ".lake" / "build" / "literate-html" / "LitConfig" / "UserExt" / "index.html"
   unless ← htmlFile.pathExists do
     fail s!"Expected HTML page at {htmlFile}"
   let html ← IO.FS.readFile htmlFile
@@ -1221,59 +1292,42 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("all built-in doc roles", testAllBuiltinDocRoles data),
   ("custom literate handlers", testCustomLiterateHandlers data),
   ("docstring code block messages", testDocstringCodeBlockMessages data),
-  ("unknown extension fallback", testUnknownExtensionFallback)
+  ("unknown extension fallback", testUnknownExtensionFallback projectDir)
 ]
 
-/-- The literate HTML generator produces the expected output for the single-root test project. -/
-@[test (tags := slow)]
-def literateHtml (htmlExe : literateHtmlExe) (planExe : literatePlanExe) : Test := do
+/--
+Runs {name}`test` with the test data of the built test project {name}`projectDir`: the literate JSON
+of {name}`modules`, copied into a temporary directory as `A/B.json` per module `A.B`, and a module
+list that assigns each module the library that {name}`library` names.
+-/
+private def withProjectData (projectDir : System.FilePath) (modules : Array String)
+    (library : String → String) (htmlExe planExe : System.FilePath) (test : TestData → Test) :
+    Test := do
   let htmlExe ← IO.FS.realPath htmlExe
   let planExe ← IO.FS.realPath planExe
-  let projectDir := "test-projects/literate-config"
-  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings", "LitConfig.Builtins", "LitConfig.UserExt"]
-
-  -- First verify test project toolchain matches root toolchain
-  let rootToolchain := (← IO.FS.readFile "lean-toolchain").trimAscii
-  let testToolchain := (← IO.FS.readFile (projectDir / "lean-toolchain")).trimAscii
-  unless rootToolchain == testToolchain do
-    failHere s!"test-projects/literate-config/lean-toolchain ({testToolchain}) does not match root lean-toolchain ({rootToolchain})"
-
-  -- Next, ensure test project manifest is up to date
-  let lakeVars :=
-    #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
-      "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
-      "LEAN_GITHASH",
-      "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
-  let updateResult ← IO.Process.output {
-    cmd := "elan"
-    args := #["run", "--install", rootToolchain.trimAscii.toString, "lake", "update", "verso"]
-    cwd := projectDir
-    env := lakeVars.map (·, none)
-  }
-  unless updateResult.exitCode == 0 do
-    failHere s!"lake update verso failed with exit code {updateResult.exitCode}"
-      (detail? := some updateResult.stderr)
-
-  -- Build shared test data (JSON) in a persistent temp dir
   IO.FS.withTempDir fun sharedTmpDir => do
     let jsonDir := sharedTmpDir / "json"
     let moduleListFile := sharedTmpDir / "modules"
     IO.FS.createDirAll jsonDir
-
-    IO.println "  Building literate JSON for test modules..."
+    -- The fixture built the JSON, so each query only reports where it is.
     for mod in modules do
       let json ← VersoLiterate.loadModuleJson projectDir mod
       let jsonFile := mod.splitOn "." |>.foldl (init := jsonDir) (· / ·) |>.withExtension "json"
       IO.FS.createDirAll (jsonFile.parent.getD jsonDir)
       IO.FS.writeFile jsonFile json
-
-    -- Write module list with library annotations (tab-separated: library\tmodule)
-    -- All test modules belong to the "LitConfig" library
-    let moduleEntries := modules.map fun m => s!"LitConfig\t{m}"
+    -- The module list is tab-separated: the library, then the module.
+    let moduleEntries := modules.map fun m => s!"{library m}\t{m}"
     IO.FS.writeFile moduleListFile ("\n".intercalate moduleEntries.toList ++ "\n")
+    test { jsonDir, modules, moduleListFile, htmlExe, planExe }
 
-    let data : TestData := { jsonDir, modules, moduleListFile, htmlExe, planExe }
-
+/-- The literate HTML generator produces the expected output for the single-root test project. -/
+@[test (tags := slow)]
+def literateHtml (projects : literateProjects) (htmlExe : literateHtmlExe)
+    (planExe : literatePlanExe) : Test := do
+  let projectDir := projects.config
+  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings", "LitConfig.Builtins", "LitConfig.UserExt"]
+  -- Every test module belongs to the library `LitConfig`.
+  withProjectData projectDir modules (fun _ => "LitConfig") htmlExe planExe fun data => do
     for (name, test) in htmlTests data projectDir do
       result name test
 
@@ -1303,52 +1357,11 @@ private def multiRootHtmlTests (data : TestData) : List (String × Test) := [
 
 /-- The literate HTML generator produces the expected output for the multi-root test project. -/
 @[test (tags := slow)]
-def literateHtmlMultiRoot (htmlExe : literateHtmlExe) (planExe : literatePlanExe) : Test := do
-  let htmlExe ← IO.FS.realPath htmlExe
-  let planExe ← IO.FS.realPath planExe
-  let projectDir := "test-projects/literate-multi-root"
+def literateHtmlMultiRoot (projects : literateProjects) (htmlExe : literateHtmlExe)
+    (planExe : literatePlanExe) : Test := do
   let modules := #["LibA", "LibA.Core", "LibB", "LibB.Utils"]
-
-  let rootToolchain := (← IO.FS.readFile "lean-toolchain").trimAscii
-  let testToolchain := (← IO.FS.readFile (projectDir / "lean-toolchain")).trimAscii
-  unless rootToolchain == testToolchain do
-    failHere s!"{projectDir}/lean-toolchain ({testToolchain}) does not match root lean-toolchain ({rootToolchain})"
-
-  let lakeVars :=
-    #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
-      "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
-      "LEAN_GITHASH",
-      "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
-  let updateResult ← IO.Process.output {
-    cmd := "elan"
-    args := #["run", "--install", rootToolchain.trimAscii.toString, "lake", "update", "verso"]
-    cwd := projectDir
-    env := lakeVars.map (·, none)
-  }
-  unless updateResult.exitCode == 0 do
-    failHere s!"lake update verso failed with exit code {updateResult.exitCode}"
-      (detail? := some updateResult.stderr)
-
-  IO.FS.withTempDir fun sharedTmpDir => do
-    let jsonDir := sharedTmpDir / "json"
-    let moduleListFile := sharedTmpDir / "modules"
-    IO.FS.createDirAll jsonDir
-
-    IO.println "  Building literate JSON for multi-root test modules..."
-    for mod in modules do
-      let json ← VersoLiterate.loadModuleJson projectDir mod
-      let jsonFile := mod.splitOn "." |>.foldl (init := jsonDir) (· / ·) |>.withExtension "json"
-      IO.FS.createDirAll (jsonFile.parent.getD jsonDir)
-      IO.FS.writeFile jsonFile json
-
-    -- Write module list with library annotations
-    let moduleEntries := modules.map fun m =>
-      let lib := if m.startsWith "LibA" then "LibA" else "LibB"
-      s!"{lib}\t{m}"
-    IO.FS.writeFile moduleListFile ("\n".intercalate moduleEntries.toList ++ "\n")
-
-    let data : TestData := { jsonDir, modules, moduleListFile, htmlExe, planExe }
-
+  let library (m : String) := if m.startsWith "LibA" then "LibA" else "LibB"
+  withProjectData projects.multiRoot modules library htmlExe planExe fun data => do
     for (name, test) in multiRootHtmlTests data do
       result name test
 

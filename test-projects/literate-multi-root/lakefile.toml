@@ -1,5 +1,8 @@
 name = "literate-multi-root-test"
 defaultTargets = ["LibA", "LibB"]
+# Verso's clones of the git dependencies serve this workspace too, so that the Verso modules that
+# this project builds in Verso's build directory see the same dependencies as Verso's own build.
+packagesDir = "../../.lake/packages"
 
 [[require]]
 name = "verso"

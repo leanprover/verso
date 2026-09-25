@@ -13,6 +13,7 @@ versoServeExe = { needs = "verso-serve" }
 [profile.default.settings.VersoTests.Settings]
 checkTeX = "false"
 versoExe = { needs = "verso" }
+literateExe = { needs = "verso-literate" }
 literateHtmlExe = { needs = "verso-literate-html" }
 literatePlanExe = { needs = "verso-literate-plan" }
 
