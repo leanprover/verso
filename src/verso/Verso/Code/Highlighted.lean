@@ -13,7 +13,6 @@ import Verso.Method
 public import Verso.Output.Html
 import Verso.Output.TeX
 meta import Verso.Instances.Deriving
-import VersoUtil.WfRec
 
 open SubVerso.Highlighting
 open Verso.Output Html
