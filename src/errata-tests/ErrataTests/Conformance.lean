@@ -182,6 +182,11 @@ structure Product where
   exe : ExecutableConfig
   /-- The reason that the product is unavailable here, when it is. -/
   unavailable : IO (Option String) := pure none
+  /--
+  The time, in milliseconds, that an invocation of the product takes to start before it runs
+  anything, beyond what the other products take.
+  -/
+  startMs : Nat := 0
   /-- A test that passes. -/
   passes : Role
   /-- A test that fails with a verdict. -/
@@ -332,6 +337,8 @@ def interpretedProduct : Product := { leanProduct with
   unavailable := do
     if ← interpreter.pathExists then return none
     return some s!"the interpreted product is not built at {interpreter}"
+  -- Each invocation imports the test modules first.
+  startMs := 3000
 }
 
 /-- Every product. -/
@@ -1760,8 +1767,9 @@ inconclusive without running, and its teardown still runs, without a value.
 @[test]
 def killedSetupTearsDown : Test := forEach products fun p => do
   let fx := p.fixtures
-  let config : Config :=
-    { profiles := #[{ name := "default", fixtureTimeoutMs? := some 500, gracePeriodMs? := some 300 }] }
+  -- The timeout leaves the teardown time to start.
+  let config : Config := { profiles := #[{
+    name := "default", fixtureTimeoutMs? := some (500 + p.startMs), gracePeriodMs? := some 300 }] }
   let start ← IO.monoMsNow
   let r ← p.runTests #[fx.afterSlowSetup] { sets := fx.sleepSets } config
   assertTrue ((← IO.monoMsNow) - start < 20000) "the setup was stopped"
