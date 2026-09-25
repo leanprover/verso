@@ -1132,14 +1132,17 @@ def executeAndWrite (config : Config) (opts : Options)
   let events? ← opts.eventsPath.mapM fun p => do
     if let some parent := (p : System.FilePath).parent then IO.FS.createDirAll parent
     IO.FS.Handle.mk p .append
+  -- The dispatcher prints from the threads that watch the tests too, so every line goes to the
+  -- standard output of the caller's thread.
+  let stdout ← IO.getStdout
   let sinks : Sinks := {
     event := fun j => do
       if let some h := events? then
         h.putStr (j.compress ++ "\n")
         h.flush
     line := fun l => do
-      IO.println l
-      (← IO.getStdout).flush
+      stdout.putStrLn l
+      stdout.flush
   }
   let (report, code) ← execute config opts sinks registry color
   -- A cancelled run writes no reports.
