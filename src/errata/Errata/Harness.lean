@@ -55,6 +55,13 @@ rewrites golden files when it is {lit}`true`. The runner passes it for {lit}`--u
 def harnessSettings : List String := ["updateGolden"]
 
 /--
+The module name that {name}`text` writes, read as Lean writes names, with {lit}`«»` around each
+component that needs them.
+-/
+def moduleNameOf (text : String) : Lean.Name :=
+  (Lean.Syntax.decodeNameLit ("`" ++ text)).getD text.toName
+
+/--
 The command that starts this test executable: {name}`invocation` when it is non-empty, and otherwise
 the path of the running program.
 -/

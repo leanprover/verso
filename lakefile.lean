@@ -353,6 +353,13 @@ private structure LibraryExecutable where
 /-! ## The interpreted product -/
 
 /--
+A module name as the command line writes it, read as Lean writes it, with `«»` around a component
+that needs them.
+-/
+private def moduleNameOf (written : String) : Lean.Name :=
+  (Lean.Syntax.decodeNameLit ("`" ++ written)).getD written.toName
+
+/--
 The test executable of a library whose tests run through the interpreted product at `interpreter`:
 the interpreter with the library's test modules among `modules`, then `--`, with the workspace's
 search path in its environment.
@@ -464,7 +471,7 @@ private def Plan.ofJson (j : Lean.Json) : Plan where
   executables := (j.getObjValAs? (Array String) "executables").toOption.getD #[]
   needs := (j.getObjValAs? Bool "needs").toOption.getD true
   phases := (j.getObjValAs? Bool "phases").toOption.getD false
-  interpreted := (j.getObjValAs? (Array String) "interpreted").toOption.getD #[] |>.map (·.toName)
+  interpreted := (j.getObjValAs? (Array String) "interpreted").toOption.getD #[] |>.map moduleNameOf
 
 -- The script's name is the one `driverInvocation` looks up.
 @[test_driver]
@@ -738,8 +745,9 @@ script run (args) do
   -- runner to end its tests when that pipe closes. A driver started with
   -- `ERRATA_DRIVER_LIFELINE=1`, as the editor widget starts it, hands its own standard input on as
   -- the runner's lifeline, so the runner ends when the driver's parent does; the variable stops at
-  -- the driver, so a driver that a test starts holds a lifeline of its own. The driver removes `LEAN_ABORT_ON_PANIC` from the
-  -- runner's environment, and the runner sets it for every test executable.
+  -- the driver, so a driver that a test starts holds a lifeline of its own. The driver removes
+  -- `LEAN_ABORT_ON_PANIC` from the runner's environment, and the runner sets it for every test
+  -- executable.
   let handsOnLifeline := (← IO.getEnv "ERRATA_DRIVER_LIFELINE") == some "1"
   let child ← IO.Process.spawn {
     cmd := runnerPath.toString

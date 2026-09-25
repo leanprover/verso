@@ -205,7 +205,7 @@ workspace's build directory and those of the packages that the tests import.
 -/
 def interpreterLeanPath : String :=
   System.SearchPath.separator.toString.intercalate <|
-    ".lake/build/lib/lean" :: ["plausible", "Cli"].map (s!".lake/packages/{·}/.lake/build/lib/lean")
+    [".lake/build/lib/lean", ".lake/packages/plausible/.lake/build/lib/lean"]
 
 /--
 This library's tests through the interpreted product of the Lean harness, which imports the modules

@@ -54,3 +54,7 @@ name = "AppShadow"
 # A test that sleeps past a short timeout, beside one whose output comes from a subprocess.
 [[lean_lib]]
 name = "AppSlow"
+
+# A test in a module whose name Lean writes with guillemets, `AppQuoted.«1st»`.
+[[lean_lib]]
+name = "AppQuoted"

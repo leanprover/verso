@@ -107,7 +107,7 @@ after it, or gives {lean}`none` when there is no {lit}`--` or no module.
 -/
 def splitArgs (args : List String) : Option (Array Name × List String) :=
   match args.span (· != "--") with
-  | (modules@(_ :: _), _ :: rest) => some (modules.toArray.map String.toName, rest)
+  | (modules@(_ :: _), _ :: rest) => some (modules.toArray.map Errata.Harness.moduleNameOf, rest)
   | _ => none
 
 /--

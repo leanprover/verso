@@ -778,6 +778,36 @@ def driverRunsUnsafeTests : Test := do
       assertContains s!"{passed} passed, 0 failed, 0 errors" out.stdout
 
 /--
+The driver's `--interpreted` runs the tests of the modules it names through the interpreted product.
+A module name that Lean writes with guillemets is read as Lean reads it, and a named module that no
+selected library holds is a setup error that names it, whether the filters rule out its library or
+no library holds it.
+-/
+@[test]
+def driverRunsInterpretedModules : Test := do
+  let fixture := fixturesDir / "driver-configured"
+  result "a quoted module name" do
+    let out ← lakeInFixture fixture #["test", "--", "--interpreted", "AppQuoted.«1st»"]
+    assertExitCode 0 out
+    assertContains "1 passed, 0 failed, 0 errors" out.stdout
+  result "a module outside the selected library" do
+    let out ← lakeInFixture fixture
+      #["test", "--", "-E", "exe(App)", "--interpreted", "AppUnsafe"]
+    assertExitCode 96 out
+    assertContains "no selected library holds the module 'AppUnsafe'" out.stderr
+  result "a module that no library holds" do
+    let out ← lakeInFixture fixture #["test", "--", "--interpreted", "Nowhere"]
+    assertExitCode 96 out
+    assertContains "'Nowhere'" out.stderr
+
+/-- A module name is read as Lean writes it, with guillemets around a component that needs them. -/
+@[test]
+def moduleNamesAreReadAsLeanWritesThem : Test := do
+  assertBEq (Lean.Name.mkStr (.mkSimple "AppQuoted") "1st") (Harness.moduleNameOf "AppQuoted.«1st»")
+  assertBEq `A.B.C (Harness.moduleNameOf "A.B.C")
+  assertBEq "AppQuoted.«1st»" (Harness.moduleNameOf "AppQuoted.«1st»").toString
+
+/--
 A module below a library's root that isn't imported transitively by any root causes a warning
 because its tests are never discovered. The `--wfail` flag makes that report into an error. Either
 way the tests run, and the reports record the warning or error. The fixture's `AppStray` library
@@ -1991,8 +2021,8 @@ through the file that a test executable writes to.
 -/
 private def harnessRun {α} [IsTest α] (value : α) : IO (UInt32 × Array Protocol.Record) :=
   IO.FS.withTempFile fun out path => do
-    let code ← Harness.runTest (TestEntry.of "" "" "t" default value) (← Harness.contextOf #[]) #[]
-      out
+    let entry := TestEntry.of "" "" "t" default value
+    let code ← Harness.runTest entry (← Harness.contextOf #[]) #[] out
     out.flush
     let lines := (← IO.FS.readFile path).splitOn "\n" |>.filter (!·.isEmpty)
     let records := lines.toArray.filterMap fun l =>
@@ -2019,14 +2049,14 @@ private def finishedOf (records : Array Protocol.Record) : Array Protocol.Result
 
 /-- The Lean harness reports a passing value as passed and exits with 0. -/
 @[test]
-def runOnePasses : Test := do
+def harnessRecordsAPass : Test := do
   let (code, rs) ← harnessRun (pure () : Test)
   assertBEq 0 code
   assertBEq (some .pass) ((verdictOf? rs).bind (·.status?))
 
 /-- The Lean harness reports a failing value as failed, with its message, and exits with 1. -/
 @[test]
-def runOneFails : Test := do
+def harnessRecordsAFailure : Test := do
   let (code, rs) ← harnessRun (TestResult.fail { message := "boom" })
   assertBEq 1 code
   assertBEq (some .fail) ((verdictOf? rs).bind (·.status?))
@@ -2034,7 +2064,7 @@ def runOneFails : Test := do
 
 /-- A failing run reports what it wrote as output records. -/
 @[test]
-def runOneCapturesOutput : Test := do
+def harnessRecordsTheOutputOfAFailure : Test := do
   let (_, rs) ← harnessRun (do IO.println "trace line"; failHere "nope" : Test)
   assertBEq (some .fail) ((verdictOf? rs).bind (·.status?))
   assertBEq #[("stdout", "trace line\n", 0)] (outputsOf rs)
@@ -2044,7 +2074,7 @@ A test's verdict is the most severe among its own code and its named results, an
 assertion that failed is on the named result that raised it.
 -/
 @[test]
-def runOneAggregates : Test := do
+def harnessPlacesAFailureOnItsNamedResult : Test := do
   let (_, rs) ← harnessRun (do result "a" (pure ()); result "b" (failHere "bad") : Test)
   assertBEq (some .fail) ((verdictOf? rs).bind (·.status?))
   assertBEq #[some "a", some "b"] ((finishedOf rs).map (·.name?))
@@ -2055,7 +2085,7 @@ Each named result is reported with an identifier in the order it started and wit
 the result that contains it, {lit}`0` for the test itself.
 -/
 @[test]
-def runOneNodes : Test := do
+def harnessNumbersNamedResults : Test := do
   let (_, rs) ← harnessRun (do
     result "a" (result "inner" (pure ()))
     result "b" (failHere "bad") : Test)
@@ -2067,7 +2097,7 @@ def runOneNodes : Test := do
 
 /-- Each output record names the result whose own code wrote it. -/
 @[test]
-def runOneNodeOutput : Test := do
+def harnessAttributesOutputToResults : Test := do
   let (_, rs) ← harnessRun <| show Test from do
     IO.println "outer"
     result "inner" (IO.println "within")
@@ -2080,7 +2110,7 @@ A named result and the action of an `expectFail` are each reported as they start
 finish, with reports properly nested.
 -/
 @[test]
-def runOneWatchesResults : Test := do
+def resultWatcherSeesStartsAndEnds : Test := do
   let seen ← IO.mkRef (#[] : Array String)
   let watch (ev : ResultEvent) : IO Unit :=
     let said :=
@@ -2123,14 +2153,14 @@ def runOutcomeJsonOmitsNone : Test := do
 
 /-- A passing run still reports what it wrote. -/
 @[test]
-def runOnePassOutput : Test := do
+def harnessRecordsTheOutputOfAPass : Test := do
   let (_, rs) ← harnessRun (do IO.println "printed"; return true : IO Bool)
   assertBEq (some .pass) ((verdictOf? rs).bind (·.status?))
   assertBEq #[("stdout", "printed\n", 0)] (outputsOf rs)
 
 /-- Captured output keeps stdout and stderr distinct and interleaved in order. -/
 @[test]
-def runOneStreams : Test := do
+def harnessKeepsStreamsApart : Test := do
   let (_, rs) ← harnessRun <| show IO Bool from do
     IO.println "out one"
     IO.eprintln "err one"
