@@ -267,6 +267,13 @@ def HumanReporter.summary (h : HumanReporter) (elapsedMs : Nat)
     {", ".intercalate counts}"
 
 /--
+The line after the summary that names the run's seed, {lit}`Seed: N`, with which {lit}`--seed N`
+replays the run's scheduling order and each test's seed.
+-/
+def HumanReporter.seedLine (h : HumanReporter) (seed : Nat) : String :=
+  s!"{padLeft statusWidth "Seed:"} {Style.count.paint h.color (toString seed)}"
+
+/--
 Reports the results of one test: the test's own result first, then its named results, each on a
 status line of its own whose status word, duration, and executable stand in fixed columns.
 
@@ -458,6 +465,11 @@ structure RunReport where
   seed : Nat
   /-- The run's identifier, which its test executables receive as {lit}`ERRATA_RUN_ID`. -/
   runId : String := ""
+  /--
+  The order in which the JUnit report lists the tests and the fixtures' phases, by their keys. When
+  it is empty, the JUnit report lists the results in the order they were reported.
+  -/
+  order : Array Result.Key := #[]
 deriving Repr, Inhabited
 
 /-- Whether an issue fails the run. -/
@@ -561,11 +573,24 @@ private def junitIssue (indent : String) (issue : RunReport.Issue) : String :=
   xmlElements indent "testcase" [("name", issue.headline), ("classname", runSuite)] content
 
 /--
+The results in the report's {name}`RunReport.order`: each by its key's position there, results with
+one key in the order they were reported, and results whose keys the order lacks last.
+-/
+def RunReport.orderedResults (report : RunReport) : Array Result := Id.run do
+  if report.order.isEmpty then return report.results
+  let mut rank : Std.HashMap Result.Key Nat := {}
+  for h : i in [0 : report.order.size] do
+    rank := rank.insertIfNew report.order[i] i
+  let keyed := report.results.mapIdx fun i r => ((rank.getD r.key report.order.size, i), r)
+  let sorted := keyed.qsort fun ((a, i), _) ((b, j), _) => a < b || (a == b && i < j)
+  return sorted.map (·.2)
+
+/--
 Renders the report as JUnit XML. The run's issues, when there are any, come first as the
-{name}`runSuite` suite with one case each. The results follow, one suite per test executable: each
-result becomes one {lit}`testcase` element, whose {lit}`system-out` and {lit}`system-err` elements
-contain the result's captured output. A failure is a {lit}`failure` element; an error verdict and
-an inconclusive outcome are {lit}`error` elements.
+{name}`runSuite` suite with one case each. The results follow in the report's order, one suite per
+test executable: each result becomes one {lit}`testcase` element, whose {lit}`system-out` and
+{lit}`system-err` elements contain the result's captured output. A failure is a {lit}`failure`
+element; an error verdict and an inconclusive outcome are {lit}`error` elements.
 -/
 def junitReport (report : RunReport) : String :=
   let run :=
@@ -574,7 +599,7 @@ def junitReport (report : RunReport) : String :=
       [("name", runSuite), ("tests", toString report.issues.size), ("failures", "0"),
         ("errors", toString (report.issues.countP (·.isError)))]
       (report.issues.map (junitIssue "    "))]
-  let suites := byExe report.results |>.map fun (exe, cases) =>
+  let suites := byExe report.orderedResults |>.map fun (exe, cases) =>
     let tally := Tally.of cases
     xmlElements "  " "testsuite"
       [("name", exe), ("tests", toString cases.size), ("failures", toString tally.failed),

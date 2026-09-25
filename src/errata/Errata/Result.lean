@@ -135,6 +135,24 @@ structure Result where
 deriving Repr, Inhabited, DecidableEq
 
 /--
+What names a test or a fixture's phase in a run: the executable, the test's or the fixture's name,
+and for a fixture's phase, its path, such as the fixture's name and {lit}`setup`. A test's own
+result and its named results share their test's key.
+-/
+structure Result.Key where
+  /-- The name of the test executable. -/
+  exe : String
+  /-- The test's or the fixture's name. -/
+  test : String
+  /-- The path of a fixture's phase; empty for a test. -/
+  phase : Array String := #[]
+deriving Repr, Inhabited, DecidableEq, BEq, Hashable
+
+/-- The key of the test or the fixture's phase that the result is about. -/
+def Result.key (r : Result) : Result.Key :=
+  { exe := r.exe, test := r.test, phase := if r.kind matches .fixture then r.path else #[] }
+
+/--
 The result's status: its verdict, or an error for an inconclusive outcome, which counts against the
 run as an error does.
 -/

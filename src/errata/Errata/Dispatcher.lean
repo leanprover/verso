@@ -94,7 +94,8 @@ inductive Event where
   /--
   The run is over. The human report prints its summary when {name}`summary` is true, with the
   numbers of listed tests, of test libraries, and of the configuration's executables that the
-  filters left out when {name}`skipped?` gives them.
+  filters left out when {name}`skipped?` gives them, and then the run's seed when the dispatcher
+  knows it.
   -/
   | ended (timeMs : Nat) (summary : Bool) (skipped? : Option (Nat × Nat × Nat))
 deriving Inhabited
@@ -145,6 +146,8 @@ structure State where
   wfail : Bool := false
   /-- When the run started, in milliseconds since the epoch. -/
   startMs : Nat := 0
+  /-- The run's seed, which the human report names after its summary. -/
+  seed? : Option Nat := none
   /-- The tests that are running. -/
   running : Array Running := #[]
   /-- The results of the tests that have finished, in the order they finished. -/
@@ -386,7 +389,9 @@ def step (s : State) : Event → State × Array Action
   | .ended timeMs summary skipped? =>
     let t := s.human.tally
     let line := s.human.summary (timeMs - s.startMs) skipped?
-    (s, (if summary then #[.print line] else #[]) ++ #[.event (Json.mkObj [("type", Json.str "end"),
-      ("time_ms", ToJson.toJson timeMs), ("passed", ToJson.toJson t.passed),
-      ("failed", ToJson.toJson t.failed), ("errors", ToJson.toJson t.errors),
-      ("inconclusive", ToJson.toJson t.inconclusive)])])
+    let seedLines := (s.seed?.map fun seed => Action.print (s.human.seedLine seed)).toArray
+    (s, (if summary then #[.print line] ++ seedLines else #[]) ++
+      #[.event (Json.mkObj [("type", Json.str "end"),
+        ("time_ms", ToJson.toJson timeMs), ("passed", ToJson.toJson t.passed),
+        ("failed", ToJson.toJson t.failed), ("errors", ToJson.toJson t.errors),
+        ("inconclusive", ToJson.toJson t.inconclusive)])])
