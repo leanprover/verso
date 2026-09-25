@@ -187,7 +187,7 @@ class LeanServer:
         The process ids of the processes below this server that run a test named `decl`: the driver
         that the widget started for it, and the interpreted test executable that runs it.
         """
-        runs = matching(rf"-E name\(={decl}\) ") | matching(
+        runs = matching(rf"run -E name\(={decl}\) ") | matching(
             rf"errata-interpret .* errata-run \S+ {decl}( |$)"
         )
         return sorted(runs & set(descendants(self.proc.pid)))
