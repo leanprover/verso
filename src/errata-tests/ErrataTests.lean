@@ -726,22 +726,45 @@ def verbosityLevels : Test := do
   assertBEq true Verbosity.superVerbose.showsAllDocstrings
 
 /-- The workspaces in which the self-tests run Verso's driver as a dependency's. -/
-private def fixturesDir : System.FilePath := "src/errata-tests/fixtures"
+def fixturesDir : System.FilePath := "src/errata-tests/fixtures"
 
 /--
-Runs Lake in a fixture workspace after deleting its manifest and packages directories.
+Deletes a fixture workspace's manifest and packages directory.
 
-The fixture requires Verso by path and shares its clones of dependencies. If Verso were updated,
-then these could get out of date, leading to spurious rebuilds. Deleting them ensures that it always
-uses the copies in Verso.
+The fixture workspaces require Verso by path and share its clones of dependencies. If Verso were
+updated, then a manifest could be out of date, leading to spurious rebuilds. Without the manifest,
+Lake resolves the workspace against the copies in Verso.
 -/
-private def lakeInFixture (fixture : System.FilePath) (args : Array String) :
-    IO IO.Process.Output := do
-  let manifest := fixture / "lake-manifest.json"
+def resetWorkspace (ws : System.FilePath) : IO Unit := do
+  let manifest := ws / "lake-manifest.json"
   if ← manifest.pathExists then IO.FS.removeFile manifest
-  let packages := fixture / ".lake" / "packages"
+  let packages := ws / ".lake" / "packages"
   if ← packages.isDir then IO.FS.removeDirAll packages
-  IO.Process.output { cmd := "lake", args, cwd := fixture }
+
+/--
+A fixture whose value is the fixture workspace {name}`name` under {name}`fixturesDir`, and whose
+prepare resets the workspace with {name}`resetWorkspace` before each test that uses it. Its users
+run Lake there, which writes the workspace's manifest and build directory.
+-/
+abbrev driverWorkspace (name : String) : Fixture where
+  type := System.FilePath
+  toString := toString
+  fromString s := some s
+  setup := return fixturesDir / name
+  prepare ws := resetWorkspace ws
+
+/-- The workspace that names Verso's driver as its test driver, with many test libraries. -/
+@[fixture] abbrev driverConfigured : Fixture := driverWorkspace "driver-configured"
+
+/-- The workspace that neither names a test driver nor defines a script. -/
+@[fixture] abbrev driverBare : Fixture := driverWorkspace "driver-bare"
+
+/-- The workspace with an `Errata.run` script of its own. -/
+@[fixture] abbrev driverShadowed : Fixture := driverWorkspace "driver-shadowed"
+
+/-- Runs Lake with {name}`args` in the workspace {name}`ws`. -/
+def lakeIn (ws : System.FilePath) (args : Array String) : IO IO.Process.Output :=
+  IO.Process.output { cmd := "lake", args, cwd := ws }
 
 /--
 The driver tells users how it should be invoked, and works that out from the workspace it runs in.
@@ -755,14 +778,15 @@ be named as `verso/Errata.run`.
 The driver's help should show the expected command.
 -/
 @[test]
-def driverHelpNamesInvocation : Test := do
+def driverHelpNamesInvocation (bare : driverBare) (configured : driverConfigured)
+    (shadowed : driverShadowed) : Test := do
   let cases : List (String × System.FilePath × String) := [
-    ("bare", fixturesDir / "driver-bare", "lake run Errata.run"),
-    ("configured", fixturesDir / "driver-configured", "lake test"),
-    ("shadowed", fixturesDir / "driver-shadowed", "lake run verso/Errata.run")]
-  for (name, fixture, run) in cases do
+    ("bare", bare, "lake run Errata.run"),
+    ("configured", configured, "lake test"),
+    ("shadowed", shadowed, "lake run verso/Errata.run")]
+  for (name, ws, run) in cases do
     result name do
-      let out ← lakeInFixture fixture #["run", "verso/Errata.run", "--help"]
+      let out ← lakeIn ws #["run", "verso/Errata.run", "--help"]
       assertExitCode 0 out
       assertContains s!"\n  {run} " out.stdout
 
@@ -771,11 +795,10 @@ The driver runs `unsafe` tests. The fixture's `App` library has only safe tests,
 library has an unsafe one.
 -/
 @[test]
-def driverRunsUnsafeTests : Test := do
+def driverRunsUnsafeTests (ws : driverConfigured) : Test := do
   for (lib, passed) in [("App", 1), ("AppUnsafe", 2)] do
     result lib do
-      let out ← lakeInFixture (fixturesDir / "driver-configured")
-        #["test", "--", "-E", s!"exe({lib})"]
+      let out ← lakeIn ws #["test", "--", "-E", s!"exe({lib})"]
       assertExitCode 0 out
       assertContains s!"{passed} passed, 0 failed, 0 errors" out.stdout
 
@@ -786,19 +809,17 @@ selected library holds is a setup error that names it, whether the filters rule 
 no library holds it.
 -/
 @[test]
-def driverRunsInterpretedModules : Test := do
-  let fixture := fixturesDir / "driver-configured"
+def driverRunsInterpretedModules (ws : driverConfigured) : Test := do
   result "a quoted module name" do
-    let out ← lakeInFixture fixture #["test", "--", "--interpreted", "AppQuoted.«1st»"]
+    let out ← lakeIn ws #["test", "--", "--interpreted", "AppQuoted.«1st»"]
     assertExitCode 0 out
     assertContains "1 passed, 0 failed, 0 errors" out.stdout
   result "a module outside the selected library" do
-    let out ← lakeInFixture fixture
-      #["test", "--", "-E", "exe(App)", "--interpreted", "AppUnsafe"]
+    let out ← lakeIn ws #["test", "--", "-E", "exe(App)", "--interpreted", "AppUnsafe"]
     assertExitCode 96 out
     assertContains "no selected library holds the module 'AppUnsafe'" out.stderr
   result "a module that no library holds" do
-    let out ← lakeInFixture fixture #["test", "--", "--interpreted", "Nowhere"]
+    let out ← lakeIn ws #["test", "--", "--interpreted", "Nowhere"]
     assertExitCode 96 out
     assertContains "'Nowhere'" out.stderr
 
@@ -816,14 +837,13 @@ way the tests run, and the reports record the warning or error. The fixture's `A
 has one such module.
 -/
 @[test]
-def driverReportsUnreachableModules : Test := do
-  let fixture := fixturesDir / "driver-configured"
+def driverReportsUnreachableModules (ws : driverConfigured) : Test := do
   let notice := "modules are not reachable from their library's roots"
   IO.FS.withTempDir fun dir => do
     let junit := dir / "report.xml"
     let args := #["test", "--", "-E", "exe(AppStray)", "--junit", junit.toString]
     result "A warning is emitted" do
-      let out ← lakeInFixture fixture args
+      let out ← lakeIn ws args
       assertExitCode 0 out
       assertContains s!"warning: these {notice}" out.stderr
       assertContains "AppStray: AppStray.Orphan" out.stderr
@@ -833,7 +853,7 @@ def driverReportsUnreachableModules : Test := do
       assertContains "AppStray.Orphan" xml
       assertNotContains "<error" xml
     result "The --wfail flag turns the warning into an error" do
-      let out ← lakeInFixture fixture (args.push "--wfail")
+      let out ← lakeIn ws (args.push "--wfail")
       assertExitCode 100 out
       assertContains s!"error: these {notice}" out.stderr
       assertContains "1 passed, 0 failed, 0 errors" out.stdout
@@ -985,8 +1005,8 @@ signal with the panic's message in its output, and the rest of the run goes on. 
 `AppPanic` library has a test that indexes past the end of an array.
 -/
 @[test]
-def driverReportsPanics : Test := do
-  let out ← lakeInFixture (fixturesDir / "driver-configured") #["test", "--", "-E", "exe(AppPanic)"]
+def driverReportsPanics (ws : driverConfigured) : Test := do
+  let out ← lakeIn ws #["test", "--", "-E", "exe(AppPanic)"]
   assertExitCode 100 out
   assertContains "     SIGABRT [" out.stdout
   assertContains "\n             the test executable was ended by signal 6" out.stdout
@@ -999,14 +1019,13 @@ tests, and the inventory leaves helpers out. The fixture's `AppHelper` library h
 helper from a module it imports.
 -/
 @[test]
-def driverRunsHelpers : Test := do
-  let fixture := fixturesDir / "driver-configured"
+def driverRunsHelpers (ws : driverConfigured) : Test := do
   result "The test runs its helper" do
-    let out ← lakeInFixture fixture #["test", "--", "-E", "exe(AppHelper)"]
+    let out ← lakeIn ws #["test", "--", "-E", "exe(AppHelper)"]
     assertExitCode 0 out
     assertContains "1 passed, 0 failed, 0 errors, 0 inconclusive" out.stdout
   result "The inventory has no helpers" do
-    let out ← lakeInFixture fixture #["test", "--", "list", "-v", "-E", "exe(AppHelper)"]
+    let out ← lakeIn ws #["test", "--", "list", "-v", "-E", "exe(AppHelper)"]
     assertExitCode 0 out
     assertContains "runsItsHelper" out.stdout
     assertNotContains "shout" out.stdout
@@ -1019,34 +1038,32 @@ JSON format, the inventory. Filters with syntax errors are reported at their pla
 command fails with the exit code of an invalid filter.
 -/
 @[test]
-def driverListsTests : Test := do
-  let fixture := fixturesDir / "driver-configured"
+def driverListsTests (ws : driverConfigured) : Test := do
   result "a filter" do
-    let out ← lakeInFixture fixture
-      #["test", "--", "list", "-T", "oneline", "-E", "name(#*[Pp]anic*)"]
+    let out ← lakeIn ws #["test", "--", "list", "-T", "oneline", "-E", "name(#*[Pp]anic*)"]
     assertExitCode 0 out
     let lines := out.stdout.splitOn "\n" |>.filter (·.startsWith "AppPanic")
     assertBEq 1 lines.length
     assertContains "panics" (lines.headD "")
     assertContains "AppPanic.lean:" (lines.headD "")
   result "several filters and none" do
-    let two ← lakeInFixture fixture
+    let two ← lakeIn ws
       #["test", "--", "list", "--message-format=oneline", "-E", "exe(App)", "-Eexe(AppUnsafe)"]
     assertExitCode 0 two
     assertBEq 3 (two.stdout.splitOn "\n" |>.filter (·.startsWith "App")).length
-    let all ← lakeInFixture fixture #["test", "--", "list"]
+    let all ← lakeIn ws #["test", "--", "list"]
     assertExitCode 0 all
     assertContains "\nAppUnsafe:\n    " all.stdout
     assertContains "safeTest" all.stdout
     assertContains "failsAsWritten" all.stdout
   result "the JSON format" do
-    let out ← lakeInFixture fixture #["test", "--", "list", "-T", "json", "-E", "exe(App)"]
+    let out ← lakeIn ws #["test", "--", "list", "-T", "json", "-E", "exe(App)"]
     assertExitCode 0 out
     let .ok j := Lean.Json.parse out.stdout | fail s!"not JSON: {out.stdout}"
     let exes := (j.getObjValAs? (Array Lean.Json) "executables").toOption.getD #[]
     assertBEq #["App"] (exes.filterMap fun e => (e.getObjValAs? String "name").toOption)
   result "a filter with a syntax error" do
-    let out ← lakeInFixture fixture #["test", "--", "list", "-E", "name(x"]
+    let out ← lakeIn ws #["test", "--", "list", "-E", "name(x"]
     assertExitCode 94 out
     assertContains "--filter:6: expected ')' to end the matcher" out.stderr
 
@@ -1291,9 +1308,8 @@ The compile-time commands register their verdicts as tests, so a module that imp
 one `#test_guard` and one `#test_msgs`.
 -/
 @[test]
-def compileTimeImportSuffices : Test := do
-  let out ← lakeInFixture (fixturesDir / "driver-configured")
-    #["test", "--", "-E", "exe(AppCompileTime)"]
+def compileTimeImportSuffices (ws : driverConfigured) : Test := do
+  let out ← lakeIn ws #["test", "--", "-E", "exe(AppCompileTime)"]
   assertExitCode 0 out
   assertContains "2 passed, 0 failed, 0 errors" out.stdout
 
@@ -1303,13 +1319,12 @@ are neither built nor listed, even when a filter names their executables. The fi
 `dep` package, whose `DepLib` library has one test.
 -/
 @[test]
-def dependencyLibrariesAreNotSelected : Test := do
-  let fixture := fixturesDir / "driver-configured"
-  let out ← lakeInFixture fixture #["test", "--", "list", "-E", "exe(DepLib) | exe(App)"]
+def dependencyLibrariesAreNotSelected (ws : driverConfigured) : Test := do
+  let out ← lakeIn ws #["test", "--", "list", "-E", "exe(DepLib) | exe(App)"]
   assertExitCode 0 out
   assertContains "App:" out.stdout
   assertNotContains "depTest" out.stdout
-  let workspace ← IO.FS.readFile (fixture / ".lake" / "errata" / "workspace.json")
+  let workspace ← IO.FS.readFile (ws / ".lake" / "errata" / "workspace.json")
   assertNotContains "DepLib" workspace
 
 /--
@@ -1318,9 +1333,8 @@ test discovered once.
 The fixture's `AppMixed` library has that shape.
 -/
 @[test]
-def mixedDiscoveryRunsEachTestOnce : Test := do
-  let out ← lakeInFixture (fixturesDir / "driver-configured")
-    #["test", "--", "-E", "exe(AppMixed)", "-v"]
+def mixedDiscoveryRunsEachTestOnce (ws : driverConfigured) : Test := do
+  let out ← lakeIn ws #["test", "--", "-E", "exe(AppMixed)", "-v"]
   assertExitCode 0 out
   assertContains "PASS [" out.stdout
   assertContains "] AppMixed parentTest" out.stdout
@@ -1334,11 +1348,10 @@ subprocess writes reaches the report. The fixture's `AppSlow` library has a test
 that prints from a subprocess.
 -/
 @[test]
-def driverEnforcesTimeouts : Test := do
-  let fixture := fixturesDir / "driver-configured"
+def driverEnforcesTimeouts (ws : driverConfigured) : Test := do
   IO.FS.withTempDir fun dir => do
     let junit := dir / "report.xml"
-    let out ← lakeInFixture fixture
+    let out ← lakeIn ws
       #["test", "--", "run", "-E", "exe(AppSlow)", "--timeout", "1s", "--junit", junit.toString]
     assertExitCode 100 out
     assertContains "     TIMEOUT [" out.stdout
@@ -1355,14 +1368,13 @@ fixture's `AppLocalInstance` library has a test whose type has only a local inst
 pass it.
 -/
 @[test]
-def instanceIsFixedAtDeclaration : Test := do
-  let fixture := fixturesDir / "driver-configured"
+def instanceIsFixedAtDeclaration (ws : driverConfigured) : Test := do
   result "a local instance runs the test" do
-    let out ← lakeInFixture fixture #["test", "--", "-E", "exe(AppLocalInstance)"]
+    let out ← lakeIn ws #["test", "--", "-E", "exe(AppLocalInstance)"]
     assertExitCode 0 out
     assertContains "1 passed, 0 failed, 0 errors" out.stdout
   result "an instance elsewhere does not change the verdict" do
-    let out ← lakeInFixture fixture #["test", "--", "-E", "exe(AppShadow)"]
+    let out ← lakeIn ws #["test", "--", "-E", "exe(AppShadow)"]
     assertExitCode 100 out
     assertContains "] AppShadow failsAsWritten" out.stdout
     assertContains "1 passed, 1 failed, 0 errors" out.stdout
