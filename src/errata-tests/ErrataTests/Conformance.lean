@@ -1064,15 +1064,15 @@ def resolutionPrecedence : Test := do
     assertBEq false r.updateGolden
 
 /--
-Tests that run longer than `slow-after` are marked slow in the human report, whose status word for a
-slow pass is `SLOW`, and their outcomes stand.
+Tests that run longer than `slow-after` keep their outcome's status word in the human report, with
+`[slow]` after the name, and their outcomes stand.
 -/
 @[test]
 def slowTestsAreMarked : Test := do
   let config : Config := { profiles := #[{ name := "default", slowAfterMs? := some 0 }] }
   let r ← runWith #[basic ["pass"]] { verbosity := .verbose } config
   expectOutcome r "pass" (· matches .reported .pass) "a pass"
-  assertTrue (r.lines.any fun l => l.startsWith "        SLOW [" && l.endsWith "basic pass")
+  assertTrue (r.lines.any fun l => l.startsWith "        PASS [" && l.endsWith "basic pass [slow]")
     s!"no line is marked slow: {r.lines}"
   assertTrue ((r.result? "pass").map (·.slow) == some true) "the result is slow"
 

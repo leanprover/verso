@@ -123,14 +123,14 @@ def signalName? (signal : Nat) : Option String :=
 
 /--
 The word that the status line of a result begins with, and its style. The words are nextest's where
-the outcome is one nextest has: {lit}`PASS`, {lit}`SLOW` for a slow pass, {lit}`FAIL`,
-{lit}`TIMEOUT`, the signal's name such as {lit}`SIGABRT`, and {lit}`XFAIL` for a test executable
-that could not be started. An error verdict is {lit}`ERROR`, and the other inconclusive outcomes
-are {lit}`INCONCLUSIVE`.
+the outcome is one nextest has: {lit}`PASS`, {lit}`FAIL`, {lit}`TIMEOUT`, the signal's name such
+as {lit}`SIGABRT`, and {lit}`XFAIL` for a test executable that could not be started. An error
+verdict is {lit}`ERROR`, and the other inconclusive outcomes are {lit}`INCONCLUSIVE`. A slow test's
+word is its outcome's; the line marks the slowness after the name.
 -/
 def statusWord (r : Result) : String × Style :=
   match r.outcome with
-  | .reported .pass => if r.slow then ("SLOW", .slow) else ("PASS", .pass)
+  | .reported .pass => ("PASS", .pass)
   | .reported (.fail _) => ("FAIL", .fail)
   | .reported (.error _) => ("ERROR", .fail)
   | .inconclusive (.timedOut ..) => ("TIMEOUT", .fail)
@@ -200,8 +200,9 @@ it.
 private def resultLines (h : HumanReporter) (r : Result) (name : String) : Array String := Id.run do
   let (word, style) := statusWord r
   let exe := if r.exe.isEmpty then "" else Style.exe.paint h.color r.exe ++ " "
+  let slow := if r.slow then " " ++ Style.slow.paint h.color "[slow]" else ""
   let mut out := #[s!"{style.paint h.color (padLeft statusWidth word)} \
-    {bracketedDuration r.durationMs} {exe}{name}"]
+    {bracketedDuration r.durationMs} {exe}{name}{slow}"]
   let detail (text : String) := indentLines text.trimAsciiEnd.copy detailIndent
   match r.outcome with
   | .reported .pass => pure ()

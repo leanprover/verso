@@ -1745,16 +1745,17 @@ def reportVerbose : Test := do
   assertContains "        PASS [   0.000s] t\n" out.stdout
 
 /--
-The status word of each outcome, as nextest writes it where nextest has the outcome: `PASS`, `SLOW`,
-`FAIL`, `TIMEOUT`, the signal's name, and `XFAIL` for a test executable that could not start; an
-error verdict is `ERROR`, and the other inconclusive outcomes are `INCONCLUSIVE`.
+The status word of each outcome, as nextest writes it where nextest has the outcome: `PASS`, `FAIL`,
+`TIMEOUT`, the signal's name, and `XFAIL` for a test executable that could not start; an error
+verdict is `ERROR`, and the other inconclusive outcomes are `INCONCLUSIVE`. A slow test's word is
+its outcome's.
 -/
 @[test]
 def statusWords : Test := do
   let word (outcome : Outcome) (slow := false) : String :=
     (statusWord { exe := "", test := "t", outcome, slow }).1
   assertBEq "PASS" (word (.reported .pass))
-  assertBEq "SLOW" (word (.reported .pass) (slow := true))
+  assertBEq "PASS" (word (.reported .pass) (slow := true))
   assertBEq "FAIL" (word (.reported (.fail { message := "m" })) (slow := true))
   assertBEq "ERROR" (word (.reported (.error "m")))
   assertBEq "TIMEOUT" (word (.inconclusive (.timedOut 5 true)))
@@ -1771,9 +1772,9 @@ private def hasEscapes (s : String) : Bool := s.contains '\x1b'
 
 /--
 Under `--color always` the human-readable report colors each status word and the summary as nextest
-does: bold green for a pass, bold yellow for a slow pass, bold red for everything that did not pass,
-bold magenta for the executable, bold blue for the test's name with its namespaces in cyan, and
-bold counts. Without color, and in the report files, no escape sequence appears.
+does: bold green for a pass, bold red for everything that did not pass, bold yellow for the `[slow]`
+mark after a slow test's name, bold magenta for the executable, bold blue for the test's name with
+its namespaces in cyan, and bold counts. Without color, and in the report files, no escape sequence appears.
 -/
 @[test]
 def reportColors : Test := do
@@ -1795,12 +1796,13 @@ def reportColors : Test := do
   let colored := (lines true).filter (!·.startsWith "             ")
   let esc (code text : String) := s!"\x1b[{code}m{text}\x1b[0m"
   let expected := [
-    esc "32;1" "        PASS", esc "33;1" "        SLOW", esc "31;1" "        FAIL",
+    esc "32;1" "        PASS", esc "32;1" "        PASS", esc "31;1" "        FAIL",
     esc "31;1" "       ERROR", esc "31;1" "     TIMEOUT", esc "31;1" "     SIGSEGV",
     esc "31;1" "INCONCLUSIVE"]
   for (word, i) in expected.zipIdx do
     assertTrue (colored[i]!.startsWith word) s!"line {i}: {colored[i]!.quote}"
   assertContains s!"{esc "35;1" "Lib"} {esc "36" "A."}{esc "34;1" "ok"}" colored[0]!
+  assertTrue (colored[1]!.endsWith s!"{esc "34;1" "slow"} {esc "33;1" "[slow]"}") colored[1]!.quote
   let summary := colored.back!
   assertTrue (summary.startsWith (esc "31;1" "     Summary")) summary.quote
   assertContains s!"{esc "1" "2"} {esc "32;1" "passed"}" summary
