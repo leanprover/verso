@@ -24,13 +24,23 @@ open Lean (Json ToJson)
 
 namespace Errata.Runner
 
-/-- A test that the runner is about to run, with everything it passes to the test executable. -/
+/--
+A test or a fixture's phase that the runner is about to run, with everything it passes to the test
+executable.
+-/
 structure Planned where
   /-- The test executable's name. -/
   exe : String
-  /-- The test's name. -/
+  /-- The test's name, or the fixture's for a fixture's phase. -/
   test : String
-  /-- The components of the test's name, for nesting in reports. -/
+  /--
+  What distinguishes a fixture's phase from the test of the same name and from the fixture's other
+  phases: the empty string for a test, and the phase's path below the fixture's name for a phase.
+  -/
+  key : String := ""
+  /-- Whether this is a test or a fixture's phase. -/
+  kind : Result.Kind := .test
+  /-- The components of the test's name, or the fixture's name and the phase, for reports. -/
   path : Array String := #[]
   /-- The test's description from the inventory. -/
   description? : Option String := none
@@ -54,24 +64,29 @@ inductive Exit where
   | spawnFailed (message : String)
   /-- The mandatory setting {name}`setting` has no value, so the runner started no process. -/
   | settingMissing (setting : String)
+  /-- A fixture that the test needs failed in the given phase, so the runner started no process. -/
+  | fixtureFailed (fixture : String) (phase : FixturePhase)
 deriving Repr, Inhabited
 
-/-- Something that happened during a run. -/
+/--
+Something that happened during a run. A test or a fixture's phase is named by its executable, its
+test's or fixture's name, and its key (see {name}`Planned.key`).
+-/
 inductive Event where
   /-- A phase of the run has begun. -/
   | phase (name : String) (timeMs : Nat)
   /-- An issue with the run as a whole. -/
   | issue (issue : RunReport.Issue)
-  /-- A test is about to be started. -/
+  /-- A test or a fixture's phase is about to be started. -/
   | testStarted (test : Planned)
   /-- A record arrived from a test executable's result file, as JSON and decoded. -/
-  | record (exe test : String) (json : Json) (record : Protocol.Record)
+  | record (exe test key : String) (json : Json) (record : Protocol.Record)
   /-- A line arrived on a test executable's standard output or standard error. -/
-  | captured (exe test : String) (stream : String) (text : String) (timeMs : Nat)
+  | captured (exe test key : String) (stream : String) (text : String) (timeMs : Nat)
   /-- A line of a test executable's result file could not be read. -/
-  | unreadable (exe test : String) (message : String)
+  | unreadable (exe test key : String) (message : String)
   /-- A test executable's process has ended, after {name}`durationMs` milliseconds. -/
-  | testEnded (exe test : String) (exit : Exit) (durationMs : Nat)
+  | testEnded (exe test key : String) (exit : Exit) (durationMs : Nat)
   /--
   The run is over. The human report prints its summary when {name}`summary` is true, with the
   numbers of listed tests, of test libraries, and of the configuration's executables that the
@@ -168,6 +183,7 @@ def mergeOutcome (verdict? : Option Protocol.VerdictInfo) (unreadable? : Option 
     (exit : Exit) : Outcome :=
   match exit with
   | .settingMissing s => .inconclusive (.settingMissing s)
+  | .fixtureFailed f p => .inconclusive (.fixtureFailed f p)
   | .spawnFailed m => .inconclusive (.spawnFailed m)
   | .timedOut ms killed => .inconclusive (.timedOut ms killed)
   | .exited code =>
@@ -205,7 +221,7 @@ def nodeResults (p : Planned) (nodes : Array Node) : Array Result := Id.run do
         | some st => pure (.reported (verdictOfInfo st info.message? info.detail? info.location?))
         | none => pure (.reported (.error "the named result did not finish"))
     out := out.push {
-      exe := p.exe, test := p.test, path := p.path
+      exe := p.exe, test := p.test, path := p.path, kind := p.kind
       resultPath := path
       outcome, durationMs := (n.finish?.bind (·.durationMs?)).getD 0
       output := { log := n.output }
@@ -219,7 +235,7 @@ def testResults (r : Running) (exit : Exit) (durationMs : Nat) : Array Result :=
   let named := nodeResults p r.nodes
   let inside := named.foldl (· + ·.durationMs) 0
   let own : Result := {
-    exe := p.exe, test := p.test, path := p.path, outcome
+    exe := p.exe, test := p.test, path := p.path, kind := p.kind, outcome
     durationMs := durationMs - inside
     output := { log := r.output }
     description? := p.description?
@@ -229,11 +245,11 @@ def testResults (r : Running) (exit : Exit) (durationMs : Nat) : Array Result :=
   }
   #[own] ++ named
 
-/-- The events-file record for a test's outcome. -/
+/-- The events-file record for the outcome of a test or a fixture's phase. -/
 def outcomeEvent (p : Planned) (outcome : Outcome) (durationMs : Nat) : Json :=
   Json.mkObj <|
     [("type", Json.str "outcome"), ("exe", Json.str p.exe), ("test", Json.str p.test),
-      ("kind", Json.str "test"), ("path", ToJson.toJson p.path)] ++
+      ("kind", Json.str p.kind.name), ("path", ToJson.toJson p.path)] ++
     outcome.fields ++
     [("duration_ms", ToJson.toJson durationMs)] ++
     (match p.seed? with | some s => [("seed", Json.str s)] | none => []) ++
@@ -241,11 +257,26 @@ def outcomeEvent (p : Planned) (outcome : Outcome) (durationMs : Nat) : Json :=
     (match p.description? with | some d => [("description", Json.str d)] | none => []) ++
     (if outcome.isPass then [] else [("reproduce", Json.str p.reproduce)])
 
+/-- Whether a running test or fixture's phase has the given executable, name, and key. -/
+private def Running.is (r : Running) (exe test key : String) : Bool :=
+  r.planned.exe == exe && r.planned.test == test && r.planned.key == key
+
 /-- Applies a function to the running test with the given names, if there is one. -/
-private def State.modifyRunning (s : State) (exe test : String) (f : Running → Running) : State :=
-  match s.running.findIdx? (fun r => r.planned.exe == exe && r.planned.test == test) with
+private def State.modifyRunning (s : State) (exe test key : String) (f : Running → Running) :
+    State :=
+  match s.running.findIdx? (·.is exe test key) with
   | some i => { s with running := s.running.modify i f }
   | none => s
+
+/--
+A record from a test executable, or a line it wrote, as the events file receives it: tagged with the
+executable's and the test's names, and for a fixture's phase also with its kind and its path.
+-/
+def taggedFor (p : Planned) (j : Json) : Json :=
+  let j := tagged p.exe p.test j
+  match p.kind with
+  | .test => j
+  | .fixture => (j.setObjVal! "kind" (.str p.kind.name)).setObjVal! "path" (ToJson.toJson p.path)
 
 /-- Adds output to the named result with the given identifier, or to the test's own. -/
 private def Running.addOutput (r : Running) (result : Nat) (o : Output) : Running :=
@@ -311,27 +342,29 @@ def step (s : State) : Event → State × Array Action
       [("type", Json.str "issue"), ("level", Json.str issue.level),
         ("message", Json.str issue.message)])])
   | .testStarted p => ({ s with running := s.running.push { planned := p } }, #[])
-  | .record exe test json rec =>
-    if !(s.running.any fun r => r.planned.exe == exe && r.planned.test == test) then (s, #[])
-    else
-      let s := s.modifyRunning exe test (·.addRecord rec)
+  | .record exe test key json rec =>
+    match s.running.find? (·.is exe test key) with
+    | none => (s, #[])
+    | some r =>
+      let s := s.modifyRunning exe test key (·.addRecord rec)
       let forwarded := match rec with
-        | .start .. | .output .. | .result .. => #[Action.event (tagged exe test json)]
+        | .start .. | .output .. | .result .. => #[Action.event (taggedFor r.planned json)]
         | _ => #[]
       (s, forwarded)
-  | .captured exe test stream text timeMs =>
-    if !(s.running.any fun r => r.planned.exe == exe && r.planned.test == test) then (s, #[])
-    else
+  | .captured exe test key stream text timeMs =>
+    match s.running.find? (·.is exe test key) with
+    | none => (s, #[])
+    | some r =>
       let o : Output := if stream == "stderr" then .stderr text else .stdout text
-      let s := s.modifyRunning exe test (·.addOutput 0 o)
-      (s, #[.event (Json.mkObj [("type", Json.str "output"), ("exe", Json.str exe),
-        ("test", Json.str test), ("stream", Json.str stream), ("text", Json.str text),
-        ("time_ms", ToJson.toJson timeMs), ("result", ToJson.toJson (0 : Nat))])])
-  | .unreadable exe test message =>
-    (s.modifyRunning exe test fun r =>
+      let s := s.modifyRunning exe test key (·.addOutput 0 o)
+      (s, #[.event (taggedFor r.planned (Json.mkObj [("type", Json.str "output"),
+        ("stream", Json.str stream), ("text", Json.str text),
+        ("time_ms", ToJson.toJson timeMs), ("result", ToJson.toJson (0 : Nat))]))])
+  | .unreadable exe test key message =>
+    (s.modifyRunning exe test key fun r =>
       if r.unreadable?.isSome then r else { r with unreadable? := some message }, #[])
-  | .testEnded exe test exit durationMs =>
-    match s.running.findIdx? (fun r => r.planned.exe == exe && r.planned.test == test) with
+  | .testEnded exe test key exit durationMs =>
+    match s.running.findIdx? (·.is exe test key) with
     | none => (s, #[])
     | some i =>
       let r := s.running[i]!

@@ -14,6 +14,7 @@ module
 public import Errata.RunnerConfig
 public import Errata.Resolution
 public import Errata.Dispatcher
+public import Errata.Scheduler
 public import Errata.ProcessControl
 public import Errata.CommandLine
 public import Std.Sync.Mutex
@@ -235,6 +236,7 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
   if lines.isEmpty then return fail "it wrote nothing to its list file"
   let mut sawProtocol := false
   let mut settings : Array SettingInfo := #[]
+  let mut fixtures : Array InventoryFixture := #[]
   let mut tests : Array InventoryTest := #[]
   let mut names : Std.HashSet String := {}
   for line in lines do
@@ -255,6 +257,20 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
         if settings.any (·.name == name) then
           return fail s!"it declares the setting {name} more than once"
         settings := settings.push { name, description?, default? }
+      | .fixture info =>
+        unless sawProtocol do return fail "its list file does not begin with a protocol record"
+        let some name := info.name? | return fail "its list file has a fixture without a name"
+        if fixtures.any (·.name == name) then
+          return fail s!"it declares the fixture {name} more than once"
+        unless tests.isEmpty do
+          return fail s!"it declares the fixture {name} after a test; fixtures precede tests"
+        let deps := info.fixtures?.getD #[]
+        if let some d := deps.find? (fun d => !fixtures.any (·.name == d)) then
+          return fail s!"its fixture {name} takes the fixture {d}, which is not declared before it"
+        fixtures := fixtures.push {
+          name, description? := info.description?, settings := info.settings?.getD #[]
+          fixtures := deps, threads? := info.threads?
+        }
       | .test info =>
         unless sawProtocol do return fail "its list file does not begin with a protocol record"
         let some name := info.name? | return fail "its list file has a test without a name"
@@ -262,19 +278,56 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
         if info.kind? == some "benchmark" then continue
         if names.contains name then return fail s!"it lists the test {name} more than once"
         names := names.insert name
+        let uses := info.fixtures?.getD #[]
+        if let some d := uses.find? (fun d => !fixtures.any (·.name == d.name)) then
+          return fail s!"its test {name} uses the fixture {d.name}, which is not declared before it"
         tests := tests.push {
           exeIdx := idx, name, path := info.path?.getD #[], file? := info.file?,
           line? := info.line?, description? := info.description?, tags := info.tags?.getD #[]
-          settings := info.settings?.getD #[]
+          settings := info.settings?.getD #[], fixtures := uses, threads? := info.threads?
         }
       | _ => unless sawProtocol do
           return fail "its list file does not begin with a protocol record"
   unless sawProtocol do return fail "its list file has no protocol record"
-  return .ok { settings, tests }
+  return .ok { settings, fixtures, tests }
+
+/--
+The arguments after a test's or a fixture phase's name: its settings, the values of its fixtures,
+and its thread grant, when it asked for threads.
+-/
+def invocationArgs (settings fixtures : Array (String × String)) (threads? : Option Nat) :
+    Array String :=
+  settings.map (fun (k, v) => s!"setting:{k}={v}") ++
+    fixtures.map (fun (k, v) => s!"fixture:{k}={v}") ++
+    (threads?.map fun n => #[s!"threads:{n}"]).getD #[]
 
 /-- The arguments of a test executable that runs one test. -/
-def runArgs (out name : String) (settings : Array (String × String)) : Array String :=
-  #["errata-run", out, name] ++ settings.map fun (k, v) => s!"setting:{k}={v}"
+def runArgs (out name : String) (settings : Array (String × String))
+    (fixtures : Array (String × String) := #[]) (threads? : Option Nat := none) : Array String :=
+  #["errata-run", out, name] ++ invocationArgs settings fixtures threads?
+
+/-- The arguments of a test executable that runs one phase of a fixture. -/
+def fixtureArgs (out name : String) (phase : FixturePhase) (settings : Array (String × String))
+    (fixtures : Array (String × String) := #[]) (threads? : Option Nat := none) : Array String :=
+  #["errata-fixture", out, name, phase.name] ++ invocationArgs settings fixtures threads?
+
+/--
+The command that runs a chain of invocations by hand, quoted for a POSIX shell: the executable
+with the invocations separated by {lit}`;` arguments. Their records go to standard error, and
+{name}`threads?` is the thread grant that the invocations asked for, when they asked.
+-/
+def RunContext.reproduceChain (ctx : RunContext) (exe : ExecutableConfig)
+    (links : Array (Array String)) (threads? : Option Nat := none) : String :=
+  let env : Array (String × String) :=
+    #[("LEAN_ABORT_ON_PANIC", "1")] ++
+    ((ctx.config.errataDir?.map fun d => #[("ERRATA_DIR", d)]).getD #[]) ++ exe.env ++
+    ((threads?.map fun n => #[("LEAN_NUM_THREADS", toString n)]).getD #[])
+  let chain := links.foldl (init := #[]) fun acc l =>
+    (if acc.isEmpty then acc else acc.push ";") ++ l
+  let words := env.map (fun (k, v) => s!"{k}={shellQuote v}") ++
+    (exe.command ++ chain).map shellQuote
+  let cd := match exe.cwd? with | some d => s!"cd {shellQuote d} && " | none => ""
+  cd ++ " ".intercalate words.toList
 
 /--
 The command that runs a test again by hand, quoted for a POSIX shell. Its records go to standard
@@ -282,13 +335,7 @@ error.
 -/
 def RunContext.reproduce (ctx : RunContext) (exe : ExecutableConfig) (name : String)
     (settings : Array (String × String)) : String :=
-  let env : Array (String × String) :=
-    #[("LEAN_ABORT_ON_PANIC", "1")] ++
-    ((ctx.config.errataDir?.map fun d => #[("ERRATA_DIR", d)]).getD #[]) ++ exe.env
-  let words := env.map (fun (k, v) => s!"{k}={shellQuote v}") ++
-    (exe.command ++ runArgs "/dev/stderr" name settings).map shellQuote
-  let cd := match exe.cwd? with | some d => s!"cd {shellQuote d} && " | none => ""
-  cd ++ " ".intercalate words.toList
+  ctx.reproduceChain exe #[runArgs "/dev/stderr" name settings]
 
 /--
 The settings that a test executable receives for a test: the resolved values of the settings the
@@ -306,66 +353,70 @@ def RunContext.planned (ctx : RunContext) (exe : ExecutableConfig) (t : Inventor
     seed? := (r.settings.find? (·.1 == seedSetting)).map (·.2), settings
     reproduce := ctx.reproduce exe t.name settings, slowAfterMs := r.slowAfterMs }
 
+/-- A test or a fixture's phase, as the runner starts it in a process of its own. -/
+structure Invocation where
+  /-- The test executable. -/
+  exe : ExecutableConfig
+  /-- What the dispatcher knows of it. -/
+  planned : Planned
+  /-- The arguments for a result file at the given path. -/
+  args : String → Array String
+  /-- The thread grant, when the test or fixture asked for threads. -/
+  threads? : Option Nat := none
+  /-- How long it may run, in milliseconds. -/
+  timeoutMs : Nat
+  /-- How long it has after it is terminated, in milliseconds. -/
+  gracePeriodMs : Nat
+
+/-- How a test's or a fixture phase's process ended, as the scheduler learns it. -/
+structure JobEnd where
+  /-- How the process ended. -/
+  exit : Exit
+  /-- Whether the outcome is a pass. -/
+  succeeded : Bool
+  /-- The value that a setup wrote, when it wrote one. -/
+  value? : Option String := none
+
+/-- Tells the dispatcher that an invocation ended, and returns how it ended for the scheduler. -/
+def RunContext.ended (ctx : RunContext) (inv : Invocation) (exit : Exit) (durationMs : Nat)
+    (value? : Option String := none) : IO JobEnd := do
+  let p := inv.planned
+  ctx.dispatcher.dispatch (.testEnded p.exe p.test p.key exit durationMs)
+  let results := (← ctx.dispatcher.get).results
+  let own? := results.findRev? fun r =>
+    r.exe == p.exe && r.test == p.test && r.kind == p.kind && r.path == p.path &&
+      r.resultPath.isEmpty
+  return { exit, succeeded := own?.any (·.outcome.isPass), value? }
+
 /--
-Runs one test in a process of its own, with the settings and limits resolved for it. Records from its
-result file and lines from its standard output and standard error go to the dispatcher as they
-arrive. Before a line of output is handed on, the result file is read up to its end, so the records
-that the test wrote before that output precede it. The test is terminated at its timeout and killed
-after the grace period. The run loop checks the clock after every bounded read of the result file.
-Once the test executable has exited, the processes that it started have the pipe grace to release
-its output pipes, and then its process group is swept. If {name}`t`'s mandatory setting has no
-value, then it is reported with no process started. The result is {lean}`false` when the run has
-been cancelled and the test was not started.
+Watches an invocation's process from its start to its end, as {lit}`RunContext.launch` describes,
+and returns how it ended.
 -/
-def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) (r : Resolved) : IO Bool := do
-  let exe := ctx.config.executables[t.exeIdx]!
-  let planned := ctx.planned exe t r
+def RunContext.watch (ctx : RunContext) (inv : Invocation) (g : Group) (file : System.FilePath)
+    (start : Nat) : IO JobEnd := do
   let d := ctx.dispatcher
-  if let some missing := r.missing[0]? then
-    d.dispatch (.testStarted planned)
-    d.dispatch (.testEnded exe.name t.name (.settingMissing missing) 0)
-    return true
-  let file := ctx.dir / s!"run-{n}.jsonl"
-  IO.FS.writeFile file ""
-  let start ← IO.monoMsNow
-  let ended (exit : Exit) : IO Unit := do
-    d.dispatch (.testEnded exe.name t.name exit ((← IO.monoMsNow) - start))
-  let spawned ←
-    try
-      let some cmd := exe.command[0]? | throw <| .userError "the command is empty"
-      let g? ← ctx.registry.start <|
-        spawnGroup cmd
-          (exe.command.extract 1 exe.command.size ++ runArgs file.toString t.name planned.settings)
-          exe.cwd? (ctx.env exe)
-      pure (Except.ok g?)
-    catch e => pure (.error (toString e))
-  let g ← match spawned with
-    | .ok none => return false
-    | .ok (some g) =>
-      d.dispatch (.testStarted planned)
-      pure g
-    | .error e =>
-      d.dispatch (.testStarted planned)
-      ended (.spawnFailed e)
-      return true
+  let p := inv.planned
+  let value ← IO.mkRef (none : Option String)
   let tail ← Tail.open file
   let onFileLine (bytes : ByteArray) : IO Unit := do
     let line := decodeLine bytes
     if line.trimAscii.isEmpty then return
     match Protocol.Record.parseLine line with
-    | .ok (some (json, record)) => d.dispatch (.record exe.name t.name json record)
+    | .ok (some (json, record)) =>
+      if let .value text? := record then value.set (some (text?.getD ""))
+      d.dispatch (.record p.exe p.test p.key json record)
     | .ok none => pure ()
-    | .error e => d.dispatch (.unreadable exe.name t.name e)
+    | .error e => d.dispatch (.unreadable p.exe p.test p.key e)
   let fileLock ← Std.Mutex.new ()
   let pollFile : IO Bool := fileLock.atomically (tail.poll onFileLine)
   let forward (stream : String) (line : String) : IO Unit :=
     fileLock.atomically do
       -- The file is read to its end, a bounded read at a time, so that the records written before
-      -- this line precede it. Reading stops at the test's timeout, which the run loop enforces.
+      -- this line precede it. Reading stops at the timeout, which the run loop enforces.
       repeat
-        if (← IO.monoMsNow) ≥ start + r.timeoutMs then break
+        if (← IO.monoMsNow) ≥ start + inv.timeoutMs then break
         unless ← tail.poll onFileLine do break
-      d.dispatch (.captured exe.name t.name stream line (← Protocol.nowMs))
+      d.dispatch (.captured p.exe p.test p.key stream line (← Protocol.nowMs))
   let outTask ← IO.asTask (prio := .dedicated) (forwardLines g.child.stdout (forward "stdout"))
   let errTask ← IO.asTask (prio := .dedicated) (forwardLines g.child.stderr (forward "stderr"))
   let mut timedOut : Option (Nat × Bool) := none
@@ -373,15 +424,15 @@ def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) (r : Resolved) : IO 
     let read ← pollFile
     if (← g.tryWait).isSome then break
     let elapsed := (← IO.monoMsNow) - start
-    if elapsed ≥ r.timeoutMs then
-      let killed ← g.terminateGraceKill r.gracePeriodMs
+    if elapsed ≥ inv.timeoutMs then
+      let killed ← g.terminateGraceKill inv.gracePeriodMs
       timedOut := some (elapsed, killed)
       break
     unless read do IO.sleep pollMs
   let code ← g.wait
-  -- What a test that timed out wrote is read for at most the grace period more.
+  -- What an invocation that timed out wrote is read for at most the grace period more.
   let deadline? ← if timedOut.isSome then
-      pure (some ((← IO.monoMsNow) + r.gracePeriodMs))
+      pure (some ((← IO.monoMsNow) + inv.gracePeriodMs))
     else pure none
   fileLock.atomically (tail.finish onFileLine deadline?)
   releasePipes g [outTask, errTask]
@@ -389,8 +440,245 @@ def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) (r : Resolved) : IO 
   let exit := match timedOut with
     | some (ms, killed) => Exit.timedOut ms killed
     | none => .exited code
-  ended exit
-  return true
+  ctx.ended inv exit ((← IO.monoMsNow) - start) (← value.get)
+
+/--
+Starts a test or a fixture's phase in a process of its own, with the settings, fixtures' values,
+and limits resolved for it, and returns a task that ends with the process, or {lean}`none` when the
+run has been cancelled and nothing was started. Records from its result file and lines from its
+standard output and standard error go to the dispatcher as they arrive. Before a line of output is
+handed on, the result file is read up to its end, so the records that it wrote before that output
+precede it. It is terminated at its timeout and killed after the grace period; the watch checks the
+clock after every bounded read of the result file. Once the test executable has exited, the
+processes that it started have the pipe grace to release its output pipes, and then its process
+group is swept. The environment holds {lit}`LEAN_NUM_THREADS` with the thread grant when the test or
+fixture asked for threads. {name}`n` numbers the result file.
+-/
+def RunContext.launch (ctx : RunContext) (inv : Invocation) (n : Nat) :
+    IO (Option (Task JobEnd)) := do
+  let d := ctx.dispatcher
+  let exe := inv.exe
+  let file := ctx.dir / s!"run-{n}.jsonl"
+  IO.FS.writeFile file ""
+  let start ← IO.monoMsNow
+  let env := ctx.env exe ++
+    ((inv.threads?.map fun t => #[("LEAN_NUM_THREADS", some (toString t))]).getD #[])
+  let spawned ←
+    try
+      let some cmd := exe.command[0]? | throw <| .userError "the command is empty"
+      let g? ← ctx.registry.start <|
+        spawnGroup cmd (exe.command.extract 1 exe.command.size ++ inv.args file.toString) exe.cwd?
+          env
+      pure (Except.ok g?)
+    catch e => pure (.error (toString e))
+  match spawned with
+  | .ok none => return none
+  | .error e =>
+    d.dispatch (.testStarted inv.planned)
+    return some (.pure (← ctx.ended inv (.spawnFailed e) 0))
+  | .ok (some g) =>
+    d.dispatch (.testStarted inv.planned)
+    let watching : BaseIO JobEnd := do
+      match ← (ctx.watch inv g file start).toBaseIO with
+      | .ok e => pure e
+      | .error e =>
+        pure { exit := .spawnFailed s!"the runner lost the process: {e}", succeeded := false }
+    return some (← BaseIO.asTask (prio := .dedicated) watching)
+
+/-- The tests and fixtures of a run, as the scheduler numbers them. -/
+structure Plan where
+  /-- The number of hardware-thread slots. -/
+  pool : Nat
+  /-- The selected tests, each with what it receives, in queue order. -/
+  tests : Array (InventoryTest × Resolved)
+  /--
+  The fixtures that the tests need, each with its executable's position and what its phases
+  receive, each after the fixtures it takes.
+  -/
+  fixtures : Array (Nat × InventoryFixture × Resolved)
+  /-- The scheduler's view of the tests. -/
+  testSpecs : Array Scheduler.TestSpec
+  /-- The scheduler's view of the fixtures. -/
+  fixtureSpecs : Array Scheduler.FixtureSpec
+
+/--
+The plan of a run with {name}`pool` slots and the {name}`selected` tests: the fixtures that the
+tests need, directly or through other fixtures, in the order their executables list them, resolved
+as {name}`resolution` says.
+-/
+def RunContext.fixturePlan (ctx : RunContext) (pool : Nat) (listings : Array Listing)
+    (resolution : ResolutionContext) (selected : Array (InventoryTest × Resolved)) : Plan :=
+    Id.run do
+  let mut index : Std.HashMap (Nat × String) Nat := {}
+  let mut fixtures := #[]
+  let mut specs : Array Scheduler.FixtureSpec := #[]
+  for h : e in [0 : listings.size] do
+    let listing := listings[e]
+    let mut needed : Std.HashSet String := selected.foldl (init := {}) fun s (t, _) =>
+      if t.exeIdx == e then t.fixtures.foldl (init := s) (·.insert ·.name) else s
+    -- A fixture's own fixtures are listed before it, so one pass from the last reaches all.
+    for f in listing.fixtures.reverse do
+      if needed.contains f.name then
+        needed := f.fixtures.foldl (init := needed) (·.insert ·)
+    let exe := ctx.config.executables[e]!.name
+    for f in listing.fixtures do
+      unless needed.contains f.name do continue
+      let r := resolution.resolveFixture exe listing.settings f
+      index := index.insert (e, f.name) fixtures.size
+      fixtures := fixtures.push (e, f, r)
+      specs := specs.push {
+        deps := f.fixtures.filterMap (fun d => index.get? (e, d)), threads := f.threads?.getD 1
+        missing? := r.missing[0]? }
+  let testSpecs := selected.map fun (t, r) => {
+    fixtures := t.fixtures.filterMap fun d => (index.get? (t.exeIdx, d.name)).map (·, d.exclusive)
+    threads := t.threads?.getD 1, missing? := r.missing[0]? : Scheduler.TestSpec }
+  return { pool, tests := selected, fixtures, testSpecs, fixtureSpecs := specs }
+
+/-- The grant of a request of {name}`n` threads in the plan's pool. -/
+def Plan.grant (plan : Plan) (n : Nat) : Nat := max 1 (min n plan.pool)
+
+/-- The thread grant of a test that asked for threads. -/
+def Plan.testThreads? (plan : Plan) (t : Nat) : Option Nat :=
+  plan.tests[t]!.1.threads?.map plan.grant
+
+/-- The thread grant of a fixture that asked for threads. -/
+def Plan.fixtureThreads? (plan : Plan) (f : Nat) : Option Nat :=
+  plan.fixtures[f]!.2.1.threads?.map plan.grant
+
+/-- Fixtures' values, given by the fixtures' positions, by the fixtures' names. -/
+def Plan.namedValues (plan : Plan) (values : Array (Nat × String)) : Array (String × String) :=
+  values.map fun (i, v) => (plan.fixtures[i]!.2.1.name, v)
+
+/-- The arguments of one phase of a fixture, with the values of the given fixtures. -/
+def Plan.phaseArgs (plan : Plan) (out : String) (f : Nat) (phase : FixturePhase)
+    (values : Array (Nat × String)) : Array String :=
+  let (_, fixture, r) := plan.fixtures[f]!
+  fixtureArgs out fixture.name phase r.settings (plan.namedValues values) (plan.fixtureThreads? f)
+
+/-- The arguments of a test, with the values of the given fixtures. -/
+def Plan.testArgs (plan : Plan) (out : String) (t : Nat) (values : Array (Nat × String)) :
+    Array String :=
+  let (test, r) := plan.tests[t]!
+  runArgs out test.name r.arguments (plan.namedValues values) (plan.testThreads? t)
+
+/--
+The command that reproduces a job by hand: the setups of the fixtures it needs, each after those it
+takes, then the prepares and the test for a test, or the job itself for a fixture's phase, then the
+teardowns, in the reverse order of the setups. The chain supplies the fixtures' values.
+-/
+def RunContext.reproduceJob (ctx : RunContext) (plan : Plan) (job : Scheduler.Job) : String :=
+  let out := "/dev/stderr"
+  let (exeIdx, roots, middle, threads?) : Nat × Array Nat × Array (Array String) × Option Nat :=
+    match job with
+    | .test t =>
+      let direct := plan.testSpecs[t]!.fixtures.map (·.1)
+      (plan.tests[t]!.1.exeIdx, direct,
+        direct.map (plan.phaseArgs out · .prepare #[]) ++ #[plan.testArgs out t #[]],
+        plan.testThreads? t)
+    | .setup f | .teardown f => (plan.fixtures[f]!.1, #[f], #[], plan.fixtureThreads? f)
+    | .prepare f _ =>
+      (plan.fixtures[f]!.1, #[f], #[plan.phaseArgs out f .prepare #[]], plan.fixtureThreads? f)
+  let closure := Scheduler.closureOf plan.fixtureSpecs roots
+  let links := closure.map (plan.phaseArgs out · .setup #[]) ++ middle ++
+    closure.reverse.map (plan.phaseArgs out · .teardown #[])
+  ctx.reproduceChain ctx.config.executables[exeIdx]! links threads?
+
+/-- What the dispatcher knows of a job before it runs. -/
+def RunContext.plannedJob (ctx : RunContext) (plan : Plan) (job : Scheduler.Job) : Planned :=
+  let reproduce := ctx.reproduceJob plan job
+  match job with
+  | .test t =>
+    let (test, r) := plan.tests[t]!
+    { ctx.planned ctx.config.executables[test.exeIdx]! test r with reproduce }
+  | .setup f | .prepare f _ | .teardown f =>
+    let (e, fixture, r) := plan.fixtures[f]!
+    let (key, path) := match job with
+      | .prepare _ t =>
+        let name := plan.tests[t]!.1.name
+        (s!"prepare {name}", #[fixture.name, "prepare", name])
+      | .teardown _ => ("teardown", #[fixture.name, "teardown"])
+      | _ => ("setup", #[fixture.name, "setup"])
+    { exe := ctx.config.executables[e]!.name, test := fixture.name, key, kind := .fixture, path
+      description? := fixture.description?, settings := r.settings
+      seed? := (r.settings.find? (·.1 == seedSetting)).map (·.2), reproduce
+      slowAfterMs := r.slowAfterMs }
+
+/-- The invocation that runs a job, with the values of the fixtures it receives. -/
+def RunContext.invocation (ctx : RunContext) (plan : Plan) (job : Scheduler.Job)
+    (values : Array (Nat × String)) : Invocation :=
+  let planned := ctx.plannedJob plan job
+  match job with
+  | .test t =>
+    let (test, r) := plan.tests[t]!
+    { exe := ctx.config.executables[test.exeIdx]!, planned
+      args := (plan.testArgs · t values), threads? := plan.testThreads? t
+      timeoutMs := r.timeoutMs, gracePeriodMs := r.gracePeriodMs }
+  | .setup f | .prepare f _ | .teardown f =>
+    let (e, _, r) := plan.fixtures[f]!
+    let phase : FixturePhase := match job with
+      | .prepare .. => .prepare
+      | .teardown _ => .teardown
+      | _ => .setup
+    { exe := ctx.config.executables[e]!, planned
+      args := (plan.phaseArgs · f phase values), threads? := plan.fixtureThreads? f
+      timeoutMs := r.timeoutMs, gracePeriodMs := r.gracePeriodMs }
+
+/--
+Runs the plan's tests and the phases of their fixtures, as the scheduler directs: it starts each job
+that the scheduler asks for, reports the tests and setups that it asks to report without running,
+and tells it of each process that ends, until it ends the run. When the run has been cancelled, the
+first start that is refused tells the scheduler, which starts nothing more.
+-/
+def RunContext.runScheduled (ctx : RunContext) (plan : Plan) : IO Unit := do
+  let d := ctx.dispatcher
+  let mut sched := Scheduler.State.init plan.pool plan.testSpecs plan.fixtureSpecs
+  let (s, first) := Scheduler.step sched .begin
+  sched := s
+  let mut queue := first
+  let mut running : Array (Nat × Scheduler.Job × Task JobEnd) := #[]
+  let mut launched := 0
+  repeat
+    let mut finished := false
+    let mut i := 0
+    while i < queue.size do
+      let cmd := queue[i]!
+      i := i + 1
+      match cmd with
+      | .finish => finished := true
+      | .skip job reason =>
+        let p := ctx.plannedJob plan job
+        let exit : Exit := match reason with
+          | .settingMissing s => .settingMissing s
+          | .fixtureFailed f phase => .fixtureFailed plan.fixtures[f]!.2.1.name phase
+        d.dispatch (.testStarted p)
+        d.dispatch (.testEnded p.exe p.test p.key exit 0)
+      | .spawn job _ values =>
+        match ← ctx.launch (ctx.invocation plan job values) launched with
+        | none =>
+          let (s, more) := Scheduler.step sched .cancelled
+          sched := s
+          queue := queue ++ more
+        | some task =>
+          running := running.push (launched, job, task)
+          launched := launched + 1
+    queue := #[]
+    if finished then break
+    let tasks := running.toList.map fun (n, _, task) => task.map (n, ·)
+    let (n, e) ← match tasks with
+      | [] => break
+      | t :: ts => IO.waitAny (t :: ts)
+    let some (_, job, _) := running.find? (·.1 == n) | break
+    running := running.filter (·.1 != n)
+    if let .setup f := job then
+      if e.succeeded then
+        let (s, _) := Scheduler.step sched (.valueProduced f (e.value?.getD ""))
+        sched := s
+    let event : Scheduler.Event := match e.exit with
+      | .timedOut .. => .timedOut job
+      | _ => .exited job e.succeeded
+    let (s, more) := Scheduler.step sched event
+    sched := s
+    queue := more
 
 /-- A value as a listing shows it, quoted so that an empty value shows. -/
 private def showValue (v : String) : String := v.quote
@@ -411,10 +699,12 @@ private def byExecutable (selected : Array (InventoryTest × Resolved)) :
 /--
 Prints the selected tests in nextest's human format: each test executable's name and a colon, then
 its selected tests, indented by four spaces. With {name}`verbose`, the settings that the test
-executables declare come first when there are any, with their descriptions and defaults; each test
-is followed by its file and line, its tags, its description, and the values it receives; and the
-mandatory settings that nothing gives a value come last, with the tests that need them. Seeds
-derived from a run seed that the command line leaves to chance are shown as derived.
+executables declare come first when there are any, with their descriptions and defaults, and then
+the fixtures they declare when there are any, with their descriptions and the threads they ask for;
+each test is followed by its file and line, its tags, its description, the values it receives, and
+the fixtures it uses; and the mandatory settings that nothing gives a value come last, with the
+tests that need them. Seeds derived from a run seed that the command line leaves to chance are
+shown as derived.
 -/
 def printHumanList (ctx : RunContext) (color verbose : Bool) (listings : Array Listing)
     (selected : Array (InventoryTest × Resolved)) : IO Unit := do
@@ -430,6 +720,14 @@ def printHumanList (ctx : RunContext) (color verbose : Bool) (listings : Array L
         let dflt := match s.default? with | some d => s!" (default {showValue d})" | none => ""
         line s!"  {s.name}{dflt}"
         if let some d := s.description? then line (indented "      " d)
+  -- Likewise the fixtures' heading, only when a test executable declares a fixture.
+  if verbose && listings.any (!·.fixtures.isEmpty) then
+    line "Fixtures:"
+    for l in listings do
+      for f in l.fixtures do
+        let threads := match f.threads? with | some n => s!" (threads {n})" | none => ""
+        line s!"  {f.name}{threads}"
+        if let some d := f.description? then line (indented "      " d)
   let mut missing : Array (String × String) := #[]
   for (idx, tests) in byExecutable selected do
     line s!"{Style.exe.paint color ctx.config.executables[idx]!.name}:"
@@ -451,6 +749,8 @@ def printHumanList (ctx : RunContext) (color verbose : Bool) (listings : Array L
           line s!"        {k}: derived from the run's seed"
         else
           line s!"        {k} = {showValue v}"
+      for f in t.fixtures do
+        line s!"        uses {f.name}{if f.exclusive then "" else " (shared)"}"
       for m in r.missing do
         line s!"        {m}: no value"
         missing := missing.push (m, t.name)
@@ -604,7 +904,9 @@ against the inventory: values that the command line gives to settings that no ex
 are errors, and those that the profile gives are warnings; the filters are evaluated, with a warning
 for each atom and each filter that selects nothing. The configuration's filters draw these warnings
 only when the run has every test executable of the package. The {lit}`list` command then prints the
-selected tests in its message format. The Run phase runs the selected tests in inventory order.
+selected tests in its message format. The Run phase runs the selected tests and the phases of the
+fixtures they use as the scheduler directs, in inventory order as far as the fixtures' claims and
+the slots of {lit}`jobs` allow.
 -/
 def execute (config : Config) (opts : Options) (sinks : Sinks)
     (registry : Option Registry := none) (color : Bool := false) : IO (RunReport × UInt32) := do
@@ -700,9 +1002,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
       | .warn => d.dispatch (.issue { isError := false, message := "no tests to run" })
       | .pass => pure ()
     d.dispatch (.phase "Run" (← Protocol.nowMs))
-    for h : i in [0 : selected.size] do
-      let (t, r) := selected[i]
-      unless ← runOne ctx i t r do break
+    ctx.runScheduled (ctx.fixturePlan opts.jobs listings resolution selected)
     let s ← d.get
     -- Under `--wfail`, the warning of `--no-tests warn` fails the run as `--no-tests fail` does.
     let code :=

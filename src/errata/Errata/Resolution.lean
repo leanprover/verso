@@ -50,12 +50,32 @@ structure InventoryTest where
   tags : Array String := #[]
   /-- The settings that the test takes, in the order it takes them. -/
   settings : Array Protocol.SettingDep := #[]
+  /-- The fixtures that the test uses, each exclusive or shared. -/
+  fixtures : Array Protocol.FixtureDep := #[]
+  /-- The number of hardware threads that the test asks for, when it asks. -/
+  threads? : Option Nat := none
+deriving Repr, Inhabited
+
+/-- A fixture in the inventory. -/
+structure InventoryFixture where
+  /-- The fixture's name. -/
+  name : String
+  /-- The fixture's description. -/
+  description? : Option String := none
+  /-- The settings that the fixture takes, in the order it takes them. -/
+  settings : Array Protocol.SettingDep := #[]
+  /-- The names of the fixtures that the fixture takes, each declared before it. -/
+  fixtures : Array String := #[]
+  /-- The number of hardware threads that the fixture's phases ask for, when it asks. -/
+  threads? : Option Nat := none
 deriving Repr, Inhabited
 
 /-- What the List phase gathered from one test executable. -/
 structure Listing where
   /-- The settings that the executable declares. -/
   settings : Array SettingInfo := #[]
+  /-- The fixtures that the executable declares, each after the fixtures it takes. -/
+  fixtures : Array InventoryFixture := #[]
   /-- The executable's tests. -/
   tests : Array InventoryTest := #[]
 deriving Repr, Inhabited
@@ -192,6 +212,48 @@ structure Resolved where
 deriving Repr, Inhabited, DecidableEq
 
 /--
+The values of the settings {name}`deps` that the test or fixture {name}`name` of the executable
+{name}`exe` takes, with the mandatory ones that nothing gives a value, and whether the seed is the
+derived one. Each value comes from the command line, then the first of {name}`overrides` that gives
+it, then the profile, then the setting's declared default, and, for {lit}`Errata.seed`, the seed
+derived from the run's seed and {name}`name`.
+-/
+def ResolutionContext.resolveSettings (ctx : ResolutionContext) (exe : String)
+    (declared : Array SettingInfo) (name : String) (deps : Array Protocol.SettingDep)
+    (overrides : Array Override) : Array (String × String) × Array String × Bool := Id.run do
+  let mut settings := #[]
+  let mut missing := #[]
+  let mut derivedSeed := false
+  for dep in deps do
+    let given? :=
+      ((ctx.sets.findRev? (·.1 == dep.name)).map (·.2))
+      <|> overrides.findSome? (fun o => (o.settings.find? (·.1 == dep.name)).map (·.2))
+      <|> (ctx.profile.settings.find? (·.1 == dep.name)).map (·.2)
+      <|> (declared.find? (·.name == dep.name)).bind (·.default?)
+    match given? with
+    | some v => settings := settings.push (dep.name, v)
+    | none =>
+      if dep.name == seedSetting then
+        settings := settings.push (dep.name, toString (testSeed ctx.runSeed exe name))
+        derivedSeed := true
+      else unless dep.optional do missing := missing.push dep.name
+  return (settings, missing, derivedSeed)
+
+/--
+Resolves what a fixture's phases receive: each setting the fixture takes from the command line,
+then the profile, then the setting's declared default, and, for {lit}`Errata.seed`, the seed derived
+from the run's seed and the fixture's name. The timeout is the profile's {lit}`fixture-timeout`, and
+the grace period comes from the command line, then the profile.
+-/
+def ResolutionContext.resolveFixture (ctx : ResolutionContext) (exe : String)
+    (declared : Array SettingInfo) (f : InventoryFixture) : Resolved :=
+  let (settings, missing, derivedSeed) := ctx.resolveSettings exe declared f.name f.settings #[]
+  { settings, missing, derivedSeed
+    timeoutMs := ctx.profile.fixtureTimeoutMs?.getD defaultTimeoutMs
+    gracePeriodMs := ctx.gracePeriodMs? <|> ctx.profile.gracePeriodMs? |>.getD defaultGracePeriodMs
+    slowAfterMs := ctx.profile.slowAfterMs?.getD defaultSlowAfterMs }
+
+/--
 Resolves what a test receives. Each setting the test takes comes from the command line, then the
 first override that matches the test and gives it, then the profile, then the setting's declared
 default, and, for {lit}`Errata.seed`, the seed derived from the run's seed. The timeout and the
@@ -206,22 +268,8 @@ def ResolutionContext.resolve (ctx : ResolutionContext) (exe : String)
   let matching := ctx.overrides.filterMap fun (f, o) =>
     if f.expr.eval record dflt then some o else none
   let fromOverrides {α} (field : Override → Option α) : Option α := matching.findSome? field
-  let mut settings := #[]
-  let mut missing := #[]
-  let mut derivedSeed := false
-  for dep in t.settings do
-    let given? :=
-      ((ctx.sets.findRev? (·.1 == dep.name)).map (·.2))
-      <|> fromOverrides (fun o => (o.settings.find? (·.1 == dep.name)).map (·.2))
-      <|> (ctx.profile.settings.find? (·.1 == dep.name)).map (·.2)
-      <|> (declared.find? (·.name == dep.name)).bind (·.default?)
-    match given? with
-    | some v => settings := settings.push (dep.name, v)
-    | none =>
-      if dep.name == seedSetting then
-        settings := settings.push (dep.name, toString (testSeed ctx.runSeed exe t.name))
-        derivedSeed := true
-      else unless dep.optional do missing := missing.push dep.name
+  let (settings, missing, derivedSeed) :=
+    ctx.resolveSettings exe declared t.name t.settings matching
   return {
     settings, missing, derivedSeed
     timeoutMs := ctx.timeoutMs? <|> fromOverrides (·.timeoutMs?) <|> ctx.profile.timeoutMs?
