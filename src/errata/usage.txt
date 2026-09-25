@@ -1,0 +1,56 @@
+Runs or lists the tests of the package's test executables.
+
+Usage:
+  INVOCATION [run|list] [OPTIONS] [NAME-FILTER]... [-- NAME-FILTER...]
+
+Commands:
+  run   Run the selected tests; the command when the first argument is neither word.
+  list  List the selected tests.
+
+The command is the first argument; after an option, run and list are name filters.
+
+A test is selected when its name contains a name filter (equals one, under --exact), a filter
+expression selects it, no --skip pattern is in its name, and the profile's default filter
+selects it. Without name filters, or without filter expressions, that condition holds for
+every test. In a filter expression, default() stands for the default filter.
+
+Selection:
+  -E, --filter EXPR             Select the tests that the filter expression selects. Repeatable;
+                                several are joined by union.
+  --skip PATTERN                Leave out the tests whose names contain PATTERN. Repeatable.
+  --exact                       Match name filters and --skip patterns against whole names.
+  --ignore-default-filter       Draw the tests from the whole inventory, the profile's default
+                                filter set aside.
+
+Configuration:
+  -P, --profile NAME            The profile of errata.toml to use (ERRATA_PROFILE, or default).
+  --set NAME=VALUE              Give a setting a value. Repeatable.
+  --seed N                      The run's seed, from which each test's seed is derived.
+  --timeout DURATION            How long a test may run before it is stopped, such as 90s or 2m30s
+                                (10m).
+  --grace-period DURATION       How long a stopped test has before it is killed (10s).
+
+Running:
+  -j, --test-threads, --jobs N  How many tests may run at once (1). Run only.
+  --no-tests ACTION             What a run that selects no test does: fail, warn, or pass (fail).
+                                Run only.
+  --update-golden               Rewrite the expected files of golden checks. Run only.
+  --wfail                       Fail the run if warnings are logged. Run only.
+
+Reporting:
+  -v, --verbose                 Also report passes, truncating each test's results; with list, show
+                                the settings and what each test receives.
+  -vv, --verbose-all            Report every result, without truncation.
+  -vvv, --verbose-docs          Report every result and every test's docstring.
+  --color WHEN                  Color the output: auto, always, or never (auto: on a terminal,
+                                unless NO_COLOR is set; CLICOLOR_FORCE forces it).
+  -T, --message-format FORMAT   The format of the list: human, oneline, json, or json-pretty
+                                (human). List only.
+  --junit PATH                  Write a JUnit XML report to PATH, in place of the profile's junit.
+                                Run only.
+  --json PATH                   Write a JSON report to PATH, in place of the profile's json. Run
+                                only.
+  --markdown PATH               Write a Markdown report (for a CI job summary) to PATH, in place of
+                                the profile's markdown. Run only.
+  --events PATH                 Append the run's events to PATH as JSON lines. Run only.
+  -h, --help                    Print this text.

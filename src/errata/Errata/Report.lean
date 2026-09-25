@@ -227,11 +227,13 @@ private def resultLines (h : HumanReporter) (r : Result) (name : String) : Array
 
 /--
 The summary line of the human-readable report, in nextest's shape: {lit}`Summary`, the run's
-duration in brackets, and the counts of results by outcome, then the number of tests that the
-filters left out when it is known.
+duration in brackets, and the counts of results by outcome. When {name}`skipped?` gives them, the
+line ends with the number of listed tests that the filters left out, {lit}`N tests skipped`, and,
+when there are any, the number of test executables that the filters ruled out before they were
+built, {lit}`M executables skipped`, whose tests were never listed.
 -/
-def HumanReporter.summary (h : HumanReporter) (elapsedMs : Nat) (skipped? : Option Nat := none) :
-    String :=
+def HumanReporter.summary (h : HumanReporter) (elapsedMs : Nat)
+    (skipped? : Option (Nat × Nat) := none) : String :=
   let t := h.tally
   let c := h.color
   let count (n : Nat) (word : String) (s : Style) :=
@@ -240,7 +242,13 @@ def HumanReporter.summary (h : HumanReporter) (elapsedMs : Nat) (skipped? : Opti
     if t.notPassed > 0 then .fail else if t.passed == 0 then .slow else .pass
   let counts := [count t.passed "passed" .pass, count t.failed "failed" .fail,
     count t.errors "errors" .fail, count t.inconclusive "inconclusive" .fail] ++
-    (skipped?.map (count · "skipped" .slow)).toList
+    (match skipped? with
+      | some (tests, exes) =>
+        [count tests (if tests == 1 then "test skipped" else "tests skipped") .slow] ++
+          if exes == 0 then []
+          else
+            [count exes (if exes == 1 then "executable skipped" else "executables skipped") .slow]
+      | none => [])
   s!"{style.paint c (padLeft statusWidth "Summary")} {bracketedDuration elapsedMs} \
     {", ".intercalate counts}"
 

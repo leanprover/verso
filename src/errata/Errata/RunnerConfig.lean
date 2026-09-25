@@ -132,6 +132,14 @@ structure Config where
   filters rule them out.
   -/
   partialSelection : Bool := false
+  /--
+  The names of every test executable that the package can have: its libraries and the executables
+  that the configuration file adds. When it is empty, the names are those of
+  {name}`Config.executables`.
+  -/
+  knownExecutables : Array String := #[]
+  /-- The names among {name}`Config.knownExecutables` that the filters ruled out before building. -/
+  ruledOut : Array String := #[]
 deriving Repr, Inhabited, DecidableEq
 
 /-- The profile with the given name. The {lit}`default` profile always exists. -/
@@ -324,7 +332,13 @@ def Config.ofJson (config workspace : Json) (required? : Option String) : Except
     profiles
     defaultFilter? := ← configField config "default-filter"
     partialSelection := (← configField workspace "partial-selection").getD false
+    knownExecutables := (← configField workspace "knownExecutables").getD #[]
+    ruledOut := (← configField workspace "ruledOut").getD #[]
   }
+
+/-- The names of every test executable that the package can have. -/
+def Config.executableNames (c : Config) : Array String :=
+  if c.knownExecutables.isEmpty then c.executables.map (·.name) else c.knownExecutables
 
 /-- The contents of {lit}`config.json` that describe the configuration's profiles and filter. -/
 def Config.configJson (c : Config) : Json :=
@@ -342,7 +356,10 @@ def Config.workspaceJson (c : Config) : Json :=
     [("warnings", ToJson.toJson c.warnings)] ++
     (match c.invocation? with | some i => [("invocation", Json.str i)] | none => []) ++
     (match c.packageDir? with | some d => [("packageDir", Json.str d)] | none => []) ++
-    (if c.partialSelection then [("partial-selection", Json.bool true)] else [])
+    (if c.partialSelection then [("partial-selection", Json.bool true)] else []) ++
+    (if c.knownExecutables.isEmpty then []
+      else [("knownExecutables", ToJson.toJson c.knownExecutables)]) ++
+    (if c.ruledOut.isEmpty then [] else [("ruledOut", ToJson.toJson c.ruledOut)])
 
 /-- Writes {lit}`config.json` and {lit}`workspace.json` for the configuration into {name}`dir`. -/
 def Config.write (c : Config) (dir : System.FilePath) :

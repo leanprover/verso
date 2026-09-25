@@ -817,8 +817,9 @@ def unknownProfile : Test := do
 /--
 The command line's filter expressions, joined by union, select from the tests that the profile's
 default filter selects, unless `--ignore-default-filter` draws them from the whole inventory; in a
-filter expression, `default()` stands for the default filter. A filter with a syntax error, and a
-default filter that contains `default()`, end the run with the exit code of an invalid filter.
+filter expression, `default()` stands for the default filter. A command-line filter with a syntax
+error ends the run with the exit code of an invalid filter; a filter of the configuration with a
+syntax error, and a default filter that contains `default()`, end it with that of a setup error.
 -/
 @[test]
 def defaultFilterAndCommandLine : Test := do
@@ -853,7 +854,13 @@ def defaultFilterAndCommandLine : Test := do
     assertTrue r.report.results.isEmpty "no test ran"
     assertBEq #["configuration:8: default() stands for the default filter, so the default filter \
       cannot contain it"] (r.report.issues.map (·.message))
-    assertBEq ExitCode.invalidFilter r.code
+    assertBEq ExitCode.setupError r.code
+  result "a syntax error in the default filter" do
+    let dflt : FilterText := { text := "tag(x" }
+    let config : Config := { profiles := #[{ name := "default", defaultFilter? := some dflt }] }
+    let r ← runWith #[basic ["pass"]] { filters := #["name(y"] } config
+    assertBEq ExitCode.setupError r.code
+    assertBEq 2 r.report.issues.size
 
 /--
 Name filters select the tests whose names contain one of them, and `--skip` leaves out the tests
@@ -900,6 +907,49 @@ def noTestsToRun : Test := do
     assertBEq ExitCode.testRunFailed (← runWith #[basic ["pass", "fail"]]).code
 
 /--
+The summary counts the listed tests that the filters left out, as tests, and the test executables
+that the filters ruled out before building, whose tests were never listed.
+-/
+@[test]
+def skippedCounts : Test := do
+  let summary (r : Run) : String := r.lines.back?.getD ""
+  let exe := basic ["pass", "greets", "verdict-fail"]
+  result "tests" do
+    let r ← runWith #[exe] { nameFilters := #["pass"] }
+    let expected := "1 passed, 0 failed, 0 errors, 0 inconclusive, 2 tests skipped"
+    assertTrue ((summary r).endsWith expected)
+      (summary r)
+  result "none()" do
+    let r ← runWith #[exe] { filters := #["none()"], noTests := .pass }
+    assertTrue ((summary r).endsWith ", 3 tests skipped") (summary r)
+  result "executables" do
+    let config : Config := {
+      knownExecutables := #["basic", "Alpha", "Beta"]
+      ruledOut := #["Alpha", "Beta"], partialSelection := true }
+    let r ← runWith #[basic ["pass"]] {} config
+    assertTrue ((summary r).endsWith ", 0 tests skipped, 2 executables skipped") (summary r)
+
+/--
+An `exe(…)` is judged against every test executable of the package, those that the filters ruled
+out before building included, so a filter that names or excludes a ruled-out executable draws no
+warning, under `--wfail` too.
+-/
+@[test]
+def ruledOutExecutablesAreKnown : Test := do
+  let config : Config := {
+    knownExecutables := #["basic", "Alpha", "Beta"]
+    ruledOut := #["Alpha", "Beta"], partialSelection := true }
+  for filter in ["!exe(Alpha)", "exe(basic) | exe(Beta)"] do
+    result filter do
+      let r ← runWith #[basic ["pass"]] { filters := #[filter], wfail := true } config
+      assertBEq #[] (r.report.issues.map (·.message))
+      assertBEq ExitCode.ok r.code
+  result "an executable that the package does not have" do
+    let r ← runWith #[basic ["pass"]] { filters := #["exe(basic) | exe(Gamma)"] } config
+    assertBEq #["--filter:13: exe(Gamma) matches no test executable"]
+      (r.report.issues.map (·.message))
+
+/--
 The `list` command selects as a run does and runs nothing. Its human format names each executable
 with a colon and its tests below it, indented by four spaces; the one-line format has a line per
 test with the executable, the name, the file, and the tags; the JSON format holds the inventory with
@@ -936,6 +986,13 @@ def listFormats : Test := do
   result "json-pretty" do
     let r ← listed .jsonPretty
     assertTrue (r.lines.any (·.contains '\n')) "the JSON is indented over several lines"
+  result "human with settings, when the executables declare none" do
+    let bare : ExecutableConfig := {
+      name := "bare"
+      command := #["bash", "-c", "printf '%s\\n' '{\"type\":\"protocol\",\"version\":1}' \
+        '{\"type\":\"test\",\"name\":\"only\"}' >> \"$2\"", "bare"] }
+    let r ← runWith #[bare] { command := .list, verbosity := .quiet }
+    assertBEq #["bare:", "    only"] r.lines
 
 /--
 The source of a filter of {name}`length` characters in a one-line string of {name}`path` whose

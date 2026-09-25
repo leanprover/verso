@@ -6,7 +6,6 @@ require subverso from git "https://github.com/leanprover/subverso"@"main"
 require MD4Lean from git "https://github.com/acmepjz/md4lean"@"main"
 require plausible from git "https://github.com/leanprover-community/plausible"@"main"
 require illuminate from git "https://github.com/leanprover/illuminate"@"main"
-require Cli from git "https://github.com/leanprover/lean4-cli"@"main"
 
 package verso where
   precompileModules := true
@@ -350,13 +349,13 @@ What the workspace contributes to the run, `.lake/errata/workspace.json`, as JSO
 needed target's result, the libraries' test executables and the executables `added` that
 `errata.toml` adds, the directory of Errata's sources, the driver's warnings, the command that the
 runner's arguments follow, and the package's directory, `cwd`, where tests run and which report
-paths in `errata.toml` are relative to. `partialSelection` says that the command line's filters
-ruled out some of the package's test executables.
+paths in `errata.toml` are relative to. `known` names every test executable that the package can
+have, and `ruledOut` those among them that the command line's filters ruled out before building.
 -/
 private def workspaceJson (needs : Array (String × String))
     (executables : Array (String × System.FilePath)) (added : Array AddedExecutable)
     (cwd : System.FilePath) (errataDir : String) (warnings : Array String) (invocation : String)
-    (partialSelection : Bool) : Lean.Json :=
+    (known ruledOut : Array String) : Lean.Json :=
   let added := added.map fun e =>
     Lean.Json.mkObj [("name", Lean.Json.str e.name),
       ("command", Lean.Json.arr (e.command.map Lean.Json.str)),
@@ -373,8 +372,10 @@ private def workspaceJson (needs : Array (String × String))
     ("errataDir", Lean.Json.str errataDir),
     ("warnings", Lean.toJson warnings),
     ("invocation", Lean.Json.str invocation),
-    ("packageDir", Lean.Json.str cwd.toString)
-  ] ++ (if partialSelection then [("partial-selection", Lean.Json.bool true)] else [])
+    ("packageDir", Lean.Json.str cwd.toString),
+    ("knownExecutables", Lean.toJson known),
+    ("ruledOut", Lean.toJson ruledOut)
+  ] ++ (if ruledOut.isEmpty then [] else [("partial-selection", Lean.Json.bool true)])
 
 /--
 How the Errata driver (the `Errata.run` script in this file) should be invoked: the command that
@@ -443,6 +444,15 @@ script run (args) do
       return 1
   -- Every argument belongs to the runner, which reads the command line.
   let (_, withArgs) ← driverInvocation ws self
+  -- The usage text is printed before anything is read or built, so it needs neither a valid
+  -- `errata.toml` nor a built runner. It is the runner's usage text, kept beside Errata's sources
+  -- with a placeholder for the command, which a test of Errata keeps equal to the runner's.
+  if (args.takeWhile (· != "--")).any (fun a => a == "--help" || a == "-h") then
+    let dir := match self.findLeanLib? `Errata with
+      | some lib => lib.srcDir
+      | none => self.dir
+    IO.print ((← IO.FS.readFile (dir / "usage.txt")).replace "INVOCATION" withArgs)
+    return 0
   -- The configuration file is elaborated before the tests are built, so that a mistake in it ends
   -- Discovery at once. Lake writes `config.json` again only when `errata.toml` or `errata-config`
   -- changes. A failed build is silent, so the problems that `errata-config` reports are relayed.
@@ -539,7 +549,7 @@ script run (args) do
     (← IO.getStdout).flush
   let addedExes := added.filter (plan.executables.contains ·.name)
   let libs := ws.root.leanLibs.filter (plan.executables.contains <| libName ·)
-  let partialSelection := plan.executables.size < candidates.size
+  let ruledOut := candidates.filter (!plan.executables.contains ·)
   -- Build every module in the selected libraries; their compiled `.olean` headers are authoritative
   -- on which modules carry tests.
   let built ← try
@@ -565,8 +575,8 @@ script run (args) do
     if (← moduleInfo oleanFile).hasTests then testMods := testMods.push moduleName
   -- A module that sits under a library's roots without being reachable from them is never built, so
   -- any tests it defines are silently left out. A library is checked when its built modules record
-  -- tests. Such a module is a configuration slip, which the runner reports as a warning alongside the
-  -- results, and the run goes ahead.
+  -- tests. Such a module is a configuration slip, which the runner reports as a warning alongside
+  -- the results, and the run goes ahead.
   let mut unreachable : Array (Lake.LeanLib × Array Lean.Name) := #[]
   for (lib, mods) in libMods do
     if mods.any (testMods.contains ·) then
@@ -621,7 +631,7 @@ script run (args) do
         let needs := needed.zipWith (fun (tgt, _) value => (tgt, value)) needValues
         -- Tests run from the root package's directory, where `lake test` runs.
         let content := (workspaceJson needs executables addedExes rootDir errataDir.toString
-          driverWarnings withArgs partialSelection).pretty ++ "\n"
+          driverWarnings withArgs candidates ruledOut).pretty ++ "\n"
         addPureTrace (← IO.FS.readFile configFile) "config.json"
         addPureTrace content "workspace.json"
         buildFileUnlessUpToDate' (text := true) workspaceFile do

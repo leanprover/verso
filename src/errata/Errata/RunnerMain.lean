@@ -411,15 +411,16 @@ private def byExecutable (selected : Array (InventoryTest × Resolved)) :
 /--
 Prints the selected tests in nextest's human format: each test executable's name and a colon, then
 its selected tests, indented by four spaces. With {name}`verbose`, the settings that the test
-executables declare come first, with their descriptions and defaults; each test is followed by its
-file and line, its tags, its description, and the values it receives; and the mandatory settings
-that nothing gives a value come last, with the tests that need them. Seeds derived from a run seed
+executables declare come first when there are any, with their descriptions and defaults; each test
+is followed by its file and line, its tags, its description, and the values it receives; and the
+mandatory settings that nothing gives a value come last, with the tests that need them. Seeds derived from a run seed
 that the command line leaves to chance are shown as derived.
 -/
 def printHumanList (ctx : RunContext) (color verbose : Bool) (listings : Array Listing)
     (selected : Array (InventoryTest × Resolved)) : IO Unit := do
   let line := ctx.dispatcher.sinks.line
-  if verbose then
+  -- The settings' heading is printed only when a test executable declares a setting.
+  if verbose && listings.any (!·.settings.isEmpty) then
     line "Settings:"
     let mut shown : Std.HashSet String := {}
     for l in listings do
@@ -478,8 +479,9 @@ def printOnelineList (ctx : RunContext) (selected : Array (InventoryTest × Reso
     ctx.dispatcher.sinks.line ("  ".intercalate (cols ++ [r[3]!]) |>.trimAsciiEnd.copy)
 
 /--
-The selected tests as JSON: the profile, the run's seed, the number of tests selected and left out,
-the settings that the test executables declare, and each test executable with its selected tests.
+The selected tests as JSON: the profile, the run's seed, the number of listed tests selected and
+left out, the names of the test executables that the filters ruled out before building, the
+settings that the test executables declare, and each test executable with its selected tests.
 Each test has its name, path, file, line, tags, and description, the values it receives, the
 mandatory settings without a value, whether its seed is derived from the run's, and its timeout,
 grace period, and slow mark in milliseconds.
@@ -510,6 +512,7 @@ def inventoryJson (ctx : RunContext) (profile : String) (listings : Array Listin
       ("tests", Json.arr (tests.map fun (t, r) => testJson t r))]
   return Json.mkObj [("profile", Json.str profile), ("seed", ToJson.toJson ctx.runSeed),
     ("selected", ToJson.toJson selected.size), ("skipped", ToJson.toJson skipped),
+    ("executables-skipped", ToJson.toJson ctx.config.ruledOut),
     ("settings", Json.arr settings), ("executables", Json.arr executables)]
 
 /-- The message of a configuration that has no profile with the given name. -/
@@ -521,11 +524,14 @@ def unknownProfile (config : Config) (name : String) : String :=
 The filters of a run, parsed: the selection, from the command line's filters and the profile's
 default filter, or the configuration's when the profile has none, and each override's filter. The
 result is the messages of the filters that do not parse, and of a default filter that contains
-{lit}`default()`.
+{lit}`default()`, with the exit code they end the run with: {name}`ExitCode.setupError` when a
+filter of the configuration is among them, as nextest treats its configuration's filters, and
+{name}`ExitCode.invalidFilter` otherwise.
 -/
 def parseSelection (config : Config) (opts : Options) (profile : Profile) :
-    Except (Array String) (Selection × Array (SourcedFilter × Override)) := do
+    Except (Array String × UInt32) (Selection × Array (SourcedFilter × Override)) := do
   let mut errors := #[]
+  let mut configErrors := false
   let mut defaultFilter? : Option SourcedFilter := none
   if let some f := profile.defaultFilter? <|> config.defaultFilter? then
     match SourcedFilter.parse f.text f.source with
@@ -534,8 +540,11 @@ def parseSelection (config : Config) (opts : Options) (profile : Profile) :
       | some span =>
         errors := errors.push s!"{sf.at span.start}: default() stands for the default filter, so \
           the default filter cannot contain it"
+        configErrors := true
       | none => defaultFilter? := some sf
-    | .error e => errors := errors.push e
+    | .error e =>
+      errors := errors.push e
+      configErrors := true
   let mut filters := #[]
   for f in opts.filters do
     match SourcedFilter.parse f (.argument "--filter") with
@@ -545,8 +554,11 @@ def parseSelection (config : Config) (opts : Options) (profile : Profile) :
   for o in profile.overrides do
     match SourcedFilter.parse o.filter.text o.filter.source with
     | .ok sf => overrides := overrides.push (sf, o)
-    | .error e => errors := errors.push e
-  unless errors.isEmpty do throw errors
+    | .error e =>
+      errors := errors.push e
+      configErrors := true
+  unless errors.isEmpty do
+    throw (errors, if configErrors then ExitCode.setupError else ExitCode.invalidFilter)
   let selection : Selection := {
     filters, names := opts.nameFilters, skips := opts.skips, exact := opts.exact
     default? := defaultFilter?, useDefault := !opts.ignoreDefaultFilter }
@@ -611,7 +623,8 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
     | some r => pure r
     | none => Registry.new
   let d := dispatcher
-  let finish (code : UInt32) (skipped? : Option Nat := none) : IO (RunReport × UInt32) := do
+  let finish (code : UInt32) (skipped? : Option (Nat × Nat) := none) :
+      IO (RunReport × UInt32) := do
     -- A listing runs nothing, so it has no counts to sum up.
     d.dispatch (.ended (← Protocol.nowMs) (!listing) skipped?)
     let s ← d.get
@@ -628,9 +641,9 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
       return ← finish ExitCode.setupError
   let (selection, overrides) ← match parseSelection config opts profile with
     | .ok fs => pure fs
-    | .error errors =>
+    | .error (errors, code) =>
       for e in errors do d.dispatch (.issue { isError := true, message := e })
-      return ← finish ExitCode.invalidFilter
+      return ← finish code
   IO.FS.withTempDir fun dir => do
     let ctx : RunContext := {
       config, opts, runSeed, runId, dir, dispatcher, registry
@@ -658,7 +671,9 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
         {if names.isEmpty then "none" else ", ".intercalate names.toList}" })
     if undeclared.any (·.commandLine) then return ← finish ExitCode.setupError
     let records := inventory.map fun t => t.record (exeName t)
-    let exes := config.executables.map (·.name)
+    -- An `exe(…)` is judged against every executable of the package, those that the filters ruled
+    -- out before building included.
+    let exes := config.executableNames
     -- The configuration's filters serve every executable of the package, so they are checked
     -- against the inventory only when the run has all of them. The command line's always are.
     let checked := selection.filters ++
@@ -694,7 +709,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
         ExitCode.noTestsRun
       else if s.results.all (·.outcome.isPass) && !s.issues.any (·.isError) then ExitCode.ok
       else ExitCode.testRunFailed
-    finish code skipped
+    finish code (skipped, config.ruledOut.size)
 
 /--
 The paths of the JUnit, JSON, and Markdown reports: the command line's, or else the profile's, which
@@ -844,9 +859,9 @@ def plan (request out : String) (args : List String) : IO UInt32 := do
     | IO.eprintln s!"error: {unknownProfile config opts.profile}"
       return ExitCode.setupError
   match parseSelection config opts profile with
-  | .error errors =>
+  | .error (errors, code) =>
     for e in errors do IO.eprintln s!"error: {e}"
-    return ExitCode.invalidFilter
+    return code
   | .ok (selection, _) =>
     write <| Json.mkObj [("command", Json.str opts.command.name),
       ("profile", Json.str profile.name),

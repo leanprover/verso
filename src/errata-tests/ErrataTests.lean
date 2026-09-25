@@ -1061,7 +1061,7 @@ private def withTomlVariant (name : String) (args : Array String) : IO IO.Proces
 The driver relays the problems that `errata-config` finds in `errata.toml` and reports targets that
 Lake cannot build, each at its position in the file, before it builds any test executable, with the
 exit code of a setup error. The runner reports errors in filters at the positions of the filters'
-characters, also before any test executable is built, with the exit code of an invalid filter.
+characters, also before any test executable is built, with the same exit code.
 `ErrataConfigTests` checks the rest of the file's validation in process.
 -/
 @[test]
@@ -1069,7 +1069,7 @@ def driverValidatesToml : Test := do
   let cases : List (String × String × UInt32) := [
     ("bad-duration", "errata.toml:2:10: 'timeout' must be a duration", 96),
     ("unknown-target", "errata.toml:2:32: the target 'nonexistent' cannot be built:", 96),
-    ("filter-basic", "errata.toml:2:53: expected ')' to end the matcher", 94)]
+    ("filter-basic", "errata.toml:2:53: expected ')' to end the matcher", 96)]
   for (variant, message, code) in cases do
     result variant do
       let out ← withTomlVariant variant #["test"]
@@ -1183,11 +1183,45 @@ def driverSelectsProfilesAndExecutables : Test :=
       assertContains "TomlLib.stampFile = \"" out.stdout
       let plain ← lake #["test", "--", "list", "-v", "-E", "exe(TomlLib)"]
       assertContains "TomlLib.stampFile: no value" plain.stdout
+    result "a filter that excludes an executable, under --wfail" do
+      let out ← lake #["test", "--", "-P", "stamped", "--wfail", "-E", "!exe(extra)"]
+      assertExitCode 0 out
+      assertBEq #["TomlLib"] (exeNames (← config))
+      assertContains "1 passed, 0 failed, 0 errors, 0 inconclusive, 0 tests skipped, \
+        1 executable skipped" out.stdout
     result "a filter that rules out every executable" do
       let out ← lake #["test", "--", "-E", "exe(Nothing)"]
       assertExitCode 4 out
       assertBEq #[] (exeNames (← config))
       assertContains "no tests to run" out.stderr
+
+/--
+The copy of the runner's usage text that the driver prints for `--help` is the runner's, with a
+placeholder for the command that the arguments follow.
+-/
+@[test]
+def usageCopyIsCurrent : Test := do
+  assertBEq (Runner.usage "INVOCATION") (← IO.FS.readFile "src/errata/usage.txt")
+
+/--
+The driver answers `--help` and `-h`, for either command and in any position before a `--`, before
+it reads `errata.toml` or builds anything, so a broken configuration file leaves the usage text
+available.
+-/
+@[test]
+def driverHelpWithBrokenConfiguration : Test :=
+  IO.FS.withTempDir fun dir => do
+    copyFixture tomlFixture dir
+    IO.FS.writeFile (dir / "errata.toml") "[profile.default\ntimeout = \n"
+    for args in [#["--help"], #["list", "-v", "-h"], #["run", "-E", "exe(x)", "--help"]] do
+      result (" ".intercalate args.toList) do
+        let out ← IO.Process.output { cmd := "lake", args := #["test", "--"] ++ args, cwd := dir }
+        assertExitCode 0 out
+        assertContains "\n  lake test -- [run|list] [OPTIONS]" out.stdout
+        assertNotContains "errata.toml:" out.stderr
+    result "a run with the broken file" do
+      let out ← IO.Process.output { cmd := "lake", args := #["test"], cwd := dir }
+      assertExitCode 96 out
 
 /--
 The runner reads the whole command line before anything is built: an unknown option, an option of
@@ -1575,8 +1609,12 @@ def runnerArgRejections : Test := do
   let cases : List (List String × String) := [
     (["--golden", "on"], "unknown option '--golden'"),
     (["-x"], "unknown option '-x'"),
-    (["--list"], "unknown option '--list'"),
-    (["--test-options"], "unknown option '--test-options'"),
+    (["--list"], "unknown option '--list': the `list` command lists the tests"),
+    (["--test-options"], "unknown option '--test-options': the arguments after `lake test --` go \
+      to the runner as they are"),
+    (["--filter", "--exact"], "--filter expects EXPR, and --exact is an option"),
+    (["-E", "-v"], "-E expects EXPR, and -v is an option"),
+    (["--set", "-Pci"], "--set expects NAME=VALUE, and -Pci is an option"),
     (["--ignore-panics"], "unknown option '--ignore-panics'"),
     (["--exit-on-panic"], "unknown option '--exit-on-panic'"),
     (["--wfail=yes"], "--wfail takes no value"),
@@ -1774,7 +1812,8 @@ private def hasEscapes (s : String) : Bool := s.contains '\x1b'
 Under `--color always` the human-readable report colors each status word and the summary as nextest
 does: bold green for a pass, bold red for everything that did not pass, bold yellow for the `[slow]`
 mark after a slow test's name, bold magenta for the executable, bold blue for the test's name with
-its namespaces in cyan, and bold counts. Without color, and in the report files, no escape sequence appears.
+its namespaces in cyan, and bold counts. Without color, and in the report files, no escape
+sequence appears.
 -/
 @[test]
 def reportColors : Test := do
@@ -1791,7 +1830,7 @@ def reportColors : Test := do
       let (h', ls) := h.test #[res]
       h := h'
       out := out ++ ls
-    return out.push (h.summary 1500 (some 2))
+    return out.push (h.summary 1500 (some (2, 3)))
   -- The status lines, without the lines that explain an outcome below them.
   let colored := (lines true).filter (!·.startsWith "             ")
   let esc (code text : String) := s!"\x1b[{code}m{text}\x1b[0m"
@@ -1807,7 +1846,8 @@ def reportColors : Test := do
   assertTrue (summary.startsWith (esc "31;1" "     Summary")) summary.quote
   assertContains s!"{esc "1" "2"} {esc "32;1" "passed"}" summary
   assertContains s!"{esc "1" "1"} {esc "31;1" "failed"}" summary
-  assertContains s!"{esc "1" "2"} {esc "33;1" "skipped"}" summary
+  assertContains s!"{esc "1" "2"} {esc "33;1" "tests skipped"}" summary
+  assertContains s!"{esc "1" "3"} {esc "33;1" "executables skipped"}" summary
   assertTrue (!(lines false).any hasEscapes) "no escape sequence without color"
   let report : RunReport := { results, seed := 0 }
   assertTrue (!hasEscapes (junitReport report) && !hasEscapes (jsonReport report) &&

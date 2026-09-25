@@ -8,7 +8,8 @@ Author: David Thrane Christiansen
 Filters over the inventory: the predicates `name(…)`, `file(…)`, `exe(…)`, and `tag(…)`, the
 constants `all()` and `none()`, `default()` for the profile's default filter, and the operators
 `|`, `&`, `\`, and `!`. Filters are parsed in three layers: the expression, the text of each
-predicate's matcher with its escapes, and, for a glob matcher, the glob. Every node of a parsed filter has its span in the filter's text.
+predicate's matcher with its escapes, and, for a glob matcher, the glob. Every node of a parsed
+filter has its span in the filter's text.
 -/
 module
 

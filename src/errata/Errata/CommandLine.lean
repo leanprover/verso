@@ -83,7 +83,10 @@ def usage : UInt32 := 2
 /-- The run selected no test, under {lit}`--no-tests fail` (nextest's {lit}`NO_TESTS_RUN`). -/
 def noTestsRun : UInt32 := 4
 
-/-- A filter has a syntax error (nextest's {lit}`INVALID_FILTERSET`). -/
+/--
+A filter on the command line has a syntax error. The value is nextest's {lit}`INVALID_FILTERSET`,
+named after nextest's term for a filter.
+-/
 def invalidFilter : UInt32 := 94
 
 /--
@@ -151,7 +154,7 @@ structure Options where
   exact : Bool := false
   /-- The patterns of {lit}`--skip`: tests whose names contain one are left out. -/
   skips : Array String := #[]
-  /-- Whether the tests are drawn from the whole inventory rather than the default filter. -/
+  /-- Whether the tests are drawn from the whole inventory, the default filter set aside. -/
   ignoreDefaultFilter : Bool := false
   /-- What a run that selects no test ends with. -/
   noTests : NoTests := .fail
@@ -246,7 +249,7 @@ def optionSpecs : Array OptionSpec := #[
   { long := "exact", group := "Selection"
     help := "Match name filters and --skip patterns against whole names." },
   { long := "ignore-default-filter", group := "Selection"
-    help := "Draw the tests from the whole inventory, setting the profile's default filter aside." },
+    help := "Draw the tests from the whole inventory, the profile's default filter set aside." },
   { long := "profile", short? := "-P", value? := "NAME", group := "Configuration"
     help := "The profile of errata.toml to use (ERRATA_PROFILE, or default)." },
   { long := "set", value? := "NAME=VALUE", repeatable := true, group := "Configuration"
@@ -289,6 +292,15 @@ def optionSpecs : Array OptionSpec := #[
     help := "Append the run's events to PATH as JSON lines." },
   { long := "help", short? := "-h", group := "Reporting", help := "Print this text." }
 ]
+
+/--
+Earlier options of the command line, by long name, each with what now does its work, for the
+message that rejects it.
+-/
+def replacedOptions : List (String × String) := [
+  ("test-options", "the arguments after `lake test --` go to the runner as they are: `run` or \
+    `list`, then options and filters, such as `-E 'exe(Lib)'` for a library"),
+  ("list", "the `list` command lists the tests, and `list -v` shows what each receives")]
 
 /-- One option as the command line gives it: its spec, how it was written, and its value. -/
 structure GivenOption where
@@ -336,8 +348,16 @@ where
     | none, some _, _ => .error s!"{written} takes no value"
     | none, none, _ => .ok ({ spec, written }, false)
     | some _, some v, _ => .ok ({ spec, written, value? := some v }, false)
-    | some _, none, some v => .ok ({ spec, written, value? := some v }, true)
+    | some what, none, some v =>
+      -- A next argument that names an option is that option, and the value is missing.
+      if namesOption v then .error s!"{written} expects {what}, and {v} is an option"
+      else .ok ({ spec, written, value? := some v }, true)
     | some what, none, none => .error s!"{written} expects {what}"
+  /-- Whether an argument names an option of the table. -/
+  namesOption (arg : String) : Bool :=
+    if arg.startsWith "--" then
+      (findLongOption? ((arg.drop 2).copy.splitOn "=").head!).isSome
+    else arg.startsWith "-" && (findShortOption? arg).isSome
   /-- The option that an argument that begins with {lit}`-` names, with its value. -/
   optionOf (arg : String) (next? : Option String) : Except String (GivenOption × Bool) :=
     if arg.startsWith "--" then
@@ -346,7 +366,10 @@ where
         | n :: v :: vs => (n, some ("=".intercalate (v :: vs)))
         | _ => (body, none)
       match findLongOption? name with
-      | none => .error s!"unknown option '--{name}'"
+      | none =>
+        match replacedOptions.lookup name with
+        | some how => .error s!"unknown option '--{name}': {how}"
+        | none => .error s!"unknown option '--{name}'"
       | some spec => withValue spec s!"--{name}" attached? next?
     else
       match findShortOption? arg with
@@ -488,6 +511,7 @@ def usage (invocation : String) : String := Id.run do
     Commands:\n  \
     run   Run the selected tests; the command when the first argument is neither word.\n  \
     list  List the selected tests.\n\n\
+    The command is the first argument; after an option, run and list are name filters.\n\n\
     A test is selected when its name contains a name filter (equals one, under --exact), a filter\n\
     expression selects it, no --skip pattern is in its name, and the profile's default filter\n\
     selects it. Without name filters, or without filter expressions, that condition holds for\n\
