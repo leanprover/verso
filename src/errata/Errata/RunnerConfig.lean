@@ -42,8 +42,8 @@ structure ExecutableConfig where
 deriving Repr, Inhabited, DecidableEq
 
 /--
-A filter's text, and where it came from: a position in the configuration file, which the driver
-records, or the configuration itself when the file named none.
+A filter's text, and where it came from: a position in the configuration file, which
+{lit}`errata-config` records, or the configuration itself when the file named none.
 -/
 structure FilterText where
   /-- The filter's text. -/
