@@ -2236,8 +2236,8 @@ def runsUnderTheDefaultFileLimit : Test := do
     assertContains "300 passed, 0 failed" r.stdout
 
 /--
-With standard output a pipe, the runner keeps no progress display: a run whose environment names a
-terminal type prints its report's lines alone, with no terminal sequences and no running list.
+A run whose standard output is a pipe prints its report's lines alone, even when its environment
+names a terminal type: its output has neither terminal sequences nor a running list.
 -/
 @[test]
 def pipedRunHasNoProgressDisplay : Test := do
@@ -2260,6 +2260,49 @@ def pipedRunHasNoProgressDisplay : Test := do
     assertNotContains "\x1b[" r.stdout
     assertNotContains "Running:" r.stdout
     assertNotContains "\x1b[" r.stderr
+
+/--
+Runs the tests of {name}`basic` with a progress display over a buffer, 100 columns wide, and gives
+the run, the display's last frame, and what the display wrote. The lines of the human-readable
+report reach both the run's lines and the display.
+-/
+def runWithDisplay (tests : List String) : IO (Run × Progress.Frame × String) := do
+  let buf ← IO.mkRef ({} : IO.FS.Stream.Buffer)
+  let p ← Progress.Display.new (IO.FS.Stream.ofBuffer buf) false (size? := some { cols := 101 })
+  let events ← IO.mkRef #[]
+  let lines ← IO.mkRef #[]
+  let config : Config := { executables := #[basic tests], errataDir? := some (← errataDir).toString }
+  let sinks : Sinks := {
+    event := fun j => events.modify (·.push j)
+    line := fun l => do
+      lines.modify (·.push l)
+      p.print l }
+  let (report, code) ← execute config { jobs? := some 1 } sinks (progress? := some p)
+  let run : Run := { report, code, events := ← events.get, lines := ← lines.get }
+  return (run, ← p.frame, String.fromUTF8! (← buf.get).data)
+
+/--
+The progress display of a run follows the dispatched events: the total is the number of tests that
+the run selects, every one of them completes, tests reported without a process count as failed,
+a fixture phase that failed is counted apart, and the display is erased before the summary.
+-/
+@[test]
+def progressDisplayFollowsTheRun : Test := do
+  result "a missing setting and a failed setup" do
+    let (r, frame, written) ← runWithDisplay ["pass", "needs-setting", "after-setup-failure"]
+    assertBEq (3, 3, 1, 2, 1)
+      (frame.total, frame.completed, frame.passed, frame.failed, frame.fixturesFailed)
+    assertContains "3/3 tests completed (1 passed, 2 failed, 1 fixture failed) [" written
+    assertContains "\x1b[J     Summary" written
+    let afterSummary := (written.splitOn "     Summary").getLast!
+    assertNotContains "\x1b[" afterSummary
+    assertTrue (r.lines.any (·.startsWith "     Summary")) "the summary did not reach the sink"
+    for l in r.lines do assertContains l written
+  result "a failed teardown" do
+    let (_, frame, written) ← runWithDisplay ["before-teardown-failure"]
+    assertBEq (1, 1, 1, 0, 1)
+      (frame.total, frame.completed, frame.passed, frame.failed, frame.fixturesFailed)
+    assertContains "1/1 tests completed (1 passed, 0 failed, 1 fixture failed) [" written
 
 /-- The number of files that the process {name}`pid` holds open, or {lean}`none` without `lsof`. -/
 def openFiles (pid : UInt32) : IO (Option Nat) := do
