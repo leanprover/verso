@@ -5,8 +5,8 @@ Author: David Thrane Christiansen
 -/
 
 /-
-Fixtures: resources that tests share, such as a built test project or a running server. A fixture is
-set up once per run, prepared before each test that uses it, and torn down once at the end. Tests
+Fixtures: resources that tests share, such as a built test project or a running server. Each fixture
+is set up once per run, prepared before each test that uses it, and torn down once at the end. Tests
 take fixtures as parameters, and `@[fixture]` records the declarations that declare them.
 -/
 module
@@ -63,11 +63,9 @@ instance : CoeSort Fixture Type := ⟨Fixture.type⟩
 
 /-!
 Fixtures with parameters stand for the types of their values too, so a test's parameter
-{lit}`(x : F)` has the value's type when {lit}`F` takes settings and fixtures. The type is that of
-the fixture applied to default arguments, which is the same for every argument. Instance resolution
-indexes a type by unfolding reducible definitions only, and it reaches the value's type through the
-fixture, which is reducible, without unfolding the default arguments. Fixtures take up to eight
-parameters.
+{lit}`(x : F)` has the value's type when {lit}`F` takes settings and fixtures. That type is the same
+for every argument. Fixtures take up to eight parameters, and each parameter's type has an
+{lit}`Inhabited` instance.
 -/
 
 instance [Inhabited α₁] : CoeSort (α₁ → Fixture) Type :=
@@ -101,16 +99,17 @@ instance [Inhabited α₁] [Inhabited α₂] [Inhabited α₃] [Inhabited α₄]
   ⟨fun f => Fixture.type (f default default default default default default default default)⟩
 
 /--
-Marks a test's use of a fixture as shared: a test that takes {lit}`(x : shared F)` may run at the
-same time as other shared users of {lit}`F`. The fixture {lit}`F` stands for the type of its value,
-and to Lean, {lean}`shared` is the identity on types, so {lit}`shared F` is the same type.
+Marks a test's use of a fixture as shared: tests that take {lit}`(x : shared F)` may run at the
+same time as other shared users of {lit}`F`. {lean}`shared` is the identity on types, so
+{lit}`x` has the type of the fixture's value, and {lit}`@[test]` reads a parameter of type
+{lit}`shared F` as a shared claim on {lit}`F`.
 -/
 @[reducible, expose] def shared (α : Type) : Type := α
 
 /--
 The value of the fixture {name}`F`, named {name}`name`, among {name}`fixtures`: the last value given
-for the name, parsed by the fixture's parser. With no value, or a value that the parser rejects, the
-test or fixture phase ends with an error that names the fixture.
+for the name, parsed by the fixture's parser. If the name has no value, or the parser rejects its
+value, the test or fixture phase ends with an error that names the fixture.
 -/
 def Fixture.withValue {m : Type → Type} {α : Type} [Monad m] [MonadExceptOf IO.Error m]
     (F : Fixture) (name : String) (fixtures : Array (String × String)) (k : F.type → m α) :
@@ -124,9 +123,9 @@ def Fixture.withValue {m : Type → Type} {α : Type} [Monad m] [MonadExceptOf I
 
 /--
 Runs one phase of the fixture {name}`F`, named {name}`name`. The setup's result is its value as a
-string. The prepare receives {name}`own?`, the value from the setup, which it needs; the teardown
-receives it when it is given. A value that the fixture's parser rejects ends the phase with an error
-that names the fixture.
+string. The prepare requires {name}`own?`, the setup's value, and the teardown receives it when it
+is present. If the fixture's parser rejects the value, the phase ends with an error that names the
+fixture.
 -/
 def Fixture.runPhase (F : Fixture) (name : String) (phase : FixturePhase) (own? : Option String) :
     FixtureM (Option String) := do
@@ -158,7 +157,7 @@ inductive Parameter where
   | fixture (use : FixtureUse) (fixture : Expr)
 
 /--
-The fixture that a parameter's type names, and whether the use is exclusive, with the fixture as the
+The use of the fixture that a parameter's type names, exclusive or shared, and the fixture as the
 type names it. The type is read as elaborated: {lit}`(x : F)` has the type {lit}`Fixture.type F`,
 {lit}`(x : shared F)` the type {lit}`shared (Fixture.type F)`, and a fixture with parameters appears
 applied to default arguments.
@@ -312,8 +311,8 @@ meta def fixtureAction (decl : Name) : MetaM (Expr × Array SettingUse × Array 
             no meaning on a fixture's parameters: tests claim fixtures, exclusively or shared. \
             Write `{use.decl}`."
         fixtureUses := fixtureUses.push use.decl
-    -- A test's parameter stands for the fixture's value's type through the fixture applied to
-    -- default arguments, which needs an `Inhabited` instance for each parameter's type.
+    -- A test's parameter has the type of the value of the fixture applied to default arguments, so
+    -- each parameter's type needs an `Inhabited` instance.
     if params.size > maxParameters then
       throwError m!"`{userName}` has {params.size} parameters, and a fixture takes at most \
         {maxParameters}."
@@ -340,8 +339,8 @@ meta def fixtureAction (decl : Name) : MetaM (Expr × Array SettingUse × Array 
 
 /--
 Records a declaration as a fixture that asks for {name}`threads?` hardware threads, and makes it
-reducible, so that instance resolution sees a test's parameter {lit}`(x : F)` at the type of the
-fixture's value. The declaration must be a runtime definition of type {lit}`Errata.Fixture` after
+reducible, so that a test's parameter {lit}`(x : F)` has the type of the fixture's value. The
+declaration must be a runtime definition of type {lit}`Errata.Fixture` after
 its parameters, exported with its value, with no universe parameters, and marked as a fixture once.
 The definition that runs its phases is compiled into an exported definition beside it.
 -/
@@ -378,9 +377,9 @@ meta def recordFixture (decl : Name) (threads? : Option Nat) : AttrM Unit := do
 /--
 The arguments of the {lit}`fixture` attribute: {lit}`@[fixture]`, or
 {lit}`@[fixture (threads := N)]` for a fixture whose phases ask for {lit}`N` hardware threads. When
-tests run concurrently, each phase runs with {lit}`LEAN_NUM_THREADS` set to its grant, one without
-a request, and the processes it starts inherit it, so a fixture whose setup runs a Lake build asks
-for the threads that the build should use.
+tests run concurrently, each phase runs with {lit}`LEAN_NUM_THREADS` set to its thread grant, which
+is one when the fixture asks for none, and the processes that the phase starts inherit it. Fixtures
+whose setups run a Lake build therefore ask for the threads that the build should use.
 -/
 syntax (name := fixture) "fixture" (" (" &"threads" " := " num ")")? : attr
 

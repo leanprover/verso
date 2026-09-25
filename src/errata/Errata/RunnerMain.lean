@@ -72,9 +72,9 @@ def Dispatcher.get (d : Dispatcher) : IO State :=
 structure Registry.Contents where
   /-- Whether the run has been cancelled. -/
   cancelled : Bool := false
-  /-- The groups that are running. -/
+  /-- The process group of each running process. -/
   groups : Array Group := #[]
-  /-- Whether the run has ended, after a cancellation its teardowns included. -/
+  /-- Whether the run has ended, including the teardowns that follow a cancellation. -/
   done : Bool := false
   /-- How long the teardowns that a cancelled run started may take, in milliseconds. -/
   allowanceMs : Nat := 0
@@ -93,9 +93,10 @@ def Registry.new : BaseIO Registry := do
   return { state := ← Std.Mutex.new {} }
 
 /--
-Starts a process with {name}`start` and records it. When the run has been cancelled, the result is
-{lean}`none` and {name}`start` is skipped, unless {name}`afterCancel` allows the start, as it does
-for a teardown, which also extends the time the cancelled run may take by {name}`allowanceMs`.
+Starts a process with {name}`start` and records it. If the run has been cancelled and
+{name}`afterCancel` is false, the result is {lean}`none` and {name}`start` is skipped. Teardowns set
+{name}`afterCancel`, and each start after a cancellation extends the time that the cancelled run may
+take by {name}`allowanceMs`.
 -/
 def Registry.start (r : Registry) (start : IO Group) (afterCancel : Bool := false)
     (allowanceMs : Nat := 0) : IO (Option Group) :=
@@ -384,8 +385,10 @@ structure Invocation where
   args : String → Array String
   /-- The thread grant. -/
   threads : Nat := 1
-  /-- Whether {lit}`LEAN_NUM_THREADS` bounds its runtime to the grant, as it does when tests run
-  concurrently. -/
+  /--
+  Whether {lit}`LEAN_NUM_THREADS` bounds its runtime to the grant, as it does when tests run
+  concurrently.
+  -/
   boundRuntime : Bool := false
   /-- How long it may run, in milliseconds. -/
   timeoutMs : Nat
@@ -454,7 +457,7 @@ def RunContext.watch (ctx : RunContext) (inv : Invocation) (g : Group) (file : S
       break
     unless read do IO.sleep pollMs
   let code ← g.wait
-  -- What an invocation that timed out wrote is read for at most the grace period more.
+  -- If the invocation timed out, what it wrote is read for at most the grace period more.
   let deadline? ← if timedOut.isSome then
       pure (some ((← IO.monoMsNow) + inv.gracePeriodMs))
     else pure none
@@ -475,11 +478,11 @@ handed on, the result file is read up to its end, so the records that it wrote b
 precede it. It is terminated at its timeout and killed after the grace period; the watch checks the
 clock after every bounded read of the result file. Once the test executable has exited, the
 processes that it started have the pipe grace to release its output pipes, and then its process
-group is swept. When the slot pool holds more than one slot, the environment holds
-{lit}`LEAN_NUM_THREADS` with the thread grant, which the processes that the test executable starts
-inherit; with one slot the sole process and what it starts use the machine. {name}`n` numbers the
-result file. A teardown,
-as {name}`teardown` says, starts after the run has been cancelled too.
+group is swept. If the invocation bounds its runtime, as it does when the slot pool has more than
+one slot, the environment sets {lit}`LEAN_NUM_THREADS` to the thread grant, and the processes that
+the test executable starts inherit it; with one slot, the sole process and what it starts use the
+machine. {name}`n` numbers the result file. Teardowns, which {name}`teardown` marks, start after a
+cancellation too.
 -/
 def RunContext.launch (ctx : RunContext) (inv : Invocation) (n : Nat) (teardown : Bool := false) :
     IO (Option (Task JobEnd)) := do
@@ -544,7 +547,7 @@ def RunContext.fixturePlan (ctx : RunContext) (pool : Nat) (listings : Array Lis
     let listing := listings[e]
     let mut needed : Std.HashSet String := selected.foldl (init := {}) fun s (t, _) =>
       if t.exeIdx == e then t.fixtures.foldl (init := s) (·.insert ·.name) else s
-    -- A fixture's own fixtures are listed before it, so one pass from the last reaches all.
+    -- Each fixture's own fixtures are listed before it, so one pass from the last reaches all.
     for f in listing.fixtures.reverse do
       if needed.contains f.name then
         needed := f.fixtures.foldl (init := needed) (·.insert ·)
@@ -580,8 +583,8 @@ def Plan.settingConflicts (plan : Plan) : Array String := Id.run do
   return out
 
 /--
-Whether the run bounds each process's runtime threads with {lit}`LEAN_NUM_THREADS`: only when its
-slot pool holds more than one slot, so that tests run concurrently.
+Whether the run bounds each process's runtime threads with {lit}`LEAN_NUM_THREADS`, which it does
+when its slot pool has more than one slot, so that tests run concurrently.
 -/
 def Plan.boundsRuntime (plan : Plan) : Bool := plan.pool > 1
 

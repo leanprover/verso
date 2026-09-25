@@ -2451,7 +2451,7 @@ error: The field `fromString` of `dependentParser` depends on its parameters. A 
   fromString s := s.toNat?.map (· + n)
   setup := return 0
 
-/-- A setting whose values have no `Inhabited` instance. -/
+/-- A type without an `Inhabited` instance, for the values of a setting. -/
 structure Uninhabited where
   /-- The value, which the structure wraps without a default. -/
   value : Empty → Nat

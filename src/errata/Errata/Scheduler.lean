@@ -6,7 +6,7 @@ Author: David Thrane Christiansen
 
 /-
 The runner's scheduler: a pure function from the scheduler's state and an event, such as a process
-that ended, to the new state and the commands that the runner carries out, such as starting a test.
+that ended, to the new state and the commands that the runner performs, such as starting a test.
 It decides which test runs next, when each fixture's phases run, how many hardware threads each
 process is granted, and when the run is over.
 -/
@@ -42,7 +42,7 @@ structure TestSpec where
   missing? : Option String := none
 deriving Repr, Inhabited, DecidableEq
 
-/-- A unit of work that the runner carries out in a process of its own. -/
+/-- A unit of work that the runner runs in a process of its own. -/
 inductive Job where
   /-- Runs a test. -/
   | test (test : Nat)
@@ -123,7 +123,11 @@ inductive FixtureStatus where
   | tornDown
 deriving Repr, Inhabited, DecidableEq
 
-/-- The scheduler's state. -/
+/--
+The scheduler's state. The pool is a number of slots, one per hardware thread, and each running job
+holds the slots of its grant. A test claims each fixture that it uses, exclusively or shared, from
+its first prepare until it ends.
+-/
 structure State where
   /-- The number of hardware-thread slots in the pool. -/
   pool : Nat
@@ -143,7 +147,7 @@ structure State where
   fixtureStatus : Array FixtureStatus
   /-- The value that each fixture's running setup has written so far. -/
   written : Array (Option String)
-  /-- The number of unfinished tests whose closures hold each fixture. -/
+  /-- The number of unfinished tests whose closures include each fixture. -/
   openUsers : Array Nat
   /-- The test that holds each fixture exclusively, if one does. -/
   exclusiveHolder : Array (Option Nat)
@@ -292,16 +296,15 @@ def State.startTeardowns (s : State) : State × Array Command := Id.run do
   return (s, out)
 
 /--
-Starts what may start, in queue order. A test that is reported without running waits until every
-test before it has ended, so reports keep the queue's order where the pool allows it. A test starts
-once its fixtures are set up, its claims are free, and its slots are free: an exclusive claim needs
-the fixture free of other users, and a shared claim needs it free of exclusive ones. Earlier
-waiting tests go first: a fixture that one of them wants exclusively waits for it, and a fixture
-that one of them wants at all waits for it before an exclusive claim, so the users of a fixture take
-it in queue order. Once a job waits for slots, the jobs after it wait too, so a large request is
-served. Setups start as their first users reach them, after the setups of the fixtures they take; a
-test that a failed fixture already dooms starts no setup, so a fixture whose remaining users are all
-doomed is not set up.
+Starts what may start, in queue order. Tests that are reported without running wait until every test
+before them has ended, so reports keep the queue's order where the pool allows it. Tests start once
+their fixtures are set up, their claims are free, and their slots are free: exclusive claims need
+the fixture free of other users, and shared claims need it free of exclusive ones. Earlier waiting
+tests go first: fixtures that one of them wants exclusively wait for it, and fixtures that one of
+them wants at all wait for it before an exclusive claim, so the users of a fixture take it in queue
+order. Once a job waits for slots, the jobs after it wait too, so large requests are served. Setups
+start as their first users reach them, after the setups of the fixtures they take. Tests that a
+failed fixture already dooms start no setups, so fixtures are set up only for users that can run.
 
 Once the run is cancelled, the tests that have not started are dropped without a report, and every
 fixture whose setup was invoked is torn down once its running users have ended.
@@ -412,7 +415,7 @@ def State.ended (s : State) (job : Job) (succeeded : Bool) : State × Array Comm
       ({ s with fixtureStatus := s.fixtureStatus.set! f (.ready value) }, #[])
     else (s.failFixture f .setup true, #[])
   | .prepare f t =>
-    -- A cancelled run starts nothing more, so the test ends after its prepare.
+    -- Cancelled runs start nothing more, so the test ends after its prepare.
     if s.cancelled then (s.endTest t, #[])
     else if succeeded then
       match s.testStatus[t]! with
@@ -427,7 +430,7 @@ def State.ended (s : State) (job : Job) (succeeded : Bool) : State × Array Comm
     ({ s with fixtureStatus := s.fixtureStatus.set! f .tornDown }, #[])
 
 /--
-Handles one event: the new state, and the commands that the runner carries out, in order. After
+Handles one event: the new state, and the commands that the runner performs, in order. After
 every event the scheduler starts what may start, and ends the run once nothing runs and nothing is
 left.
 -/

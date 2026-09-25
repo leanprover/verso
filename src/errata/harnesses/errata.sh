@@ -41,15 +41,15 @@
 # `errata_fail` writes a failing verdict and returns 1, which ends the body unless the body catches
 # the status; the test fails either way. Fixtures' phases run the same way, through
 # `errata_fixture_setup`, `errata_fixture_prepare`, and `errata_fixture_teardown`, each given the
-# fixture's name; a script without a prepare or a teardown function has nothing to do in that phase.
+# fixture's name. If a script defines no prepare or teardown function, that phase does nothing.
 #
 # The runner sets three variables in every test executable's environment: ERRATA_DIR, the directory
 # of Errata's sources; ERRATA_RUN_ID, the run's identifier, the same for every process of one run and
 # different in the next, for work a script does once per run; and ERRATA_LIFELINE=1, which marks
 # standard input as a pipe that closes when the runner ends. Scripts read the first two from their
-# environment, and the runner ends shell tests' process groups itself. When tests run concurrently,
-# every test and fixture phase also receives LEAN_NUM_THREADS, the same number as `errata_threads`
-# prints.
+# environment, and the runner itself ends the process group of each shell test. When tests run
+# concurrently, every test and fixture phase also receives LEAN_NUM_THREADS, the same number as
+# `errata_threads` prints.
 #
 # The library needs bash 3.2 or later and the POSIX utilities that ship with macOS and Linux. It
 # writes the records to file descriptor 9, which it opens on the file that the runner names, so the
@@ -354,7 +354,7 @@ errata_setting() {
 }
 
 # Prints the value of a fixture that the test or fixture phase received. The status is 1 when it
-# received none, as a teardown does after a setup that failed.
+# received none, as teardowns do after a failed setup.
 errata_fixture_value() {
   local i found="" given=""
   for i in ${_errata_given_fixture_names[@]+"${!_errata_given_fixture_names[@]}"}; do
@@ -509,8 +509,8 @@ _errata_error() {
   errata_record "{\"type\":\"verdict\",\"status\":\"error\",\"message\":$_errata_json}"
 }
 
-# Performs one invocation, and returns its exit status. A setup that succeeds leaves its fixture's
-# name and value in `_errata_produced_fixture` and `_errata_produced_value`.
+# Performs one invocation, and returns its exit status. If the invocation is a setup that succeeds,
+# it leaves its fixture's name and value in `_errata_produced_fixture` and `_errata_produced_value`.
 _errata_invoke() {
   _errata_produced_fixture=""
   case "${1:-}" in
@@ -597,7 +597,7 @@ _errata_invoke() {
 # settings that `errata_settings` declares, then the fixtures that `errata_fixtures` declares, then
 # the tests that `errata_tests` declares. `errata-run` runs one test with `errata_run_test NAME`,
 # and `errata-fixture` one phase of a fixture with `errata_fixture_PHASE NAME`, each in a subshell
-# with `set -e`, so that a command that fails ends it, and exits with its status, or with 1 when it
+# with `set -e`, so that failing commands end it, and exits with its status, or with 1 when it
 # called `errata_fail`.
 errata_main() {
   local status invocation carried=() failure="" teardown_failure="" teardown

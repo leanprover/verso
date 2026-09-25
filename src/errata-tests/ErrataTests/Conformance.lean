@@ -818,9 +818,9 @@ def verdictsIn (text : String) : Array Json :=
     | .error _ => none
 
 /--
-A test that did not pass carries a command that reproduces it: its executable, {lit}`errata-run`, its
-name, its settings, and its thread grant, quoted for a POSIX shell. Run in a shell, the command
-writes the test's verdict to standard error and exits with the test's status, 1.
+Tests that did not pass have commands that reproduce them: the executable, {lit}`errata-run`, the
+test's name, its settings, and its thread grant, quoted for a POSIX shell. Run in a shell, each
+command writes the test's verdict to standard error and exits with the test's status, 1.
 -/
 @[test]
 def reproductionLine : Test := do
@@ -1403,8 +1403,8 @@ def readRecords (path : System.FilePath) : TestM (Array Json) := do
 Errata's shell harness writes names and descriptions with any character as JSON strings, rejects a
 list value with a newline, a setting declared after a test or a fixture, and a fixture declared after
 a test, rejects unknown modes and phases with exit code 2, and reports an undeclared test or fixture
-as an error. A prepare or a teardown without a function has nothing to do, and a setup without one
-is an error.
+as an error. Prepares and teardowns without a function do nothing, and setups without one are
+errors.
 -/
 @[test]
 def shellHarness : Test := do
@@ -1672,8 +1672,8 @@ def exclusiveUsersNeverOverlap : Test := forEach products fun p => do
         strField e "test" == some fx.stamped) "no outcome of a fixture's phase"
 
 /--
-A setup that fails reports its fixture's users as inconclusive, with the fixture and the phase
-named, without running them; its teardown still runs, without a value.
+If a setup fails, its fixture's users are reported as inconclusive without running, with the fixture
+and the phase named, and its teardown still runs, without a value.
 -/
 @[test]
 def setupFailureStopsUsers : Test := forEach products fun p => do
@@ -1697,7 +1697,7 @@ def setupFailureStopsUsers : Test := forEach products fun p => do
     assertContains "teardown received no value" (out.stdout ++ out.stderr)
     assertNotContains "received fixture" (out.stdout ++ out.stderr)
 
-/-- A prepare that fails stops only the test it prepares, and the fixture's next user runs. -/
+/-- If a prepare fails, only the test it prepares stops, and the fixture's next user runs. -/
 @[test]
 def prepareFailureStopsOneTest : Test := forEach products fun p => do
   let fx := p.fixtures
@@ -1717,8 +1717,8 @@ def prepareFailureStopsOneTest : Test := forEach products fun p => do
     assertBEq #[some "fail"] ((verdictsIn out.stderr).map (strField · "status"))
 
 /--
-A test that uses a fixture and fails has a reproduction line that chains the fixture's setup, its
-prepare, the test, and its teardown, and exits with the test's status.
+Tests that use a fixture and fail have reproduction lines that chain the fixture's setup, its
+prepare, the test, and its teardown, and exit with the test's status.
 -/
 @[test]
 def failingUserReproduces : Test := forEach products fun p => do
@@ -1737,7 +1737,7 @@ def failingUserReproduces : Test := forEach products fun p => do
     assertBEq #["setup", "prepare start", "prepare end"] (lines.extract 0 3)
     assertTrue (lines.size == 4 && lines[3]!.startsWith "teardown") s!"{lines}"
 
-/-- A teardown that fails is reported on its own, after the test it served, which passes. -/
+/-- If a teardown fails, it is reported on its own, after the test it served, which passes. -/
 @[test]
 def teardownFailureReportedAlone : Test := forEach products fun p => do
   let fx := p.fixtures
@@ -1754,8 +1754,8 @@ def teardownFailureReportedAlone : Test := forEach products fun p => do
   assertTrue (!r.report.succeeded) "the failed teardown fails the run"
 
 /--
-A setup that its timeout stops is inconclusive, its fixture's users are reported as inconclusive
-without running, and its teardown still runs, without a value.
+If its timeout stops a setup, the setup is inconclusive, its fixture's users are reported as
+inconclusive without running, and its teardown still runs, without a value.
 -/
 @[test]
 def killedSetupTearsDown : Test := forEach products fun p => do
@@ -1774,8 +1774,8 @@ def killedSetupTearsDown : Test := forEach products fun p => do
   assertContains "teardown received no value" teardown.output.all
 
 /--
-A fixture that takes a setting and another fixture receives both: its value joins the greeting and
-the other fixture's value, which its user prints.
+The fixture `dependent`, which takes a setting and another fixture, receives both: its value joins
+the greeting and the other fixture's value, which its user prints.
 -/
 @[test]
 def fixturesReceiveSettings : Test := forEach products fun p => do
@@ -1791,9 +1791,9 @@ def fixturesReceiveSettings : Test := forEach products fun p => do
     assertBEq (some "hi") ((setup.settings.find? (·.1 == p.greeting)).map (·.2))
 
 /--
-A fixture's phases and a test that ask for threads receive the grant as {lit}`threads:N` and as
-{lit}`LEAN_NUM_THREADS`: the request when the pool holds it, and the whole pool otherwise, in which
-case the test runs alone.
+Fixture phases and tests that ask for threads receive the grant as {lit}`threads:N` and as
+{lit}`LEAN_NUM_THREADS`: the request when the pool has room for it, and the whole pool otherwise, in
+which case the test runs alone.
 -/
 @[test]
 def threadGrants : Test := forEach products fun p => do
@@ -1817,8 +1817,8 @@ def threadGrants : Test := forEach products fun p => do
         assertTrue (lines.contains s!"start {test}") s!"{lines}"
 
 /--
-Every invocation receives a thread grant: a test that asks for nothing receives {lit}`threads:1`.
-With two slots it also receives {lit}`LEAN_NUM_THREADS=1`; with one slot the variable is absent.
+Every invocation receives a thread grant: tests that ask for nothing receive {lit}`threads:1`. With
+two slots they also receive {lit}`LEAN_NUM_THREADS=1`; with one slot the variable is absent.
 -/
 @[test]
 def defaultThreadGrant : Test := forEach products fun p => do
@@ -1841,9 +1841,9 @@ def unknownFixtureFails : Test := forEach products fun p => do
     assertNotContains "\"type\":\"value\"" (← IO.FS.readFile out)
 
 /--
-A chain of fixture phases and a test runs in order in one process: each setup's value reaches the
-later invocations, and after an invocation fails only teardowns run, the teardown of a fixture whose
-setup failed without a value.
+Chains of fixture phases and a test run in order in one process: each setup's value reaches the
+later invocations, and once an invocation fails only teardowns run, without a value for fixtures
+whose setups failed.
 -/
 @[test]
 def fixtureChains : Test := forEach products fun p => do

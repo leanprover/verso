@@ -46,6 +46,7 @@ def fail_on_request(what):
     """A phase that fails with an assertion."""
 
     def phase(*_):
+        """Fails with an assertion that names the phase."""
         raise AssertionError(f"the {what} failed on request")
 
     return phase

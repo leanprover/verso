@@ -86,7 +86,7 @@ case "$mode" in
       esac
     done
     record '{"type":"protocol","version":1}'
-    # Tells a chain the value that a setup produced.
+    # Records the setup's value, and hands it to the chain.
     produce() {
       record "{\"type\":\"value\",\"text\":\"$1\"}"
       if [ -n "$CHAIN_VALUE_FILE" ]; then printf '%s=%s' "$name" "$1" > "$CHAIN_VALUE_FILE"; fi

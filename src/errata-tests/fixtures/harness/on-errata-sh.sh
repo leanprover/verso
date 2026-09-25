@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# A test executable on Errata's shell harness, for the conformance suite. It declares the tests that
-# `basic.sh` writes by hand, with the same behavior, so that each check of the suite runs against a
-# script that speaks the protocol by itself and one that the library speaks it for.
+# A test executable on Errata's shell harness, for the conformance suite. It declares the fixtures
+# and tests that `basic.sh` writes by hand, with the same behavior, so that each check of the suite
+# runs against a script that speaks the protocol by itself and one that the library speaks it for.
 
 source "$ERRATA_DIR/harnesses/errata.sh"
 
 # Declares Errata's seed, which the runner derives, a marker for the processes a test starts, a note,
-# a greeting with a default, and a setting without one.
+# a greeting with a default, a setting without one, and the file that the users of `stamped` stamp.
 errata_settings() {
   errata_setting_decl Errata.seed "The seed."
   errata_setting_decl marker "Names the processes that a test starts."
@@ -64,8 +64,7 @@ errata_tests() {
   done
 }
 
-# Runs one phase of a fixture, as the fixture of the same name in `basic.sh` does. The teardowns of
-# the fixtures other than `stamped` print whether they received their value.
+# Runs a fixture's setup, as the fixture of the same name in `basic.sh` does.
 errata_fixture_setup() {
   case "$1" in
     stamped)
@@ -89,6 +88,7 @@ errata_fixture_setup() {
   esac
 }
 
+# Runs a fixture's prepare, as the fixture of the same name in `basic.sh` does.
 errata_fixture_prepare() {
   local value
   value=$(errata_fixture_value "$1") || value=""
@@ -107,6 +107,9 @@ errata_fixture_prepare() {
   esac
 }
 
+# Runs a fixture's teardown, as the fixture of the same name in `basic.sh` does. The teardowns of
+# the fixtures other than `stamped`, `prepare-fails`, and `teardown-fails` print whether they
+# received their value.
 errata_fixture_teardown() {
   local value
   if value=$(errata_fixture_value "$1"); then :; else value=""; fi

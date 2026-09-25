@@ -212,7 +212,8 @@ than letting it propagate. The action's stdout and stderr are recorded as text, 
 by stream, and returned alongside the outcome. Each fragment is also handed to the common context's
 output destination as it is written, so a live runner can stream output while the action runs.
 
-Output from tasks or subprocesses spawned by the action is not captured.
+The capture covers the action's own output; the tasks and subprocesses that it spawns write to the
+process's streams.
 -/
 def runCapturing [HasCommonContext ρ] (ctx : ρ) (act : ReaderT ρ (ExceptT TestFailure IO) α) :
     IO (Except IO.Error (Except TestFailure α) × OutputLog) := do

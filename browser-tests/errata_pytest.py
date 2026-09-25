@@ -33,7 +33,7 @@ optionally `fixtures`, the names of fixtures declared before it that it takes; o
 `threads`; and the callables `setup(context)`, which returns the value as a string,
 `prepare(value, context)`, and `teardown(value, context)`, whose value is `None` when the setup
 produced none. The context has the attributes `settings` and `fixtures`, dictionaries from names to
-values, and `threads`. A suite without a prepare or a teardown has nothing to do in that phase. Tests
+values, and `threads`. If a fixture declares no prepare or teardown, that phase does nothing. Tests
 take fixtures through the marker `errata_fixture(NAME)`, which uses the fixture alone among its
 users, or `errata_fixture(NAME, exclusive=False)`, which shares it with other shared users, and read
 the values through the `errata_fixtures` fixture, a dictionary from names to values.
@@ -315,7 +315,7 @@ class ListPlugin:
             if uses:
                 record["fixtures"] = [{"name": n, "exclusive": e} for n, e in uses]
             tests.append(record)
-        # A fixture's own fixtures are declared before it, so one pass from the last reaches all.
+        # Each fixture's own fixtures are declared before it, so one pass from the last reaches all.
         for name in reversed(list(fixtures)):
             if name in wanted:
                 wanted.update(fixtures[name].get("fixtures", []))

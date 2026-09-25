@@ -66,8 +66,8 @@ def fixturesOf (args : List String) : Array (String × String) :=
   pairsOf "fixture" args
 
 /--
-The thread grant among a test executable's arguments: the number in the last {lit}`threads:N`, and
-{lit}`1` when there is none.
+The thread grant among a test executable's arguments: the number in the last {lit}`threads:N` when
+it is positive, and {lit}`1` otherwise.
 -/
 def threadsOf (args : List String) : Nat :=
   let grants := args.filterMap fun arg => (arg.dropPrefix? "threads:").bind (·.toNat?)
@@ -113,7 +113,7 @@ def reachedFixtures (entries : Array TestEntry) (fixtures : Array FixtureEntry) 
     Array FixtureEntry := Id.run do
   let mut needed : Std.HashSet String := entries.foldl (init := {}) fun s e =>
     e.fixtures.foldl (init := s) fun s f => s.insert f.name
-  -- A fixture's own fixtures come before it, so one pass from the last fixture to the first
+  -- Each fixture's own fixtures come before it, so one pass from the last fixture to the first
   -- reaches every fixture that a needed one takes.
   for f in fixtures.reverse do
     if needed.contains f.name then
@@ -433,8 +433,8 @@ and column, its docstring as its description, its tags, and the settings and fix
 {lit}`errata-run <out> <name> [setting:NAME=VALUE]... [fixture:NAME=VALUE]... [threads:N]` runs
 the test with that name and writes its records to {lit}`out`. It exits with {lit}`0` when the test
 passes and {lit}`1` otherwise. The test receives the settings and the fixtures' values, and parses
-the values of those it takes; a missing mandatory setting or fixture, or a value that a parser
-rejects, ends the test with an error. Its context holds the thread grant, {lit}`1` without one.
+the values of those it takes. If a mandatory setting or a fixture has no value, or a parser rejects
+a value, the test ends with an error. Its context holds the thread grant, {lit}`1` without one.
 When tests run concurrently, the runner also sets {lit}`LEAN_NUM_THREADS` to the grant, which sizes
 the executable's task pool and reaches the processes it starts; when one test runs at a time, the
 variable is left as it is, and the test uses the machine.
@@ -442,8 +442,8 @@ variable is left as it is, and the test uses the machine.
 {lit}`errata-fixture <out> <name> setup|prepare|teardown [setting:NAME=VALUE]...
 [fixture:NAME=VALUE]... [threads:N]` runs that phase of the fixture with that name, with the
 settings and the values of the fixtures it takes, and its own value, from the setup, as its
-{lit}`fixture:` argument. The setup writes its value as a {lit}`value` record, and a phase that
-fails writes a {lit}`verdict`. It exits with {lit}`0` when the phase succeeds and {lit}`1`
+{lit}`fixture:` argument. The setup writes its value as a {lit}`value` record, and failed phases
+write a {lit}`verdict`. It exits with {lit}`0` when the phase succeeds and {lit}`1`
 otherwise; for an unknown fixture it writes an error verdict and exits with {lit}`1`.
 
 The runner passes {lit}`setting:updateGolden=true` for {lit}`--update-golden`, which the harness

@@ -107,7 +107,7 @@ structure Sim where
   teardowns : Array Nat
   /-- The fixtures whose teardowns have ended. -/
   tornDown : Array Bool
-  /-- The fixtures whose setups failed, and the prepares that failed, as fixture and test. -/
+  /-- The fixtures whose setups failed. -/
   failedSetups : Array Nat := #[]
   /-- The prepares that failed, each a fixture and a test. -/
   failedPrepares : Array (Nat × Nat) := #[]
@@ -163,7 +163,7 @@ def Sim.request (s : Sim) : Job → Nat
   | .test t => s.state.tests[t]!.threads
   | .setup f | .prepare f _ | .teardown f => s.state.fixtures[f]!.threads
 
-/-- Checks a command against the rules and carries it out in the simulation. -/
+/-- Checks a command against the rules and performs it in the simulation. -/
 def Sim.perform (sc : Scenario) (s : Sim) (cmd : Command) : Sim := Id.run do
   let mut s := s
   if s.finished then return s.violate s!"a command after the end: {repr cmd}"
@@ -239,11 +239,11 @@ def Sim.perform (sc : Scenario) (s : Sim) (cmd : Command) : Sim := Id.run do
     let ending := sc.ending job
     return { s with running := s.running.push (job, s.now + sc.duration job, grant, ending) }
 
-/-- Carries out the commands in order. -/
+/-- Performs the commands in order. -/
 def Sim.performAll (sc : Scenario) (s : Sim) (cmds : Array Command) : Sim :=
   cmds.foldl (Sim.perform sc) s
 
-/-- Feeds an event to the scheduler and carries out its commands. -/
+/-- Feeds an event to the scheduler and performs its commands. -/
 def Sim.feed (sc : Scenario) (s : Sim) (ev : Event) : Sim :=
   let (state, cmds) := step s.state ev
   Sim.performAll sc { s with state } cmds
@@ -270,13 +270,13 @@ def Sim.advance (sc : Scenario) (s : Sim) : Sim := Id.run do
   | .prepare f t =>
     if succeeded then s := { s with prepared := s.prepared.push (f, t) }
     else s := { s with failedPrepares := s.failedPrepares.push (f, t) }
-    -- A prepare that ends after the cancellation ends its test, which runs no more.
+    -- If a prepare ends after the cancellation, its test ends too and runs no more.
     if s.cancelled then s := s.release t
   | .teardown f => s := { s with tornDown := s.tornDown.set! f true }
   if succeeded then
     if let .setup f := job then s := Sim.feed sc s (.valueProduced f s!"value {f}")
   let ev : Event := if ending == 2 then .timedOut job else .exited job succeeded
-  -- A prepare that failed ends its test's claim, which the scheduler reports as a skip.
+  -- If a prepare failed, its test's claim ends, and the scheduler reports the test as a skip.
   return Sim.feed sc s ev
 
 /-- Runs the simulation until the run ends, the scheduler stalls, or a bound is reached. -/
@@ -315,10 +315,10 @@ The scheduler keeps its rules in random runs, cancelled ones and jobs that take 
 no two exclusive users of a fixture overlap, no shared user overlaps an exclusive one, and exclusive
 users claim a fixture in queue order; the slots in use never exceed the pool, and each grant is the
 request or the whole pool; each test is scheduled once or reported without running, unless the run
-is cancelled first, and runs after its prepares; a setup ends before its fixture's users and the
-setups of the fixtures that take it begin; a teardown runs once whenever the setup ran, cancelled
-runs included, after the last user and after the teardowns of the fixtures that take it, and
-nothing that needs the fixture starts after it; and the run ends.
+is cancelled first, and runs after its prepares; setups end before their fixtures' users and the
+setups of the fixtures that take them begin; teardowns run once whenever the setup ran, cancelled
+runs included, after the last user and after the teardowns of the fixtures that take them, and
+nothing that needs a fixture starts after its teardown; and the run ends.
 -/
 @[test]
 def schedulerKeepsItsRules : seed → Test :=
@@ -353,7 +353,7 @@ def exclusiveUsersTakeTurns : Test := do
   let (_, cmds) := step s (.exited (.teardown 0) true)
   assertBEq #[Command.finish] cmds
 
-/-- A request larger than the pool is granted the whole pool and runs alone. -/
+/-- Requests larger than the pool are granted the whole pool and run alone. -/
 @[test]
 def oversizeRequestsRunAlone : Test := do
   let tests : Array TestSpec := #[{}, { threads := 9 }, {}]
@@ -366,7 +366,7 @@ def oversizeRequestsRunAlone : Test := do
   assertBEq #[Command.spawn (.test 2) 1 #[]] cmds
 
 /--
-A failed setup reports its fixture's users as inconclusive without running them, and its teardown
+If a setup fails, its fixture's users are reported as inconclusive without running, and its teardown
 still runs, without a value.
 -/
 @[test]
@@ -382,8 +382,8 @@ def failedSetupStopsUsers : Test := do
   assertBEq #[Command.finish] cmds
 
 /--
-A cancelled run starts no more tests, and tears down each fixture whose setup ran once its running
-user ends.
+Cancelled runs start no more tests, and tear down each fixture whose setup ran once its running
+users end.
 -/
 @[test]
 def cancelledRunTearsDown : Test := do
@@ -400,7 +400,7 @@ def cancelledRunTearsDown : Test := do
   let (_, cmds) := step s (.exited (.teardown 0) true)
   assertBEq #[Command.finish] cmds
 
-/-- A test that a failed fixture dooms starts no setup of its other fixtures. -/
+/-- Tests that a failed fixture dooms start no setups of their other fixtures. -/
 @[test]
 def doomedTestsSetNothingUp : Test := do
   let s := State.init 1 #[{ fixtures := #[(0, true), (1, true)] }] #[{}, {}]
@@ -409,7 +409,7 @@ def doomedTestsSetNothingUp : Test := do
   let (_, cmds) := step s (.exited (.setup 0) false)
   assertBEq #[Command.skip (.test 0) (.fixtureFailed 0 .setup), .spawn (.teardown 0) 1 #[]] cmds
 
-/-- A test that receives a setting with another value than its fixture did draws a warning. -/
+/-- Tests that receive a setting with another value than their fixtures did draw a warning. -/
 @[test]
 def settingConflictsWarn : Test := do
   let plan : Runner.Plan := {
