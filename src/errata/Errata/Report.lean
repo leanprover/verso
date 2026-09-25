@@ -304,7 +304,12 @@ def HumanReporter.test (h : HumanReporter) (results : Array Result) :
   for r in shown do
     let mut name := ""
     let mut indent := 0
-    if r.resultPath.isEmpty then
+    if r.resultPath.isEmpty && r.kind matches .fixture then
+      -- A fixture's phase is named in full: the fixture, then the phase, such as `prepare T`.
+      h := { h with lastExe? := some r.exe, lastPath := #[] }
+      let phase := " ".intercalate (r.path.extract 1 r.path.size).toList
+      name := styleTestName c r.test #[] ++ " " ++ Style.testName.paint c phase
+    else if r.resultPath.isEmpty then
       let path := if r.path.isEmpty then #[r.test] else r.path
       let shared :=
         if h.lastExe? == some r.exe then min (sharedPrefix path h.lastPath) (path.size - 1)
