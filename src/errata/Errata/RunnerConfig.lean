@@ -110,7 +110,10 @@ structure Config where
   warnings : Array String := #[]
   /-- The command that the runner's options follow, such as {lit}`lake test -- --test-options`. -/
   invocation? : Option String := none
-  /-- The profiles, by name. A configuration without a {lit}`default` profile has an empty one. -/
+  /--
+  The profiles, by name. If the configuration has no {lit}`default` profile, then that profile is
+  empty.
+  -/
   profiles : Array Profile := #[]
   /--
   The filter that selects the tests to run when neither the profile nor the command line gives one.

@@ -532,9 +532,9 @@ arrive. Before a line of output is handed on, the result file is read up to its 
 that the test wrote before that output precede it. The test is terminated at its timeout and killed
 after the grace period. The run loop checks the clock after every bounded read of the result file.
 Once the test executable has exited, the processes that it started have the pipe grace to release
-its output pipes, and then its process group is swept. A test whose mandatory setting has no value
-is reported with no process started. The result is {lean}`false` when the run has been cancelled
-and the test was not started.
+its output pipes, and then its process group is swept. Tests with mandatory settings that have no
+value are reported with no process started. The result is {lean}`false` when the run has been
+cancelled and the test was not started.
 -/
 def runOne (ctx : RunContext) (n : Nat) (t : InventoryTest) (r : Resolved) : IO Bool := do
   let exe := ctx.config.executables[t.exeIdx]!
@@ -618,7 +618,7 @@ private def showValue (v : String) : String := v.quote
 Prints what {lit}`--list` shows: every setting the test executables declare, with its description
 and its default; the tests that the filters select, each with its file and line, its tags, and the
 values it receives; and the mandatory settings that nothing gives a value, with the tests that need
-them. A seed derived from a run seed that the command line leaves to chance is shown as derived.
+them. Seeds derived from a run seed that the command line leaves to chance are shown as derived.
 -/
 def printInventory (ctx : RunContext) (listings : Array Listing)
     (selected : Array (InventoryTest × Resolved)) : IO Unit := do
@@ -649,7 +649,7 @@ def printInventory (ctx : RunContext) (listings : Array Listing)
     if let some d := t.description? then
       line ("\n".intercalate ((d.trimAscii.copy.splitOn "\n").map ("        " ++ ·)))
     for (k, v) in r.settings do
-      -- A seed derived from a random run seed differs in every run, so its value says nothing.
+      -- Seeds derived from a random run seed differ in every run, so their values say nothing.
       if k == seedSetting && r.derivedSeed && ctx.opts.seed.isNone then
         line s!"        {k}: derived from the run's seed"
       else
@@ -715,11 +715,11 @@ proceeds, and returns the report. The events file's lines and the human-readable
 to the sinks; the report files are the caller's to write. The {lit}`protocol` line of the events
 file is sent first.
 
-A filter with a syntax error, an unknown profile, or a profile's {lit}`jobs` above one ends the run
-before the List phase. The List phase lists every executable, then checks the configuration against
-the inventory: a value that the command line gives to a setting that no executable declares is an
-error, and one that the profile gives is a warning; the filters are evaluated, with a warning for
-each atom and each filter that selects nothing. The configuration's filters draw these warnings only
+Filters with syntax errors, unknown profiles, and profiles whose {lit}`jobs` is above one end the
+run before the List phase. The List phase lists every executable, then checks the configuration
+against the inventory: values that the command line gives to settings that no executable declares
+are errors, and those that the profile gives are warnings; the filters are evaluated, with a warning
+for each atom and each filter that selects nothing. The configuration's filters draw these warnings only
 when the run has every test executable of the package. The Run phase runs the selected tests in
 inventory order.
 -/
@@ -775,9 +775,9 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
       sets := opts.sets, profile, overrides, timeoutMs? := opts.timeoutMs?
       gracePeriodMs? := opts.gracePeriodMs?, updateGolden := opts.updateGolden, runSeed
     }
-    -- A value that the command line gives to a setting that nothing declares stops the run. One that
-    -- the configuration gives is a warning, since a profile serves the executables of every library
-    -- and a run may select some of them.
+    -- Values that the command line gives to settings that nothing declares stop the run. Those that
+    -- the configuration gives are warnings, since profiles serve the executables of every library
+    -- and runs may select some of them.
     let declared := listings.flatMap (·.settings.map (·.name))
     let undeclared := resolution.undeclared declared
     let names := declared.foldl (init := #[]) fun acc n => if acc.contains n then acc else acc.push n

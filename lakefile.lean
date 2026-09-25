@@ -431,10 +431,10 @@ private def tomlBool (key : String) (v : Lake.Toml.Value) : TomlM (Option Bool) 
 
 /--
 Decodes a TOML string token by TOML's string rules, with the byte offset in the token where each
-decoded character starts, then the offset of the closing delimiter. A literal string, `'…'` or
-`'''…'''`, holds its characters as written. A basic string, `"…"` or `"""…"""`, decodes the escapes
-`\b`, `\t`, `\n`, `\f`, `\r`, `\"`, `\\`, `\uXXXX`, and `\UXXXXXXXX`. A multi-line string drops a
-newline right after its opening delimiter, and in a multi-line basic string a backslash followed by
+decoded character starts, then the offset of the closing delimiter. Literal strings, `'…'` and
+`'''…'''`, hold their characters as written. Basic strings, `"…"` and `"""…"""`, decode the escapes
+`\b`, `\t`, `\n`, `\f`, `\r`, `\"`, `\\`, `\uXXXX`, and `\UXXXXXXXX`. Multi-line strings drop a
+newline right after their opening delimiter, and in multi-line basic strings a backslash followed by
 whitespace drops that whitespace and the newlines within it.
 -/
 private def tomlStringOffsets (token : String) : Option (String × Array Nat) := Id.run do
@@ -517,8 +517,8 @@ private partial def settingLeaves (namePrefix : String) (t : Lake.Toml.Table) :
     | _ => out.push (name, v)
 
 /--
-The settings table. A setting's name is its fully qualified declaration name, written as a quoted
-dotted key (`"A.B.c" = …`), a bare dotted key, or a key in a nested table (`[….settings.A.B]` with
+The settings table. Settings' names are their fully qualified declaration names, written as quoted
+dotted keys (`"A.B.c" = …`), bare dotted keys, or keys in nested tables (`[….settings.A.B]` with
 `c = …`); `settingLeaves` flattens nested tables into dotted names. Each value is a string or
 `{ needs = "target" }`, with no coercion, and each name is given once.
 -/
@@ -809,8 +809,8 @@ private def filterJson (f : TomlFilter) : Lean.Json :=
     (f.positions?.map fun ps => [("positions", Lean.toJson ps)]).getD []
 
 /--
-Settings as JSON, each `{ needs = … }` replaced by the target's result. A setting whose target was
-not built for this run is left out.
+Settings as JSON, each `{ needs = … }` replaced by the target's result. Settings whose targets
+were not built for this run are left out.
 -/
 private def settingsJson (needs : Array (String × String)) (s : Array (String × TomlSetting)) :
     Lean.Json :=
@@ -982,7 +982,7 @@ script run (args) do
   -- `list` as the first argument lists the tests of every library that the filters after it select.
   let (libNames, runnerArgs) ←
     if args.head? == some "list" then
-      -- A filter begins with a predicate, a constant, `!`, or `(`, never with `-`.
+      -- Filters begin with a predicate, a constant, `!`, or `(`, never with `-`.
       if let some opt := args.tail.find? (·.startsWith "-") then
         IO.eprintln s!"error: the `list` subcommand takes filters only, and {opt} is an option; \
           `list` applies exactly the filters it is given"
@@ -1011,7 +1011,7 @@ script run (args) do
   if verbose then
     IO.println "== Discovery"
     (← IO.getStdout).flush
-  -- A name on the command line may name a test executable that `errata.toml` adds. With no names,
+  -- Names on the command line may name test executables that `errata.toml` adds. With no names,
   -- every such executable runs.
   let selecting := !libNames.isEmpty
   let tomlExes :=
@@ -1100,7 +1100,7 @@ script run (args) do
     let name := lib.name.toString (escape := false)
     if (testLibs.filter (·.1.name == lib.name)).size > 1 then s!"{lib.pkg.prettyName}/{name}"
     else name
-  -- An executable that the configuration file adds is named apart from the libraries' executables.
+  -- Executables that the configuration file adds are named apart from the libraries' executables.
   for e in toml.config.executables do
     if testLibs.any (exeName ·.1 == e.name) then
       IO.eprintln (renderTomlProblem toml.fileMap

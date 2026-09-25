@@ -61,8 +61,8 @@ build_site() {
 stamp_dir="$PWD/.lake/build/sites"
 lock="$stamp_dir/$(basename "$project").lock"
 
-# Takes the lock of the test project, which one build at a time holds. A lock whose holder has
-# exited is taken over.
+# Takes the lock of the test project, which one build at a time holds. Locks whose holders have
+# exited are taken over.
 take_lock() {
   mkdir -p "$stamp_dir"
   until mkdir "$lock" 2>/dev/null; do

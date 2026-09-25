@@ -139,7 +139,7 @@ def filterParseErrors : Test := do
         assertBEq offset err.offset
         assertContains message err.message
 
-/-- A parse error names its place in its source. -/
+/-- Parse errors name their places in their sources. -/
 @[test]
 def filterErrorLocations : Test := do
   let text := "tag(x) & (name(y)"
@@ -269,8 +269,8 @@ def globCases : Test := do
       assertBEq none (globMatches glob "")
 
 /--
-A glob matches in time bounded by the product of the pattern's length and the string's, and linear
-in the string for a given pattern, so patterns with many `*` against long strings that almost match
+Globs match in time bounded by the product of the pattern's length and the string's, and linear in
+the string for a given pattern, so patterns with many `*` against long strings that almost match
 finish at once.
 -/
 @[test]
@@ -289,7 +289,7 @@ def globMatchingIsLinear : Test := do
       let elapsed := (← IO.monoMsNow) - start
       assertTrue (elapsed < 200) s!"matching took {elapsed}ms"
 
-/-- A glob whose alternation expands to more patterns than the limit is an error. -/
+/-- Globs whose alternations expand to more patterns than the limit are errors. -/
 @[test]
 def globAlternationIsBounded : Test := do
   let many := String.join (List.replicate 20 "{a,b}")

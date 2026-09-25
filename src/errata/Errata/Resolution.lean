@@ -126,8 +126,8 @@ def seedSetting : String := "Errata.seed"
 /-- What a test runs with, as the runner resolved it. -/
 structure Resolved where
   /--
-  The values of the settings it takes that have one, in the order it takes them. An optional setting
-  without a value has no entry.
+  The values of the settings it takes that have one, in the order it takes them. Optional settings
+  without values have no entry.
   -/
   settings : Array (String × String) := #[]
   /-- The mandatory settings that nothing gives a value. -/
@@ -216,8 +216,8 @@ def ResolutionContext.undeclared (ctx : ResolutionContext) (declared : Array Str
 /--
 The warnings about a filter once the inventory is known, each at the place in the filter's text: a
 {lit}`tag(…)` that matches no test's tag, an {lit}`exe(…)` that names no test executable, and a
-filter that selects no test. A filter made only of {lit}`all()` and {lit}`none()` selects what it
-says, so it draws no warning.
+filter that selects no test. Filters made only of {lit}`all()` and {lit}`none()` select what they
+say, so they draw no warning.
 -/
 def SourcedFilter.warnings (f : SourcedFilter) (records : Array Filter.Record)
     (exes : Array String) : Array String := Id.run do

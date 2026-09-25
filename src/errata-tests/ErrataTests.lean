@@ -972,8 +972,8 @@ def driverRunsHelpers : Test := do
 
 /--
 The `list` subcommand discovers the tests of every library and prints those that its filters select,
-one per line with the executable, the name, the file and line, and the tags. A filter with a syntax
-error is reported at its place, and the command fails.
+one per line with the executable, the name, the file and line, and the tags. Filters with syntax
+errors are reported at their places, and the command fails.
 -/
 @[test]
 def driverListsTests : Test := do
@@ -1068,11 +1068,11 @@ def driverValidatesToml : Test := do
       assertNotContains "errataExe" out.stdout
 
 /--
-A setting's name may be written as nested tables as well as a quoted dotted key, and the driver
-reads a file that begins with a byte-order mark and durations with spaces around them. An error in a
-filter is reported at the line and column in the file of the character where it was found, in each
-of TOML's four forms of string, past escapes and a dropped first newline. A compound duration such
-as `2m30s` reaches the runner's configuration as its total in milliseconds.
+Settings' names may be written as nested tables as well as quoted dotted keys, and the driver reads
+a file that begins with a byte-order mark and durations with spaces around them. Errors in filters
+are reported at the line and column in the file of the character where they were found, in each of
+TOML's four forms of string, past escapes and a dropped first newline. Compound durations such as
+`2m30s` reach the runner's configuration as their totals in milliseconds.
 -/
 @[test]
 def driverReadsTomlForms : Test := do
@@ -1103,7 +1103,7 @@ def driverReadsTomlForms : Test := do
           >>= (·.getObjValAs? Nat "timeout-ms")).toOption
 
 /--
-A setting bound to a target with `{ needs = … }` receives the target's result. Editing the target's
+Settings bound to targets with `{ needs = … }` receive the targets' results. Editing a target's
 input rebuilds the runner's configuration, and leaves the test library alone.
 -/
 @[test]
@@ -1129,10 +1129,10 @@ def driverBuildsNeededTargets : Test :=
       assertTrue ((← olean.metadata).modified == oleanBefore) "TomlLib.olean was rebuilt"
 
 /--
-The driver builds only the targets that the selected profile's settings need. A name on the command
-line selects a test executable that `errata.toml` adds, as it selects a library, and such an
-executable receives the directory of Errata's sources. The runner's configuration says when the
-command line named what to test, and a name that matches nothing is an error that names both kinds.
+The driver builds only the targets that the selected profile's settings need. Names on the command
+line select test executables that `errata.toml` adds, as they select libraries, and such executables
+receive the directory of Errata's sources. The runner's configuration says when the command line
+named what to test, and names that match nothing are errors that name both kinds.
 -/
 @[test]
 def driverSelectsProfilesAndExecutables : Test :=
@@ -1835,8 +1835,8 @@ private def greetsEntry : TestM TestEntry := do
   return e
 
 /--
-A test's entry lists its tags and the settings it takes, in the order of its parameters, each with
-its description and its declared default.
+Tests' entries list their tags and the settings they take, in the order of their parameters, each
+with its description and its declared default.
 -/
 @[test]
 def testsCarryTagsAndSettings : Test := do
@@ -1853,9 +1853,10 @@ def testsCarryTagsAndSettings : Test := do
   assertBEq 0 plain.settings.size
 
 /--
-A test's action parses the values of the settings it takes and applies the test to them. The last
-value given for a setting counts, an optional setting without a value is `none`, and a missing
-mandatory setting or a value its parser rejects ends the test with an error that names the setting.
+Tests' actions parse the values of the settings they take and apply the tests to them. The last
+value given for a setting counts, optional settings without values are `none`, and missing
+mandatory settings and values that their parsers reject end the test with an error that names the
+setting.
 -/
 @[test]
 def settingsAreParsed : Test := do
@@ -1945,7 +1946,7 @@ error: `@[setting]` requires the type `Errata.Setting`, and `notASetting` has th
 #test_msgs in
 @[setting, expose] def notASetting : Nat := 3
 
--- A setting's name is its fully qualified name, so settings whose names end alike are distinct.
+-- Settings' names are their fully qualified names, so settings whose names end alike are distinct.
 #test_msgs in
 @[setting, expose] def greeting : Setting where
   type := String
@@ -1993,7 +1994,7 @@ which is not a setting. A test's parameters are settings: `S` or `Option S` for 
 #test_msgs in
 @[test (flavor := sweet)] def flavored : Bool := true
 
--- A partial application of `property` is a test that takes the seed.
+-- Partial applications of `property` are tests that take the seed.
 #test_msgs in
 @[test] def partialProperty : seed → Test := property (∀ n : Nat, n + 0 = n)
 

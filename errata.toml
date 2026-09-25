@@ -1,7 +1,7 @@
 # The configuration of Verso's tests, which `lake test` reads. The runner's profiles are named
 # kinds of run: `default` for a developer's machine, `browser` for the browser tests alone, and `ci`
-# for continuous integration. A setting of a Lean test is named by its fully qualified declaration
-# name; the settings of `VersoTests.Settings` are given in a table of their namespace.
+# for continuous integration. Settings of Lean tests are named by their fully qualified declaration
+# names; the settings of `VersoTests.Settings` are given in a table of their namespace.
 
 # A plain `lake test` leaves out the browser tests, which need built sites and browsers.
 [profile.default]

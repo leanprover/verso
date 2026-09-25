@@ -59,8 +59,8 @@ structure Context.Common where
   -/
   helperCommand : Option (Array String) := none
   /--
-  Receives each captured output fragment as it is written, in order. A runner that streams a test's
-  output as the test produces it, such as one serving an editor widget, needs this.
+  Receives each captured output fragment as it is written, in order. Runners that stream a test's
+  output as the test produces it, such as those serving an editor widget, need this.
 
   It runs with the streams that were in place before the test's output was redirected, so it can
   reach the runner's own streams from inside the capture.

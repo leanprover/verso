@@ -13,10 +13,10 @@ its verdict to OUT, with the location and the detail of a failure, and exits wit
 and 1 otherwise. Several invocations may be chained, each separated by a `;` argument; they run in
 order in one process, stopping at the first that exits non-zero.
 
-A suite declares the settings its tests take in a module-level dictionary `errata_settings_decl` in a
-`conftest.py`, which maps each setting's name to a dictionary with its `description` and optionally
-its `default`. A test takes a setting through the marker `errata_setting(NAME)`, or
-`errata_setting(NAME, optional=True)` for one it runs without, and reads the values it receives
+Suites declare the settings their tests take in a module-level dictionary `errata_settings_decl` in
+a `conftest.py`, which maps each setting's name to a dictionary with its `description` and
+optionally its `default`. Tests take settings through the marker `errata_setting(NAME)`, or
+`errata_setting(NAME, optional=True)` for those they run without, and read the values they receive
 through the `errata_settings` fixture, a dictionary from names to values.
 
 pytest's own output, and what a test prints, goes to standard output and standard error, which the
@@ -295,8 +295,8 @@ def failure_verdict(status, report, fallback):
 
 def skipped_verdict(report):
     """
-    The verdict of a skipped report. An expected failure passes, and any other skip is an error: a
-    test whose precondition fails has shown nothing.
+    The verdict of a skipped report. Expected failures pass, and all other skips are errors: tests
+    whose preconditions fail have shown nothing.
     """
     reason = ""
     if isinstance(report.longrepr, tuple) and len(report.longrepr) == 3:

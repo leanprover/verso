@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Errata's shell harness: a bash library that a script sources to become an Errata test executable.
 # The library speaks the test-executable protocol, and the script says what its tests are and how to
-# run one. A script looks like this:
+# run one. Scripts look like this:
 #
 #   source "$ERRATA_DIR/harnesses/errata.sh"
 #
@@ -21,15 +21,15 @@
 #
 #   errata_main "$@"
 #
-# A test's body runs in a subshell with `set -e`: a command that fails ends the test with its status.
+# Tests' bodies run in subshells with `set -e`: commands that fail end the test with their status.
 # `errata_fail` writes a failing verdict and returns 1, which ends the body unless the body catches
 # the status; the test fails either way.
 #
 # The runner sets three variables in every test executable's environment: ERRATA_DIR, the directory
 # of Errata's sources; ERRATA_RUN_ID, the run's identifier, the same for every process of one run and
 # different in the next, for work a script does once per run; and ERRATA_LIFELINE=1, which marks
-# standard input as a pipe that closes when the runner ends. A script reads the first two from its
-# environment, and the runner ends a shell test's process group itself.
+# standard input as a pipe that closes when the runner ends. Scripts read the first two from their
+# environment, and the runner ends shell tests' process groups itself.
 #
 # The library needs bash 3.2 or later and the POSIX utilities that ship with macOS and Linux. It
 # writes the records to file descriptor 9, which it opens on the file that the runner names, so the
@@ -171,8 +171,8 @@ errata_setting_decl() {
 }
 
 # Declares a test: `errata_test NAME [--path a,b,c] [--file F] [--line N] [--description TEXT]
-# [--tags a,b] [--settings a,optional(b)] [--threads N]`. A setting written `optional(b)` is one the
-# test runs without. The script calls it from `errata_tests`.
+# [--tags a,b] [--settings a,optional(b)] [--threads N]`. Settings written `optional(b)` are ones
+# the test runs without. The script calls it from `errata_tests`.
 errata_test() {
   [ $# -ge 1 ] || _errata_misuse "errata_test takes a name"
   local name=$1
@@ -346,7 +346,7 @@ _errata_invoke() {
       (set -e; errata_run_test "$name")
       status=$?
       [ -n "$errexit" ] && set -e
-      # A test that failed with `errata_fail` exits with 1, whatever its body returned.
+      # Tests that failed with `errata_fail` exit with 1, whatever their bodies returned.
       [ -e "$_errata_failed_mark" ] && status=1
       rm -rf "$marks"
       _errata_failed_mark=""

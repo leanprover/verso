@@ -22,8 +22,8 @@ namespace Errata
 
 /--
 A setting: a value that the configuration file or the command line gives as a string, and that a test
-takes as a parameter of the setting's {name (full := Setting.type)}`type`. A declaration of this type
-marked {lit}`@[setting]` declares one, and its docstring describes it.
+takes as a parameter of the setting's {name (full := Setting.type)}`type`. Declarations of this type
+marked {lit}`@[setting]` declare settings, and their docstrings describe them.
 -/
 structure Setting where
   /-- The type of the value that a test receives. -/
@@ -37,7 +37,7 @@ structure Setting where
   default? : Option String := none
 
 /--
-A setting stands for the type of its values, so a parameter {lit}`(x : S)` has the type
+Settings stand for the types of their values, so a parameter {lit}`(x : S)` has the type
 {lit}`S.type`.
 -/
 instance : CoeSort Setting Type := ⟨Setting.type⟩
@@ -71,7 +71,7 @@ def Setting.withValue (S : Setting) (name : String) (settings : Array (String ×
 /--
 The value of the optional setting {name}`S`, named {name}`name`, among {name}`settings`:
 {lean}`none` when no value is given, and otherwise the last value given, parsed by the setting's
-parser. A value that the parser rejects ends the test with an error that names the setting.
+parser. Values that the parser rejects end the test with an error that names the setting.
 -/
 def Setting.withOptional (S : Setting) (name : String) (settings : Array (String × String))
     (k : Option S.type → TestM Unit) : TestM Unit := do
@@ -83,8 +83,8 @@ def Setting.withOptional (S : Setting) (name : String) (settings : Array (String
           parser rejects"
     k (some value)
 
--- A setting's name is its fully qualified declaration name, here `Errata.seed`. By convention a
--- setting's declaration begins with a lowercase letter, as a definition's name does.
+-- Settings' names are their fully qualified declaration names, here `Errata.seed`. By convention,
+-- settings' declarations begin with a lowercase letter, as definitions' names do.
 /--
 The seed for property tests, a natural number. The runner derives each test's seed from the run's
 seed, the test executable's name, and the test's name, unless the configuration or the command line

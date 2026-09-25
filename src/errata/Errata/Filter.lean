@@ -6,8 +6,8 @@ Author: David Thrane Christiansen
 
 /-
 Filters over the inventory: the predicates `name(…)`, `file(…)`, `exe(…)`, and `tag(…)`, the
-constants `all()` and `none()`, and the operators `|`, `&`, `\`, and `!`. A filter is parsed in three
-layers: the expression, the text of each predicate's matcher with its escapes, and, for a glob
+constants `all()` and `none()`, and the operators `|`, `&`, `\`, and `!`. Filters are parsed in
+three layers: the expression, the text of each predicate's matcher with its escapes, and, for a glob
 matcher, the glob. Every node of a parsed filter has its span in the filter's text.
 -/
 module
@@ -86,8 +86,8 @@ def GlobPart.classAccepts (negated : Bool) (ranges : Array (Char × Char)) (c : 
   ranges.any (fun (lo, hi) => lo ≤ c && c ≤ hi) != negated
 
 /--
-A glob, as the patterns that its alternation expands to. A string matches the glob when it matches
-one of the patterns, each of which holds only literals, {lit}`?`, classes, and {lit}`*`.
+A glob, as the patterns that its alternation expands to. Strings match the glob when they match one
+of the patterns, each of which holds only literals, {lit}`?`, classes, and {lit}`*`.
 -/
 structure Glob where
   /-- The expanded patterns. -/

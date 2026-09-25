@@ -111,8 +111,8 @@ def pytest_collection_modifyitems(config, items):
     """
     Marks every browser test with `browser`, the tag that the default profile's filter in
     `errata.toml` leaves out, and marks the tests that serve a site or draw redirects as taking the
-    Errata settings they read. A test that serves a site needs `siteDir` unless the command line
-    gives `--site-dir`.
+    Errata settings they read. Tests that serve a site need `siteDir` unless the command line gives
+    `--site-dir`.
     """
     site_given = config.getoption("--site-dir") is not None
     for item in items:

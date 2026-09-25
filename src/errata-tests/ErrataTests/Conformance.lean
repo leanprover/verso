@@ -296,7 +296,7 @@ def inventoryWellFormed : Test := forEach products fun p => do
   assertTrue problems.isEmpty s!"the inventory of {p.name} is malformed" (some ("\n".intercalate problems.toList))
 
 /--
-A known passing test passes, a known failing test fails, and a test that throws ends with an error.
+Known passing tests pass, known failing tests fail, and tests that throw end with an error.
 -/
 @[test]
 def knownTestsEndAsTheyShould : Test := forEach products fun p => do
@@ -309,7 +309,7 @@ def knownTestsEndAsTheyShould : Test := forEach products fun p => do
     expectOutcome r e.test (· matches .reported (.error _)) "an error"
 
 /--
-A test executable asked for a test outside its inventory exits non-zero and writes no passing
+Test executables asked for a test outside their inventory exit non-zero and write no passing
 verdict.
 -/
 @[test]
@@ -323,8 +323,8 @@ def unknownTestNameFails : Test := forEach products fun p => do
     assertNotContains "\"status\": \"pass\"" (← IO.FS.readFile out)
 
 /--
-A test whose mandatory setting has no value is inconclusive, naming the setting, and the runner
-starts no process for it. The rest of the run goes on.
+Tests with mandatory settings that have no value are inconclusive, naming the setting, and the
+runner starts no process for them. The rest of the run goes on.
 -/
 @[test]
 def settingMissing : Test := forEach products fun p => do
@@ -342,9 +342,9 @@ def settingMissing : Test := forEach products fun p => do
     expectOutcome r p.needsSetting.test (· matches .reported .pass) "a pass"
 
 /--
-A value that the command line gives to a setting that no test executable declares stops the run
-before anything runs, with the declared settings in the message. One that the profile gives is a
-warning, since a profile serves every library's executable and a run may select some of them.
+Values that the command line gives to settings that no test executable declares stop the run before
+anything runs, with the declared settings in the message. Those that the profile gives are warnings,
+since profiles serve every library's executable and runs may select some of them.
 -/
 @[test]
 def undeclaredSettingRejected : Test := do
@@ -371,7 +371,7 @@ def undeclaredSettingRejected : Test := do
     assertTrue r.report.failsRun "--wfail makes it an error"
 
 /--
-A setting's declared default reaches a test that takes it when nothing else gives a value, and the
+Settings' declared defaults reach the tests that take them when nothing else gives a value, and the
 test prints it. `--list` shows the default and what the test receives, and the command line wins
 over the default.
 -/
@@ -416,8 +416,8 @@ def settingsArriveInOrder : Test := forEach scriptedProducts fun p => do
 /-! # Checks of the scripted products -/
 
 /--
-Tier 0: a test executable that writes no verdict is judged by its exit code alone. A zero exit is a
-pass, and a non-zero exit without a verdict is inconclusive, with the test's output kept.
+Tier 0: test executables that write no verdict are judged by their exit codes alone. Zero exits are
+passes, and non-zero exits without a verdict are inconclusive, with the test's output kept.
 -/
 @[test]
 def tierZeroPassAndFail : Test := forEach scriptedProducts fun p => do
@@ -452,8 +452,8 @@ def unknownRecordsIgnored : Test := forEach scriptedProducts fun p => do
   expectOutcome r "unknown-records" (· matches .reported .pass) "a pass"
 
 /--
-An exit code that contradicts the reported verdict is a mismatch, whichever way it goes. On the
-shell harness a test that calls `errata_fail` exits with 1, so its `mismatch-fail` fails.
+Exit codes that contradict the reported verdict are mismatches, whichever way they go. On the shell
+harness, tests that call `errata_fail` exit with 1, so its `mismatch-fail` fails.
 -/
 @[test]
 def verdictMismatch : Test := forEach scriptedProducts fun p => do
@@ -675,8 +675,8 @@ def Role.args (r : Role) (out : System.FilePath) : Array String :=
   #["errata-run", out.toString, r.test] ++ r.sets.map fun (k, v) => s!"setting:{k}={v}"
 
 /--
-A chain of invocations separated by {lit}`;` arguments runs in order in one process, stops at the
-first that exits non-zero, and exits with its status.
+Chains of invocations separated by {lit}`;` arguments run in order in one process, stop at the first
+that exits non-zero, and exit with its status.
 -/
 @[test]
 def chainsRunInOrder : Test := forEach products fun p => do
@@ -724,8 +724,8 @@ def runIdIsSharedWithinARun : Test := do
   assertBEq (products.map fun _ => second) ids'
 
 /--
-A test executable's result file begins with the {lit}`protocol` record. The runner reads a result
-file whose first record is another as unreadable.
+Test executables' result files begin with the {lit}`protocol` record. The runner reads result files
+whose first record is another as unreadable.
 -/
 @[test]
 def resultFileBeginsWithProtocol : Test := do
@@ -762,8 +762,8 @@ def signalExitCodes : Test := do
   assertBEq none (signalOfExitCode? 128)
 
 /--
-A duration is a sequence of whole numbers with units, in the order `h`, `m`, `s`, `ms` and each unit
-at most once. A malformed duration's error states the accepted form.
+Durations are sequences of whole numbers with units, in the order `h`, `m`, `s`, `ms` and each unit
+at most once. The errors for malformed durations state the accepted form.
 -/
 @[test]
 def durations : Test := do
@@ -799,7 +799,7 @@ def seedsAreDerived : Test := do
     assertBEq (some (toString (testSeed 7 p.exe.name "pass"))) (strField outcome "seed")
     assertBEq 7 r.report.seed
 
-/-- An unknown profile stops the run, with the profiles in the message. -/
+/-- Unknown profiles stop the run, with the profiles in the message. -/
 @[test]
 def unknownProfile : Test := do
   let r ← runWith #[basic ["pass"]] { profile := "nightly" } { profiles := #[{ name := "ci" }] }
@@ -877,7 +877,7 @@ def filterWarnings : Test := do
       assertTrue (r.report.issues.any (·.message == "errata.toml:3:25: tag(browser) matches no tag of any test"))
         s!"{r.report.issues.map (·.message)}"
 
-/-- An override's values apply to the tests its filter matches; the first match wins per value. -/
+/-- Overrides' values apply to the tests their filters match; the first match wins per value. -/
 @[test]
 def overridesApply : Test := forEach scriptedProducts fun p => do
   let overrides : Array Override := #[
@@ -955,8 +955,8 @@ def resolutionPrecedence : Test := do
     assertBEq false r.updateGolden
 
 /--
-A test that runs longer than `slow-after` is marked slow in the human report, and its outcome
-stands.
+Tests that run longer than `slow-after` are marked slow in the human report, and their outcomes
+stand.
 -/
 @[test]
 def slowTestsAreMarked : Test := do

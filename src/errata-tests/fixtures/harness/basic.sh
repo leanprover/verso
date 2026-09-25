@@ -194,8 +194,8 @@ case "$mode" in
 esac
 }
 
-# A single invocation runs in this process, so that a test that ignores a signal is the process that
-# the runner signals.
+# If there is a single invocation, then it runs in this process, so that tests that ignore a signal
+# are the processes that the runner signals.
 chained=""
 for arg in "$@"; do
   [ "$arg" = ";" ] && chained=1

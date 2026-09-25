@@ -76,8 +76,8 @@ meta def testAction (decl : Name) : MetaM (Expr × Array SettingUse) := do
           match settingOfParameter? env ty with
           | some use => uses := uses.push use
           | none =>
-            -- A parameter whose type is a definition that stands for a setting names the setting
-            -- through another name.
+            -- Parameters whose types are definitions that stand for settings name the settings
+            -- through other names.
             let named? : Option Name := match ty with
               | .app (.const ``Errata.Setting.type []) (.const c [])
               | .app (.const ``Option _) (.app (.const ``Errata.Setting.type []) (.const c [])) =>
@@ -127,10 +127,10 @@ meta def runDeclName (env : Environment) (decl : Name) : Name := Id.run do
 
 /--
 Records a declaration as a test with the given tags. The action that runs it is compiled, with the
-{name}`IsTest` instance in force here, into an exported definition beside it. A test executable
-reaches that definition through a plain {lit}`import` of the test's module. A test must itself be
-exported: in a module, it is public, which a {lit}`public section` arranges. The docstring is read
-here, from the live environment, and stored with the test.
+{name}`IsTest` instance in force here, into an exported definition beside it. Test executables
+reach that definition through a plain {lit}`import` of the test's module. Tests must themselves be
+exported: in a module, they are public, which a {lit}`public section` arranges. The docstring is
+read here, from the live environment, and stored with the test.
 -/
 meta def recordTest (decl : Name) (tags : Array String := #[]) : AttrM Unit := do
   if (testExt.getState (← getEnv)).any (·.name == decl) then
