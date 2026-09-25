@@ -719,9 +719,9 @@ Filters with syntax errors, unknown profiles, and profiles whose {lit}`jobs` is 
 run before the List phase. The List phase lists every executable, then checks the configuration
 against the inventory: values that the command line gives to settings that no executable declares
 are errors, and those that the profile gives are warnings; the filters are evaluated, with a warning
-for each atom and each filter that selects nothing. The configuration's filters draw these warnings only
-when the run has every test executable of the package. The Run phase runs the selected tests in
-inventory order.
+for each atom and each filter that selects nothing. The configuration's filters draw these warnings
+only when the run has every test executable of the package. The Run phase runs the selected tests
+in inventory order.
 -/
 def execute (config : Config) (opts : Options) (sinks : Sinks)
     (registry : Option Registry := none) : IO RunReport := do
