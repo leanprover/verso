@@ -812,7 +812,7 @@ lean_exe packagedocs where
 
 /--
 Runs a manual's executable to write its multi-page HTML into a directory of the build directory, and
-returns the site's directory. The browser tests take such a site as their `siteDir` setting.
+returns the site's directory. The browser suites' site fixtures take such a site as a setting.
 -/
 def buildManualSite (pkg : Package) (exe : Job System.FilePath) (name : String) :
     FetchM (Job System.FilePath) :=

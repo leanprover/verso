@@ -1,18 +1,99 @@
 """
 Fixtures for the Errata widget tests. Within a session, tests share one Lean server, and each test
-gets a fresh page with the InfoView and an editor that connects the page to the server.
+gets a fresh page with the InfoView and an editor that connects the page to the server. Under
+Verso's pytest harness, the tests of a run share one Lean server, which the Errata fixture
+`leanServer` hosts.
 """
 
+import json
+import sys
 from pathlib import Path
 
 import pytest
 from playwright.sync_api import Page, expect
 
-from harness import FIXTURE, INFOVIEW, Editor, LeanSession, LspRelay
+import harness
+import services
+from harness import FIXTURE, INFOVIEW, Editor, LeanSession, LspRelay, RemoteLeanServer
+from harness import RemoteLeanSession
 from widget import EXPECT_TIMEOUT
 
 # Playwright's own timeout for an assertion, which each widget test restores as it ends.
 PLAYWRIGHT_EXPECT_TIMEOUT = 5_000
+
+
+def check_fixture_workspace():
+    """
+    Checks that the InfoView is installed, and removes the fixture workspace's manifest so that Lake
+    resolves the workspace against Verso's own dependencies.
+    """
+    if not INFOVIEW.is_dir():
+        raise RuntimeError("the InfoView is missing; run `npm ci` in the repository root first")
+    manifest = FIXTURE / "lake-manifest.json"
+    if manifest.exists():
+        manifest.unlink()
+
+
+def lean_server_setup(context):
+    """
+    The setup of the fixture `leanServer`, which starts this suite's harness as the host of a Lean
+    server and returns the host's address.
+    """
+    check_fixture_workspace()
+    ready = services.state_dir(context, "leanServer") / "ready.json"
+    proc = services.start(
+        context, "leanServer", [sys.executable, harness.__file__, "serve", str(ready)]
+    )
+
+    def port():
+        try:
+            return json.loads(ready.read_text())["port"]
+        except (OSError, ValueError, KeyError):
+            return None
+
+    found = services.wait_until(port, 300, "the Lean server", proc, context, "leanServer")
+    return f"127.0.0.1:{found}"
+
+
+def lean_server_prepare(address, context):
+    """
+    The prepare of the fixture `leanServer`, which readies the server for the next test: it ends the
+    runs that the server's file workers started and closes the documents that earlier tests left
+    open, or starts a new server when the last one has exited.
+    """
+    lean = RemoteLeanServer(address, lambda message: None)
+    try:
+        lean.control("reset")
+    finally:
+        lean.close()
+
+
+def lean_server_teardown(address, context):
+    """The teardown of the fixture `leanServer`: it stops the host, the server, and their runs."""
+    services.stop(context, "leanServer", group_first=False, grace=20.0)
+
+
+# The Lean server that the tests share. Each test uses it alone among its users, since the tests
+# open documents in one workspace and write its scratch module.
+errata_fixtures_decl = {
+    "leanServer": {
+        "description": "A Lean server in the widget's fixture workspace, which the tests share.",
+        "setup": lean_server_setup,
+        "prepare": lean_server_prepare,
+        "teardown": lean_server_teardown,
+    },
+}
+
+
+def errata_fixtures_of(request):
+    """
+    The values of the Errata fixtures that the test received from Verso's pytest harness, or an
+    empty dictionary when pytest runs without the harness.
+    """
+    try:
+        return request.getfixturevalue("errata_fixtures")
+    except pytest.FixtureLookupError:
+        return {}
 
 
 @pytest.fixture(autouse=True)
@@ -28,31 +109,34 @@ def expect_timeout():
 
 
 @pytest.fixture(scope="session")
-def browser(playwright_instance):
-    """The widget runs in the InfoView of VS Code, whose webviews are Chromium."""
-    browser = playwright_instance.chromium.launch()
+def browser(request, playwright_instance):
+    """
+    The widget runs in the InfoView of VS Code, whose webviews are Chromium: a connection to the
+    server of the Errata fixture `chromium` under Verso's pytest harness, and otherwise a browser
+    that this process launches.
+    """
+    endpoint = errata_fixtures_of(request).get("chromium")
+    chromium = playwright_instance.chromium
+    browser = chromium.connect(endpoint) if endpoint else chromium.launch()
     yield browser
     browser.close()
 
 
 @pytest.fixture(scope="session")
-def fixture_workspace():
+def lean_session(request):
     """
-    Checks that the InfoView is installed, and removes the fixture workspace's manifest so that Lake
-    resolves the workspace against Verso's own dependencies.
+    The Lean server of the tests: the server of the Errata fixture `leanServer` under Verso's pytest
+    harness, and otherwise one that this session starts.
     """
-    if not INFOVIEW.is_dir():
-        pytest.fail(
-            "the InfoView is missing; run `npm ci` in the repository root first"
-        )
-    manifest = FIXTURE / "lake-manifest.json"
-    if manifest.exists():
-        manifest.unlink()
-
-
-@pytest.fixture(scope="session")
-def lean_session(fixture_workspace):
-    session = LeanSession()
+    address = errata_fixtures_of(request).get("leanServer")
+    if address:
+        session = RemoteLeanSession(address)
+    else:
+        try:
+            check_fixture_workspace()
+        except RuntimeError as error:
+            pytest.fail(str(error))
+        session = LeanSession()
     yield session
     session.stop()
 
@@ -66,13 +150,15 @@ def relay():
 
 def pytest_collection_modifyitems(config, items):
     """
-    Marks the widget tests `slow`: each starts a Lean server of its own when Errata runs it in a
-    process of its own.
+    Marks the widget tests `slow`, since each takes several seconds, and marks the tests that use a
+    Lean server as using the Errata fixture `leanServer`.
     """
     here = Path(__file__).parent
     for item in items:
         if here in Path(item.path).parents:
             item.add_marker(pytest.mark.slow)
+            if "lean_session" in item.fixturenames:
+                item.add_marker(pytest.mark.errata_fixture("leanServer"))
 
 
 @pytest.hookimpl(wrapper=True)

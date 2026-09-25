@@ -22,17 +22,18 @@ literatePlanExe = { needs = "verso-literate-plan" }
 required = "given"
 
 # The browser tests alone, each suite with the site it tests. Lake builds the sites of the user's
-# guide and the package documentation example; the literate suites build theirs as they run.
+# guide and the package documentation example; the literate suites' site fixtures build theirs in
+# their test projects, with the root's executables that these settings bind.
 [profile.browser]
 default-filter = "tag(browser)"
 
-[[profile.browser.override]]
-filter = "exe(browser-search)"
-settings.siteDir = { needs = "usersGuideSite" }
-
-[[profile.browser.override]]
-filter = "exe(browser-package-manual)"
-settings.siteDir = { needs = "packageManualSite" }
+[profile.browser.settings]
+usersGuideSite = { needs = "usersGuideSite" }
+packageManualSite = { needs = "packageManualSite" }
+versoLiterateExe = { needs = "verso-literate" }
+versoLiterateHtmlExe = { needs = "verso-literate-html" }
+versoLiteratePlanExe = { needs = "verso-literate-plan" }
+versoHtmlExe = { needs = "verso-html" }
 
 # Continuous integration runs every test, with the browser tests' sites. Linux headless Firefox
 # disables the CSS guarded by `@media (hover: hover)`, so the tests that need it run on Chromium.
@@ -59,34 +60,37 @@ command = ["bash", "src/tests/interactive/tests.sh"]
 name = "serve"
 command = ["bash", "src/tests/run_serve_test.sh"]
 
-# The browser suites, each through Verso's pytest harness.
+# The browser suites, each through Verso's pytest harness. `--errata-site` names the site that a
+# suite tests, which its Errata fixtures build and serve once per run.
 [[executable]]
 name = "browser-search"
 command = ["uv", "run", "--project", "browser-tests", "--extra", "test", "python",
-  "browser-tests/errata_pytest.py",
+  "browser-tests/errata_pytest.py", "--errata-site", "usersguide",
   "browser-tests/test_search.py", "browser-tests/test_search_priority.py",
   "browser-tests/test_search_page.py", "browser-tests/test_search_path_prefix.py",
   "browser-tests/test_toc_resize.py", "browser-tests/test_redirect.py", "browser-tests/test_katex.py"]
 
 [[executable]]
 name = "browser-literate"
-command = ["bash", "browser-tests/errata_with_site.sh", "literate", "test-projects/literate-config",
-  "browser-tests/literate"]
+command = ["uv", "run", "--project", "browser-tests", "--extra", "test", "python",
+  "browser-tests/errata_pytest.py", "--errata-site", "literate", "browser-tests/literate"]
 
 [[executable]]
 name = "browser-literate-multi-root"
-command = ["bash", "browser-tests/errata_with_site.sh", "literate",
-  "test-projects/literate-multi-root", "browser-tests/literate-multi-root"]
+command = ["uv", "run", "--project", "browser-tests", "--extra", "test", "python",
+  "browser-tests/errata_pytest.py", "--errata-site", "literate-multi-root",
+  "browser-tests/literate-multi-root"]
 
 [[executable]]
 name = "browser-verso-html"
-command = ["bash", "browser-tests/errata_with_site.sh", "verso-html",
-  "test-projects/literate-config", "+LitConfig:literate", "browser-tests/verso-html"]
+command = ["uv", "run", "--project", "browser-tests", "--extra", "test", "python",
+  "browser-tests/errata_pytest.py", "--errata-site", "verso-html", "browser-tests/verso-html"]
 
 [[executable]]
 name = "browser-package-manual"
 command = ["uv", "run", "--project", "browser-tests", "--extra", "test", "python",
-  "browser-tests/errata_pytest.py", "browser-tests/package-manual"]
+  "browser-tests/errata_pytest.py", "--errata-site", "package-manual",
+  "browser-tests/package-manual"]
 
 [[executable]]
 name = "browser-errata-widget"
