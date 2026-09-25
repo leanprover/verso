@@ -85,7 +85,10 @@ inductive Event where
   | exited (job : Job) (succeeded : Bool)
   /-- A job's process ran past its timeout and was stopped. -/
   | timedOut (job : Job)
-  /-- The run was cancelled: nothing more starts, and the run ends once nothing is running. -/
+  /--
+  The run was cancelled: no test or prepare starts, the fixtures whose setups were invoked are torn
+  down once their running users end, and then the run ends.
+  -/
   | cancelled
 deriving Repr, Inhabited, DecidableEq
 
@@ -296,13 +299,21 @@ the fixture free of other users, and a shared claim needs it free of exclusive o
 waiting tests go first: a fixture that one of them wants exclusively waits for it, and a fixture
 that one of them wants at all waits for it before an exclusive claim, so the users of a fixture take
 it in queue order. Once a job waits for slots, the jobs after it wait too, so a large request is
-served. Setups start as their first users reach them, after the setups of the fixtures they take.
+served. Setups start as their first users reach them, after the setups of the fixtures they take; a
+test that a failed fixture already dooms starts no setup, so a fixture whose remaining users are all
+doomed is not set up.
+
+Once the run is cancelled, the tests that have not started are dropped without a report, and every
+fixture whose setup was invoked is torn down once its running users have ended.
 -/
 def State.fill (s : State) : State × Array Command := Id.run do
   if s.finished then return (s, #[])
   let mut s := s
   let mut out : Array Command := #[]
-  if !s.cancelled then
+  if s.cancelled then
+    for t in [0 : s.tests.size] do
+      if s.testStatus[t]! matches .pending then s := s.endTest t
+  else
     let (s', cmds) := s.startTeardowns
     s := s'
     out := out ++ cmds
@@ -320,14 +331,22 @@ def State.fill (s : State) : State × Array Command := Id.run do
         s := s.endTest t
         out := out.push (.skip (.test t) (.settingMissing setting))
         continue
+      -- Fixtures whose mandatory settings have no value fail at once, and doom their users.
+      for f in s.closures[t]! do
+        if s.fixtureStatus[f]! matches .unset then
+          if let some setting := s.fixtures[f]!.missing? then
+            s := s.failFixture f .setup false
+            out := out.push (.skip (.setup f) (.settingMissing setting))
+      if let some (root, phase) := s.closures[t]!.findSome? s.failure? then
+        if earlierUnfinished then continue
+        s := s.endTest t
+        out := out.push (.skip (.test t) (.fixtureFailed root phase))
+        continue
       -- The setups that the test waits for, each after the setups of the fixtures it takes.
       for f in s.closures[t]! do
         unless s.fixtureStatus[f]! matches .unset do continue
         unless s.fixtures[f]!.deps.all (s.value? · |>.isSome) do continue
-        if let some setting := s.fixtures[f]!.missing? then
-          s := s.failFixture f .setup false
-          out := out.push (.skip (.setup f) (.settingMissing setting))
-        else if !slotsBlocked then
+        if !slotsBlocked then
           let grant := s.grant s.fixtures[f]!.threads
           if s.free ≥ grant then
             s := { s with
@@ -335,11 +354,6 @@ def State.fill (s : State) : State × Array Command := Id.run do
               fixtureJobs := s.fixtureJobs.push (.setup f, grant) }
             out := out.push (.spawn (.setup f) grant (s.valuesOf s.fixtures[f]!.deps))
           else slotsBlocked := true
-      if let some (root, phase) := s.closures[t]!.findSome? s.failure? then
-        if earlierUnfinished then continue
-        s := s.endTest t
-        out := out.push (.skip (.test t) (.fixtureFailed root phase))
-        continue
       let ready := s.closures[t]!.all (s.value? · |>.isSome)
       let claimable := test.fixtures.all fun (f, exclusive) =>
         if exclusive then
@@ -365,17 +379,16 @@ def State.fill (s : State) : State × Array Command := Id.run do
         for (f, exclusive) in test.fixtures do
           wanted := wanted.insert f (exclusive || wanted.getD f false)
       earlierUnfinished := true
-    -- Tests reported without running may have been the last users of their fixtures.
-    let (s', cmds) := s.startTeardowns
-    s := s'
-    out := out ++ cmds
+  -- Tests reported without running, or dropped, may have been the last users of their fixtures.
+  let (s', cmds) := s.startTeardowns
+  s := s'
+  out := out ++ cmds
   let idle := s.fixtureJobs.isEmpty && s.testStatus.all fun
     | .pending | .done => true
     | _ => false
-  let allDone := s.cancelled || s.testStatus.all (· matches .done)
-  let teardownsLeft := !s.cancelled &&
-    (List.range s.fixtures.size).any fun f =>
-      s.invoked f && !(s.fixtureStatus[f]! matches .tornDown)
+  let allDone := s.testStatus.all (· matches .done)
+  let teardownsLeft := (List.range s.fixtures.size).any fun f =>
+    s.invoked f && !(s.fixtureStatus[f]! matches .tornDown)
   if idle && allDone && !teardownsLeft then
     s := { s with finished := true }
     out := out.push .finish

@@ -52,7 +52,7 @@ def jobKey : Job → List Nat
 
 /-- How long a job runs in the scenario. -/
 def Scenario.duration (sc : Scenario) (job : Job) : Nat :=
-  1 + draw sc.seed (0 :: jobKey job) 9
+  draw sc.seed (0 :: jobKey job) 9
 
 /-- How a job ends in the scenario: {lit}`0` succeeds, {lit}`1` fails, and {lit}`2` times out. -/
 def Scenario.ending (sc : Scenario) (job : Job) : Nat :=
@@ -89,8 +89,14 @@ structure Sim where
   now : Nat := 0
   /-- The running jobs, each with its end time, its grant, and how it ends. -/
   running : Array (Job × Nat × Nat × Nat) := #[]
-  /-- The tests that hold claims: each test and the time its claim began. -/
+  /-- The tests that hold claims. -/
   holding : Array Nat := #[]
+  /-- For each fixture, the last test that claimed it exclusively. -/
+  lastExclusive : Array (Option Nat) := #[]
+  /-- The prepares that ended successfully, each a fixture and a test. -/
+  prepared : Array (Nat × Nat) := #[]
+  /-- The fixtures whose teardowns have started. -/
+  teardownStarted : Array Bool := #[]
   /-- The number of times each test was started or reported without running. -/
   outcomes : Array Nat
   /-- The fixtures whose setups ended successfully. -/
@@ -125,7 +131,10 @@ def Sim.violate (s : Sim) (msg : String) : Sim :=
 /-- The slots that the running processes hold. -/
 def Sim.slotsInUse (s : Sim) : Nat := s.running.foldl (· + ·.2.2.1) 0
 
-/-- Checks that a test may claim its fixtures now, and records its claim. -/
+/--
+Checks that a test may claim its fixtures now, and that it claims each fixture it uses exclusively
+after the earlier tests that do, and records its claim.
+-/
 def Sim.claim (s : Sim) (t : Nat) : Sim := Id.run do
   let mut s := s
   for (f, exclusive) in s.state.tests[t]!.fixtures do
@@ -133,7 +142,17 @@ def Sim.claim (s : Sim) (t : Nat) : Sim := Id.run do
       for (g, other) in s.state.tests[u]!.fixtures do
         if g == f && (exclusive || other) then
           s := s.violate s!"test {t} claims fixture {f} while test {u} holds it"
+    if exclusive then
+      if let some u := s.lastExclusive[f]! then
+        if u > t then s := s.violate s!"test {t} claims fixture {f} after test {u}, a later one"
+      s := { s with lastExclusive := s.lastExclusive.set! f (some t) }
   return { s with holding := s.holding.push t }
+
+/-- Checks that no fixture that a job needs has begun its teardown. -/
+def Sim.notTornDown (s : Sim) (job : Job) (fs : Array Nat) : Sim :=
+  fs.foldl (init := s) fun s f =>
+    if s.teardownStarted[f]! then s.violate s!"{repr job} started after fixture {f}'s teardown"
+    else s
 
 /-- Ends a test's claim. -/
 def Sim.release (s : Sim) (t : Nat) : Sim :=
@@ -173,7 +192,8 @@ def Sim.perform (sc : Scenario) (s : Sim) (cmd : Command) : Sim := Id.run do
     | _, _ => s := s.violate s!"an unexpected report: {repr cmd}"
     return s
   | .spawn job grant values =>
-    if s.cancelled then s := s.violate s!"a job started after the cancellation: {repr job}"
+    if s.cancelled && !(job matches .teardown _) then
+      s := s.violate s!"a job started after the cancellation: {repr job}"
     let request := s.request job
     unless grant == max 1 (min request sc.pool) do
       s := s.violate s!"{repr job} asked for {request} threads and was granted {grant}"
@@ -193,19 +213,25 @@ def Sim.perform (sc : Scenario) (s : Sim) (cmd : Command) : Sim := Id.run do
       for (f, _) in s.state.tests[t]!.fixtures do
         if s.failedPrepares.contains (f, t) then
           s := s.violate s!"test {t} started after its prepare of fixture {f} failed"
+        unless s.prepared.contains (f, t) do
+          s := s.violate s!"test {t} started before its prepare of fixture {f} ended"
+      s := s.notTornDown job (s.closure t)
       unless s.holding.contains t do s := s.violate s!"test {t} started without its claims"
     | .setup f =>
       s := { s with setups := s.setups.modify f (· + 1) }
       s := needsValues s.state.fixtures[f]!.deps s
+      s := s.notTornDown job (closureOf s.state.fixtures #[f])
     | .prepare f t =>
       if s.state.tests[t]!.fixtures[0]?.map (·.1) == some f then s := s.claim t
       s := needsValues #[f] s
+      s := s.notTornDown job (s.closure t)
       unless s.holding.contains t do s := s.violate s!"the prepare of {f} for {t} ran unclaimed"
     | .teardown f =>
-      s := { s with teardowns := s.teardowns.modify f (· + 1) }
+      s := { s with teardowns := s.teardowns.modify f (· + 1)
+                    teardownStarted := s.teardownStarted.set! f true }
       if s.setups[f]! == 0 then s := s.violate s!"fixture {f} torn down without a setup"
-      for t in [0 : s.state.tests.size] do
-        if (s.closure t).contains f && !s.ended[t]! then
+      for t in s.holding do
+        if (s.closure t).contains f then
           s := s.violate s!"fixture {f} torn down before test {t} ended"
       for g in [0 : s.state.fixtures.size] do
         if s.state.fixtures[g]!.deps.contains f && s.setups[g]! > 0 && !s.tornDown[g]! then
@@ -242,7 +268,10 @@ def Sim.advance (sc : Scenario) (s : Sim) : Sim := Id.run do
     if succeeded then s := { s with setUp := s.setUp.set! f true }
     else s := { s with failedSetups := s.failedSetups.push f }
   | .prepare f t =>
-    unless succeeded do s := { s with failedPrepares := s.failedPrepares.push (f, t) }
+    if succeeded then s := { s with prepared := s.prepared.push (f, t) }
+    else s := { s with failedPrepares := s.failedPrepares.push (f, t) }
+    -- A prepare that ends after the cancellation ends its test, which runs no more.
+    if s.cancelled then s := s.release t
   | .teardown f => s := { s with tornDown := s.tornDown.set! f true }
   if succeeded then
     if let .setup f := job then s := Sim.feed sc s (.valueProduced f s!"value {f}")
@@ -266,7 +295,8 @@ def violations (seed : UInt64) : List String := Id.run do
   let s : Sim := {
     state, outcomes := Array.replicate n 0, setUp := Array.replicate m false
     setups := Array.replicate m 0, teardowns := Array.replicate m 0
-    tornDown := Array.replicate m false, ended := Array.replicate n false }
+    tornDown := Array.replicate m false, ended := Array.replicate n false
+    lastExclusive := Array.replicate m none, teardownStarted := Array.replicate m false }
   let mut s := Sim.run sc (Sim.feed sc s .begin)
   unless s.finished do s := s.violate "the run did not finish"
   for t in [0 : n] do
@@ -276,17 +306,19 @@ def violations (seed : UInt64) : List String := Id.run do
   for f in [0 : m] do
     if s.setups[f]! > 1 then s := s.violate s!"fixture {f} was set up {s.setups[f]!} times"
     if s.teardowns[f]! > 1 then s := s.violate s!"fixture {f} was torn down {s.teardowns[f]!} times"
-    if !s.cancelled && s.setups[f]! == 1 && s.teardowns[f]! == 0 then
+    if s.setups[f]! == 1 && s.teardowns[f]! == 0 then
       s := s.violate s!"fixture {f} was set up and never torn down"
   return s.violations.toList
 
 /--
-The scheduler keeps its rules in random runs: no two exclusive users of a fixture overlap, and no
-shared user overlaps an exclusive one; the slots in use never exceed the pool, and each grant is the
-request or the whole pool; each test is scheduled once or reported without running; a setup ends
-before its fixture's users and the setups of the fixtures that take it begin; a teardown runs once
-whenever the setup ran, after the last user and after the teardowns of the fixtures that take it;
-and the run ends.
+The scheduler keeps its rules in random runs, cancelled ones and jobs that take no time included:
+no two exclusive users of a fixture overlap, no shared user overlaps an exclusive one, and exclusive
+users claim a fixture in queue order; the slots in use never exceed the pool, and each grant is the
+request or the whole pool; each test is scheduled once or reported without running, unless the run
+is cancelled first, and runs after its prepares; a setup ends before its fixture's users and the
+setups of the fixtures that take it begin; a teardown runs once whenever the setup ran, cancelled
+runs included, after the last user and after the teardowns of the fixtures that take it, and
+nothing that needs the fixture starts after it; and the run ends.
 -/
 @[test]
 def schedulerKeepsItsRules : seed → Test :=
@@ -348,5 +380,44 @@ def failedSetupStopsUsers : Test := do
   assertBEq #[Command.spawn (.teardown 0) 1 #[]] cmds
   let (_, cmds) := step s (.exited (.teardown 0) false)
   assertBEq #[Command.finish] cmds
+
+/--
+A cancelled run starts no more tests, and tears down each fixture whose setup ran once its running
+user ends.
+-/
+@[test]
+def cancelledRunTearsDown : Test := do
+  let tests : Array TestSpec := #[{ fixtures := #[(0, true)] }, { fixtures := #[(0, true)] }]
+  let s := State.init 2 tests #[{}]
+  let (s, _) := step s .begin
+  let (s, _) := step s (.valueProduced 0 "v")
+  let (s, _) := step s (.exited (.setup 0) true)
+  let (s, _) := step s (.exited (.prepare 0 0) true)
+  let (s, cmds) := step s .cancelled
+  assertBEq #[] cmds
+  let (s, cmds) := step s (.exited (.test 0) false)
+  assertBEq #[Command.spawn (.teardown 0) 1 #[(0, "v")]] cmds
+  let (_, cmds) := step s (.exited (.teardown 0) true)
+  assertBEq #[Command.finish] cmds
+
+/-- A test that a failed fixture dooms starts no setup of its other fixtures. -/
+@[test]
+def doomedTestsSetNothingUp : Test := do
+  let s := State.init 1 #[{ fixtures := #[(0, true), (1, true)] }] #[{}, {}]
+  let (s, cmds) := step s .begin
+  assertBEq #[Command.spawn (.setup 0) 1 #[]] cmds
+  let (_, cmds) := step s (.exited (.setup 0) false)
+  assertBEq #[Command.skip (.test 0) (.fixtureFailed 0 .setup), .spawn (.teardown 0) 1 #[]] cmds
+
+/-- A test that receives a setting with another value than its fixture did draws a warning. -/
+@[test]
+def settingConflictsWarn : Test := do
+  let plan : Runner.Plan := {
+    pool := 1
+    tests := #[({ exeIdx := 0, name := "t" }, { settings := #[("g", "override")] })]
+    fixtures := #[(0, { name := "F" }, { settings := #[("g", "profile")] })]
+    testSpecs := #[{ fixtures := #[(0, true)] }], fixtureSpecs := #[{}] }
+  assertBEq #["the test t receives the setting g as \"override\", and its fixture F received it as \
+    \"profile\""] plan.settingConflicts
 
 end ErrataTests.Scheduling

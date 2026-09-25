@@ -68,56 +68,75 @@ def Dispatcher.dispatch (d : Dispatcher) (ev : Event) : IO Unit :=
 def Dispatcher.get (d : Dispatcher) : IO State :=
   d.state.atomically MonadState.get
 
+/-- What a registry holds. -/
+structure Registry.Contents where
+  /-- Whether the run has been cancelled. -/
+  cancelled : Bool := false
+  /-- The groups that are running. -/
+  groups : Array Group := #[]
+  /-- Whether the run has ended, after a cancellation its teardowns included. -/
+  done : Bool := false
+  /-- How long the teardowns that a cancelled run started may take, in milliseconds. -/
+  allowanceMs : Nat := 0
+
 /--
 The processes of a run that are running, and whether the run has been cancelled. Every process
 starts under the lock, after a check of the cancellation. Once the run is cancelled, every later
-start is refused.
+start is refused, except the teardowns of the fixtures whose setups were invoked.
 -/
 structure Registry where
-  /-- Whether the run has been cancelled, and the groups that are running. -/
-  state : Std.Mutex (Bool × Array Group)
+  /-- The registry's contents. -/
+  state : Std.Mutex Registry.Contents
 
 /-- A registry with nothing running. -/
 def Registry.new : BaseIO Registry := do
-  return { state := ← Std.Mutex.new (false, #[]) }
+  return { state := ← Std.Mutex.new {} }
 
 /--
 Starts a process with {name}`start` and records it. When the run has been cancelled, the result is
-{lean}`none` and {name}`start` is skipped.
+{lean}`none` and {name}`start` is skipped, unless {name}`afterCancel` allows the start, as it does
+for a teardown, which also extends the time the cancelled run may take by {name}`allowanceMs`.
 -/
-def Registry.start (r : Registry) (start : IO Group) : IO (Option Group) :=
+def Registry.start (r : Registry) (start : IO Group) (afterCancel : Bool := false)
+    (allowanceMs : Nat := 0) : IO (Option Group) :=
   r.state.atomically do
-    let (cancelled, groups) ← get
-    if cancelled then return none
+    let c ← get
+    if c.cancelled && !afterCancel then return none
     let g ← start
-    set (cancelled, groups.push g)
+    set { c with
+      groups := c.groups.push g
+      allowanceMs := c.allowanceMs + if c.cancelled then allowanceMs else 0 }
     return some g
 
 /-- Forgets a process that the run has finished with. -/
 def Registry.release (r : Registry) (g : Group) : IO Unit :=
-  r.state.atomically (modify fun (c, gs) => (c, gs.filter (·.pid != g.pid)))
+  r.state.atomically (modify fun c => { c with groups := c.groups.filter (·.pid != g.pid) })
 
 /-- Whether the run has been cancelled. -/
 def Registry.cancelled (r : Registry) : IO Bool :=
-  r.state.atomically (return (← get).1)
+  r.state.atomically (return (← get).cancelled)
+
+/-- Records that the run has ended. -/
+def Registry.finish (r : Registry) : IO Unit :=
+  r.state.atomically (modify ({ · with done := true }))
 
 /--
-Cancels the run: every later start is refused, every running group is asked to terminate, and the
-groups whose first process is still running after {name}`graceMs` milliseconds are killed. The parts
-of the run that started the processes wait for them.
+Cancels the run: every later start is refused, except teardowns, every running group is asked to
+terminate, and those of them whose first process is still running after {name}`graceMs`
+milliseconds are killed. The parts of the run that started the processes wait for them.
 -/
 def Registry.cancel (r : Registry) (graceMs : Nat) : IO Unit := do
   let groups ← r.state.atomically do
-    let (_, gs) ← get
-    set (true, gs)
-    return gs
+    let c ← get
+    set { c with cancelled := true }
+    return c.groups
   for g in groups do g.terminate
   let deadline := (← IO.monoMsNow) + graceMs
   repeat
-    let live ← (← r.state.atomically (return (← get).2)).filterM (·.armed.get)
+    let live ← groups.filterM (·.armed.get)
     if live.isEmpty || (← IO.monoMsNow) ≥ deadline then break
     IO.sleep pollMs
-  for g in (← r.state.atomically (return (← get).2)) do g.kill
+  for g in groups do g.kill
 
 /-- What the parts of a run share. -/
 structure RunContext where
@@ -281,6 +300,8 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
         let uses := info.fixtures?.getD #[]
         if let some d := uses.find? (fun d => !fixtures.any (·.name == d.name)) then
           return fail s!"its test {name} uses the fixture {d.name}, which is not declared before it"
+        if let some d := uses.find? (fun d => (uses.filter (·.name == d.name)).size > 1) then
+          return fail s!"its test {name} uses the fixture {d.name} twice"
         tests := tests.push {
           exeIdx := idx, name, path := info.path?.getD #[], file? := info.file?,
           line? := info.line?, description? := info.description?, tags := info.tags?.getD #[]
@@ -293,35 +314,35 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
 
 /--
 The arguments after a test's or a fixture phase's name: its settings, the values of its fixtures,
-and its thread grant, when it asked for threads.
+and its thread grant.
 -/
-def invocationArgs (settings fixtures : Array (String × String)) (threads? : Option Nat) :
+def invocationArgs (settings fixtures : Array (String × String)) (threads : Nat) :
     Array String :=
   settings.map (fun (k, v) => s!"setting:{k}={v}") ++
-    fixtures.map (fun (k, v) => s!"fixture:{k}={v}") ++
-    (threads?.map fun n => #[s!"threads:{n}"]).getD #[]
+    fixtures.map (fun (k, v) => s!"fixture:{k}={v}") ++ #[s!"threads:{threads}"]
 
 /-- The arguments of a test executable that runs one test. -/
 def runArgs (out name : String) (settings : Array (String × String))
-    (fixtures : Array (String × String) := #[]) (threads? : Option Nat := none) : Array String :=
-  #["errata-run", out, name] ++ invocationArgs settings fixtures threads?
+    (fixtures : Array (String × String) := #[]) (threads : Nat := 1) : Array String :=
+  #["errata-run", out, name] ++ invocationArgs settings fixtures threads
 
 /-- The arguments of a test executable that runs one phase of a fixture. -/
 def fixtureArgs (out name : String) (phase : FixturePhase) (settings : Array (String × String))
-    (fixtures : Array (String × String) := #[]) (threads? : Option Nat := none) : Array String :=
-  #["errata-fixture", out, name, phase.name] ++ invocationArgs settings fixtures threads?
+    (fixtures : Array (String × String) := #[]) (threads : Nat := 1) : Array String :=
+  #["errata-fixture", out, name, phase.name] ++ invocationArgs settings fixtures threads
 
 /--
 The command that runs a chain of invocations by hand, quoted for a POSIX shell: the executable
 with the invocations separated by {lit}`;` arguments. Their records go to standard error, and
-{name}`threads?` is the thread grant that the invocations asked for, when they asked.
+{lit}`LEAN_NUM_THREADS` is {name}`threads`, the thread grant of the invocation that the chain
+reproduces.
 -/
 def RunContext.reproduceChain (ctx : RunContext) (exe : ExecutableConfig)
-    (links : Array (Array String)) (threads? : Option Nat := none) : String :=
+    (links : Array (Array String)) (threads : Nat := 1) : String :=
   let env : Array (String × String) :=
     #[("LEAN_ABORT_ON_PANIC", "1")] ++
     ((ctx.config.errataDir?.map fun d => #[("ERRATA_DIR", d)]).getD #[]) ++ exe.env ++
-    ((threads?.map fun n => #[("LEAN_NUM_THREADS", toString n)]).getD #[])
+    #[("LEAN_NUM_THREADS", toString threads)]
   let chain := links.foldl (init := #[]) fun acc l =>
     (if acc.isEmpty then acc else acc.push ";") ++ l
   let words := env.map (fun (k, v) => s!"{k}={shellQuote v}") ++
@@ -361,8 +382,8 @@ structure Invocation where
   planned : Planned
   /-- The arguments for a result file at the given path. -/
   args : String → Array String
-  /-- The thread grant, when the test or fixture asked for threads. -/
-  threads? : Option Nat := none
+  /-- The thread grant. -/
+  threads : Nat := 1
   /-- How long it may run, in milliseconds. -/
   timeoutMs : Nat
   /-- How long it has after it is terminated, in milliseconds. -/
@@ -451,22 +472,23 @@ handed on, the result file is read up to its end, so the records that it wrote b
 precede it. It is terminated at its timeout and killed after the grace period; the watch checks the
 clock after every bounded read of the result file. Once the test executable has exited, the
 processes that it started have the pipe grace to release its output pipes, and then its process
-group is swept. The environment holds {lit}`LEAN_NUM_THREADS` with the thread grant when the test or
-fixture asked for threads. {name}`n` numbers the result file.
+group is swept. The environment holds {lit}`LEAN_NUM_THREADS` with the thread grant, which the
+processes that the test executable starts inherit. {name}`n` numbers the result file. A teardown,
+as {name}`teardown` says, starts after the run has been cancelled too.
 -/
-def RunContext.launch (ctx : RunContext) (inv : Invocation) (n : Nat) :
+def RunContext.launch (ctx : RunContext) (inv : Invocation) (n : Nat) (teardown : Bool := false) :
     IO (Option (Task JobEnd)) := do
   let d := ctx.dispatcher
   let exe := inv.exe
   let file := ctx.dir / s!"run-{n}.jsonl"
   IO.FS.writeFile file ""
   let start ← IO.monoMsNow
-  let env := ctx.env exe ++
-    ((inv.threads?.map fun t => #[("LEAN_NUM_THREADS", some (toString t))]).getD #[])
+  let env := ctx.env exe ++ #[("LEAN_NUM_THREADS", some (toString inv.threads))]
   let spawned ←
     try
       let some cmd := exe.command[0]? | throw <| .userError "the command is empty"
-      let g? ← ctx.registry.start <|
+      let g? ← ctx.registry.start (afterCancel := teardown)
+        (allowanceMs := inv.timeoutMs + inv.gracePeriodMs + 4 * pipeGraceMs) <|
         spawnGroup cmd (exe.command.extract 1 exe.command.size ++ inv.args file.toString) exe.cwd?
           env
       pure (Except.ok g?)
@@ -534,16 +556,35 @@ def RunContext.fixturePlan (ctx : RunContext) (pool : Nat) (listings : Array Lis
     threads := t.threads?.getD 1, missing? := r.missing[0]? : Scheduler.TestSpec }
   return { pool, tests := selected, fixtures, testSpecs, fixtureSpecs := specs }
 
+/--
+Warnings about settings that a test receives with one value and a fixture it needs, directly or
+through other fixtures, with another, as an override that selects the test can make happen.
+-/
+def Plan.settingConflicts (plan : Plan) : Array String := Id.run do
+  let mut out := #[]
+  for h : t in [0 : plan.tests.size] do
+    let (test, r) := plan.tests[t]
+    for f in Scheduler.closureOf plan.fixtureSpecs (plan.testSpecs[t]!.fixtures.map (·.1)) do
+      let (_, fixture, fr) := plan.fixtures[f]!
+      for (k, v) in fr.settings do
+        if let some (_, mine) := r.settings.find? (·.1 == k) then
+          unless mine == v do
+            out := out.push s!"the test {test.name} receives the setting {k} as {mine.quote}, and \
+              its fixture {fixture.name} received it as {v.quote}"
+  return out
+
 /-- The grant of a request of {name}`n` threads in the plan's pool. -/
 def Plan.grant (plan : Plan) (n : Nat) : Nat := max 1 (min n plan.pool)
 
-/-- The thread grant of a test that asked for threads. -/
-def Plan.testThreads? (plan : Plan) (t : Nat) : Option Nat :=
-  plan.tests[t]!.1.threads?.map plan.grant
+/-- The thread grant of a test: its request, one when it asks for none, within the pool. -/
+def Plan.testThreads (plan : Plan) (t : Nat) : Nat :=
+  plan.grant (plan.tests[t]!.1.threads?.getD 1)
 
-/-- The thread grant of a fixture that asked for threads. -/
-def Plan.fixtureThreads? (plan : Plan) (f : Nat) : Option Nat :=
-  plan.fixtures[f]!.2.1.threads?.map plan.grant
+/--
+The thread grant of a fixture's phases: its request, one when it asks for none, within the pool.
+-/
+def Plan.fixtureThreads (plan : Plan) (f : Nat) : Nat :=
+  plan.grant (plan.fixtures[f]!.2.1.threads?.getD 1)
 
 /-- Fixtures' values, given by the fixtures' positions, by the fixtures' names. -/
 def Plan.namedValues (plan : Plan) (values : Array (Nat × String)) : Array (String × String) :=
@@ -553,13 +594,13 @@ def Plan.namedValues (plan : Plan) (values : Array (Nat × String)) : Array (Str
 def Plan.phaseArgs (plan : Plan) (out : String) (f : Nat) (phase : FixturePhase)
     (values : Array (Nat × String)) : Array String :=
   let (_, fixture, r) := plan.fixtures[f]!
-  fixtureArgs out fixture.name phase r.settings (plan.namedValues values) (plan.fixtureThreads? f)
+  fixtureArgs out fixture.name phase r.settings (plan.namedValues values) (plan.fixtureThreads f)
 
 /-- The arguments of a test, with the values of the given fixtures. -/
 def Plan.testArgs (plan : Plan) (out : String) (t : Nat) (values : Array (Nat × String)) :
     Array String :=
   let (test, r) := plan.tests[t]!
-  runArgs out test.name r.arguments (plan.namedValues values) (plan.testThreads? t)
+  runArgs out test.name r.arguments (plan.namedValues values) (plan.testThreads t)
 
 /--
 The command that reproduces a job by hand: the setups of the fixtures it needs, each after those it
@@ -568,20 +609,20 @@ teardowns, in the reverse order of the setups. The chain supplies the fixtures' 
 -/
 def RunContext.reproduceJob (ctx : RunContext) (plan : Plan) (job : Scheduler.Job) : String :=
   let out := "/dev/stderr"
-  let (exeIdx, roots, middle, threads?) : Nat × Array Nat × Array (Array String) × Option Nat :=
+  let (exeIdx, roots, middle, threads) : Nat × Array Nat × Array (Array String) × Nat :=
     match job with
     | .test t =>
       let direct := plan.testSpecs[t]!.fixtures.map (·.1)
       (plan.tests[t]!.1.exeIdx, direct,
         direct.map (plan.phaseArgs out · .prepare #[]) ++ #[plan.testArgs out t #[]],
-        plan.testThreads? t)
-    | .setup f | .teardown f => (plan.fixtures[f]!.1, #[f], #[], plan.fixtureThreads? f)
+        plan.testThreads t)
+    | .setup f | .teardown f => (plan.fixtures[f]!.1, #[f], #[], plan.fixtureThreads f)
     | .prepare f _ =>
-      (plan.fixtures[f]!.1, #[f], #[plan.phaseArgs out f .prepare #[]], plan.fixtureThreads? f)
+      (plan.fixtures[f]!.1, #[f], #[plan.phaseArgs out f .prepare #[]], plan.fixtureThreads f)
   let closure := Scheduler.closureOf plan.fixtureSpecs roots
   let links := closure.map (plan.phaseArgs out · .setup #[]) ++ middle ++
     closure.reverse.map (plan.phaseArgs out · .teardown #[])
-  ctx.reproduceChain ctx.config.executables[exeIdx]! links threads?
+  ctx.reproduceChain ctx.config.executables[exeIdx]! links threads
 
 /-- What the dispatcher knows of a job before it runs. -/
 def RunContext.plannedJob (ctx : RunContext) (plan : Plan) (job : Scheduler.Job) : Planned :=
@@ -611,7 +652,7 @@ def RunContext.invocation (ctx : RunContext) (plan : Plan) (job : Scheduler.Job)
   | .test t =>
     let (test, r) := plan.tests[t]!
     { exe := ctx.config.executables[test.exeIdx]!, planned
-      args := (plan.testArgs · t values), threads? := plan.testThreads? t
+      args := (plan.testArgs · t values), threads := plan.testThreads t
       timeoutMs := r.timeoutMs, gracePeriodMs := r.gracePeriodMs }
   | .setup f | .prepare f _ | .teardown f =>
     let (e, _, r) := plan.fixtures[f]!
@@ -620,14 +661,16 @@ def RunContext.invocation (ctx : RunContext) (plan : Plan) (job : Scheduler.Job)
       | .teardown _ => .teardown
       | _ => .setup
     { exe := ctx.config.executables[e]!, planned
-      args := (plan.phaseArgs · f phase values), threads? := plan.fixtureThreads? f
+      args := (plan.phaseArgs · f phase values), threads := plan.fixtureThreads f
       timeoutMs := r.timeoutMs, gracePeriodMs := r.gracePeriodMs }
 
 /--
 Runs the plan's tests and the phases of their fixtures, as the scheduler directs: it starts each job
 that the scheduler asks for, reports the tests and setups that it asks to report without running,
-and tells it of each process that ends, until it ends the run. When the run has been cancelled, the
-first start that is refused tells the scheduler, which starts nothing more.
+and tells it of each process that ends, until it ends the run. Once the run has been cancelled, the
+scheduler learns of it before the next command, starts no more tests, and tears down the fixtures
+whose setups were invoked. When nothing runs and the scheduler has not ended the run, the tests it
+never started are named in a run-level error.
 -/
 def RunContext.runScheduled (ctx : RunContext) (plan : Plan) : IO Unit := do
   let d := ctx.dispatcher
@@ -637,10 +680,17 @@ def RunContext.runScheduled (ctx : RunContext) (plan : Plan) : IO Unit := do
   let mut queue := first
   let mut running : Array (Nat × Scheduler.Job × Task JobEnd) := #[]
   let mut launched := 0
+  let mut toldCancelled := false
   repeat
     let mut finished := false
     let mut i := 0
     while i < queue.size do
+      -- A cancellation reaches the scheduler before the next command, so it starts only teardowns.
+      if !toldCancelled && (← ctx.registry.cancelled) then
+        toldCancelled := true
+        let (s, more) := Scheduler.step sched .cancelled
+        sched := s
+        queue := queue ++ more
       let cmd := queue[i]!
       i := i + 1
       match cmd with
@@ -653,11 +703,15 @@ def RunContext.runScheduled (ctx : RunContext) (plan : Plan) : IO Unit := do
         d.dispatch (.testStarted p)
         d.dispatch (.testEnded p.exe p.test p.key exit 0)
       | .spawn job _ values =>
-        match ← ctx.launch (ctx.invocation plan job values) launched with
+        let teardown := job matches .teardown _
+        match ← ctx.launch (ctx.invocation plan job values) launched teardown with
         | none =>
+          -- The run was cancelled after the scheduler asked for the job, which never started.
+          toldCancelled := true
           let (s, more) := Scheduler.step sched .cancelled
+          let (s, more') := Scheduler.step s (.exited job false)
           sched := s
-          queue := queue ++ more
+          queue := queue ++ more ++ more'
         | some task =>
           running := running.push (launched, job, task)
           launched := launched + 1
@@ -665,7 +719,14 @@ def RunContext.runScheduled (ctx : RunContext) (plan : Plan) : IO Unit := do
     if finished then break
     let tasks := running.toList.map fun (n, _, task) => task.map (n, ·)
     let (n, e) ← match tasks with
-      | [] => break
+      | [] =>
+        -- Nothing runs and the scheduler has not ended the run, so the tests left never start.
+        let pending := (List.range plan.tests.size).filter fun t =>
+          !(sched.testStatus[t]! matches .done)
+        let names := pending.map (plan.tests[·]!.1.name)
+        d.dispatch (.issue { isError := true, message := s!"the scheduler stopped with nothing \
+          running before these tests ran: {", ".intercalate names}" })
+        break
       | t :: ts => IO.waitAny (t :: ts)
     let some (_, job, _) := running.find? (·.1 == n) | break
     running := running.filter (·.1 != n)
@@ -1002,7 +1063,10 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
       | .warn => d.dispatch (.issue { isError := false, message := "no tests to run" })
       | .pass => pure ()
     d.dispatch (.phase "Run" (← Protocol.nowMs))
-    ctx.runScheduled (ctx.fixturePlan opts.jobs listings resolution selected)
+    let plan := ctx.fixturePlan opts.jobs listings resolution selected
+    for w in plan.settingConflicts do
+      d.dispatch (.issue { isError := false, message := w })
+    ctx.runScheduled plan
     let s ← d.get
     -- Under `--wfail`, the warning of `--no-tests warn` fails the run as `--no-tests fail` does.
     let code :=
@@ -1069,10 +1133,11 @@ def executeAndWrite (config : Config) (opts : Options)
 
 /--
 Cancels the run once the runner's lifeline, its standard input, closes: every later start is
-refused, and the running processes are terminated and, after the grace period, killed. The driver
-holds the other end of that pipe, which closes when the driver exits, however it exits. After the
-cancellation, the run loop has the grace period, four pipe graces, and two more seconds to end, and
-then the runner exits with {lit}`1`.
+refused, and the running processes are terminated and, after the grace period, killed; then the
+run loop tears down the fixtures whose setups were invoked. The driver holds the other end of that
+pipe, which closes when the driver exits, however it exits. After the cancellation, the run loop has
+the grace period, four pipe graces, two more seconds, and the time that each teardown it starts may
+take to end, and then the runner exits with {lit}`1`.
 -/
 def exitWhenStdinCloses (parentIn : IO.FS.Stream) (registry : Registry) (graceMs : Nat) :
     IO Unit := do
@@ -1080,11 +1145,18 @@ def exitWhenStdinCloses (parentIn : IO.FS.Stream) (registry : Registry) (graceMs
     if (← parentIn.getLine).isEmpty then break
   try IO.eprintln "errata-runner: standard input closed, so the run ends" catch _ => pure ()
   registry.cancel graceMs
-  -- The run loop reaps the processes and ends what they left holding their pipes; this bounds how
-  -- long that may take.
-  IO.sleep (graceMs + 4 * pipeGraceMs + 2000).toUInt32
-  try (← IO.getStdout).flush catch _ => pure ()
-  IO.Process.forceExit 1
+  -- The run loop reaps the processes, ends what they left holding their pipes, and runs the
+  -- teardowns; this bounds how long that may take.
+  let start ← IO.monoMsNow
+  repeat
+    let c ← registry.state.atomically get
+    if c.done || (← IO.monoMsNow) ≥ start + graceMs + 4 * pipeGraceMs + 2000 + c.allowanceMs then
+      break
+    IO.sleep 50
+  -- The run loop ends the process itself once it is done; this ends it when the bound passes.
+  unless (← registry.state.atomically get).done do
+    try (← IO.getStdout).flush catch _ => pure ()
+    IO.Process.forceExit 1
 
 /--
 Whether the human-readable output is colored, from the choice, the environment variable lookup
@@ -1215,6 +1287,7 @@ def main (args : List String) : IO UInt32 := do
   if (← IO.getEnv lifelineVariable) == some "1" then
     let _ ← IO.asTask (prio := .dedicated) (exitWhenStdinCloses (← IO.getStdin) registry grace)
   let code ← executeAndWrite config opts (some registry) (← useColor opts.color)
+  registry.finish
   try (← IO.getStdout).flush catch _ => pure ()
   try (← IO.getStderr).flush catch _ => pure ()
   -- The thread that reads standard input runs until the pipe closes, and a Lean program that
