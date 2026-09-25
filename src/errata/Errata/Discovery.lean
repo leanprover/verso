@@ -65,7 +65,8 @@ Records a declaration as a test with the given tags and thread request. The acti
 compiled, with the {name}`IsTest` instance in force here, into an exported definition beside it.
 Test executables reach that definition through a plain {lit}`import` of the test's module. Tests
 must themselves be exported: in a module, they are public, which a {lit}`public section` arranges.
-Docstrings are read here, from the live environment, and stored with each test.
+Docstrings are read here, from the live environment, and stored with each test, together with the
+fixtures that the test reaches, so that a test executable lists the test from its record alone.
 -/
 meta def recordTest (decl : Name) (tags : Array String := #[]) (threads? : Option Nat := none) :
     AttrM Unit := do
@@ -80,9 +81,11 @@ meta def recordTest (decl : Name) (tags : Array String := #[]) (threads? : Optio
   withExporting (isExporting := true) do
     addAndCompile (.defnDecl val)
   let docstring? ← findDocString? (← getEnv) decl
+  let reachedFixtures :=
+    reachedFixtureDecls (fixtureExt.getState (← getEnv)) (fixtures.map (·.decl))
   modifyEnv (testExt.addEntry · {
     name := decl, run, isUnsafe := val.safety == .unsafe, file := ← getFileName, docstring?,
-    tags, threads?, settings, fixtures
+    tags, threads?, settings, fixtures, reachedFixtures
   })
 
 /--
@@ -182,23 +185,13 @@ meta def widgetRangeSyntax (decl : Name) (attrStx : Syntax) : AttrM Syntax := do
   | some range => rangeSyntax range.start range.stop
   | none => return attrStx
 
-/-- The declared default of the setting {name}`decl`, read from the setting's value. -/
-private meta unsafe def settingDefaultImpl (decl : Name) : MetaM (Option String) :=
-  evalExpr (Option String) (mkApp (mkConst ``Option [.zero]) (mkConst ``String))
-    (mkApp (mkConst ``Errata.Setting.default?) (mkConst decl)) (safety := .unsafe)
-
-@[implemented_by settingDefaultImpl, inherit_doc settingDefaultImpl]
-private meta opaque settingDefault (decl : Name) : MetaM (Option String)
-
 /--
 A setting that a test takes, as the widget offers a field for it: its name, whether it is optional,
-its docstring, and its declared default, or {lean}`none` in its place when evaluating it fails.
+its docstring, and its declared default.
 -/
-meta def declaredSetting (use : SettingUse) : AttrM Errata.Widget.DeclaredSetting := do
-  let description? :=
-    (settingExt.getState (← getEnv)).find? (·.decl == use.decl) |>.bind (·.docstring?)
-  let default? ← try (settingDefault use.decl).run' catch _ => pure none
-  return { name := settingNameOf use.decl, optional := use.optional, description?, default? }
+meta def declaredSetting (use : SettingUse) : Errata.Widget.DeclaredSetting :=
+  { name := settingNameOf use.decl, optional := use.optional, description? := use.description?,
+    default? := use.default? }
 
 /-- Marks a definition as a test, discovered and run by the Errata test runner. -/
 meta initialize
@@ -237,7 +230,7 @@ meta initialize
       Errata.Widget.noteTest decl {
         version
         location? := declared?.filter (·.endPos.line != 0) <|> commandLocation?
-        settings := ← (test?.map (·.settings)).getD #[] |>.mapM declaredSetting
+        settings := (test?.map (·.settings)).getD #[] |>.map declaredSetting
       }
       let props := pure <| json% {
         decl: $(Errata.nameToJson decl),
@@ -305,17 +298,15 @@ syntax testModules := ident ("." "*")?
 
 /--
 The settings that a test or fixture takes, as a test executable's entries list them: each with its
-docstring as its description and a reference to its declared default, which is read from the
-setting's value when the test executable runs.
+docstring as its description and its declared default, as {lit}`@[setting]` recorded them.
 -/
-meta def settingRefs (env : Environment) (uses : Array SettingUse) : TermElabM (Array Term) :=
+meta def settingRefs (uses : Array SettingUse) : TermElabM (Array Term) :=
   uses.mapM fun use => do
-    let doc? := (settingExt.getState env).find? (·.decl == use.decl) |>.bind (·.docstring?)
-    let docStx ← match doc? with
-      | some doc => `(some $(quote doc))
+    let quoteOpt (s? : Option String) : TermElabM Term := match s? with
+      | some s => `(some $(quote s))
       | none => `((none : Option String))
     `({ name := $(quote (settingNameOf use.decl)), optional := $(quote use.optional),
-        description? := $docStx, default? := Errata.Setting.default? @$(mkCIdent use.decl)
+        description? := $(← quoteOpt use.description?), default? := $(← quoteOpt use.default?)
         : Errata.SettingRef })
 
 /--
@@ -324,8 +315,8 @@ named modules, and expands to the array of {name}`TestEntry` values that run the
 trailing {lit}`.*` also names every imported module below it. Even if a module is named more than
 once, its tests are not duplicated. Each module must be imported so its tests are reachable. Each
 test is named by its fully qualified declaration name, and its entry lists its tags, the settings it
-takes, each with its description and a reference to its declared default, and the fixtures it takes,
-each exclusive or shared. Unsafe tests are wrapped in {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
+takes, each with its description and its declared default, and the fixtures it takes, each exclusive
+or shared. Unsafe tests are wrapped in {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
 -/
 syntax (name := getAllTests) "getAllTests%" str testModules* : term
 
@@ -369,7 +360,7 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
           | none => `((none : Option String))
         let ref ← `(@$(mkCIdent test.run))
         let run ← if test.isUnsafe then `(unsafe $ref) else pure ref
-        let settings ← settingRefs env test.settings
+        let settings ← settingRefs test.settings
         let fixtures ← test.fixtures.mapM fun use =>
           `({ name := $(quote (settingNameOf use.decl)), exclusive := $(quote use.exclusive)
               : Errata.FixtureRef })
@@ -416,7 +407,7 @@ meta def elabGetAllFixtures : TermElab := fun stx expectedType? => do
     let threadsStx ← match f.threads? with
       | some n => `(some $(quote n))
       | none => `((none : Option Nat))
-    let settings ← settingRefs env f.settings
+    let settings ← settingRefs f.settings
     let deps := f.fixtures.map settingNameOf
     entries := entries.push <| ←
       `({ name := $(quote (settingNameOf f.name)), location := $(← exprToSyntax (toExpr location)),

@@ -33,11 +33,29 @@ meta def ensureExported (decl : Name) : AttrM Unit := do
     throwError m!"`{privateToUserName decl}` is private or not exported, so a test executable \
       cannot reach it. Make it public, for example by declaring it in a `public section`."
 
+/-- The declared default of the setting {name}`decl`, read from the setting's value. -/
+private meta unsafe def settingDefaultImpl (decl : Name) : MetaM (Option String) :=
+  evalExpr (Option String) (mkApp (mkConst ``Option [.zero]) (mkConst ``String))
+    (mkApp (mkConst `Errata.Setting.default?) (mkConst decl)) (safety := .unsafe)
+
+@[implemented_by settingDefaultImpl, inherit_doc settingDefaultImpl]
+private meta opaque settingDefault (decl : Name) : MetaM (Option String)
+
+/--
+The setting that a parameter of a test or a fixture takes, as a use of the setting
+{name}`decl` with its docstring and declared default from {name}`settingExt`, or {lean}`none` when
+{lit}`@[setting]` has not recorded {name}`decl`.
+-/
+meta def settingUse? (env : Environment) (decl : Name) (optional : Bool) : Option SettingUse :=
+  (settingExt.getState env).find? (·.decl == decl) |>.map fun s =>
+    { decl, optional, description? := s.docstring?, default? := s.default? }
+
 /--
 Records a declaration as a setting and makes it reducible, so that instance resolution sees a test's
 parameter {lit}`(x : S)` at the type of the setting's values. The declaration must be a runtime
 definition of type {lit}`Errata.Setting`, exported with its value, with no universe parameters, and
-marked as a setting once.
+marked as a setting once. The record holds the setting's docstring and its declared default, which
+is evaluated here.
 -/
 meta def recordSetting (decl : Name) : AttrM Unit := do
   let env ← getEnv
@@ -63,7 +81,9 @@ meta def recordSetting (decl : Name) : AttrM Unit := do
       parameter has the setting's type there. Mark it `@[expose]`, or declare it with `abbrev`."
   setReducibilityStatus decl .reducible
   let docstring? ← findDocString? env decl
-  modifyEnv (settingExt.addEntry · { decl, file := ← getFileName, docstring? })
+  let default? ← try (settingDefault decl).run' catch e =>
+    throwError m!"The default of the setting `{decl}` could not be evaluated: {e.toMessageData}"
+  modifyEnv (settingExt.addEntry · { decl, file := ← getFileName, docstring?, default? })
 
 /--
 Marks a definition of type {lit}`Errata.Setting` as a setting, which tests take as parameters and the

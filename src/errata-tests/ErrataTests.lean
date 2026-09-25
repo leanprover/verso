@@ -1714,6 +1714,24 @@ def harnessSettings : Test := do
     assertBEq (some #["interp", "M", "--", "errata-helper"]) ctx.helperCommand
 
 /--
+The Lean harness lists the fixtures that its tests reach in the order in which the tests first reach
+them, each after the fixtures it takes, whatever the order of its table of fixtures.
+-/
+@[test]
+def harnessOrdersFixturesByTheTests : Test := do
+  let loc : Location := { file := "F.lean", startPos := ⟨1, 0⟩, endPos := ⟨1, 0⟩ }
+  let test (name : String) (fixtures : Array String) : TestInfo :=
+    { package := "", moduleName := "M", name, path := #[name], location := loc
+      fixtures := fixtures.map ({ name := ·, exclusive := true }) }
+  let fixture (name : String) (takes : Array String := #[]) : FixtureInfo :=
+    { name, fixtures := takes }
+  let tests := #[test "t1" #["c"], test "t2" #["a", "d"], test "t3" #["b"]]
+  let table := #[fixture "a", fixture "b" #["a"], fixture "c" #["b"], fixture "d", fixture "e"]
+  for (label, fixtures) in [("in order", table), ("reversed", table.reverse)] do
+    result label do
+      assertBEq #["a", "b", "c", "d"] ((Harness.reachedFixtures tests fixtures).map (·.name))
+
+/--
 The Lean harness lists its tests with their names, paths, and locations, runs one by name, writing
 its records and exiting with its verdict, and runs a helper by name, exiting with its exit code.
 -/

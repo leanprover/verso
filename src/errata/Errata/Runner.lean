@@ -25,15 +25,10 @@ structure FixtureRef where
   exclusive : Bool
 deriving Repr, Inhabited, BEq
 
-/--
-A fixture that a test executable runs the phases of: its identity, what it depends on, and the
-action that runs a phase.
--/
-structure FixtureEntry where
+/-- A fixture as a test executable lists it: its identity and what it depends on. -/
+structure FixtureInfo where
   /-- The fixture's name: its fully qualified declaration name. -/
   name : String
-  /-- The fixture's own source range, used as the default failure location. -/
-  location : Location := default
   /-- The fixture's docstring, rendered as Markdown, when it has one. -/
   docstring? : Option String := none
   /-- The settings that the fixture takes as parameters, in the order of its parameters. -/
@@ -42,6 +37,15 @@ structure FixtureEntry where
   fixtures : Array String := #[]
   /-- The number of hardware threads that the fixture's phases ask for, when it asks. -/
   threads? : Option Nat := none
+deriving Inhabited
+
+/--
+A fixture that a test executable runs the phases of: its identity, what it depends on, and the
+action that runs a phase.
+-/
+structure FixtureEntry extends FixtureInfo where
+  /-- The fixture's own source range, used as the default failure location. -/
+  location : Location := default
   /--
   Runs a phase, given the settings and the fixtures' values as name and value pairs, the phase, and
   the fixture's own value when the phase receives one. The result is the value that a setup
@@ -50,8 +54,8 @@ structure FixtureEntry where
   run : Array (String × String) → Array (String × String) → FixturePhase → Option String →
     FixtureM (Option String)
 
-/-- A test to run: its identity, what it depends on, and the action that produces its results. -/
-structure TestEntry where
+/-- A test as a test executable lists it: its identity and what it depends on. -/
+structure TestInfo where
   /-- The package that defines the test. -/
   package : String
   /-- The module that defines the test, as a dotted name. -/
@@ -72,6 +76,10 @@ structure TestEntry where
   settings : Array SettingRef := #[]
   /-- The fixtures that the test takes as parameters, in the order of its parameters. -/
   fixtures : Array FixtureRef := #[]
+deriving Inhabited
+
+/-- A test to run: its identity, what it depends on, and the action that produces its results. -/
+structure TestEntry extends TestInfo where
   /--
   The action to run, given the settings and then the fixtures' values as name and value pairs. It
   parses the values of the settings and fixtures that the test takes and applies the test to them.

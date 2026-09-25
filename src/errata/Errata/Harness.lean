@@ -106,25 +106,38 @@ def contextOf (settings : Array (String × String)) (threads : Nat := 1)
     helperCommand := some ((← selfCommand invocation).push "errata-helper"), threads }
 
 /--
-The fixtures that the tests in {name}`entries` use, directly or through the fixtures they use, in
-the order of {name}`fixtures`, which lists each fixture after the fixtures it takes.
+Adds the fixture named {name}`name` from {name}`byName` to {name}`order`, the fixtures added so far
+with their names, after the fixtures it takes, each once. Fixtures take no fixture that takes them,
+so the walk ends.
 -/
-def reachedFixtures (entries : Array TestEntry) (fixtures : Array FixtureEntry) :
-    Array FixtureEntry := Id.run do
-  let mut needed : Std.HashSet String := entries.foldl (init := {}) fun s e =>
-    e.fixtures.foldl (init := s) fun s f => s.insert f.name
-  -- Each fixture's own fixtures come before it, so one pass from the last fixture to the first
-  -- reaches every fixture that a needed one takes.
-  for f in fixtures.reverse do
-    if needed.contains f.name then
-      needed := f.fixtures.foldl (init := needed) fun s d => s.insert d
-  return fixtures.filter (needed.contains ·.name)
+partial def addFixtureAfterItsFixtures (byName : Std.HashMap String FixtureInfo) (name : String)
+    (order : Array FixtureInfo × Std.HashSet String) : Array FixtureInfo × Std.HashSet String :=
+  let (out, seen) := order
+  if seen.contains name then order
+  else match byName.get? name with
+    | none => order
+    | some f =>
+      let (out, seen) := f.fixtures.foldl (init := (out, seen.insert name)) fun acc d =>
+        addFixtureAfterItsFixtures byName d acc
+      (out.push f, seen)
+
+/--
+The fixtures among {name}`fixtures` that the tests in {name}`entries` use, directly or through the
+fixtures they use, in the order in which the tests first reach them, each after the fixtures it
+takes. The order depends on the tests alone, whatever the order of {name}`fixtures`.
+-/
+def reachedFixtures (entries : Array TestInfo) (fixtures : Array FixtureInfo) :
+    Array FixtureInfo :=
+  let byName : Std.HashMap String FixtureInfo := fixtures.foldl (init := {}) fun m f =>
+    m.insert f.name f
+  entries.foldl (init := (#[], {})) (fun acc e =>
+    e.fixtures.foldl (init := acc) fun acc f => addFixtureAfterItsFixtures byName f.name acc) |>.1
 
 /--
 The settings that the tests in {name}`entries` and the fixtures in {name}`fixtures` take, each once,
 in the order in which the entries, and then the fixtures, first name them.
 -/
-def reachedSettings (entries : Array TestEntry) (fixtures : Array FixtureEntry := #[]) :
+def reachedSettings (entries : Array TestInfo) (fixtures : Array FixtureInfo := #[]) :
     Array SettingRef := Id.run do
   let mut seen : Std.HashSet String := {}
   let mut out := #[]
@@ -142,12 +155,13 @@ private def settingDeps (settings : Array SettingRef) : Option (Array SettingDep
 /--
 Writes the inventory: the protocol record; a setting record for each setting that the tests and
 their fixtures take, with its description and its declared default; a fixture record for each
-fixture that the tests use, directly or through other fixtures, with its description, the settings
-and fixtures it takes, and the threads it asks for; and then a test record for each entry, with its
-tags and the settings and fixtures it takes.
+fixture that the tests use, directly or through other fixtures, in the order of
+{name}`reachedFixtures`, with its description, the settings and fixtures it takes, and the threads
+it asks for; and then a test record for each entry, with its tags and the settings and fixtures it
+takes.
 -/
-def writeInventory (entries : Array TestEntry) (out : IO.FS.Handle)
-    (fixtures : Array FixtureEntry := #[]) : IO Unit := do
+def writeInventory (entries : Array TestInfo) (out : IO.FS.Handle)
+    (fixtures : Array FixtureInfo := #[]) : IO Unit := do
   writeRecord out (.protocol (some version))
   let reached := reachedFixtures entries fixtures
   for s in reachedSettings entries reached do
@@ -325,7 +339,7 @@ def invoke (entries : Array TestEntry) (args : List String) (helpers : Array Hel
   | "errata-helper" :: name :: rest => return (← runHelperNamed helpers name rest, none)
   | ["errata-list", outPath] =>
     let out ← IO.FS.Handle.mk outPath .append
-    writeInventory entries out fixtures
+    writeInventory (entries.map (·.toTestInfo)) out (fixtures.map (·.toFixtureInfo))
     return (0, none)
   | "errata-run" :: outPath :: name :: rest =>
     let out ← IO.FS.Handle.mk outPath .append

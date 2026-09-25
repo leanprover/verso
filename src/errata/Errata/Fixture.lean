@@ -173,17 +173,17 @@ meta def fixtureOfParameter? (env : Environment) (type : Expr) : Option (Fixture
 /--
 The setting that a parameter's type names: {lit}`S` for a parameter of type {lit}`S` and
 {lit}`Option S`, where {lit}`S` is a declaration that {lit}`@[setting]` marks. The type is read as
-elaborated, where the parameter {lit}`(x : S)` has the type {lit}`Setting.type S`.
+elaborated, where the parameter {lit}`(x : S)` has the type {lit}`Setting.type S`. The use holds the
+setting's docstring and declared default.
 -/
 meta def settingOfParameter? (env : Environment) (type : Expr) : Option SettingUse :=
-  let known (e : Expr) : Option Name :=
+  let known (e : Expr) (optional : Bool) : Option SettingUse :=
     match e with
-    | .app (.const ``Errata.Setting.type []) (.const s []) =>
-      if (settingExt.getState env).any (·.decl == s) then some s else none
+    | .app (.const ``Errata.Setting.type []) (.const s []) => settingUse? env s optional
     | _ => none
   match type with
-  | .app (.const ``Option _) inner => (known inner).map ({ decl := ·, optional := true })
-  | _ => (known type).map ({ decl := ·, optional := false })
+  | .app (.const ``Option _) inner => known inner true
+  | _ => known type false
 
 /-- The number of parameters that a fixture may take, one for each coercion to its value's type. -/
 meta def maxParameters : Nat := 8

@@ -2094,6 +2094,40 @@ def interpretedProductRunsHelpers : Test := do
           fail s!"exited with {r.exitCode}" (some (r.stdout ++ r.stderr))
         assertBEq #[some "pass"] ((verdictsIn (← IO.FS.readFile out)).map (strField · "status"))
 
+/-- The main that the driver generates for this library's compiled test executable. -/
+def generatedMain : System.FilePath :=
+  ".lake/errata-runner/ErrataGenerated_verso/ErrataTests.lean"
+
+/--
+The interpreted product lists a library's tests from the modules' {lit}`.olean` files, and its
+inventory is the compiled test executable's, record for record, when it names the modules that the
+compiled executable's generated main names, in the same order.
+-/
+@[test]
+def interpretedInventoryIsCompiledInventory : Test := do
+  interpretedProduct.check
+  unless ← leanExe.pathExists do fail s!"the test executable is not built at {leanExe}"
+  let main ← IO.FS.readFile generatedMain
+  let some rest := (main.splitOn "getAllTests% \"verso\" ")[1]?
+    | fail s!"{generatedMain} names no test modules" (some main)
+  let modules := ((rest.splitOn ")")[0]!).splitOn " " |>.filter (!·.isEmpty)
+  IO.FS.withTempDir fun dir => do
+    let compiled := dir / "compiled.jsonl"
+    let interpreted := dir / "interpreted.jsonl"
+    assertExitCode 0 (← IO.Process.output
+      { cmd := leanExe.toString, args := #["errata-list", compiled.toString] })
+    assertExitCode 0 (← IO.Process.output {
+      cmd := interpreter.toString
+      args := modules.toArray ++ #["--", "errata-list", interpreted.toString]
+      env := #[("LEAN_PATH", some interpreterLeanPath)] })
+    let compiledLines := (← IO.FS.readFile compiled).splitOn "\n"
+    let interpretedLines := (← IO.FS.readFile interpreted).splitOn "\n"
+    assertTrue (compiledLines.length > 100)
+      s!"the compiled inventory has {compiledLines.length} lines"
+    for (c, i) in compiledLines.zip interpretedLines do
+      assertBEq c i
+    assertBEq compiledLines.length interpretedLines.length
+
 /--
 A test executable of the Lean harness, run by hand without {lit}`ERRATA_LIFELINE` and with
 {lit}`/dev/null` as its standard input, runs the test.
