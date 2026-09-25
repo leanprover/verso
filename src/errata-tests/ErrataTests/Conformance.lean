@@ -829,6 +829,13 @@ def defaultFilterAndCommandLine : Test := do
     assertBEq "--filter:9: expected ')' to end the matcher" issue.message
 
 /--
+The source of a filter of {name}`length` characters in a one-line string of {name}`path` whose
+opening delimiter is at {name}`line` and {name}`col`.
+-/
+private def oneLine (path : String) (line col length : Nat) : Filter.Source :=
+  .file path line col ((Array.range (length + 1)).map ((line, col + 1 + ·)))
+
+/--
 Once the inventory is known, a `tag(…)` that matches no test's tag, an `exe(…)` that names no test
 executable, and a filter that selects no test are warnings at their places, which `--wfail` makes
 errors. The configuration's filters draw them only in a run of every test executable.
@@ -842,7 +849,8 @@ def filterWarnings : Test := do
     "--filter:0: the filter selects no test"] warnings
   expectOutcome r "pass" (· matches .reported .pass) "a pass"
   result "a filter from the configuration names its place in the file" do
-    let text : FilterText := { text := "name(pass) | tag(fast)", source := .file "errata.toml" 3 17 }
+    let text : FilterText :=
+      { text := "name(pass) | tag(fast)", source := oneLine "errata.toml" 3 16 22 }
     let config : Config := { profiles := #[{ name := "default", defaultFilter? := some text }] }
     let r ← runWith #[basic ["pass"]] {} config
     assertBEq #["errata.toml:3:30: tag(fast) matches no tag of any test"]
@@ -851,7 +859,8 @@ def filterWarnings : Test := do
     let r ← runWith #[basic ["pass"]] { filters := #["tag(fast) | name(pass)"], wfail := true }
     assertTrue r.report.failsRun
   result "the configuration's filters in a run of some executables" do
-    let text : FilterText := { text := "all() \\ tag(browser)", source := .file "errata.toml" 3 17 }
+    let text : FilterText :=
+      { text := "all() \\ tag(browser)", source := oneLine "errata.toml" 3 16 20 }
     let override : Override := { filter := { text := "exe(elsewhere)" }, timeoutMs? := some 5000 }
     let config : Config := {
       profiles := #[{ name := "default", defaultFilter? := some text, overrides := #[override] }]

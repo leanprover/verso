@@ -311,11 +311,16 @@ private def tomlCheckKeys (context : String) (known : List String) (t : Lake.Tom
     unless known.contains (tomlKey k) do
       tomlProblem v.ref s!"unknown key '{tomlKey k}' in {context}"
 
-/-- A filter's text, and the position of its first character in `errata.toml`. -/
+/--
+A filter's text and the position of its string's opening delimiter in `errata.toml`. When the
+string's token decodes to the text, `positions?` holds the line and column of each of the text's
+characters, then of the closing delimiter.
+-/
 private structure TomlFilter where
   text : String
   line : Nat
   col : Nat
+  positions? : Option (Array (Nat × Nat)) := none
 
 /-- The value of a setting: a string, or the Lake target whose result is its value. -/
 private inductive TomlSetting where
@@ -425,25 +430,73 @@ private def tomlBool (key : String) (v : Lake.Toml.Value) : TomlM (Option Bool) 
     return none
 
 /--
-A filter string, with the position of its first character after the string's opening quotes. A
-multi-line string whose opening quotes end their line starts on the next line, since TOML drops that
-newline.
+Decodes a TOML string token by TOML's string rules, with the byte offset in the token where each
+decoded character starts, then the offset of the closing delimiter. A literal string, `'…'` or
+`'''…'''`, holds its characters as written. A basic string, `"…"` or `"""…"""`, decodes the escapes
+`\b`, `\t`, `\n`, `\f`, `\r`, `\"`, `\\`, `\uXXXX`, and `\UXXXXXXXX`. A multi-line string drops a
+newline right after its opening delimiter, and in a multi-line basic string a backslash followed by
+whitespace drops that whitespace and the newlines within it.
+-/
+private def tomlStringOffsets (token : String) : Option (String × Array Nat) := Id.run do
+  let cs := token.toList.toArray
+  let bytes : Array Nat := cs.foldl (fun acc c => acc.push (acc.back! + c.utf8Size)) #[0]
+  let delim := if token.startsWith "'''" || token.startsWith "\"\"\"" then 3 else 1
+  let basic := token.startsWith "\""
+  if cs.size < 2 * delim then return none
+  let stop := cs.size - delim
+  let mut i := delim
+  if delim == 3 then
+    if cs[i]? == some '\n' then i := i + 1
+    else if cs[i]? == some '\r' && cs[i + 1]? == some '\n' then i := i + 2
+  let mut out := ""
+  let mut offsets : Array Nat := #[]
+  while i < stop do
+    let c := cs[i]!
+    if !basic || c != '\\' then
+      out := out.push c
+      offsets := offsets.push bytes[i]!
+      i := i + 1
+      continue
+    let some e := cs[i + 1]? | return none
+    let simple := [('b', '\x08'), ('t', '\t'), ('n', '\n'), ('f', '\x0C'), ('r', '\r'), ('"', '"'),
+      ('\\', '\\')]
+    if let some (_, d) := simple.find? (·.1 == e) then
+      out := out.push d
+      offsets := offsets.push bytes[i]!
+      i := i + 2
+    else if e == 'u' || e == 'U' then
+      let hex := cs.extract (i + 2) (i + 2 + if e == 'u' then 4 else 8)
+      unless hex.size == (if e == 'u' then 4 else 8) && hex.all Char.isHexDigit do return none
+      let digit (h : Char) :=
+        if h.isDigit then h.toNat - '0'.toNat else h.toLower.toNat - 'a'.toNat + 10
+      out := out.push (Char.ofNat (hex.foldl (fun n h => n * 16 + digit h) 0))
+      offsets := offsets.push bytes[i]!
+      i := i + 2 + hex.size
+    else if delim == 3 && e.isWhitespace then
+      i := i + 1
+      while i < stop && cs[i]!.isWhitespace do i := i + 1
+    else return none
+  return some (out, offsets.push bytes[stop]!)
+
+/--
+A filter string, with the position of its opening delimiter and, when its token decodes to the text
+that Lake read, the position of each of its characters.
 -/
 private def tomlFilterOf (fileMap : Lean.FileMap) (key : String) (v : Lake.Toml.Value) :
     TomlM (Option TomlFilter) := do
   match v with
   | .string ref text =>
-    let some pos := ref.getPos? | return some { text, line := 0, col := 0 }
-    let p := fileMap.toPosition pos
-    let slice (start len : Nat) : String :=
-      ({ str := fileMap.source, startPos := ⟨pos.byteIdx + start⟩,
-         stopPos := ⟨pos.byteIdx + start + len⟩ } : Substring.Raw).toString
-    let opening := slice 0 3
-    if opening == "\"\"\"" || opening == "'''" then
-      if slice 3 1 == "\n" || slice 3 2 == "\r\n" then
-        return some { text, line := p.line + 1, col := 0 }
-      return some { text, line := p.line, col := p.column + 3 }
-    return some { text, line := p.line, col := p.column + 1 }
+    let some start := ref.getPos? | return some { text, line := 0, col := 0 }
+    let p := fileMap.toPosition start
+    let positions? := do
+      let stop ← ref.getTailPos?
+      let token := ({ str := fileMap.source, startPos := start, stopPos := stop } : Substring.Raw)
+      let (decoded, offsets) ← tomlStringOffsets token.toString
+      guard (decoded == text)
+      return offsets.map fun o =>
+        let q := fileMap.toPosition ⟨start.byteIdx + o⟩
+        (q.line, q.column)
+    return some { text, line := p.line, col := p.column, positions? }
   | other =>
     tomlProblem other.ref s!"'{key}' must be a string, and it is {tomlKind other}"
     return none
@@ -743,8 +796,9 @@ private def loadErrataToml (ws : Workspace) : IO (Except (Array String) ErrataTo
 
 /-- A filter's text and position as the runner's configuration holds them. -/
 private def filterJson (f : TomlFilter) : Lean.Json :=
-  Lean.Json.mkObj [("text", Lean.Json.str f.text), ("file", Lean.Json.str "errata.toml"),
-    ("line", Lean.toJson f.line), ("col", Lean.toJson f.col)]
+  Lean.Json.mkObj <| [("text", Lean.Json.str f.text), ("file", Lean.Json.str "errata.toml"),
+    ("line", Lean.toJson f.line), ("col", Lean.toJson f.col)] ++
+    (f.positions?.map fun ps => [("positions", Lean.toJson ps)]).getD []
 
 /--
 Settings as JSON, each `{ needs = … }` replaced by the target's result. A setting whose target was

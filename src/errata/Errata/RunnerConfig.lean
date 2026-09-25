@@ -147,8 +147,9 @@ def FilterText.fromJson? (j : Json) : Except String FilterText := do
   let file? : Option String ← configField j "file"
   let line? : Option Nat ← configField j "line"
   let col? : Option Nat ← configField j "col"
+  let positions : Array (Nat × Nat) := (← configField j "positions").getD #[]
   let source := match file?, line?, col? with
-    | some f, some l, some c => .file f l c
+    | some f, some l, some c => .file f l c positions
     | _, _, _ => .argument "configuration"
   return { text, source }
 
@@ -156,8 +157,9 @@ instance : FromJson FilterText := ⟨FilterText.fromJson?⟩
 
 instance : ToJson FilterText where
   toJson f := Json.mkObj <| [("text", Json.str f.text)] ++ match f.source with
-    | .file path line col =>
-      [("file", Json.str path), ("line", ToJson.toJson line), ("col", ToJson.toJson col)]
+    | .file path line col positions =>
+      [("file", Json.str path), ("line", ToJson.toJson line), ("col", ToJson.toJson col)] ++
+        if positions.isEmpty then [] else [("positions", ToJson.toJson positions)]
     | .argument _ => []
 
 /-- Decodes the values of settings: an object whose values are strings. -/

@@ -24,26 +24,26 @@ inductive Source where
   /-- A command-line argument, named by a label such as {lit}`--filter`. -/
   | argument (label : String)
   /--
-  A string in a file. {name}`line` and {name}`col` are the position of the string's first
-  character, with lines counted from one and columns from zero.
+  A string in a file. {name}`line` and {name}`col` are the position of the string's opening
+  delimiter, with lines counted from one and columns from zero. {name}`positions` holds the line and
+  column of each character of the filter's text, then of the closing delimiter, and is empty when
+  the string's characters have no known positions.
   -/
-  | file (path : String) (line col : Nat)
+  | file (path : String) (line col : Nat) (positions : Array (Nat × Nat))
 deriving Repr, Inhabited, DecidableEq
 
 /--
-The place {name}`offset` characters into {name}`text`, as a message's prefix. In a file, a newline in
-the text before the offset advances the line and starts the column again from zero.
+The place {name}`offset` characters into the filter's text, as a message's prefix. In a file, it is
+the line and column of that character, or the string's own position and the offset when the
+characters have no known positions.
 -/
-def Source.at (s : Source) (text : String) (offset : Nat) : String :=
+def Source.at (s : Source) (offset : Nat) : String :=
   match s with
   | .argument label => s!"{label}:{offset}"
-  | .file path line col =>
-    let before := text.toList.take offset
-    let newlines := before.count '\n'
-    if newlines == 0 then s!"{path}:{line}:{col + offset}"
-    else
-      let sinceNewline := (before.reverse.takeWhile (· != '\n')).length
-      s!"{path}:{line + newlines}:{sinceNewline}"
+  | .file path line col positions =>
+    match positions[offset]? <|> positions.back? with
+    | some (l, c) => s!"{path}:{l}:{c}"
+    | none => s!"{path}:{line}:{col}: at offset {offset} in the filter"
 
 /--
 A span of a filter's text: the offsets, in characters, of its first character and past its last.
@@ -63,9 +63,9 @@ structure ParseError where
   message : String
 deriving Repr, Inhabited, DecidableEq
 
-/-- The error in the filter {name}`text` as a message that names its place in the source. -/
-def ParseError.render (e : ParseError) (source : Source) (text : String) : String :=
-  s!"{source.at text e.offset}: {e.message}"
+/-- The error as a message that names its place in the filter's source. -/
+def ParseError.render (e : ParseError) (source : Source) : String :=
+  s!"{source.at e.offset}: {e.message}"
 
 /-! # Globs -/
 

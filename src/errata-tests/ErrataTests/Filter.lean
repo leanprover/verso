@@ -144,12 +144,12 @@ def filterParseErrors : Test := do
 def filterErrorLocations : Test := do
   let text := "tag(x) & (name(y)"
   let .error e := Filter.parse text | fail "expected an error"
-  assertBEq "--filter:17: expected ')'" (e.render (.argument "--filter") text)
-  assertBEq "errata.toml:12:28: expected ')'" (e.render (.file "errata.toml" 12 11) text)
-  result "a filter over several lines of a file" do
-    let text := "tag(x) &\n  (name(y)"
-    let .error e := Filter.parse text | fail "expected an error"
-    assertBEq "errata.toml:13:10: expected ')'" (e.render (.file "errata.toml" 12 11) text)
+  assertBEq "--filter:17: expected ')'" (e.render (.argument "--filter"))
+  let positions := (Array.range (text.length + 1)).map ((12, 11 + ·))
+  assertBEq "errata.toml:12:28: expected ')'" (e.render (.file "errata.toml" 12 10 positions))
+  result "a string whose characters have no known positions" do
+    assertBEq "errata.toml:12:10: at offset 17 in the filter: expected ')'"
+      (e.render (.file "errata.toml" 12 10 #[]))
 
 /--
 Parsing a filter and printing it gives the same text, for filters written in their shortest form.

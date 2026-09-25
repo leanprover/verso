@@ -90,11 +90,11 @@ deriving Repr, Inhabited
 def SourcedFilter.parse (text : String) (source : Filter.Source) : Except String SourcedFilter :=
   match Filter.parse text with
   | .ok expr => .ok { expr, text, source }
-  | .error e => .error (e.render source text)
+  | .error e => .error (e.render source)
 
 /-- The place {name}`offset` characters into the filter's text, as a message's prefix. -/
 def SourcedFilter.at (f : SourcedFilter) (offset : Nat) : String :=
-  f.source.at f.text offset
+  f.source.at offset
 
 /-- What the runner resolves a test's configuration from, besides the test itself. -/
 structure ResolutionContext where

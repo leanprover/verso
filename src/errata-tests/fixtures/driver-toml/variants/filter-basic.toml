@@ -1,0 +1,5 @@
+[profile.default]
+default-filter = "name(a\\\\b) | tag(\u0041) | name(y"
+
+[profile.default.settings]
+"TomlLib.stampFile" = { needs = "stamp" }

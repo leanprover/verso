@@ -1069,9 +1069,10 @@ def driverValidatesToml : Test := do
 
 /--
 A setting's name may be written as nested tables as well as a quoted dotted key, and the driver
-reads a file that begins with a byte-order mark and durations with spaces around them. A filter in a
-multi-line string is reported at its line and column in the file. A compound duration such as
-`2m30s` reaches the runner's configuration as its total in milliseconds.
+reads a file that begins with a byte-order mark and durations with spaces around them. An error in a
+filter is reported at the line and column in the file of the character where it was found, in each
+of TOML's four forms of string, past escapes and a dropped first newline. A compound duration such
+as `2m30s` reaches the runner's configuration as its total in milliseconds.
 -/
 @[test]
 def driverReadsTomlForms : Test := do
@@ -1080,10 +1081,13 @@ def driverReadsTomlForms : Test := do
       let out ← withTomlVariant variant #["test"]
       assertExitCode 0 out
       assertContains "1 passed, 0 failed, 0 errors, 0 inconclusive" out.stdout
-  result "a multi-line filter" do
-    let out ← withTomlVariant "multiline-filter" #["test"]
-    assertExitCode 1 out
-    assertContains "errata.toml:4:8: expected ')' to end the matcher" out.stderr
+  let filterCases := [("filter-literal", "2:33"), ("filter-basic", "2:53"),
+    ("filter-ml-literal", "4:8"), ("multiline-filter", "4:8"), ("filter-ml-continued", "4:8")]
+  for (variant, place) in filterCases do
+    result variant do
+      let out ← withTomlVariant variant #["test"]
+      assertExitCode 1 out
+      assertContains s!"errata.toml:{place}: expected ')' to end the matcher" out.stderr
   result "a compound duration" do
     IO.FS.withTempDir fun dir => do
       copyFixture tomlFixture dir
