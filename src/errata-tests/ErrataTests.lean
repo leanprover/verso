@@ -2379,6 +2379,13 @@ error: `@[fixture]` requires the type `Errata.Fixture`, after the fixture's para
   fromString := String.toNat?
   setup := return 1
 
+/-- Another fixture for the checks of `@[fixture]`'s messages. -/
+@[fixture, expose] def otherCountFixture : Fixture where
+  type := Nat
+  toString := toString
+  fromString := String.toNat?
+  setup := return 1
+
 /--
 error: `sharingFixture` takes the fixture `countFixture` as `shared`, and `shared` has no meaning on a fixture's parameters: tests claim fixtures, exclusively or shared. Write `countFixture`.
 -/
@@ -2390,7 +2397,7 @@ error: `sharingFixture` takes the fixture `countFixture` as `shared`, and `share
   setup := return n
 
 /--
-error: The type of `dependentType`'s value depends on its parameters. A fixture's `type`, `toString`, and `fromString` are the same for every value of its parameters.
+error: The field `type` of `dependentType` depends on its parameters. A fixture's `type`, `toString`, and `fromString` are the same for every value of its parameters.
 -/
 #test_msgs in
 @[fixture, expose] def dependentType (n : seed) : Fixture where
@@ -2421,10 +2428,87 @@ which is neither a setting nor a fixture. A fixture's parameters are settings an
 
 -- Tests take fixtures exclusively and shared, beside settings.
 #test_msgs in
-@[test] def takesFixtures (a : countFixture) (b : shared countFixture) (s : seed) : Bool :=
+@[test] def takesFixtures (a : countFixture) (b : shared otherCountFixture) (s : seed) : Bool :=
   a + b + s ≥ 2
 
-/-- error: `@[test]` has no argument `flavor`; its one argument is `tags` -/
+/--
+error: The field `toString` of `dependentPrinter` depends on its parameters. A fixture's `type`, `toString`, and `fromString` are the same for every value of its parameters.
+-/
+#test_msgs in
+@[fixture, expose] def dependentPrinter (n : seed) : Fixture where
+  type := Nat
+  toString v := toString (v + n)
+  fromString := String.toNat?
+  setup := return 0
+
+/--
+error: The field `fromString` of `dependentParser` depends on its parameters. A fixture's `type`, `toString`, and `fromString` are the same for every value of its parameters.
+-/
+#test_msgs in
+@[fixture, expose] def dependentParser (n : seed) : Fixture where
+  type := Nat
+  toString := toString
+  fromString s := s.toNat?.map (· + n)
+  setup := return 0
+
+/-- A setting whose values have no `Inhabited` instance. -/
+structure Uninhabited where
+  /-- The value, which the structure wraps without a default. -/
+  value : Empty → Nat
+
+/-- A setting of a type without an `Inhabited` instance. -/
+@[setting, expose] def uninhabitedSetting : Setting where
+  type := Uninhabited
+  fromString _ := none
+
+/--
+error: The parameter `u` of `needsDefault` has the type
+  uninhabitedSetting.type
+which has no `Inhabited` instance. A fixture's parameters need one, since a test's parameter stands for the fixture's value through the fixture applied to default arguments.
+-/
+#test_msgs in
+@[fixture, expose] def needsDefault (u : uninhabitedSetting) : Fixture where
+  type := Nat
+  toString := toString
+  fromString := String.toNat?
+  setup := return (u.value |> fun _ => 0)
+
+/--
+error: `nineParameters` has 9 parameters, and a fixture takes at most 8.
+-/
+#test_msgs in
+@[fixture, expose] def nineParameters (a b c d e f g h i : seed) : Fixture where
+  type := Nat
+  toString := toString
+  fromString := String.toNat?
+  setup := return a + b + c + d + e + f + g + h + i
+
+/--
+error: The parameter `laterFixture` of `beforeItsFixture` is implicit. A fixture's parameters are explicit settings and fixtures. A setting named before its declaration becomes an implicit parameter when `autoImplicit` is on, so declare the setting before the fixture.
+-/
+#test_msgs in
+set_option autoImplicit true in
+@[fixture, expose] def beforeItsFixture (_x : laterFixture) : Fixture where
+  type := Nat
+  toString := toString
+  fromString := String.toNat?
+  setup := return 0
+
+/--
+error: `twiceFixture` takes the fixture `countFixture` twice. A test takes each fixture once, exclusively or shared.
+-/
+#test_msgs in
+@[test] def twiceFixture (a : countFixture) (b : shared countFixture) : Bool := a == b
+
+-- Tests ask for threads beside their tags.
+#test_msgs in
+@[test (tags := slow) (threads := 4)] def asksForThreads : Bool := true
+
+/-- error: A test asks for at least one thread -/
+#test_msgs in
+@[test (threads := 0)] def asksForNoThreads : Bool := true
+
+/-- error: `@[test]` has no argument `flavor`; its arguments are `tags` and `threads` -/
 #test_msgs in
 @[test (flavor := sweet)] def flavored : Bool := true
 

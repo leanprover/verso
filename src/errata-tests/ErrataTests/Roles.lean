@@ -41,10 +41,15 @@ def endsAsAsked (how? : Option outcome) : Test := do
   | some "error" => throwThe IO.Error (IO.userError "thrown on request")
   | _ => pure ()
 
-/-- Prints the run's identifier, which the runner gives every test executable. -/
+/--
+Prints the run's identifier, which the runner gives every test executable, and the thread grant it
+received.
+-/
 @[test]
 def printsRunId : Test := do
   IO.println s!"run id: {(← IO.getEnv "ERRATA_RUN_ID").getD ""}"
+  IO.println s!"threads: {(← read).threads}; LEAN_NUM_THREADS: \
+    {(← IO.getEnv "LEAN_NUM_THREADS").getD ""}"
 
 /-- Passes once it has the value it needs, which it prints. -/
 @[test]

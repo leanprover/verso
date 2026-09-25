@@ -57,8 +57,9 @@ def test_greets(errata_settings):
 
 
 def test_run_id():
-    """A test that prints the run's identifier."""
+    """A test that prints the run's identifier and the threads it was given."""
     print(f"run id: {os.environ.get('ERRATA_RUN_ID', '')}")
+    print(f"LEAN_NUM_THREADS: {os.environ.get('LEAN_NUM_THREADS', '')}")
 
 
 @pytest.mark.errata_setting("needed")
@@ -143,6 +144,12 @@ def test_uses_dependent(errata_fixtures):
 def test_after_slow_setup(errata_fixtures):
     """A user of the fixture whose setup sleeps."""
     print_fixtures(errata_fixtures)
+
+
+@pytest.mark.errata_fixture("stamped")
+def test_fails_with_fixture(errata_fixtures):
+    """A user of `stamped` that fails."""
+    assert errata_fixtures.get("stamped") == "no such value", "it failed with its fixture"
 
 
 @pytest.mark.errata_fixture("threaded")

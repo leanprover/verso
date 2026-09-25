@@ -88,6 +88,10 @@ def stampedUse (name : String) (file : String) : Test := do
 /-- Another user of `stamped` that may run beside other shared users. -/
 @[test] def sharedB (file : shared stamped) : Test := stampedUse "sharedB" file
 
+/-- A user of `stamped` that fails when `failing` is `true`. -/
+@[test] def failsWithFixture (_ : stamped) (fail? : Option failing) : Test := do
+  if fail?.getD false then fail "it failed with its fixture"
+
 /-- Prints whether the teardown received a value, which it does when the setup produced one. -/
 def reportTeardown (value? : Option String) : FixtureM Unit :=
   IO.println s!"teardown received {value?.getD "no value"}"

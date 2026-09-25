@@ -142,6 +142,8 @@ structure FixtureRoles where
   afterSlowSetup : String
   /-- The user of the fixture that asks for threads. -/
   usesThreaded : String
+  /-- A user of `stamped` that fails, with the failing settings. -/
+  failingUser : String
   /--
   A test that asks for three threads, shares `stamped`, stamps the file, and prints its grant,
   when the product has one.
@@ -166,6 +168,7 @@ def shellFixtures : FixtureRoles where
   usesDependent := "uses-dependent"
   afterSlowSetup := "after-slow-setup"
   usesThreaded := "uses-threaded"
+  failingUser := "fails-with-fixture"
   threadedTest? := some "threaded-test"
 
 /--
@@ -260,6 +263,7 @@ def pytestProduct : Product where
     usesDependent := (pytestTest "test_uses_dependent").test
     afterSlowSetup := (pytestTest "test_after_slow_setup").test
     usesThreaded := (pytestTest "test_uses_threaded").test
+    failingUser := (pytestTest "test_fails_with_fixture").test
     threadedTest? := none }
 
 /-- The built test executable of this library, a product of the Lean harness. -/
@@ -299,7 +303,8 @@ def leanProduct : Product where
     beforeTeardownFailure := "ErrataTests.Resources.beforeTeardownFailure"
     usesDependent := "ErrataTests.Resources.usesDependent"
     afterSlowSetup := "ErrataTests.Resources.afterSlowSetup"
-    usesThreaded := "ErrataTests.Resources.usesThreaded" }
+    usesThreaded := "ErrataTests.Resources.usesThreaded"
+    failingUser := "ErrataTests.Resources.failsWithFixture" }
 
 /-- The built interpreted product of the Lean harness. -/
 def interpreter : System.FilePath := ".lake/build/bin/errata-interpret"
@@ -567,7 +572,9 @@ def settingsArriveInOrder : Test := forEach scriptedProducts fun p => do
   let r ← p.runTests #["greets"] { seed := some 7 }
   let some res := r.result? "greets" | fail "no result"
   let seed := toString (testSeed 7 p.exe.name "greets")
-  assertBEq s!"received setting:Errata.seed={seed}\nreceived setting:greeting=hello\n"
+  -- `basic.sh` echoes every argument, the thread grant included.
+  let grant := if p.exe.name == basicProduct.exe.name then "received threads:1\n" else ""
+  assertBEq s!"received setting:Errata.seed={seed}\nreceived setting:greeting=hello\n{grant}"
     res.output.stdout
   assertBEq #[("Errata.seed", seed), ("greeting", "hello")] res.settings
   result "list -v shows the seed" do
@@ -812,8 +819,8 @@ def verdictsIn (text : String) : Array Json :=
 
 /--
 A test that did not pass carries a command that reproduces it: its executable, {lit}`errata-run`, its
-name, and its settings, quoted for a POSIX shell. Run in a shell, the command writes the test's
-verdict to standard error and exits non-zero.
+name, its settings, and its thread grant, quoted for a POSIX shell. Run in a shell, the command
+writes the test's verdict to standard error and exits with the test's status, 1.
 -/
 @[test]
 def reproductionLine : Test := do
@@ -822,9 +829,12 @@ def reproductionLine : Test := do
     let some res := r.result? p.fails.test | fail "no result"
     let some cmd := res.reproduce? | fail "no reproduction line"
     assertContains s!"errata-run /dev/stderr {shellQuote p.fails.test}" cmd
+    assertContains "LEAN_NUM_THREADS=1 " cmd
+    assertContains " threads:1" cmd
     assertNotContains "  " cmd
-    let out ← IO.Process.output { cmd := "bash", args := #["-c", cmd] }
-    assertTrue (out.exitCode != 0) s!"the reproduction exited with 0: {cmd}"
+    let out ← IO.Process.output
+      { cmd := "bash", args := #["-c", cmd], env := #[("ERRATA_LIFELINE", none)] }
+    assertBEq 1 out.exitCode
     assertBEq #[some "fail"] ((verdictsIn out.stderr).map (strField · "status"))
     result "a pass has none" do
       assertTrue ((r.result? p.passes.test).bind (·.reproduce?)).isNone
@@ -1518,6 +1528,7 @@ def pytestHarness : Test := do
     let settings := records.filter (isEvent "setting") |>.filterMap (strField · "name")
     assertBEq #["greeting", "needed", "stamp-file"] settings
     let fixtures := records.filter (isEvent "fixture") |>.filterMap (strField · "name")
+    -- The inventory lists the fixtures that some test uses.
     assertBEq #["stamped", "setup-fails", "prepare-fails", "teardown-fails", "dependent",
       "slow-setup", "threaded"] fixtures
     let shared ← find "test_shared_a"
@@ -1539,6 +1550,19 @@ def pytestHarness : Test := do
     match r.outcome? e.test with
     | some (.reported (.error m)) => assertContains "the fixture broke" m
     | o => fail s!"expected an error, got {repr o}"
+  result "a phase that calls pytest.fail or sys.exit" do
+    IO.FS.withTempDir fun dir => do
+      let out := (dir / "out.jsonl").toString
+      for (fixture, message) in [("calls-pytest-fail", "Failed: the setup gave up"),
+          ("calls-exit", "the phase called sys.exit(3)")] do
+        IO.FS.writeFile out ""
+        let r ← p.invoke #["errata-fixture", out, fixture, "setup", ";", "errata-fixture", out,
+          fixture, "teardown"]
+        assertBEq 1 r.exitCode
+        assertContains "teardown received no value" r.stdout
+        let verdicts := verdictsIn (← IO.FS.readFile out)
+        assertBEq #[some "error"] (verdicts.map (strField · "status"))
+        assertBEq (some message) (verdicts[0]?.bind (strField · "message"))
   result "pytest's own error" do
     IO.FS.withTempDir fun dir => do
       let out := dir / "out.jsonl"
@@ -1571,22 +1595,32 @@ def expectPhase (r : Run) (fixture : String) (path : Array String) (p : Outcome 
 
 /--
 The problems with a stamp file's lines, in which each user of `stamped` writes `start NAME` and
-`end NAME`: an exclusive user, whose name mentions `exclusive`, or a user that asked for the whole
-pool, whose name mentions `threaded`, that starts or runs while another user runs, and a shared user
-that starts while an exclusive one runs. The second result says whether two users ran at once.
+`end NAME` and each prepare writes `prepare start` and `prepare end`: an exclusive user, whose name
+mentions `exclusive`, or a user that asked for the whole pool, whose name mentions `threaded`, that
+starts while another user or another user's prepare runs, and a user or a prepare that starts while
+such a user runs. The second result says whether two users ran at once.
 -/
 def stampProblems (lines : Array String) : Array String × Bool := Id.run do
   let alone (n : String) : Bool := (n.find? "xclusive").isSome || (n.find? "threaded").isSome
   let mut running : Array String := #[]
   let mut problems := #[]
   let mut overlapped := false
+  let mut preparing := 0
   for l in lines do
-    if let some name := l.dropPrefix? "start " then
+    if l == "prepare start" then
+      if running.any alone then
+        problems := problems.push s!"a prepare started while {running} ran alone"
+      preparing := preparing + 1
+    else if l == "prepare end" then
+      preparing := preparing - 1
+    else if let some name := l.dropPrefix? "start " then
       let name := name.copy
       if !running.isEmpty && alone name then
         problems := problems.push s!"{name} started while {running} ran"
       if running.any alone then
         problems := problems.push s!"{name} started while {running} ran alone"
+      if alone name && preparing > 0 then
+        problems := problems.push s!"{name} started while a prepare ran"
       if !running.isEmpty then overlapped := true
       running := running.push name
     else if let some name := l.dropPrefix? "end " then
@@ -1623,7 +1657,11 @@ def exclusiveUsersNeverOverlap : Test := forEach products fun p => do
     discard <| expectPhase r fx.stamped #[fx.stamped, "setup"] (·.isPass) "a pass"
     discard <| expectPhase r fx.stamped #[fx.stamped, "teardown"] (·.isPass) "a pass"
     result "JUnit names fixtures' phases apart from tests" do
-      assertContains s!"classname=\"{xmlEscape fx.stamped} (fixture)\"" (junitReport r.report)
+      let xml := junitReport r.report
+      let classname := s!"classname=\"{xmlEscape fx.stamped} (fixture)\""
+      assertContains s!"<testcase name=\"setup\" {classname}" xml
+      assertContains s!"<testcase name=\"teardown\" {classname}" xml
+      assertContains s!"<testcase name=\"prepare {xmlEscape fx.exclusive[0]!}\" {classname}" xml
     result "the events file has the phases' outcomes" do
       assertTrue (r.events.any fun e => isEvent "outcome" (some ("kind", "fixture")) e &&
         strField e "test" == some fx.stamped) "no outcome of a fixture's phase"
@@ -1648,6 +1686,7 @@ def setupFailureStopsUsers : Test := forEach products fun p => do
   result "the reproduction line runs the chain" do
     let some cmd := user.reproduce? | fail "no reproduction line"
     let out ← runLine cmd
+    assertBEq 1 out.exitCode
     assertBEq #[some "fail"] ((verdictsIn out.stderr).map (strField · "status"))
     -- The Lean harness writes what the phases print to their records, on standard error here.
     assertContains "teardown received no value" (out.stdout ++ out.stderr)
@@ -1669,7 +1708,29 @@ def prepareFailureStopsOneTest : Test := forEach products fun p => do
   result "the reproduction line runs the chain" do
     let some cmd := (r.result? first).bind (·.reproduce?) | fail "no reproduction line"
     let out ← runLine cmd
+    assertBEq 1 out.exitCode
     assertBEq #[some "fail"] ((verdictsIn out.stderr).map (strField · "status"))
+
+/--
+A test that uses a fixture and fails has a reproduction line that chains the fixture's setup, its
+prepare, the test, and its teardown, and exits with the test's status.
+-/
+@[test]
+def failingUserReproduces : Test := forEach products fun p => do
+  IO.FS.withTempDir fun dir => do
+    let fx := p.fixtures
+    let stamps := dir / "stamps"
+    let r ← p.runTests #[fx.failingUser]
+      { sets := fx.failSets ++ #[(fx.stampFile, stamps.toString)] }
+    expectOutcome r fx.failingUser (· matches .reported (.fail _)) "a failure"
+    let some cmd := (r.result? fx.failingUser).bind (·.reproduce?) | fail "no reproduction line"
+    IO.FS.writeFile stamps ""
+    let out ← runLine cmd
+    assertBEq 1 out.exitCode
+    assertBEq #[some "fail"] ((verdictsIn out.stderr).map (strField · "status"))
+    let lines ← fileLines stamps
+    assertBEq #["setup", "prepare start", "prepare end"] (lines.extract 0 3)
+    assertTrue (lines.size == 4 && lines[3]!.startsWith "teardown") s!"{lines}"
 
 /-- A teardown that fails is reported on its own, after the test it served, which passes. -/
 @[test]
@@ -1750,6 +1811,18 @@ def threadGrants : Test := forEach products fun p => do
         assertTrue problems.isEmpty "users overlapped" (some ("\n".intercalate problems.toList))
         assertTrue (lines.contains s!"start {test}") s!"{lines}"
 
+/--
+Every invocation receives a thread grant: a test that asks for nothing receives {lit}`threads:1` and
+{lit}`LEAN_NUM_THREADS=1`.
+-/
+@[test]
+def defaultThreadGrant : Test := forEach products fun p => do
+  let r ← p.run #[p.printsRunId] { jobs := 4 }
+  let some res := r.result? p.printsRunId.test | fail "no result"
+  assertContains "LEAN_NUM_THREADS: 1" res.output.stdout
+  unless p.name == pytestProduct.name do
+    assertContains "threads: 1;" res.output.stdout
+
 /-- Test executables asked for a fixture outside their inventory exit non-zero. -/
 @[test]
 def unknownFixtureFails : Test := forEach products fun p => do
@@ -1790,6 +1863,70 @@ def fixtureChains : Test := forEach products fun p => do
       let printed := r.stdout ++ (← IO.FS.readFile out)
       assertContains "teardown received no value" printed
       assertNotContains "received fixture" printed
+      result "the failed setup's status wins over the teardown's" do
+        assertBEq 1 r.exitCode
+    result "a failed teardown's status when everything else passed" do
+      let r ← p.invoke (phase fx.teardownFails "setup" settings ++
+        #[";", "errata-run", out, fx.beforeTeardownFailure, ";"] ++
+        phase fx.teardownFails "teardown" settings)
+      assertBEq 1 r.exitCode
+    result "a passing teardown after a failed test" do
+      let r ← p.invoke (phase fx.stamped "setup" ++ #[";"] ++ phase fx.stamped "prepare" ++
+        #[";", "errata-run", out, fx.failingUser] ++
+        fx.failSets.map (fun (k, v) => s!"setting:{k}={v}") ++ #[";"] ++
+        phase fx.stamped "teardown")
+      assertBEq 1 r.exitCode
+
+/--
+The runner's own lifeline, closed while a test that uses a fixture runs, cancels the run: the test
+is ended, the fixture's teardown still runs, and the runner exits non-zero with no reports.
+-/
+@[test]
+def cancelledRunTearsDown : Test := do
+  let runnerExe : System.FilePath := ".lake/build/bin/errata-runner"
+  unless ← runnerExe.pathExists do fail s!"the runner is not built at {runnerExe}"
+  let script ← IO.FS.realPath (harnessDir / "basic.sh")
+  IO.FS.withTempDir fun dir => do
+    let stamps := dir / "stamps"
+    let json := dir / "report.json"
+    let exe : ExecutableConfig := {
+      name := "basic", command := #["bash", script.toString]
+      env := #[("BASIC_TESTS", "slow-user")] }
+    let config : Config := { executables := #[exe], errataDir? := some (← errataDir).toString }
+    let (config, workspace) ← config.write dir
+    let child ← IO.Process.spawn {
+      cmd := runnerExe.toString
+      args := #[config.toString, workspace.toString, "--json", json.toString,
+        "--grace-period", "500ms", "--set", s!"stamp-file={stamps}"]
+      stdin := .piped, stdout := .piped, stderr := .piped
+      env := #[("ERRATA_LIFELINE", some "1")]
+    }
+    let outTask ← IO.asTask (prio := .dedicated) child.stdout.readToEnd
+    let errTask ← IO.asTask (prio := .dedicated) child.stderr.readToEnd
+    let mut started := false
+    for _ in [0 : 200] do
+      if ← stamps.pathExists then
+        if (← fileLines stamps).contains "start slow-user" then
+          started := true
+          break
+      IO.sleep 50
+    -- The standard input closes when its handle is dropped here.
+    let (_, child) ← child.takeStdin
+    let mut code? : Option UInt32 := none
+    for _ in [0 : 400] do
+      code? ← child.tryWait
+      if code?.isSome then break
+      IO.sleep 50
+    if code?.isNone then child.kill
+    let out := (← IO.wait outTask).toOption.getD ""
+    let err := (← IO.wait errTask).toOption.getD ""
+    assertTrue started "the test started" (some s!"stdout:\n{out}\nstderr:\n{err}")
+    let some code := code? | fail "the runner did not exit"
+    assertTrue (code != 0) "the runner exited non-zero"
+    assertContains "standard input closed" err
+    let lines ← fileLines stamps
+    assertTrue (lines.back? == some "teardown") s!"no teardown after the cancellation: {lines}"
+    assertTrue (!(← json.pathExists)) "no report was written"
 
 /-! # Processes -/
 

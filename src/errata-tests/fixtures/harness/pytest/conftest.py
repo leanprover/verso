@@ -6,6 +6,7 @@ of the conformance suite's shell scripts do.
 """
 
 import os
+import sys
 import tempfile
 import time
 
@@ -115,6 +116,16 @@ errata_fixtures_decl = {
         "description": "It asks for threads.",
         "threads": 3,
         "setup": threaded_setup,
+    },
+    "calls-pytest-fail": {
+        "description": "Its setup calls pytest.fail.",
+        "setup": lambda context: pytest.fail("the setup gave up"),
+        "teardown": report_teardown,
+    },
+    "calls-exit": {
+        "description": "Its setup calls sys.exit.",
+        "setup": lambda context: sys.exit(3),
+        "teardown": report_teardown,
     },
 }
 

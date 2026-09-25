@@ -37,7 +37,7 @@ errata_tests() {
       stubborn spawns panics garbled records twice flood lingers greets needs-setting errexit \
       fail-goes-on run-id exclusive-a exclusive-b shared-a shared-b after-setup-failure \
       after-prepare-failure-a after-prepare-failure-b before-teardown-failure uses-dependent \
-      after-slow-setup uses-threaded threaded-test; do
+      after-slow-setup uses-threaded threaded-test fails-with-fixture; do
     settings="Errata.seed,optional(marker),optional(note)"
     case "$t" in
       greets) settings="$settings,greeting" ;;
@@ -49,7 +49,7 @@ errata_tests() {
     esac
     extra=()
     case "$t" in
-      exclusive-*) extra=(--fixtures stamped) ;;
+      exclusive-* | fails-with-fixture) extra=(--fixtures stamped) ;;
       shared-*) extra=(--fixtures "shared(stamped)") ;;
       after-setup-failure) extra=(--fixtures setup-fails) ;;
       after-prepare-failure-*) extra=(--fixtures prepare-fails) ;;
@@ -153,6 +153,10 @@ errata_run_test() {
       ;;
     run-id)
       echo "run id: ${ERRATA_RUN_ID:-}"
+      echo "threads: $(errata_threads); LEAN_NUM_THREADS: ${LEAN_NUM_THREADS:-}"
+      ;;
+    fails-with-fixture)
+      errata_fail "it failed with its fixture"
       ;;
     errexit)
       false

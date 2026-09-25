@@ -11,7 +11,7 @@ tests=(pass fail verdict-fail silent unknown-records mismatch-pass mismatch-fail
        stubborn spawns panics garbled records twice flood lingers greets needs-setting protocol-late
        run-id exclusive-a exclusive-b shared-a shared-b after-setup-failure after-prepare-failure-a
        after-prepare-failure-b before-teardown-failure uses-dependent after-slow-setup uses-threaded
-       threaded-test)
+       threaded-test fails-with-fixture slow-user)
 # A suite that needs only some of the tests names them here, separated by spaces.
 if [ -n "$BASIC_TESTS" ]; then
   read -r -a tests <<< "$BASIC_TESTS"
@@ -58,7 +58,8 @@ case "$mode" in
       esac
       extra=""
       case "$t" in
-        exclusive-*) extra=',"fixtures":[{"name":"stamped","exclusive":true}]' ;;
+        exclusive-*|fails-with-fixture|slow-user)
+          extra=',"fixtures":[{"name":"stamped","exclusive":true}]' ;;
         shared-*) extra=',"fixtures":[{"name":"stamped","exclusive":false}]' ;;
         after-setup-failure) extra=',"fixtures":[{"name":"setup-fails"}]' ;;
         after-prepare-failure-*) extra=',"fixtures":[{"name":"prepare-fails"}]' ;;
@@ -295,11 +296,33 @@ case "$mode" in
         ;;
       run-id)
         echo "run id: $ERRATA_RUN_ID"
+        grant=""
+        for arg in "$@"; do
+          case "$arg" in
+            threads:*) grant="${arg#threads:}" ;;
+          esac
+        done
+        echo "threads: $grant; LEAN_NUM_THREADS: ${LEAN_NUM_THREADS:-}"
         exit 0
         ;;
       protocol-late)
         record '{"type":"verdict","status":"pass"}'
         record '{"type":"protocol","version":1}'
+        exit 0
+        ;;
+      fails-with-fixture)
+        record '{"type":"protocol","version":1}'
+        record '{"type":"verdict","status":"fail","message":"it failed with its fixture"}'
+        exit 1
+        ;;
+      slow-user)
+        # Stamps the file as it starts, and sleeps past any run that is cancelled meanwhile.
+        for arg in "$@"; do
+          case "$arg" in
+            fixture:stamped=*) echo "start $name" >> "${arg#fixture:stamped=}" ;;
+          esac
+        done
+        sleep 30
         exit 0
         ;;
       exclusive-*|shared-*)
@@ -362,8 +385,8 @@ for arg in "$@"; do
   [ "$arg" = ";" ] && chained=1
 done
 [ -n "$chained" ] || invoke "$@"
-status=2
-failed=""
+failure=""
+teardown_failure=""
 carried=()
 CHAIN_VALUE_FILE=$(mktemp)
 while [ $# -gt 0 ]; do
@@ -373,8 +396,10 @@ while [ $# -gt 0 ]; do
     shift
   done
   [ $# -gt 0 ] && shift
+  teardown=""
+  [ "${link[0]}" = errata-fixture ] && [ "${link[3]:-}" = teardown ] && teardown=1
   # After a link fails, only teardowns run.
-  if [ -n "$failed" ] && [ "${link[3]:-}" != teardown ]; then continue; fi
+  if [ -n "$failure$teardown_failure" ] && [ -z "$teardown" ]; then continue; fi
   case "${link[0]}" in
     errata-run|errata-fixture) link+=(${carried[@]+"${carried[@]}"}) ;;
   esac
@@ -382,7 +407,14 @@ while [ $# -gt 0 ]; do
   (invoke "${link[@]}")
   status=$?
   if [ -s "$CHAIN_VALUE_FILE" ]; then carried+=("fixture:$(cat "$CHAIN_VALUE_FILE")"); fi
-  [ "$status" -eq 0 ] || failed=1
+  if [ "$status" -ne 0 ]; then
+    if [ -n "$teardown" ]; then
+      teardown_failure=${teardown_failure:-$status}
+    else
+      failure=${failure:-$status}
+    fi
+  fi
 done
 rm -f "$CHAIN_VALUE_FILE"
-exit "$status"
+# The first link other than a teardown that failed decides the status, and then a teardown.
+exit "${failure:-${teardown_failure:-0}}"
