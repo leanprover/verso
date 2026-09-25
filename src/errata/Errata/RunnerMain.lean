@@ -743,6 +743,72 @@ def RunContext.plannedJob (ctx : RunContext) (plan : Plan) (job : Scheduler.Job)
       seed? := (r.settings.find? (·.1 == seedSetting)).map (·.2), reproduce
       slowAfterMs := r.slowAfterMs }
 
+/-- The key of the results of a job: its test's, or its fixture's phase's. -/
+def RunContext.jobKey (ctx : RunContext) (plan : Plan) (job : Scheduler.Job) : Result.Key :=
+  match job with
+  | .test t =>
+    let test := plan.tests[t]!.1
+    { exe := ctx.config.executables[test.exeIdx]!.name, test := test.name }
+  | .setup f | .prepare f _ | .teardown f =>
+    let (e, fixture, _) := plan.fixtures[f]!
+    let phase := match job with
+      | .prepare _ t => #[fixture.name, "prepare", plan.tests[t]!.1.name]
+      | .teardown _ => #[fixture.name, "teardown"]
+      | _ => #[fixture.name, "setup"]
+    { exe := ctx.config.executables[e]!.name, test := fixture.name, phase }
+
+/-- The plan with its tests in the order that {name}`positions` gives by their current positions. -/
+def Plan.reorder (plan : Plan) (positions : Array Nat) : Plan :=
+  { plan with
+    tests := positions.map (plan.tests[·]!), testSpecs := positions.map (plan.testSpecs[·]!) }
+
+/--
+The key of each test's group in the scheduling order: the names of the fixtures that the test takes,
+directly or through other fixtures, or the test's own name when it takes none, so that each test
+without fixtures is a group of its own.
+-/
+def RunContext.groupKeys (ctx : RunContext) (plan : Plan) : Array String :=
+  (List.range plan.tests.size).toArray.map fun t =>
+    let closure := Scheduler.closureOf plan.fixtureSpecs (plan.testSpecs[t]!.fixtures.map (·.1))
+    if closure.isEmpty then
+      let key := ctx.jobKey plan (.test t)
+      s!"test\x00{key.exe}\x00{key.test}"
+    else
+      "fixtures" ++ String.join (closure.toList.map fun f =>
+        let (e, fixture, _) := plan.fixtures[f]!
+        s!"\x00{ctx.config.executables[e]!.name}\x00{fixture.name}")
+
+/--
+The keys of the plan's tests and fixtures' phases in the order that a run of the plan with one slot
+reports them, when each fixture's phase whose key is in {name}`failed` fails and every other job
+succeeds. A plan in the inventory's order gives the order of the JUnit report.
+-/
+def RunContext.sequentialOrder (ctx : RunContext) (plan : Plan) (failed : Array Result.Key) :
+    Array Result.Key := Id.run do
+  let failedSet : Std.HashSet Result.Key := failed.foldl (·.insert ·) {}
+  let (s, first) := Scheduler.step (Scheduler.State.init 1 plan.testSpecs plan.fixtureSpecs) .begin
+  let mut sched := s
+  let mut queue := first
+  let mut out := #[]
+  -- The started jobs, which end in the order they started.
+  let mut running : Array Scheduler.Job := #[]
+  repeat
+    let mut finished := false
+    for cmd in queue do
+      match cmd with
+      | .finish => finished := true
+      | .skip job _ => out := out.push (ctx.jobKey plan job)
+      | .spawn job _ _ => running := running.push job
+    if finished then break
+    let some job := running[0]? | break
+    running := running.eraseIdx! 0
+    let key := ctx.jobKey plan job
+    out := out.push key
+    let (s, more) := Scheduler.step sched (.exited job !(failedSet.contains key))
+    sched := s
+    queue := more
+  return out
+
 /-- The invocation that runs a job, with the values of the fixtures it receives. -/
 def RunContext.invocation (ctx : RunContext) (plan : Plan) (job : Scheduler.Job)
     (values : Array (Nat × String)) : Invocation :=
@@ -771,10 +837,12 @@ that the scheduler asks for, reports the tests and setups that it asks to report
 and tells it of each process that ends, until it ends the run. Once the run has been cancelled, the
 scheduler learns of it before the next command, starts no more tests, and tears down the fixtures
 whose setups were invoked. When nothing runs and the scheduler has not ended the run, the tests it
-never started are named in a run-level error.
+never started are named in a run-level error. The result is the keys of the fixtures' phases whose
+processes failed or ran past their timeouts.
 -/
-def RunContext.runScheduled (ctx : RunContext) (plan : Plan) : IO Unit := do
+def RunContext.runScheduled (ctx : RunContext) (plan : Plan) : IO (Array Result.Key) := do
   let d := ctx.dispatcher
+  let mut failed := #[]
   let mut sched := Scheduler.State.init plan.pool plan.testSpecs plan.fixtureSpecs
   let (s, first) := Scheduler.step sched .begin
   sched := s
@@ -838,9 +906,14 @@ def RunContext.runScheduled (ctx : RunContext) (plan : Plan) : IO Unit := do
     let event : Scheduler.Event := match e.exit with
       | .timedOut .. => .timedOut job
       | _ => .exited job e.succeeded
+    let failedPhase := match event with
+      | .timedOut _ => !(job matches .test _)
+      | _ => !e.succeeded && !(job matches .test _)
+    if failedPhase then failed := failed.push (ctx.jobKey plan job)
     let (s, more) := Scheduler.step sched event
     sched := s
     queue := more
+  return failed
 
 /-- A value as a listing shows it, quoted so that an empty value shows. -/
 private def showValue (v : String) : String := v.quote
@@ -1067,9 +1140,12 @@ gives are warnings; the filters are evaluated, with a warning for each atom and 
 selects nothing. The configuration's filters draw these warnings only when the run has every test
 executable of the package. The {lit}`list` command then prints the selected tests in its message
 format. The Run phase runs the selected tests and the phases of the fixtures they use as the
-scheduler directs, in inventory order as far as the fixtures' claims and the slots of the pool
-allow. The pool has the slots that {lit}`--jobs` or else the profile's {lit}`jobs` gives, or else
-one per CPU available to the runner. When {name}`progress?` gives a progress display, the run
+scheduler directs, in the scheduling order as far as the fixtures' claims and the slots of the pool
+allow. The scheduling order is the inventory's, or under the profile's {lit}`order = "shuffle"` the
+order that {name}`Scheduler.groupedOrder` draws from the run's seed, with the tests grouped by the
+fixtures they take. The report's JUnit order is the inventory's whatever the scheduling order. The
+pool has the slots that {lit}`--jobs` or else the profile's {lit}`jobs` gives, or else one per CPU
+available to the runner. When {name}`progress?` gives a progress display, the run
 starts it as the Run phase begins, and the dispatcher keeps it up to date. However the run ends, it
 closes the held lifelines and clears the progress display.
 -/
@@ -1084,20 +1160,21 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
   -- A listing prints no results, so its reporter prints nothing of its own.
   let human : HumanReporter := { verbosity := if listing then .silent else opts.verbosity, color }
   let dispatcher : Dispatcher :=
-    { state := ← Std.Mutex.new { human, wfail := opts.wfail, startMs := ← Protocol.nowMs }, sinks
-      progress? }
+    { state := ← Std.Mutex.new {
+        human, wfail := opts.wfail, startMs := ← Protocol.nowMs, seed? := some runSeed }
+      sinks, progress? }
   sinks.event (Json.mkObj [("type", Json.str "protocol"), ("version", ToJson.toJson Protocol.version),
-    ("run_id", Json.str runId)])
+    ("run_id", Json.str runId), ("seed", ToJson.toJson runSeed)])
   let registry ← match registry with
     | some r => pure r
     | none => Registry.new
   let d := dispatcher
-  let finish (code : UInt32) (skipped? : Option (Nat × Nat × Nat) := none) :
-      IO (RunReport × UInt32) := do
+  let finish (code : UInt32) (skipped? : Option (Nat × Nat × Nat) := none)
+      (order : Array Result.Key := #[]) : IO (RunReport × UInt32) := do
     -- A listing runs nothing, so it has no counts to sum up.
     d.dispatch (.ended (← Protocol.nowMs) (!listing) skipped?)
     let s ← d.get
-    return ({ results := s.results, issues := s.issues, seed := runSeed, runId }, code)
+    return ({ results := s.results, issues := s.issues, seed := runSeed, runId, order }, code)
   for w in config.warnings do
     d.dispatch (.issue { isError := false, message := w })
   let some profile := config.profile? opts.profile
@@ -1178,11 +1255,15 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
     let exeWidth := selected.foldl (init := 0) fun w (t, _) => max w (exeName t).length
     d.state.atomically (modify fun s => { s with human := { s.human with exeWidth } })
     d.dispatch (.phase "Run" (← Protocol.nowMs) (some pool))
-    let plan := ctx.fixturePlan pool listings resolution selected
-    for w in plan.settingConflicts do
+    let inventoryPlan := ctx.fixturePlan pool listings resolution selected
+    for w in inventoryPlan.settingConflicts do
       d.dispatch (.issue { isError := false, message := w })
+    let plan := match profile.order?.getD .default with
+      | .default => inventoryPlan
+      | .shuffle =>
+        inventoryPlan.reorder (Scheduler.groupedOrder runSeed (ctx.groupKeys inventoryPlan))
     if let some p := progress? then p.start plan.tests.size exeWidth
-    ctx.runScheduled plan
+    let failed ← ctx.runScheduled plan
     let s ← d.get
     -- Under `--wfail`, the warning of `--no-tests warn` fails the run as `--no-tests fail` does.
     let code :=
@@ -1191,6 +1272,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
       else if s.results.all (·.outcome.isPass) && !s.issues.any (·.isError) then ExitCode.ok
       else ExitCode.testRunFailed
     finish code (skipped, config.skippedTestLibraries.size, config.skippedExecutables.size)
+      (ctx.sequentialOrder inventoryPlan failed)
 
 /--
 The paths of the JUnit, JSON, and Markdown reports: the command line's, or else the profile's, which

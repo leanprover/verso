@@ -6,6 +6,7 @@
 # A plain `lake test` leaves out the browser tests, which need built sites and browsers.
 [profile.default]
 default-filter = 'all() \ tag(browser)'
+order = "shuffle"
 
 [profile.default.settings]
 versoServeExe = { needs = "verso-serve" }
