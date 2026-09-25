@@ -2235,6 +2235,32 @@ def runsUnderTheDefaultFileLimit : Test := do
     assertExitCode 0 r
     assertContains "300 passed, 0 failed" r.stdout
 
+/--
+With standard output a pipe, the runner keeps no progress display: a run whose environment names a
+terminal type prints its report's lines alone, with no terminal sequences and no running list.
+-/
+@[test]
+def pipedRunHasNoProgressDisplay : Test := do
+  unless ← runnerExe.pathExists do fail s!"the runner is not built at {runnerExe}"
+  assertBEq false (← Progress.enabled {})
+  IO.FS.withTempDir fun dir => do
+    let basic ← IO.FS.realPath (harnessDir / "basic.sh")
+    let config : Config := {
+      executables := #[← manyTests 20, {
+        name := "basic", command := #["bash", basic.toString]
+        env := #[("BASIC_TESTS", "pass fail greets needs-setting")] }]
+      errataDir? := some (← errataDir).toString }
+    let (config, workspace) ← config.write dir
+    let r ← IO.Process.output {
+      cmd := runnerExe.toString, args := #[config.toString, workspace.toString, "-v", "-j", "4"]
+      env := #[("ERRATA_LIFELINE", none), ("TERM", some "xterm-256color"),
+        ("COLUMNS", some "100")] }
+    assertContains "Summary" r.stdout
+    assertContains "PASS" r.stdout
+    assertNotContains "\x1b[" r.stdout
+    assertNotContains "Running:" r.stdout
+    assertNotContains "\x1b[" r.stderr
+
 /-- The number of files that the process {name}`pid` holds open, or {lean}`none` without `lsof`. -/
 def openFiles (pid : UInt32) : IO (Option Nat) := do
   try

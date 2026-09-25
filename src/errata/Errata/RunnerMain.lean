@@ -17,6 +17,7 @@ public import Errata.Dispatcher
 public import Errata.Scheduler
 public import Errata.ProcessControl
 public import Errata.CommandLine
+public import Errata.Progress
 public import Std.Sync.Mutex
 import all Errata.FS
 
@@ -53,16 +54,40 @@ structure Dispatcher where
   state : Std.Mutex State
   /-- Where actions go. -/
   sinks : Sinks
+  /--
+  The progress display, when the run keeps one. The human report's lines of each event then go to
+  the display, which prints them above its block in the same write that updates its frame.
+  -/
+  progress? : Option Progress.Display := none
 
-/-- Handles one event under the dispatcher's lock, calling the reporters before it returns. -/
+/--
+Handles one event under the dispatcher's lock, calling the reporters before it returns. With a
+progress display, the display follows the event, and the end of the run clears it before the
+summary.
+-/
 def Dispatcher.dispatch (d : Dispatcher) (ev : Event) : IO Unit :=
   d.state.atomically do
-    let (s, actions) := step (← get) ev
+    let before ← get
+    let (s, actions) := step before ev
     set s
-    for a in actions do
-      match a with
-      | .event j => d.sinks.event j
-      | .print l => d.sinks.line l
+    match d.progress? with
+    | none =>
+      for a in actions do
+        match a with
+        | .event j => d.sinks.event j
+        | .print l => d.sinks.line l
+    | some p =>
+      if ev matches .ended .. then p.clear
+      let mut lines := #[]
+      for a in actions do
+        match a with
+        | .event j => d.sinks.event j
+        | .print l => lines := lines.push l
+      -- Only the starts and ends of tests and fixture phases change the frame.
+      if !lines.isEmpty || ev matches .testStarted _ | .testEnded .. then
+        let fresh := s.results.extract before.results.size s.results.size
+        let now ← IO.monoMsNow
+        p.emit lines (·.after ev fresh now)
 
 /-- The dispatcher's current state. -/
 def Dispatcher.get (d : Dispatcher) : IO State :=
@@ -1037,10 +1062,12 @@ executable of the package. The {lit}`list` command then prints the selected test
 format. The Run phase runs the selected tests and the phases of the fixtures they use as the
 scheduler directs, in inventory order as far as the fixtures' claims and the slots of the pool
 allow. The pool has the slots that {lit}`--jobs` or else the profile's {lit}`jobs` gives, or else
-one per CPU available to the runner.
+one per CPU available to the runner. When {name}`progress?` gives a progress display, the run
+starts it as the Run phase begins, and the dispatcher keeps it up to date.
 -/
 def execute (config : Config) (opts : Options) (sinks : Sinks)
-    (registry : Option Registry := none) (color : Bool := false) : IO (RunReport × UInt32) := do
+    (registry : Option Registry := none) (color : Bool := false)
+    (progress? : Option Progress.Display := none) : IO (RunReport × UInt32) := do
   let runSeed ← match opts.seed with
     | some s => pure s
     | none => IO.rand 0 (2 ^ 32 - 1)
@@ -1049,7 +1076,8 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
   -- A listing prints no results, so its reporter prints nothing of its own.
   let human : HumanReporter := { verbosity := if listing then .silent else opts.verbosity, color }
   let dispatcher : Dispatcher :=
-    { state := ← Std.Mutex.new { human, wfail := opts.wfail, startMs := ← Protocol.nowMs }, sinks }
+    { state := ← Std.Mutex.new { human, wfail := opts.wfail, startMs := ← Protocol.nowMs }, sinks
+      progress? }
   sinks.event (Json.mkObj [("type", Json.str "protocol"), ("version", ToJson.toJson Protocol.version),
     ("run_id", Json.str runId)])
   let registry ← match registry with
@@ -1140,6 +1168,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
     let plan := ctx.fixturePlan pool listings resolution selected
     for w in plan.settingConflicts do
       d.dispatch (.issue { isError := false, message := w })
+    if let some p := progress? then p.start plan.tests.size exeWidth
     ctx.runScheduled plan
     let s ← d.get
     -- Under `--wfail`, the warning of `--no-tests warn` fails the run as `--no-tests fail` does.
@@ -1178,10 +1207,12 @@ def writeReports (config : Config) (opts : Options) (report : RunReport) : IO Un
 Runs or lists the tests as {name}`execute` does, with the human-readable output on standard output,
 colored when {name}`color` is true, and the events in the file that the options name; then writes
 the report files of a run and prints the issues. The result is {name}`execute`'s exit code. A
-cancelled run writes no report files and returns {name}`ExitCode.other`.
+cancelled run writes no report files and returns {name}`ExitCode.other`. With {name}`progress?`,
+the human-readable lines go through the progress display, which is cleared however the run ends.
 -/
 def executeAndWrite (config : Config) (opts : Options)
-    (registry : Option Registry := none) (color : Bool := false) : IO UInt32 := do
+    (registry : Option Registry := none) (color : Bool := false)
+    (progress? : Option Progress.Display := none) : IO UInt32 := do
   let registry ← match registry with
     | some r => pure r
     | none => Registry.new
@@ -1196,11 +1227,15 @@ def executeAndWrite (config : Config) (opts : Options)
       if let some h := events? then
         h.putStr (j.compress ++ "\n")
         h.flush
-    line := fun l => do
-      stdout.putStrLn l
-      stdout.flush
+    line := match progress? with
+      | some p => p.print
+      | none => fun l => do
+        stdout.putStrLn l
+        stdout.flush
   }
-  let (report, code) ← execute config opts sinks registry color
+  let (report, code) ←
+    try execute config opts sinks registry color progress?
+    finally if let some p := progress? then p.clear
   -- A cancelled run writes no reports.
   if ← registry.cancelled then return ExitCode.other
   if opts.command == .run then writeReports config opts report
@@ -1214,12 +1249,15 @@ refused, and the running processes are terminated and, after the grace period, k
 run loop tears down the fixtures whose setups were invoked. The driver holds the other end of that
 pipe, which closes when the driver exits, however it exits. After the cancellation, the run loop has
 the grace period, four pipe graces, two more seconds, and the time that each teardown it starts may
-take to end, and then the runner exits with {lit}`1`.
+take to end, and then the runner exits with {lit}`1`. The progress display, when there is one, is
+cleared before the runner prints anything about the cancellation.
 -/
-def exitWhenStdinCloses (parentIn : IO.FS.Stream) (registry : Registry) (graceMs : Nat) :
-    IO Unit := do
+def exitWhenStdinCloses (parentIn : IO.FS.Stream) (registry : Registry) (graceMs : Nat)
+    (progress? : Option Progress.Display := none) : IO Unit := do
   repeat
     if (← parentIn.getLine).isEmpty then break
+  if let some p := progress? then
+    try p.clear catch _ => pure ()
   try IO.eprintln "errata-runner: standard input closed, so the run ends" catch _ => pure ()
   registry.cancel graceMs
   -- The run loop reaps the processes, ends what they left holding their pipes, and runs the
@@ -1360,10 +1398,15 @@ def main (args : List String) : IO UInt32 := do
       return ExitCode.setupError
   let registry ← Registry.new
   let grace := opts.gracePeriodMs?.getD defaultGracePeriodMs
+  let color ← useColor opts.color
+  let progress? ←
+    if ← Progress.enabled opts then some <$> Progress.Display.new (← IO.getStdout) color
+    else pure none
   -- The driver sets the variable when it gives the runner a standard input to watch.
   if (← IO.getEnv lifelineVariable) == some "1" then
-    let _ ← IO.asTask (prio := .dedicated) (exitWhenStdinCloses (← IO.getStdin) registry grace)
-  let code ← executeAndWrite config opts (some registry) (← useColor opts.color)
+    let _ ← IO.asTask (prio := .dedicated)
+      (exitWhenStdinCloses (← IO.getStdin) registry grace progress?)
+  let code ← executeAndWrite config opts (some registry) color progress?
   registry.finish
   try (← IO.getStdout).flush catch _ => pure ()
   try (← IO.getStderr).flush catch _ => pure ()
