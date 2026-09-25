@@ -729,11 +729,8 @@ def verbosityLevels : Test := do
 def fixturesDir : System.FilePath := "src/errata-tests/fixtures"
 
 /--
-Deletes a fixture workspace's manifest and packages directory.
-
-The fixture workspaces require Verso by path and share its clones of dependencies. If Verso were
-updated, then a manifest could be out of date, leading to spurious rebuilds. Without the manifest,
-Lake resolves the workspace against the copies in Verso.
+Deletes a fixture workspace's manifest and packages directory, so that Lake resolves the workspace
+against the clones of dependencies that it shares with Verso.
 -/
 def resetWorkspace (ws : System.FilePath) : IO Unit := do
   let manifest := ws / "lake-manifest.json"

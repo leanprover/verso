@@ -42,6 +42,8 @@ inherits = "browser"
 default-filter = 'all() \ (tag(hover_media) & name(firefox))'
 junit = "errata-report.xml"
 markdown = "errata-summary.md"
+# The fixtures' setups build the literate test projects and their sites, from a cold cache in CI.
+fixture-timeout = "30m"
 
 [profile.ci.settings.VersoTests.Settings]
 checkTeX = "true"

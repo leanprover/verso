@@ -16,9 +16,9 @@ open Errata
 open VersoTests.Settings (literateExe literateHtmlExe literatePlanExe)
 
 /--
-The variables that Lake sets for the processes it starts, which a Lake of another workspace must
-not inherit. Clearing out {lit}`DYLD_LIBRARY_PATH` and {lit}`LD_LIBRARY_PATH` also keeps the
-toolchain that Elan selects from loading the wrong shared libraries.
+The variables that Lake sets for the processes it starts, which {name}`lakeInProject` removes, so
+that the Lake of a test project reads its own workspace. With {lit}`DYLD_LIBRARY_PATH` and
+{lit}`LD_LIBRARY_PATH` removed, the toolchain that Elan selects loads its own shared libraries.
 -/
 def lakeVars : Array String :=
   #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
@@ -51,8 +51,10 @@ structure LiterateProjects where
 
 /--
 Builds the literate HTML of the test project {name}`dir` while it holds the project's build lock,
-the file `.lake/errata-build.lock` there, which the browser suites' site fixtures lock too. The
-project's toolchain must be the root's, and its manifest is first brought up to date with Verso's.
+the file `.lake/errata-build.lock` there, which the browser suites' site fixtures lock too.
+Discovery has built the root's executables that the build runs, so the build writes to the
+project's own build directory, and the lock keeps two builds from writing it at once. The project's
+toolchain must be the root's, and its manifest is first brought up to date with Verso's.
 -/
 def buildLiterateProject (dir : System.FilePath) : FixtureM Unit := do
   let rootToolchain := (← IO.FS.readFile "lean-toolchain").trimAscii
@@ -85,8 +87,10 @@ def literateProjects (_ : literateExe) (_ : literateHtmlExe) (_ : literatePlanEx
     | [config, multiRoot] => some { config, multiRoot }
     | _ => none
   setup := do
-    let projects : LiterateProjects :=
-      { config := "test-projects/literate-config", multiRoot := "test-projects/literate-multi-root" }
+    let projects : LiterateProjects := {
+      config := "test-projects/literate-config"
+      multiRoot := "test-projects/literate-multi-root"
+    }
     buildLiterateProject projects.config
     buildLiterateProject projects.multiRoot
     return projects

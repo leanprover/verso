@@ -42,7 +42,8 @@ def lean_server_setup(context):
     check_fixture_workspace()
     ready = services.state_dir(context, "leanServer") / "ready.json"
     proc = services.start(
-        context, "leanServer", [sys.executable, harness.__file__, "serve", str(ready)]
+        context, "leanServer", [sys.executable, harness.__file__, "serve", str(ready)],
+        watches_lifeline=True,
     )
 
     def port():
@@ -74,10 +75,13 @@ def lean_server_teardown(address, context):
 
 
 # The Lean server that the tests share. Each test uses it alone among its users, since the tests
-# open documents in one workspace and write its scratch module.
+# open documents in one workspace and write its scratch module. Its phases ask for the threads of
+# the server's workers and the builds they start, which run under the grant of the phase that
+# started the server.
 errata_fixtures_decl = {
     "leanServer": {
         "description": "A Lean server in the widget's fixture workspace, which the tests share.",
+        "threads": 4,
         "setup": lean_server_setup,
         "prepare": lean_server_prepare,
         "teardown": lean_server_teardown,

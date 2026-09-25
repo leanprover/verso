@@ -9,6 +9,10 @@ from `ERRATA_RUN_ID`, and after the suite and the fixture, so a teardown finds w
 started even when the setup failed or was stopped before it produced a value. Without
 `ERRATA_RUN_ID`, as in a chain of invocations run by hand, the directory is named after the process
 that runs the chain.
+
+Under the Errata runner, which sets `ERRATA_LIFELINE=1`, a service also ends with the run: it
+inherits the setup's standard input, which the runner holds until the runner itself exits, and the
+service, or a guard that this module runs in front of it, stops at that input's end.
 """
 
 import hashlib
@@ -18,9 +22,16 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
+
+
+def under_lifeline():
+    """Whether this process's standard input is the Errata runner's lifeline."""
+    return os.environ.get("ERRATA_LIFELINE") == "1"
 
 
 def state_dir(context, name):
@@ -34,19 +45,24 @@ def state_dir(context, name):
     return Path(tempfile.gettempdir()) / "verso-browser-tests" / run / suite / name
 
 
-def start(context, name, args, cwd=None):
+def start(context, name, args, cwd=None, watches_lifeline=False):
     """
     Starts the command `args` as the service of the fixture `name`, in a session of its own, with
     its output in the log of its state directory, and returns its process. The directory records
-    the process id before this returns.
+    the process id before this returns. Under the runner's lifeline, the service inherits standard
+    input; a service that stops at the input's end itself says so with `watches_lifeline`, and any
+    other runs behind a guard (`guard`) that stops the service's group there.
     """
     state = state_dir(context, name)
     state.mkdir(parents=True, exist_ok=True)
+    lifeline = under_lifeline()
+    if lifeline and not watches_lifeline:
+        args = [sys.executable, __file__, "guard", *args]
     with open(state / "log", "wb") as log:
         proc = subprocess.Popen(
             args,
             cwd=cwd,
-            stdin=subprocess.DEVNULL,
+            stdin=None if lifeline else subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,
             start_new_session=True,
@@ -159,3 +175,31 @@ def accepts(port):
             return True
     except OSError:
         return False
+
+
+def guard(args):
+    """
+    Runs the command `args` in this process's group and exits with its code, and when standard
+    input ends, terminates the group, then kills it after a grace period.
+    """
+    child = subprocess.Popen(args, stdin=subprocess.DEVNULL)
+    # The guard outlives the terminate signal that it sends its own group, and ends with the child.
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
+    def watch():
+        while sys.stdin.buffer.read(4096):
+            pass
+        group = os.getpgrp()
+        signal_group(group, signal.SIGTERM)
+        time.sleep(5)
+        signal_group(group, signal.SIGKILL)
+
+    threading.Thread(target=watch, daemon=True).start()
+    return child.wait()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3 or sys.argv[1] != "guard":
+        print("usage: python services.py guard COMMAND...", file=sys.stderr)
+        sys.exit(2)
+    sys.exit(guard(sys.argv[2:]))

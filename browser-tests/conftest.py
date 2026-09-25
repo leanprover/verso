@@ -20,20 +20,20 @@ REPO = Path(__file__).resolve().parent.parent
 # `--site-dir` names no other.
 DEFAULT_SITE_DIR = "../_out/html-multi"
 
-# The variables that Lake sets for the processes it starts, which a Lake of another workspace must
-# not inherit.
+# The variables that Lake sets for the processes it starts, which the Lake of a test project runs
+# without.
 LAKE_VARS = (
     "LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP", "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH",
     "LEAN_SRC_PATH", "LEAN_GITHASH", "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH",
 )
 
 # The sites that the browser suites test, by the name that a suite's `--errata-site` gives. A site
-# is either the value of a setting, which `errata.toml` binds to a Lake target of the root, or the
-# output of a build in a test project, with the settings that bind the root's executables that the
-# build runs.
+# is either the value of a setting, which `errata.toml` binds to the root's Lake target `needs`, or
+# the output of a build in a test project, of its literate HTML or of the Lake target `target`
+# there, with the settings that bind the root's executables that the build runs.
 SITES = {
-    "usersguide": {"setting": "usersGuideSite"},
-    "package-manual": {"setting": "packageManualSite"},
+    "usersguide": {"setting": "usersGuideSite", "needs": "usersGuideSite"},
+    "package-manual": {"setting": "packageManualSite", "needs": "packageManualSite"},
     "literate": {
         "project": "test-projects/literate-config",
         "settings": ["versoLiterateExe", "versoLiterateHtmlExe", "versoLiteratePlanExe"],
@@ -48,6 +48,9 @@ SITES = {
         "settings": ["versoLiterateExe", "versoHtmlExe"],
     },
 }
+
+# The hardware threads that a site fixture asks for when its setup runs a Lake build.
+BUILD_THREADS = 4
 
 # The browsers that the tests run in, each an Errata fixture of the same name.
 BROWSERS = ("chromium", "firefox")
@@ -115,7 +118,9 @@ def errata_fixtures_of(request):
 def project_lock(project):
     """
     Holds the build lock of a test project, the file `.lake/errata-build.lock` there, which every
-    fixture that builds the project locks, the literate tests' fixture among them.
+    fixture that builds the project locks, the literate tests' fixture among them. Discovery has
+    built the root's executables that the project's builds run, so the builds write to the
+    project's own build directory, and the lock keeps two of them from writing it at once.
     """
     lake = REPO / project / ".lake"
     lake.mkdir(parents=True, exist_ok=True)
@@ -148,7 +153,14 @@ def site_setup(site):
 
     def setup(context):
         if "setting" in site:
-            return str((REPO / context.settings[site["setting"]]).resolve())
+            setting = site["setting"]
+            if setting not in context.settings:
+                raise RuntimeError(
+                    f"the fixture site needs the setting {setting}, the site's directory, which "
+                    f"the browser profile of errata.toml binds to the Lake target {site['needs']}; "
+                    f"by hand, give it as setting:{setting}=DIR"
+                )
+            return str((REPO / context.settings[setting]).resolve())
         project = site["project"]
         with project_lock(project):
             print(f"Building the site of {project}...", flush=True)
@@ -193,7 +205,8 @@ def browser_setup(name):
         state = services.state_dir(context, name)
         state.mkdir(parents=True, exist_ok=True)
         config = state / "launch.json"
-        config.write_text(json.dumps({"headless": True}))
+        # The server listens on the loopback interface alone.
+        config.write_text(json.dumps({"headless": True, "host": "127.0.0.1"}))
         proc = services.start(
             context, name,
             [sys.executable, "-m", "playwright", "launch-server", "--browser", name,
@@ -223,8 +236,9 @@ def service_teardown(name):
 def fixture_declarations(site_name):
     """
     The Errata fixtures of a suite whose site is `site_name` from `SITES`, or of a suite without a
-    site when it is `None`. None of them has a prepare: each test opens a browser context of its own
-    on its own connection to the browser, and reads the site without changing it.
+    site when it is `None`. The fixtures declare setups and teardowns only: each test opens a browser
+    context of its own on its own connection to the browser, and reads the site as it is. A site
+    that the setup builds asks for the threads of a Lake build.
     """
     decl = {}
     for name in BROWSERS:
@@ -241,6 +255,8 @@ def fixture_declarations(site_name):
             "settings": settings,
             "setup": site_setup(site),
         }
+        if "project" in site:
+            decl["site"]["threads"] = BUILD_THREADS
         decl["server"] = {
             "description": f"An HTTP server for the site {site_name}.",
             "fixtures": ["site"],
