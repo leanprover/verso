@@ -173,14 +173,24 @@ class LeanServer:
             pipe.close()
 
     def end_runs(self):
-        """Kills the builds and runs that the server's file workers have started."""
-        runs = matching("errata-run-one") & set(descendants(self.proc.pid))
-        kill_trees(runs)
+        """
+        Kills the drivers that the server's file workers have started, with the runners and the
+        test executables below them.
+        """
+        drivers = matching("test -- run -E name") & set(
+            descendants(self.proc.pid)
+        )
+        kill_trees(drivers)
 
     def runner_processes(self, decl):
-        """The process ids of the test runners below this server that run a test named `decl`."""
-        runners = matching(f'bin/errata-run-one .*"{decl}"')
-        return sorted(runners & set(descendants(self.proc.pid)))
+        """
+        The process ids of the processes below this server that run a test named `decl`: the driver
+        that the widget started for it, and the interpreted test executable that runs it.
+        """
+        runs = matching(rf"-E name\(={decl}\) ") | matching(
+            rf"errata-interpret .* errata-run \S+ {decl}( |$)"
+        )
+        return sorted(runs & set(descendants(self.proc.pid)))
 
     def _read(self):
         try:

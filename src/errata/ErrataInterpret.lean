@@ -97,7 +97,8 @@ unsafe def tablesOf (modules : Array Name) : MetaM Tables := do
 def usage : String :=
   "usage: errata-interpret MODULE... -- <mode> [ARG]...\n\n\
     Imports the modules and runs the Lean harness over the tests they record, as a library's \
-    compiled test executable does. The arguments after `--` are those of the test executable:\n\n" ++
+    compiled test executable does. The arguments after `--` are those of the test \
+    executable:\n\n" ++
     Errata.Harness.usage
 
 /--
@@ -134,8 +135,8 @@ opaque interpretImpl (args : List String) : IO UInt32
 The interpreted product of the Lean harness: {lit}`errata-interpret MODULE... -- <mode> [ARG]...`
 imports the modules with {lit}`Errata`, reads the tests that the modules record and the helpers that
 every imported module records, and runs {name}`Errata.Harness.main` over them with the arguments
-after {lit}`--`. Every mode of the harness behaves as it does in a library's compiled test executable;
-a test's helpers run through this same command and modules.
+after {lit}`--`. Every mode of the harness behaves as it does in a library's compiled test
+executable; a test's helpers run through this same command and modules.
 -/
 public def main (args : List String) : IO UInt32 := do
   try interpretImpl args catch e => do

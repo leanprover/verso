@@ -10,7 +10,6 @@ Tests that exercise Errata using Errata itself.
 module
 
 public import Errata
-public import Errata.WidgetRunner
 public meta import Errata
 import all Errata.FS
 import ErrataTests.Fixture
@@ -21,9 +20,9 @@ import ErrataTests.Conformance
 import ErrataTests.Settings
 import ErrataTests.Roles
 import ErrataTests.Filter
+import ErrataTests.WidgetState
 
 open Errata
-open Errata.Widget.Runner
 
 public section
 
@@ -1669,7 +1668,9 @@ def harnessSettings : Test := do
   assertBEq false ctx.updateGolden
   assertTrue (← Harness.contextOf #[("updateGolden", "true")]).updateGolden
   assertBEq (some "errata-helper") (ctx.helperCommand.bind (·[1]?))
-  assertTrue ctx.legacyOptions?.isNone "a test executable passes no free-form options"
+  result "through an interpreter" do
+    let ctx ← Harness.contextOf #[] (invocation := #["interp", "M", "--"])
+    assertBEq (some #["interp", "M", "--", "errata-helper"]) ctx.helperCommand
 
 /--
 The Lean harness lists its tests with their names, paths, and locations, runs one by name, writing
@@ -1984,64 +1985,95 @@ def junitSuitesAndClasses : Test := do
   assertContains "name=\"A.B.t\" classname=\"A.B\"" xml
   assertContains "name=\"u\" classname=\"Other\"" xml
 
-/-- `runValue` reports a passing value as passed. -/
+/--
+The records that the Lean harness writes for a run of {name}`value` as a test, with the exit code,
+through the file that a test executable writes to.
+-/
+private def harnessRun {α} [IsTest α] (value : α) : IO (UInt32 × Array Protocol.Record) :=
+  IO.FS.withTempFile fun out path => do
+    let code ← Harness.runTest (TestEntry.of "" "" "t" default value) (← Harness.contextOf #[]) #[]
+      out
+    out.flush
+    let lines := (← IO.FS.readFile path).splitOn "\n" |>.filter (!·.isEmpty)
+    let records := lines.toArray.filterMap fun l =>
+      match Protocol.Record.parseLine l with
+      | .ok (some (_, r)) => some r
+      | _ => none
+    return (code, records)
+
+/-- The verdict among a run's records. -/
+private def verdictOf? (records : Array Protocol.Record) : Option Protocol.VerdictInfo :=
+  records.findSome? fun | .verdict v => some v | _ => none
+
+/-- The output records of a run: the stream, the text, and the result that was open. -/
+private def outputsOf (records : Array Protocol.Record) : Array (String × String × Nat) :=
+  records.filterMap fun
+    | .output s t _ r => some (s.getD "", t.getD "", r.getD 0)
+    | _ => none
+
+/-- The reports of the named results that finished: the identifier, the parent, and the name. -/
+private def finishedOf (records : Array Protocol.Record) : Array Protocol.ResultInfo :=
+  records.filterMap fun
+    | .result i => if i.status?.isSome then some i else none
+    | _ => none
+
+/-- The Lean harness reports a passing value as passed and exits with 0. -/
 @[test]
 def runOnePasses : Test := do
-  let o ← runValue default (pure () : Test)
-  assertBEq .passed o.status
+  let (code, rs) ← harnessRun (pure () : Test)
+  assertBEq 0 code
+  assertBEq (some .pass) ((verdictOf? rs).bind (·.status?))
 
-/-- `runValue` reports a failing value as failed and carries its message. -/
+/-- The Lean harness reports a failing value as failed, with its message, and exits with 1. -/
 @[test]
 def runOneFails : Test := do
-  let o ← runValue default (TestResult.fail { message := "boom" })
-  assertBEq .failed o.status
-  assertBEq (some "boom") o.message?
+  let (code, rs) ← harnessRun (TestResult.fail { message := "boom" })
+  assertBEq 1 code
+  assertBEq (some .fail) ((verdictOf? rs).bind (·.status?))
+  assertBEq (some "boom") ((verdictOf? rs).bind (·.message?))
 
-/-- A failing run surfaces its captured output in the outcome. -/
+/-- A failing run reports what it wrote as output records. -/
 @[test]
 def runOneCapturesOutput : Test := do
-  let o ← runValue default (do IO.println "trace line"; failHere "nope" : Test)
-  assertBEq .failed o.status
-  assertBEq 1 o.allOutput.size
-  assertBEq .stdout o.allOutput[0]!.stream
-  assertContains "trace line" o.allOutput[0]!.text
+  let (_, rs) ← harnessRun (do IO.println "trace line"; failHere "nope" : Test)
+  assertBEq (some .fail) ((verdictOf? rs).bind (·.status?))
+  assertBEq #[("stdout", "trace line\n", 0)] (outputsOf rs)
 
 /--
-An outcome takes the most severe verdict among a test and its named results, with the message of
-the innermost result that has it, which is where the assertion failed.
+A test's verdict is the most severe among its own code and its named results, and the message of the
+assertion that failed is on the named result that raised it.
 -/
 @[test]
 def runOneAggregates : Test := do
-  let o ← runValue default (do result "a" (pure ()); result "b" (failHere "bad") : Test)
-  assertBEq .failed o.status
-  assertBEq (some "bad") o.message?
+  let (_, rs) ← harnessRun (do result "a" (pure ()); result "b" (failHere "bad") : Test)
+  assertBEq (some .fail) ((verdictOf? rs).bind (·.status?))
+  assertBEq #[some "a", some "b"] ((finishedOf rs).map (·.name?))
+  assertBEq (some "bad") ((finishedOf rs)[1]?.bind (·.message?))
 
 /--
-An outcome reports one scope per result: the test's own first, then the named results in the order
-they started, each naming the scope that contains it.
+Each named result is reported with an identifier in the order it started and with the identifier of
+the result that contains it, {lit}`0` for the test itself.
 -/
 @[test]
 def runOneNodes : Test := do
-  let o ← runValue default (do
+  let (_, rs) ← harnessRun (do
     result "a" (result "inner" (pure ()))
     result "b" (failHere "bad") : Test)
-  assertBEq #["", "a", "inner", "b"] (o.results.map (·.name))
-  assertBEq #[0, 0, 1, 0] (o.results.map (·.parent))
-  assertBEq #[0, 1, 2, 3] (o.results.map (·.id))
-  assertBEq #[some .failed, some .passed, some .passed, some .failed]
-    (o.results.map (·.status?))
-  result "the failure's message is on the result that raised it" do
-    assertBEq (some "bad") o.results[3]!.message?
+  let finished := (finishedOf rs).qsort (·.id?.getD 0 < ·.id?.getD 0)
+  assertBEq #[some "a", some "inner", some "b"] (finished.map (·.name?))
+  assertBEq #[some 0, some 1, some 0] (finished.map (·.parent?))
+  assertBEq #[some 1, some 2, some 3] (finished.map (·.id?))
+  assertBEq #[some .pass, some .pass, some .fail] (finished.map (·.status?))
 
-/-- Each scope of an outcome holds what its own code wrote, and what a scope inside it wrote is there. -/
+/-- Each output record names the result whose own code wrote it. -/
 @[test]
 def runOneNodeOutput : Test := do
-  let o ← runValue default <| show Test from do
+  let (_, rs) ← harnessRun <| show Test from do
     IO.println "outer"
     result "inner" (IO.println "within")
     IO.println "after"
-  let text (node : ResultNode) : String := node.output.foldl (fun acc c => acc ++ c.text) ""
-  assertBEq #["outer\nafter\n", "within\n"] (o.results.map text)
+  assertBEq #[("stdout", "outer\n", 0), ("stdout", "within\n", 1), ("stdout", "after\n", 0)]
+    (outputsOf rs)
 
 /--
 A named result and the action of an `expectFail` are each reported as they start and again as they
@@ -2058,81 +2090,53 @@ def runOneWatchesResults : Test := do
       | .expectFailStarted => "expecting"
       | .expectFailFinished expected => s!"expected {expected}"
     seen.modify (·.push said)
-  let _ ← runValue default  (watch := watch) do
+  let test : Test := do
     result "a" (result "inner" (pure ()))
     result "b" (pure ())
     expectFail (result "c" (fail "boom"))
+  let ctx ← Harness.contextOf #[]
+  discard <| runEntry { ctx with watchResults := some watch } (TestEntry.of "" "" "t" default test)
   assertBEq
     #["start a", "start a.inner", "end a.inner", "end a", "start b", "end b",
       "expecting", "start c", "end c", "expected true"]
     (← seen.get)
 
-/-- An outcome includes warnings for unused options. -/
-@[test]
-def runOneUnreadOptions : Test := do
-  let reads : Test := do
-    let _ ← flag "read"
-  let options := #[("read", ""), ("zeta", "1"), ("alpha", "2"), ("alpha", "3")]
-  let o ← runEntryOutcome (.of "" "" "" default reads) (options := options)
-  assertBEq #["alpha", "zeta"] o.unreadOptions
-  result "a test given no options has none unread" do
-    let o ← runEntryOutcome (.of "" "" "" default reads)
-    assertBEq #[] o.unreadOptions
-
-/-- An outcome with some optional fields set, used to test its JSON encoding. -/
-private def sampleOutcome : RunOutcome where
-  status := .failed
+/-- An outcome of the widget with some optional fields set, used to test its JSON encoding. -/
+private def sampleOutcome : Widget.RunOutcome where
+  status := "fail"
   durationMs := 5
   message? := some "bad"
   seed? := some "7"
-  options := #[{ name := "a", value := "1" }]
-  unreadOptions := #["a"]
+  ran := true
+  settings := #[{ name := "a", value := "1" }]
 
-
-/-- Decoding an outcome's JSON gives back the outcome. -/
+/-- Decoding the JSON of an outcome of the widget gives back the outcome. -/
 @[test]
 def runOutcomeJsonRoundTrips : Test := do
-  let decoded ← IO.ofExcept (Lean.fromJson? (α := RunOutcome) (Lean.toJson sampleOutcome))
-  assertBEq (Lean.toJson sampleOutcome).compress (Lean.toJson decoded).compress
+  let decoded ← IO.ofExcept (Lean.fromJson? (α := Widget.RunOutcome) (Lean.toJson sampleOutcome))
+  assertTrue (decoded == sampleOutcome)
 
-/-- An outcome's JSON has no key for an optional field that is {lean}`none`. -/
+/-- The JSON of an outcome of the widget has no key for an optional field that is {lean}`none`. -/
 @[test]
 def runOutcomeJsonOmitsNone : Test := do
   assertTrue ((Lean.toJson sampleOutcome).getObjVal? "detail").toOption.isNone
 
-/-- Decoding JSON that is missing a key gives that field of the outcome its default value. -/
-@[test]
-def runOutcomeJsonDefaults : Test := do
-  let minimal := Lean.Json.mkObj
-    [("status", Lean.toJson ResultNode.Status.passed), ("durationMs", Lean.toJson 1)]
-  let decoded ← IO.ofExcept (Lean.fromJson? (α := RunOutcome) minimal)
-  assertBEq 0 decoded.results.size
-  assertBEq 0 decoded.options.size
-  assertBEq #[] decoded.unreadOptions
-  assertBEq none decoded.seed?
-
-/-- A passing run still surfaces its captured output. -/
+/-- A passing run still reports what it wrote. -/
 @[test]
 def runOnePassOutput : Test := do
-  let o ← runValue default (do IO.println "printed"; return true : IO Bool)
-  assertBEq .passed o.status
-  assertBEq 1 o.allOutput.size
-  assertBEq .stdout o.allOutput[0]!.stream
-  assertContains "printed" o.allOutput[0]!.text
+  let (_, rs) ← harnessRun (do IO.println "printed"; return true : IO Bool)
+  assertBEq (some .pass) ((verdictOf? rs).bind (·.status?))
+  assertBEq #[("stdout", "printed\n", 0)] (outputsOf rs)
 
 /-- Captured output keeps stdout and stderr distinct and interleaved in order. -/
 @[test]
 def runOneStreams : Test := do
-  let o ← runValue default <| show IO Bool from do
+  let (_, rs) ← harnessRun <| show IO Bool from do
     IO.println "out one"
     IO.eprintln "err one"
     IO.println "out two"
     return true
-  assertBEq .passed o.status
-  assertBEq 3 o.allOutput.size
-  assertBEq .stdout o.allOutput[0]!.stream
-  assertBEq .stderr o.allOutput[1]!.stream
-  assertBEq .stdout o.allOutput[2]!.stream
+  assertBEq #["stdout", "stderr", "stdout"] ((outputsOf rs).map (·.1))
 
 /-- `failure` from the `Alternative` instance fails a test. -/
 @[test]

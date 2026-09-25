@@ -1,0 +1,4 @@
+# The configuration of the widget's runs. The default profile gives the setting `greeting` a value
+# of its own, which the widget's settings fields start from.
+[profile.default.settings]
+greeting = "good day"

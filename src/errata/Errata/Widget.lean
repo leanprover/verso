@@ -8,8 +8,9 @@ module
 public meta import Lean.Widget.UserWidget
 public meta import Lean.Server
 public meta import Errata.NameJson
-public meta import Errata.WidgetOutcome
+public meta import Errata.WidgetState
 public meta import Errata.ProcessControl
+public meta import Errata.RunnerConfig
 
 public section
 
@@ -22,58 +23,43 @@ namespace Errata.Widget
 
 /--
 Shown when the text cursor is on a test's source span. It offers a "run" button that runs the test
-in the language server, streaming its output as it is produced.
+through the Errata driver, streaming its output as it is produced.
 -/
 @[widget_module]
 meta def runTestWidget : Lean.Widget.Module where
   javascript := include_str "widget/run_test_widget.js"
 
-/--
-A live (or just-finished) run. Output chunks accumulate in {name (full := RunState.chunks)}`chunks`
-so a widget that reconnects after the cursor leaves and returns can replay them by index. They are
-the run's one copy of its output, since the outcome's results hold none. The wakeup promise is
-resolved and replaced whenever a chunk arrives or the run finishes, waking any waiter.
--/
-meta structure RunState where
-  /-- Every output chunk produced so far, in order. -/
-  chunks : IO.Ref (Array Runner.OutputChunk)
-  /--
-  The reports from named results so far, in order. A named result is reported when it starts, with
-  its identifier, parent, and name, and again when it finishes, with its verdict.
-  -/
-  results : IO.Ref (Array Runner.ResultNode)
-  /-- Whether the run has finished. -/
-  finished : IO.Ref Bool
-  /-- The final outcome, set when the run finishes. -/
-  outcome : IO.Ref (Option Runner.RunOutcome)
-  /-- A promise resolved and replaced on each change, which wakes the requests waiting on the run. -/
-  wakeup : IO.Ref (IO.Promise Unit)
-  /-- The current phase, {lit}`"building"` while compiling the module then {lit}`"running"`. -/
-  phase : IO.Ref String
-  /-- A hash of the test's source when the run started; a later request with a different one is stale. -/
-  version : String
-  /-- When the run started, in milliseconds since the Unix epoch. -/
-  startTime : Nat
-  /-- How long the build took, in milliseconds; 0 while still building. -/
-  buildMs : IO.Ref Nat
-  /-- When the test body started (reported by the runner), in epoch ms; 0 until then. -/
-  execStartTime : IO.Ref Nat
-  /--
-  The process to be killed if the run is cancelled. Contains first the build, then the runner.
-  Updated as each is spawned.
-  -/
-  kill : IO.Ref (IO Unit)
-  /-- A hash of the document's text when the run started. -/
-  sourceHash : UInt64
-  /-- The identifier that the widget gave the run when it asked for it to start. -/
-  runId : String
+/-- A setting that a test takes, which the widget offers a field for. -/
+meta structure DeclaredSetting where
+  /-- The setting's name: its fully qualified declaration name. -/
+  name : String
+  /-- Whether the test runs without a value for the setting. -/
+  optional : Bool
+  /-- The setting's docstring. -/
+  description? : Option String := none
+  /-- The setting's declared default. -/
+  default? : Option String := none
+deriving Lean.FromJson, Lean.ToJson
 
-/-- The live runs, keyed by the test's declaration name so a run survives re-elaboration. -/
+/-- What the server knows of a test from the latest elaboration of its source. -/
+meta structure TestNote where
+  /-- A hash of the test's source. -/
+  version : String
+  /-- The test's own declaration, where a failure with no more specific place is reported. -/
+  location? : Option Location := none
+  /-- The settings that the test takes, in the order of its parameters. -/
+  settings : Array DeclaredSetting := #[]
+
+/-- The live and finished runs, keyed by the test's declaration so a run survives re-elaboration. -/
 meta initialize runRegistry : IO.Ref (Std.HashMap Name RunState) ← IO.mkRef {}
 
+/-- What the latest elaboration of each test recorded, by declaration. -/
+meta initialize testNotes : IO.Ref (Std.HashMap Name TestNote) ← IO.mkRef {}
+
 /--
-Takes the workspace's build lock, runs {name}`act`, and releases the lock. The builds started for the
-tests of one workspace then run one at a time, wherever in the workspace those tests are.
+Takes the workspace's build lock, runs {name}`act`, and releases the lock. The runs started for the
+tests of one workspace then go one at a time, wherever in the workspace those tests are, since each
+builds in the workspace and writes its configuration files.
 
 The lock is a file under the workspace's {lit}`.lake` directory, and every file worker of the
 workspace opens that same file.
@@ -85,7 +71,10 @@ private meta def withBuildLock (act : IO α) : IO α := do
   handle.lock
   try act finally handle.unlock
 
-/-- A request to start running a test: the declaration and the module that defines it. -/
+/--
+A request to start running a test: the declaration and the module that defines it, the values the
+run gives the test, and the identifier of the run.
+-/
 meta structure StartRequest where
   /-- The test declaration to run, encoded by {name}`nameToJson`. -/
   decl : Json
@@ -94,27 +83,25 @@ meta structure StartRequest where
   /-- A hash of the test's source, recorded with the run so an edit can invalidate it. -/
   version : String
   /--
-  The seed for property tests, or {lean}`none` to have one randomly generated. Because JavaScript
+  The seed for property tests, or {lean}`none` to have the runner choose one. Because JavaScript
   represents JSON numbers as floats, cutting off their range, it is a string of decimal digits.
   -/
   seed? : Option String := none
+  /-- Values for the test's settings, which the run passes to the driver with {lit}`--set`. -/
+  settings : Array SettingValue := #[]
   /--
-  The options for the test, in order. A name that appears more than once gives the option
-  several values.
+  The identifier that the widget chose for the run, which later replies about the run carry, so the
+  widget can recognize the run it asked for.
   -/
-  options : Array Runner.TestOption := #[]
-  /--
-  An identifier the widget chose for the run, which later replies about the run carry, so the widget
-  can recognize the run it asked for.
-  -/
-  runId : String := ""
+  runId : String
 
 meta instance : ToJson StartRequest where
   toJson r := Json.mkObj <|
     [("decl", r.decl), ("module", r.module), ("version", toJson r.version)] ++
     Json.opt "seed" r.seed? ++
-    [("options", toJson r.options), ("runId", toJson r.runId)]
+    [("settings", toJson r.settings), ("runId", toJson r.runId)]
 
+/-- The {lit}`settings` field may be absent, and every other field but {lit}`seed` is required. -/
 meta instance : FromJson StartRequest where
   fromJson? j := do
     return {
@@ -122,8 +109,10 @@ meta instance : FromJson StartRequest where
       module := ← j.getObjVal? "module"
       version := ← j.getObjValAs? _ "version"
       seed? := ← fromJson? (j.getObjValD "seed")
-      options := ← Runner.getObjValAsD j "options" #[]
-      runId := ← Runner.getObjValAsD j "runId" ""
+      settings := ← match j.getObjVal? "settings" with
+        | .ok v => fromJson? v
+        | .error _ => pure #[]
+      runId := ← j.getObjValAs? _ "runId"
     }
 
 /-- A request for output past a known position, naming the test by its encoded declaration. -/
@@ -133,7 +122,7 @@ meta structure AwaitRequest where
   /-- The number of chunks the widget already has, so only later ones are returned. -/
   since : Nat
   /--
-  The number of reports from named results that the widget already has, counted the same way as
+  The number of reports from results that the widget already has, counted the same way as
   {name (full := AwaitRequest.since)}`since`.
   -/
   sinceResults : Nat := 0
@@ -143,31 +132,35 @@ meta structure AwaitRequest where
   phase : String
 deriving Lean.FromJson, Lean.ToJson
 
-/-- A request that names a running test by its declaration, encoded by {name}`nameToJson`. -/
+/-- A request that names a test by its declaration, encoded by {name}`nameToJson`. -/
 meta structure RunRef where
   /-- The test declaration, encoded by {name}`nameToJson`. -/
   decl : Json
 deriving Lean.FromJson, Lean.ToJson
 
 /--
-A reply from {name (scope := "Errata.Widget")}`awaitOutput`, including any output chunks past the
-requested position and whether the test run has completed.
+A reply from {name (scope := "Errata.Widget")}`awaitOutput`: the output chunks and result reports
+past the requested positions, and the run's phase and timings, with its outcome once it has one.
 -/
 meta structure AwaitResult where
   /-- The output chunks past the requested position. -/
-  chunks : Array Runner.OutputChunk := #[]
+  chunks : Array OutputChunk := #[]
   /-- The position past the returned chunks, to pass as the next request's start. -/
   nextSince : Nat := 0
   /--
-  The reports from named results that are newer than those the widget already has. A named result
-  is reported when it starts and again when it finishes.
+  The reports from results that are newer than those the widget already has. A named result is
+  reported when it starts and again when it finishes, and the test's own result when the test ends.
   -/
-  results : Array Runner.ResultNode := #[]
+  results : Array ResultNode := #[]
   /--
-  How many reports from named results the run has made so far. The widget sends this back with its
-  next request, as the number of reports it already has.
+  How many reports from results the run has made so far. The widget sends this back with its next
+  request, as the number of reports it already has.
   -/
   nextSinceResults : Nat := 0
+  /-- The fixture phases that ran for the test so far. -/
+  steps : Array Step := #[]
+  /-- The run-level issues that the runner reported so far. -/
+  issues : Array Issue := #[]
   /-- When the run started, in milliseconds since the Unix epoch. -/
   startTime : Nat := 0
   /--
@@ -175,16 +168,18 @@ meta structure AwaitResult where
   ticks from it, so the display stays right when the server's clock differs from the editor's.
   -/
   elapsedMs : Nat := 0
-  /-- How long the build took, in milliseconds; 0 while still building. -/
+  /-- How long the driver took before the runner began, in milliseconds; 0 while building. -/
   buildMs : Nat := 0
   /-- When the test body started, in epoch ms; 0 until then. Output offsets are relative to it. -/
   execStartTime : Nat := 0
-  /-- The current phase, {lit}`"building"` or {lit}`"running"`. -/
+  /--
+  The run's phase: {lit}`building`, {lit}`running`, {lit}`done`, or {lit}`cancelled`.
+  -/
   phase : String := "running"
-  /-- Whether the run has finished and no more output will arrive. -/
+  /-- Whether the run is over and no more output will arrive. -/
   done : Bool := false
-  /-- The final outcome, present once {lit}`done` is set. -/
-  outcome : Option Runner.RunOutcome := none
+  /-- The outcome, present once a run is done; a cancelled run has none. -/
+  outcome : Option RunOutcome := none
   /-- The identifier that the widget gave the run when it asked for it to start. -/
   runId : String := ""
 deriving Lean.FromJson, Lean.ToJson
@@ -196,22 +191,8 @@ private meta def decodeDecl (j : Json) : RequestM Name :=
   | .ok n => pure n
   | .error e => throw (.mk .invalidParams e)
 
-/-- Resolves the run's current wakeup promise and installs a fresh one, waking any waiter. -/
-private meta def signalRun (state : RunState) : IO Unit := do
-  let fresh ← IO.Promise.new
-  -- The protocol reader and the two forwarded streams signal a run at the same time, so each of
-  -- them takes a different promise and no waiter is left on one that nothing resolves.
-  let p ← state.wakeup.modifyGet fun p => (p, fresh)
-  p.resolve ()
-
-/-- Marks a run finished, kills its process, and wakes its waiters. -/
-private meta def stopRun (state : RunState) : IO Unit := do
-  state.finished.set true
-  try (← state.kill.get) catch _ => pure ()
-  signalRun state
-
 /--
-Forgets the run of a name, if any, and stops it. The run is taken out of the registry in the same
+Forgets the run of a name, if any, and cancels it. The run is taken out of the registry in the same
 step that finds it, so a run that a concurrent request has just started stays in place.
 {name}`onlyIf` picks which runs are dropped.
 -/
@@ -221,7 +202,7 @@ private meta def dropRun (declName : Name) (onlyIf : RunState → Bool := fun _ 
     match runs.get? declName with
     | some state => if onlyIf state then (some state, runs.erase declName) else (none, runs)
     | none => (none, runs)
-  if let some state := taken then stopRun state
+  if let some state := taken then discard <| state.apply .cancel
 
 /--
 How many finished runs stay in the registry, with the output and the outcome they collected. A
@@ -233,112 +214,29 @@ private meta def finishedRunsKept : Nat := 20
 private meta def forgetOldRuns : IO Unit := do
   let mut finished := #[]
   for (declName, state) in ← runRegistry.get do
-    if ← state.finished.get then finished := finished.push (declName, state.startTime, state.runId)
+    unless (← state.phase).isLive do finished := finished.push (declName, state)
   if finished.size ≤ finishedRunsKept then return
-  let oldest := finished.qsort (fun a b => a.2.1 < b.2.1) |>.take (finished.size - finishedRunsKept)
-  for (declName, startTime, runId) in oldest do
+  let oldest := finished.qsort (fun a b => a.2.startTime < b.2.startTime)
+    |>.take (finished.size - finishedRunsKept)
+  for (declName, old) in oldest do
     -- A run of the same test started in the meantime takes precedence
-    dropRun declName (onlyIf := fun state => state.startTime == startTime && state.runId == runId)
-
-/-- The hash of each test's source as the {lit}`@[test]` attribute last elaborated it, by declaration. -/
-meta initialize testVersions : IO.Ref (Std.HashMap Name String) ← IO.mkRef {}
+    dropRun declName
+      (onlyIf := fun state => state.startTime == old.startTime && state.runId == old.runId)
 
 /--
-Records the hash of a test's current source and ends a run of the test whose source has changed
-since the run started. {name}`version` is that hash, which the {lit}`@[test]` attribute passes each
-time it elaborates the test, so the run of an edited test ends wherever the widget is.
+Records what the latest elaboration of a test found, and ends a run of the test whose source has
+changed since the run started. The {lit}`@[test]` attribute calls it each time it elaborates the
+test, so the run of an edited test ends wherever the widget is.
 -/
-meta def dropRunsOfOtherVersions (declName : Name) (version : String) : IO Unit := do
-  testVersions.modify (·.insert declName version)
-  dropRun declName (onlyIf := (·.version != version))
+meta def noteTest (declName : Name) (note : TestNote) : IO Unit := do
+  testNotes.modify (·.insert declName note)
+  dropRun declName (onlyIf := (·.version != note.version))
 
-/--
-Records how to kill the process a run is waiting on. A run that was cancelled before this point
-kills the process at once, and the result is {lean}`false`.
--/
-private meta def setKill (state : RunState) (kill : IO Unit) : IO Bool := do
-  state.kill.set kill
-  if (← state.finished.get) then
-    try kill catch _ => pure ()
-    return false
-  return true
-
-/--
-Ends a run, with {name}`fallback` as its outcome when the runner reported none. A run that was
-cancelled earlier keeps its state.
--/
-private meta def finishWith (state : RunState) (fallback : Runner.RunOutcome) : IO Unit := do
-  if (← state.finished.get) then return
-  -- The outcome is in place before the run is marked finished, so a waiter that finds the run
-  -- finished finds the outcome with it.
-  if (← state.outcome.get).isNone then state.outcome.set (some fallback)
-  -- A cancel can mark the run finished at this same moment, and only the caller that marked it
-  -- wakes the waiters.
-  unless ← state.finished.modifyGet fun finished => (finished, true) do
-    signalRun state
-
-/--
-Handles one line of the runner's JSON protocol: an {lit}`exec` line when the test body starts, a
-{lit}`chunk` line per output fragment, a {lit}`result` line as each named result starts and
-finishes, and an {lit}`outcome` line at the end.
--/
-private meta def handleLine (state : RunState) (line : String) : IO Unit := do
-  -- A test run that has ended (e.g. a cancelled one) receives no more of the runner's reports.
-  if ← state.finished.get then return
-  if let .ok j := Json.parse line then
-    if let .ok c := j.getObjVal? "chunk" then
-      if let .ok chunk := (fromJson? c : Except String Runner.OutputChunk) then
-        state.chunks.modify (·.push chunk)
-        signalRun state
-    else if let .ok n := j.getObjVal? "result" then
-      if let .ok node := (fromJson? n : Except String Runner.ResultNode) then
-        state.results.modify (·.push node)
-        signalRun state
-    else if let .ok ex := j.getObjVal? "exec" then
-      if let .ok t := (fromJson? ex : Except String Nat) then
-        state.execStartTime.set t
-        signalRun state
-    else if let .ok o := j.getObjVal? "outcome" then
-      if let .ok oc := (fromJson? o : Except String Runner.RunOutcome) then
-        state.outcome.set oc
-
-/--
-Handles one line of the runner's JSON protocol. The line is provided as UTF-8 encoded bytes.
-
-If the line is invalid UTF-8 or if it is empty, then it is skipped.
--/
-private meta def handleLineBytes (state : RunState) (bytes : ByteArray) : IO Unit := do
-  if let some line := String.fromUTF8? bytes then
-    unless line.isEmpty do handleLine state line
-
-/--
-Passes along what the runner writes to the output stream {name}`stream`, adding each line to the
-test's own output as a chunk.
-
-The runner's streams include the output that the test's capture misses. One example is the output of
-a subprocess that the test starts. Another is an error from outside the test body, such as a failed
-import, which the runner writes to standard error.
--/
-private meta partial def forwardStream (stream : Runner.OutputChunk.Stream) (handle : IO.FS.Handle)
-    (state : RunState) : IO Unit := do
-  let line ← handle.getLine
-  if line.isEmpty then return
-  -- Output that arrives after the run has ended belongs to a process that outlived the runner.
-  unless ← state.finished.get do
-    state.chunks.modify (·.push { stream, text := line, time := ← Runner.nowMs })
-    signalRun state
-  forwardStream stream handle state
-
-/--
-How long to wait, in milliseconds, for the runner's output pipes to close once the runner has exited.
--/
-private meta def pipeGraceMs : Nat := 500
-
-/-- The number of characters of a failed subprocess's output to be reported. -/
+/-- The number of characters of the driver's output that are kept to report a failed run. -/
 private meta def detailLimit : Nat := 4000
 
 /--
-The end of a subprocess's output, which is where it says what went wrong: its last
+The end of a process's output, which is where it says what went wrong: its last
 {name}`detailLimit` characters. A build that fails after a long log then sends the widget a reply of
 a few kilobytes.
 -/
@@ -346,107 +244,122 @@ private meta def endOf (text : String) : String :=
   if text.length ≤ detailLimit then text
   else "…\n" ++ text.drop (text.length - detailLimit)
 
-/-- The outcome shown when the build step fails, carrying its message and detail. -/
-private meta def buildFailure (detail : String) : Runner.RunOutcome := {
-  status := .error, durationMs := 0, message? := some "lake build failed"
-  detail? := some (endOf detail)
-}
+/-- The outcome of a driver that failed before the runner began, with the end of its output. -/
+private meta def buildFailure (output : String) : RunOutcome :=
+  { status := "error", message? := some "lake build failed", detail? := some (endOf output) }
 
-/-- The outcome shown when building or running the test raises an error, such as a failed spawn. -/
-private meta def launchFailure (e : IO.Error) : Runner.RunOutcome := {
-  status := .error, durationMs := 0, message? := some s!"the test could not be run: {e}"
-}
+/-- The outcome when the driver could not be started or followed, such as a failed spawn. -/
+private meta def launchFailure (e : IO.Error) : RunOutcome :=
+  { status := "error", message? := some s!"the test could not be run: {e}" }
 
 /--
-The error outcome for a runner that exited with code {name}`code` before reporting an outcome of its
-own. The reason for the failure is usually in what the runner wrote to standard error, which the
-widget shows as part of the test's output.
+The outcome of a driver that exited with code {name}`code` after the runner began and before the
+runner ended the run, with the end of the driver's output.
 -/
-private meta def runnerFailure (code : UInt32) : Runner.RunOutcome := {
-  status := .error, durationMs := 0
+private meta def runnerFailure (code : UInt32) (output : String) : RunOutcome := {
+  status := "error"
   message? := some s!"the test runner exited with code {code} before reporting an outcome"
+  detail? := some (endOf output)
 }
 
+/-- The name of the setting that holds the seed for property tests. -/
+private meta def seedSetting : String := "Errata.seed"
+
+/-- What a run of one test asks of the driver. -/
+meta structure DriverRequest where
+  /-- The module that defines the test. -/
+  module : Name
+  /-- The test's name, as its test executable names it. -/
+  test : String
+  /-- The file for the runner's events. -/
+  eventsPath : System.FilePath := ""
+  /-- The seed for property tests, when the widget gives one. -/
+  seed? : Option Nat := none
+  /-- Whether the test takes the seed setting, which then receives the seed. -/
+  takesSeed : Bool := false
+  /-- Values for the test's settings. -/
+  settings : Array (String × String) := #[]
+
 /--
-Builds the module in {name}`source` and the runner, then runs the test and streams its output into
-{name}`state`. The runner imports the test's module's {lit}`.olean`, so it must first be built. The
-module and the declaration are encoded by {name}`nameToJson`, and the options are a JSON array of
-{name}`Runner.TestOption`s.
+The arguments with which the driver, {lit}`lake`, runs one test and writes the runner's events: the
+test's module through the interpreted product, a filter that selects the test by its name, and the
+seed and the settings' values. A seed goes to the seed setting when the test takes it, and otherwise
+to the runner as the run's seed.
 -/
-private meta def buildAndRun (source : System.FilePath) (moduleJson declJson optionsJson : String)
-    (seed? : Option Nat) (state : RunState) : IO Unit := do
+meta def driverArgs (r : DriverRequest) : Array String :=
+  let seed := match r.seed? with
+    | some n => if r.takesSeed then #["--set", s!"{seedSetting}={n}"] else #["--seed", toString n]
+    | none => #[]
+  #["test", "--", "run", "-E", s!"name(={Filter.escapeText r.test})",
+    "--interpreted", r.module.toString, "--events", r.eventsPath.toString] ++
+    seed ++ r.settings.flatMap fun (k, v) => #["--set", s!"{k}={v}"]
+
+/--
+How long to wait, in milliseconds, for the driver's output pipes to close once the driver has
+exited.
+-/
+private meta def pipeGraceMs : Nat := 500
+
+/-- How much of the driver's output is kept as it arrives, in characters. -/
+private meta def outputKept : Nat := 64000
+
+/--
+Runs the test through the driver, under the workspace's build lock, and applies the changes that the
+runner's events make to {name}`state`. The driver's process group is the run's kill. The driver's
+standard input is a lifeline that this process holds, and {lit}`ERRATA_DRIVER_LIFELINE` asks the
+driver to hand it on to the runner, so the runner and the tests end when this process does. What the
+driver writes, Lake's build log and the runner's report, is kept for the
+message of a driver that fails before the runner ends the run. {name}`own?` is the test's own
+declaration, as {name}`RunOutcome.ofRecord` uses it.
+-/
+private meta def runThroughDriver (state : RunState) (request : DriverRequest)
+    (own? : Option Location) : IO Unit := do
   -- The language server's Lake sets `LAKE` to its own path.
   let lake := (← IO.getEnv "LAKE").getD "lake"
-  let (buildErr, queryOut, buildCode) ← withBuildLock do
-    if ← state.finished.get then return ("", "", 0)
-    -- `lake query` builds the runner and the module, then prints the runner's path. Its own process
-    -- group lets a cancel kill the compilers that Lake starts.
-    let build ← IO.Process.spawn {
-      stdin := .null, stdout := .piped, stderr := .piped, setsid := true
-      cmd := lake, args := #["query", "errata-run-one", source.toString]
-    }
-    unless ← setKill state build.kill do
-      let _ ← build.wait
-      return ("", "", 0)
-    let errTask ← IO.asTask (prio := .dedicated) build.stderr.readToEnd
-    let queryOut ← build.stdout.readToEnd
-    let buildErr := (← IO.wait errTask).toOption.getD ""
-    let buildCode ← build.wait
-    -- The build's process group id is free for reuse once `wait` returns, so a cancel must no longer
-    -- kill that group.
-    state.kill.set (pure ())
-    return (buildErr, queryOut, buildCode)
-  if ← state.finished.get then return
-  if buildCode != 0 then
-    finishWith state (buildFailure buildErr)
-    return
-  let some runnerPath := (queryOut.splitOn "\n").find? (!·.trimAscii.isEmpty) |>.map (·.trimAscii.copy)
-    | finishWith state (buildFailure "lake query did not report the runner's path")
-      return
-  -- The runner writes its protocol to a file of its own, where no other output can mix into it.
-  IO.FS.withTempFile fun _ protocolPath => do
-    let protocol ← ProcessControl.Tail.open protocolPath
-    -- The runner finds the test's module through the `LEAN_PATH` that it inherits. It exits when its
-    -- standard input closes, which happens when this file worker exits. Its own process group lets a
-    -- cancel kill the processes that the test starts. A panic in the test ends the runner, as a
-    -- panic ends a test executable under `lake test`.
-    let run ← IO.Process.spawn {
-      stdin := .piped, stdout := .piped, stderr := .piped, setsid := true
-      env := #[("LEAN_ABORT_ON_PANIC", some "1")]
-      cmd := runnerPath
-      args := #[protocolPath.toString, moduleJson, declJson, optionsJson]
-        ++ (seed?.map (#[toString ·])).getD #[]
-    }
-    unless ← setKill state run.kill do
-      let _ ← run.wait
-      return
-    state.buildMs.set ((← Runner.nowMs) - state.startTime)
-    state.phase.set "running"
-    signalRun state
-    let runErrTask ← IO.asTask (prio := .dedicated) (forwardStream .stderr run.stderr state)
-    let runOutTask ← IO.asTask (prio := .dedicated) (forwardStream .stdout run.stdout state)
-    -- The exit code, recorded when the runner is found to have exited.
-    let code ← IO.mkRef none
-    let exitCode : IO (Option UInt32) := do
-      if let some c ← code.get then return some c
-      let c? ← run.tryWait
-      if c?.isSome then
-        -- The runner's process group id is free for reuse once `tryWait` reports the exit, so a
+  withBuildLock do
+    unless (← state.phase).isLive do return
+    IO.FS.withTempFile fun _ eventsPath => do
+      let events ← ProcessControl.Tail.open eventsPath
+      let driver ← IO.Process.spawn {
+        stdin := .piped, stdout := .piped, stderr := .piped, setsid := true
+        env := #[("ERRATA_DRIVER_LIFELINE", some "1")]
+        cmd := lake, args := driverArgs { request with eventsPath }
+      }
+      -- A run cancelled while the driver started has nothing to arm, so the driver ends here.
+      unless ← state.apply (.arm driver.kill) do
+        try driver.kill catch _ => pure ()
+        discard driver.wait
+        return
+      let output ← IO.mkRef ""
+      let keep (line : String) : IO Unit := output.modify fun text =>
+        let text := text ++ line
+        if text.length ≤ outputKept then text else text.drop (text.length - outputKept) |>.copy
+      let outTask ← IO.asTask (prio := .dedicated) (ProcessControl.forwardLines driver.stdout keep)
+      let errTask ← IO.asTask (prio := .dedicated) (ProcessControl.forwardLines driver.stderr keep)
+      -- The exit code, recorded when the driver is found to have exited.
+      let code ← IO.mkRef none
+      let exited : IO Bool := do
+        if (← code.get).isSome then return true
+        let c? ← driver.tryWait
+        -- The driver's process group id is free for reuse once `tryWait` reports the exit, so a
         -- cancel must no longer kill that group.
-        state.kill.set (pure ())
-      code.set c?
-      return c?
-    -- The file is read as bytes, and each line is decoded once all of it has arrived. Once
-    -- `errata-run-one` has exited, the file is read to its end.
-    protocol.follow (return (← exitCode).isSome) (handleLineBytes state)
-    -- Processes that the test started can hold the runner's output pipes open after the runner has
-    -- exited. They get a grace period, then are killed, and what they wrote is still read.
-    unless ← ProcessControl.waitAtMost pipeGraceMs [runOutTask, runErrTask] do
-      try run.kill catch _ => pure ()
-      discard <| ProcessControl.waitAtMost pipeGraceMs [runOutTask, runErrTask]
-    -- `Tail.follow` returns only after `errata-run-one` has exited, so the code is set.
-    let code := (← code.get).getD 0
-    finishWith state (runnerFailure code)
+        if c?.isSome then discard <| state.apply .disarm
+        code.set c?
+        return c?.isSome
+      let cache ← SourceLines.new
+      events.follow exited fun bytes => do
+        let line := ProcessControl.decodeLine bytes
+        for change in ← changesOfLine cache request.test state.startTime own? line do
+          discard <| state.apply change
+      -- Processes that outlived the driver can hold its output pipes open. They get a grace period,
+      -- and what they wrote before it ends is kept.
+      discard <| ProcessControl.waitAtMost pipeGraceMs [outTask, errTask]
+      -- `Tail.follow` returns only after the driver has exited, so the code is set.
+      let code := (← code.get).getD 0
+      let text ← output.get
+      let fallback :=
+        if (← state.phase) matches .building then buildFailure text else runnerFailure code text
+      discard <| state.apply (.finish fallback)
 
 /--
 A mapping from LSP document URIs to the saved LSP version and hash for the document.
@@ -536,67 +449,116 @@ meta def fileState (req : RunRef) : RequestM (RequestTask FileState) := do
     | none => false
   return RequestTask.pure { clean := ← bufferIsClean, changedSinceRun }
 
+/-- A field for one of a test's settings, as the widget shows it. -/
+meta structure SettingField where
+  /-- The setting's name. -/
+  name : String
+  /-- Whether the test runs without a value for the setting. -/
+  optional : Bool
+  /-- The setting's docstring. -/
+  description? : Option String := none
+  /-- The setting's declared default. -/
+  default? : Option String := none
+  /-- The value that the profile gives the setting, which fills the field at first. -/
+  profileValue? : Option String := none
+deriving Lean.FromJson, Lean.ToJson
+
+/-- The reply to a request for a test's settings. -/
+meta structure SettingsReply where
+  /-- The profile whose values fill the fields. -/
+  profile : String
+  /-- A field for each setting that the test takes, other than the seed, in parameter order. -/
+  fields : Array SettingField
+deriving Lean.FromJson, Lean.ToJson
+
+/-- The profile that the widget's runs use. -/
+private meta def widgetProfile : String := "default"
+
+/--
+The values that the profile named {name}`profile` gives settings, from the configuration that the
+driver last elaborated in the workspace's {lit}`.lake/errata`, or none when it has written none.
+-/
+private meta def profileValues (profile : String) : IO (Array (String × String)) := do
+  let dir := (← IO.currentDir) / ".lake" / "errata"
+  try
+    let config ← Runner.Config.load (dir / "config.json") (dir / "workspace.json")
+    return ((config.profile? profile).map (·.settings)).getD #[]
+  catch _ => return #[]
+
 open Server in
-/-- Server RPC method that starts running a test: builds its saved source, then streams its output. -/
+/--
+Server RPC method that gives the fields for a test's settings: for each setting that the test takes,
+other than the seed, its name, description, and declared default, whether it is optional, and the
+value that the profile gives it.
+-/
+@[server_rpc_method]
+meta def testSettings (req : RunRef) : RequestM (RequestTask SettingsReply) := do
+  let declName ← decodeDecl req.decl
+  let declared := (((← testNotes.get).get? declName).map (·.settings)).getD #[]
+  let values ← profileValues widgetProfile
+  let fields := declared.filter (·.name != seedSetting) |>.map fun s => {
+    name := s.name, optional := s.optional, description? := s.description?, default? := s.default?
+    profileValue? := (values.findRev? (·.1 == s.name)).map (·.2)
+  }
+  return RequestTask.pure { profile := widgetProfile, fields }
+
+open Server in
+/--
+Server RPC method that starts running a test: the driver builds its saved source and runs it, and
+the run's output streams in.
+-/
 @[server_rpc_method]
 meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
   let declName ← decodeDecl req.decl
+  let module ← decodeDecl req.module
+  if req.runId.isEmpty then
+    throw (.mk .invalidParams "a run needs an identifier")
   let seed? ← req.seed?.mapM fun s =>
     match s.toNat? with
     | some seed => pure seed
     | none =>
       throw (.mk .invalidParams s!"the seed must be a natural number in decimal digits: {s}")
-  let options := toJson req.options |>.compress
-  let _ ← decodeDecl req.module
-  let some source := System.Uri.fileUriToPath? (← RequestM.readDoc).meta.uri
-    | throw (.mk .invalidParams "the test's document is not a file")
   unless ← bufferIsClean do
     throw (.mk .invalidParams "the file has unsaved changes; save it before running the test")
   -- The request includes the hash of the test's source from when the widget was shown. A hash
   -- mismatch means that the widget's state is out of date.
-  if let some current := (← testVersions.get).get? declName then
-    unless current == req.version do
+  let note? := (← testNotes.get).get? declName
+  if let some note := note? then
+    unless note.version == req.version do
       throw (.mk .invalidParams "the test has changed since the widget was shown; try again")
-  let state : RunState := {
-    chunks := ← IO.mkRef #[], results := ← IO.mkRef #[],
-    finished := ← IO.mkRef false, outcome := ← IO.mkRef none,
-    wakeup := ← IO.mkRef (← IO.Promise.new), phase := ← IO.mkRef "building", version := req.version,
-    startTime := ← Runner.nowMs, buildMs := ← IO.mkRef 0, execStartTime := ← IO.mkRef 0,
-    kill := ← IO.mkRef (pure ()), sourceHash := ← documentHash, runId := req.runId
-  }
+  let state ← RunState.new req.runId req.version (← Protocol.nowMs) (← documentHash)
   -- The new run replaces the previous one in the same step that finds it.
   let previous? ← runRegistry.modifyGet fun runs => (runs.get? declName, runs.insert declName state)
-  if let some previous := previous? then stopRun previous
+  if let some previous := previous? then discard <| previous.apply .cancel
   forgetOldRuns
-  -- The task spends most of its time blocked on the build and the runner, so it has its own thread.
+  let request : DriverRequest := {
+    module, test := (privateToUserName declName).toString, seed?
+    takesSeed := note?.any (·.settings.any (·.name == seedSetting))
+    settings := req.settings.map fun s => (s.name, s.value)
+  }
+  -- The task spends most of its time blocked on the driver, so it has its own thread.
   let _ ← IO.asTask (prio := .dedicated) do
-    try buildAndRun source req.module.compress req.decl.compress options seed? state
-    catch e => finishWith state (launchFailure e)
+    try runThroughDriver state request (note?.bind (·.location?))
+    catch e => discard <| state.apply (.finish (launchFailure e))
   return RequestTask.pure ()
 
-open Server in
 /--
-Builds the reply for a waiter given the run's current state and the position it already has. The
-chunks past that position come together with the run's completion status, so a widget that
-reconnects to a finished run settles in a single reply.
+The reply for a waiter, from the run's data at one moment and the positions the waiter already has.
+The chunks past those positions come together with the run's phase, so a widget that reconnects to a
+finished run settles in a single reply.
 -/
-private meta def replyFrom (state : RunState) (since sinceResults : Nat) : IO AwaitResult := do
-  -- The finished flag is read before the chunks: once it is set, every chunk has been recorded, so
-  -- a reply that says done carries all of them.
-  let done ← state.finished.get
-  let outcome ← state.outcome.get
-  let (chunks, nextSince) ← state.chunks.modifyGet fun all =>
-    ((all.extract since all.size, all.size), all)
-  let phase ← state.phase.get
-  let startTime := state.startTime
-  let elapsedMs := (← Runner.nowMs) - startTime
-  let buildMs ← state.buildMs.get
-  let execStartTime ← state.execStartTime.get
-  let (results, nextSinceResults) ← state.results.modifyGet fun all =>
-    ((all.extract sinceResults all.size, all.size), all)
+private meta def replyFrom (state : RunState) (d : RunData) (since sinceResults : Nat) :
+    IO AwaitResult := do
   return {
-    chunks, nextSince, results, nextSinceResults, runId := state.runId
-    phase, startTime, elapsedMs, buildMs, execStartTime, done, outcome
+    chunks := d.chunks.extract since d.chunks.size, nextSince := d.chunks.size
+    results := d.results.extract sinceResults d.results.size, nextSinceResults := d.results.size
+    steps := d.steps, issues := d.issues, runId := state.runId, phase := d.phase.name
+    startTime := state.startTime, elapsedMs := (← Protocol.nowMs) - state.startTime
+    buildMs := d.buildMs, execStartTime := d.execStartTime
+    done := !d.phase.isLive
+    outcome := match d.phase with
+      | .done o => some o
+      | _ => none
   }
 
 open Server in
@@ -613,62 +575,39 @@ meta def awaitOutput (req : AwaitRequest) : RequestM (RequestTask AwaitResult) :
   -- A run recorded under a different source hash is from before an edit; treat it as absent.
   if state.version != req.version then
     return RequestTask.pure ({ done := true } : AwaitResult)
-  let p ← state.wakeup.get
-  let chunkCount ← state.chunks.modifyGet fun all => (all.size, all)
-  let resultCount ← state.results.modifyGet fun all => (all.size, all)
-  -- Return at once when there is new output, a named result has started or finished, the run
-  -- finished, or its phase changed, so that a widget reconnecting mid-build learns that the run is
-  -- building; otherwise wait.
-  if chunkCount > req.since || resultCount > req.sinceResults || (← state.finished.get) ||
-      (← state.phase.get) != req.phase then
-    return RequestTask.pure (← replyFrom state req.since req.sinceResults)
-  RequestM.mapTaskCheap (p.resultD ()).asServerTask fun _ =>
-    liftM (replyFrom state req.since req.sinceResults)
+  let d ← state.data.get
+  -- Return at once when there is new output, a result has reported, the run is over, or its phase
+  -- changed, so that a widget reconnecting mid-build learns that the run is building; otherwise
+  -- wait for the next change.
+  if d.chunks.size > req.since || d.results.size > req.sinceResults || !d.phase.isLive ||
+      d.phase.name != req.phase then
+    return RequestTask.pure (← replyFrom state d req.since req.sinceResults)
+  RequestM.mapTaskCheap (d.wakeup.resultD ()).asServerTask fun _ =>
+    liftM do replyFrom state (← state.data.get) req.since req.sinceResults
 
 /-- A request to cancel the run of a test. -/
 meta structure CancelRequest where
   /-- The test declaration, encoded by {name}`nameToJson`. -/
   decl : Json
-  /--
-  The identifier of the run to cancel, as the widget gave it when it asked for the run to start.
-  When it is empty, the request names whichever run of the test the server holds.
-  -/
-  runId : String := ""
-
-meta instance : ToJson CancelRequest where
-  toJson r := Json.mkObj [("decl", r.decl), ("runId", toJson r.runId)]
-
-meta instance : FromJson CancelRequest where
-  fromJson? j := do
-    return {
-      decl := ← j.getObjVal? "decl"
-      runId := ← Runner.getObjValAsD j "runId" ""
-    }
+  /-- The identifier of the run to cancel, which the widget gave the run when it started it. -/
+  runId : String
+deriving Lean.FromJson, Lean.ToJson
 
 /-- The reply to a request to cancel a run. -/
 meta structure CancelResult where
-  /-- Whether the run named by the request was in fact terminated by the request. -/
+  /-- Whether the run named by the request was in fact cancelled by the request. -/
   cancelled : Bool
 deriving Lean.FromJson, Lean.ToJson
 
 open Server in
 /--
-Server RPC method that cancels a run of a test by killing its process. The request uses the run
-identifier that the widget gave it, so a newer run of the same test keeps going. A run that has
-already finished keeps its outcome. The reply says whether the run was cancelled.
+Server RPC method that cancels a run of a test by killing the driver's process group. The request
+names the run by the identifier that the widget gave it, so a newer run of the same test keeps
+going. A run that is over keeps its outcome. The reply says whether the run was cancelled.
 -/
 @[server_rpc_method]
 meta def cancelTest (req : CancelRequest) : RequestM (RequestTask CancelResult) := do
   let declName ← decodeDecl req.decl
-  let runId := req.runId
   let some state := (← runRegistry.get).get? declName
     | return RequestTask.pure ({ cancelled := false } : CancelResult)
-  unless runId.isEmpty || state.runId == runId do
-    return RequestTask.pure ({ cancelled := false } : CancelResult)
-  -- Two cancels of one run can arrive together, and the run can finish on its own at that moment,
-  -- so exactly one of them reports the cancel.
-  if ← state.finished.modifyGet fun finished => (finished, true) then
-    return RequestTask.pure ({ cancelled := false } : CancelResult)
-  try (← state.kill.get) catch _ => pure ()
-  signalRun state
-  return RequestTask.pure ({ cancelled := true } : CancelResult)
+  return RequestTask.pure { cancelled := ← state.cancelNamed req.runId }

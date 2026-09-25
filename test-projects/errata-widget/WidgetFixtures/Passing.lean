@@ -109,10 +109,25 @@ def lingeringProcess : Test := do
   IO.println "started a helper"
   discard <| IO.Process.spawn { cmd := "sleep", args := #["37"] }
 
-/-- Writes the values of the `greeting` option, and fails when the `strict` flag is set. -/
+/-- The words that `readsSettings` greets with. -/
+@[setting, expose]
+def greeting : Setting where
+  type := String
+  fromString s := some s
+  default? := some "hello"
+
+/-- Whether `readsSettings` fails. -/
+@[setting, expose]
+def strict : Setting where
+  type := Bool
+  fromString
+    | "true" => some true
+    | "false" => some false
+    | _ => none
+
+/-- Writes its greeting, and fails when `strict` is set. -/
 @[test]
-def readsOptions : Test := do
-  for value in ← optionValues "greeting" do
-    IO.println s!"greeting: {value}"
-  if ← flag "strict" then
+def readsSettings (word : greeting) (strict? : Option strict) : Test := do
+  IO.println s!"greeting: {word}"
+  if strict?.getD false then
     fail "strict was set"

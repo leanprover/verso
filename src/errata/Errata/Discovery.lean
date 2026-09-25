@@ -217,6 +217,24 @@ meta def widgetRangeSyntax (decl : Name) (attrStx : Syntax) : AttrM Syntax := do
   | some range => rangeSyntax range.start range.stop
   | none => return attrStx
 
+/-- The declared default of the setting {name}`decl`, read from the setting's value. -/
+private meta unsafe def settingDefaultImpl (decl : Name) : MetaM (Option String) :=
+  evalExpr (Option String) (mkApp (mkConst ``Option [.zero]) (mkConst ``String))
+    (mkApp (mkConst ``Errata.Setting.default?) (mkConst decl)) (safety := .unsafe)
+
+@[implemented_by settingDefaultImpl, inherit_doc settingDefaultImpl]
+private meta opaque settingDefault (decl : Name) : MetaM (Option String)
+
+/--
+A setting that a test takes, as the widget offers a field for it: its name, whether it is optional,
+its docstring, and its declared default, which is {lean}`none` when it cannot be read.
+-/
+meta def declaredSetting (use : SettingUse) : AttrM Errata.Widget.DeclaredSetting := do
+  let description? :=
+    (settingExt.getState (← getEnv)).find? (·.decl == use.decl) |>.bind (·.docstring?)
+  let default? ← try (settingDefault use.decl).run' catch _ => pure none
+  return { name := settingNameOf use.decl, optional := use.optional, description?, default? }
+
 /-- Marks a definition as a test, discovered and run by the Errata test runner. -/
 meta initialize
   registerBuiltinAttribute {
@@ -242,9 +260,20 @@ meta initialize
           toString sub.toString.hash
         | none => ""
       -- In the language server, a run of the test's previous source ends as the edited test is
-      -- elaborated.
-      unless version.isEmpty do
-        Errata.Widget.dropRunsOfOtherVersions decl version
+      -- elaborated, and the widget learns the test's place and settings. The place is the test's
+      -- declaration range when it has one already, and otherwise the command that marks it, which
+      -- is the same range for a test marked where it is declared.
+      let test? := (testExt.getState (← getEnv)).find? (·.name == decl)
+      let declared? ← test?.mapM testLocation
+      let fileMap ← getFileMap
+      let commandLocation? : Option Location := widgetStx.getRange?.map fun range => {
+        file := test?.map (·.file) |>.getD "",
+        startPos := fileMap.toPosition range.start, endPos := fileMap.toPosition range.stop }
+      Errata.Widget.noteTest decl {
+        version
+        location? := declared?.filter (·.endPos.line != 0) <|> commandLocation?
+        settings := ← (test?.map (·.settings)).getD #[] |>.mapM declaredSetting
+      }
       let props := pure <| json% {
         decl: $(Errata.nameToJson decl),
         module: $(Errata.nameToJson (← getMainModule)),

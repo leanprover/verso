@@ -143,8 +143,8 @@ lean_lib VersoTests where
   roots := #[`VersoTests]
   globs := #[Glob.andSubmodules `VersoTests]
 
--- Everything below is Errata's own implementation: its library, the runner, the widget's
--- single-test program, its self-tests, the generated test executables, and the `lake test` driver.
+-- Everything below is Errata's own implementation: its library, the runner, the interpreted
+-- product, its self-tests, the generated test executables, and the `lake test` driver.
 namespace Errata
 
 input_file errataRunTestWidgetJs where
@@ -156,13 +156,6 @@ lean_lib Errata where
   srcDir := "src/errata"
   roots := #[`Errata]
   needs := #[errataRunTestWidgetJs]
-
--- Runs one test in a fresh process so the widget can stream its output and kill it on cancel. The
--- widget builds it when it runs a test.
-lean_exe «errata-run-one» where
-  srcDir := "src/errata"
-  root := `ErrataRunOne
-  supportInterpreter := true
 
 -- The interpreted product of the Lean harness, which imports test modules and runs their tests with
 -- no generated main and no link. The driver's `--interpreted` flag runs tests through it.
@@ -633,7 +626,12 @@ script run (args) do
         let mut infos : Array (Lean.Name × System.FilePath) := #[]
         let mut libMods : Array (Lake.LeanLib × Array Lean.Name) := #[]
         for lib in libs do
-          let mods ← (← lib.modules.fetch).await
+          -- Under `--interpreted`, only the named modules of the library are built, with their
+          -- imports, so a module elsewhere in the library that fails to build leaves them runnable.
+          let mods ←
+            if interpreted.isEmpty then (← lib.modules.fetch).await
+            else pure <| interpreted.filterMap fun m =>
+              (ws.findModule? m).filter (·.lib.name == lib.name)
           libMods := libMods.push (lib, mods.map (·.name))
           for m in mods do
             oleanJobs := oleanJobs.push (← m.olean.fetch)
@@ -651,9 +649,10 @@ script run (args) do
   -- Modules that sit under a library's roots without being reachable from them are never built, so
   -- any tests they define are left out. Libraries whose built modules record tests are checked for
   -- such modules. They are configuration slips, which the runner reports as warnings alongside the
-  -- results, and the run goes ahead.
+  -- results, and the run goes ahead. Under `--interpreted`, only the named modules are built, and
+  -- no library is checked.
   let mut unreachable : Array (Lake.LeanLib × Array Lean.Name) := #[]
-  for (lib, mods) in libMods do
+  for (lib, mods) in if interpreted.isEmpty then libMods else #[] do
     if mods.any (testMods.contains ·) then
       let known := mods.foldl (init := Lean.NameSet.empty) (·.insert ·)
       let missed ← unreachableModules lib known
@@ -736,13 +735,18 @@ script run (args) do
     IO.eprintln s!"error: the test executables could not be built: {e}"
     return buildFailedCode
   -- The runner's standard input is a lifeline that the driver holds, and `ERRATA_LIFELINE` asks the
-  -- runner to end its tests when that pipe closes. The driver removes `LEAN_ABORT_ON_PANIC` from
-  -- the runner's environment, and the runner sets it for every test executable.
+  -- runner to end its tests when that pipe closes. A driver started with `ERRATA_DRIVER_LIFELINE=1`,
+  -- as the editor widget starts it, hands its own standard input on as the runner's lifeline, so the
+  -- runner ends when the driver's parent does; the variable stops at the driver, so a driver that a
+  -- test starts holds a lifeline of its own. The driver removes `LEAN_ABORT_ON_PANIC` from the
+  -- runner's environment, and the runner sets it for every test executable.
+  let handsOnLifeline := (← IO.getEnv "ERRATA_DRIVER_LIFELINE") == some "1"
   let child ← IO.Process.spawn {
     cmd := runnerPath.toString
     args := #[configFile.toString, workspaceFile.toString] ++ args.toArray
-    stdin := .piped
-    env := #[("LEAN_ABORT_ON_PANIC", none), ("ERRATA_LIFELINE", some "1")]
+    stdin := if handsOnLifeline then .inherit else .piped
+    env := #[("LEAN_ABORT_ON_PANIC", none), ("ERRATA_LIFELINE", some "1"),
+      ("ERRATA_DRIVER_LIFELINE", none)]
   }
   child.wait
 

@@ -25,17 +25,6 @@ structure RealStreams where
   stderr : IO.FS.Stream
 
 /--
-Deprecated. Free-form options for a test that the single-test runner of the editor widget passes,
-read with {lit}`option?`, {lit}`optionValues`, and {lit}`flag`. Tests take their configuration as
-settings.
--/
-structure LegacyOptions where
-  /-- Every value given for each option name, in order. -/
-  values : HashMap String (Array String) := {}
-  /-- The option names read during the run, for the widget's report of unread options. -/
-  used : IO.Ref (HashSet String)
-
-/--
 What a captured, failable action runs under: the parts of a test's context that concern its output,
 its place in the source, and how it reaches the rest of its test executable.
 -/
@@ -109,8 +98,3 @@ structure TestContext extends Context.Common where
   insideMs : IO.Ref Nat
   /-- Whether golden checks write the actual output to their expected files. -/
   updateGolden : Bool := false
-  /--
-  Deprecated. The free-form options that the editor widget's single-test runner passes. Test
-  executables leave it {lean}`none`.
-  -/
-  legacyOptions? : Option LegacyOptions := none

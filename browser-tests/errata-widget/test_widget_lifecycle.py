@@ -148,8 +148,12 @@ def test_cancelling_a_run_that_has_finished_leaves_its_result(editor):
     widget.run_button.click()
     widget.wait_for_verdict("Passed")
     props = editor.widget_props("Passing", "bothStreams")
+    run_id = editor.server_run("Passing", "bothStreams")["runId"]
     reply = editor.call_rpc(
-        "Passing", "bothStreams", "Errata.Widget.cancelTest", {"decl": props["decl"]}
+        "Passing",
+        "bothStreams",
+        "Errata.Widget.cancelTest",
+        {"decl": props["decl"], "runId": run_id},
     )
     # The run had finished, so the cancel had nothing to end and the outcome is still there.
     assert reply == {"cancelled": False}, reply

@@ -22,8 +22,7 @@ public import Errata.Report
 public import Errata.Runner
 public import Errata.TestRegistry
 public import Errata.NameJson
-public import Errata.WidgetOutcome
-public import Errata.WidgetRunner
+public import Errata.WidgetState
 public import Errata.Discovery
 public import Errata.CompileTime
 public import Errata.Property

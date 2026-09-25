@@ -64,14 +64,15 @@ def test_a_failed_build_is_reported_with_the_end_of_its_log(editor):
     expect(widget.seed_badge).to_have_count(0)
 
 
-def test_a_runner_that_exits_early_is_reported_with_its_exit_code(editor):
+def test_a_test_that_exits_early_is_inconclusive_with_its_exit_code(editor):
     editor.show("Failing", "exits")
     widget = Widget(editor.page)
     widget.run_button.click()
-    widget.wait_for_verdict("ERROR")
+    widget.wait_for_verdict("INCONCLUSIVE")
     expect(widget.messages.first).to_have_text(
-        "the test runner exited with code 3 before reporting an outcome"
+        "the test executable exited with code 3 without a verdict"
     )
+    expect_exact_text(widget.output, "about to exit\n")
 
 
 def test_each_output_box_copies_its_own_output_and_copy_all_copies_the_run(editor):

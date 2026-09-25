@@ -33,29 +33,34 @@ function cacheResult(declKey, entry) {
     }
 }
 
-// The editor theme's test-result colours, with fallbacks for a page outside VS Code. They are the
-// colours of the theme's test icons, so they carry the verdict on the status glyph while the label
-// beside it keeps the editor's text colour. A failure within an `expectFail` is a failure that the
-// test wanted, so it keeps the failure's glyph in the muted colour of a skipped test.
+// The editor theme's test-result colours, with fallbacks for a page outside VS Code, keyed by the
+// statuses that the runner's events name. They are the colours of the theme's test icons, so they
+// show the verdict on the status glyph while the label beside it keeps the editor's text colour. A
+// failure within an `expectFail` is a failure that the test wanted, so it keeps the failure's glyph
+// in the muted colour of a skipped test. An inconclusive outcome is no verdict at all, and it takes
+// the colour of a warning.
 const STATUS_COLORS = {
-    passed: "var(--vscode-testing-iconPassed, #2e7d32)",
-    failed: "var(--vscode-testing-iconFailed, #c62828)",
+    pass: "var(--vscode-testing-iconPassed, #2e7d32)",
+    fail: "var(--vscode-testing-iconFailed, #c62828)",
     error: "var(--vscode-testing-iconErrored, #e65100)",
     expectedFailure: "var(--vscode-testing-iconSkipped, #848484)",
+    inconclusive: "var(--vscode-editorWarning-foreground, #bf8803)",
 };
 
 const STATUS_SYMBOLS = {
-    passed: "✓",
-    failed: "✗",
+    pass: "✓",
+    fail: "✗",
     error: "⚠",
     expectedFailure: "✗",
+    inconclusive: "?",
 };
 
 const STATUS_LABELS = {
-    passed: "Passed",
-    failed: "FAILED",
+    pass: "Passed",
+    fail: "FAILED",
     error: "ERROR",
     expectedFailure: "Expected failure",
+    inconclusive: "INCONCLUSIVE",
 };
 
 const preStyle = {
@@ -105,7 +110,7 @@ const dimColor = "var(--vscode-descriptionForeground, #717171)";
 // The editor theme's colour for errors: a run that could not start, and a rejected seed.
 const errorColor = "var(--vscode-errorForeground, #c62828)";
 
-// The editor theme's colour for warnings: an option that the test never read.
+// The editor theme's colour for warnings: the issues that the runner reported about the run.
 const warningColor = "var(--vscode-editorWarning-foreground, #bf8803)";
 
 // The size of the text that accompanies a result rather than stating it: the badges, the hints, the
@@ -163,37 +168,8 @@ function placeUnder(anchor) {
     return style;
 }
 
-// The style of a button that is a codicon alone, dimmed and without the pointer while it is
-// disabled.
-function iconButtonStyle(disabled) {
-    return {
-        background: "none",
-        border: "none",
-        padding: 0,
-        color: disabled
-            ? "var(--vscode-disabledForeground, #888)"
-            : "var(--vscode-textLink-foreground, #0078d4)",
-        cursor: disabled ? "default" : undefined,
-    };
-}
-
 // The outline of a settings field whose text holds back a run.
 const invalidOutline = "1px solid var(--vscode-inputValidation-errorBorder, #be1100)";
-
-// Whether an option row has neither a name nor a value. A blank row is left out of a run, and is
-// removed when a run starts.
-function optionIsBlank(opt) {
-    return opt.name.trim() === "" && opt.value === "";
-}
-
-// The problem with an option row that holds back a run, or null.
-function optionProblem(opt) {
-    if (optionIsBlank(opt)) return null;
-    const name = opt.name.trim();
-    if (name === "") return "Each option needs a name";
-    if (name.startsWith("-")) return "Write each option's name without its leading dashes";
-    return null;
-}
 
 // A word as a POSIX shell reads it: as it is when the shell passes on all of its characters
 // unchanged, and in double quotes otherwise.
@@ -202,19 +178,55 @@ function shellWord(text) {
     return '"' + text.replace(/["\\$`]/g, "\\$&") + '"';
 }
 
-// Options as they are written on the test driver's command line.
-function optionsCommandLine(opts) {
-    return opts
-        .map(function (opt) {
-            return (
-                "--" + shellWord(opt.name) + (opt.value === "" ? "" : "=" + shellWord(opt.value))
-            );
+/**
+ * @typedef {{name: string, optional: boolean, description?: string, default?: string,
+ *            profileValue?: string}} SettingField a setting that the test takes, with the value
+ *   that the profile gives it
+ * @typedef {{name: string, value: string}} SettingValue
+ */
+
+// The text that a setting's field starts with: the profile's value, or blank when it gives none.
+/** @param field {SettingField} */
+function prefillOf(field) {
+    return typeof field.profileValue === "string" ? field.profileValue : "";
+}
+
+// What a setting's field shows while it is blank: the value that the test then receives.
+/** @param field {SettingField} */
+function placeholderOf(field) {
+    if (typeof field.default === "string") return field.default;
+    return field.optional ? "none" : "required";
+}
+
+/**
+ * The values that a run gives the test's settings: those of the fields whose text differs from what
+ * the fields started with. The profile gives the others.
+ * @param fields {SettingField[]}
+ * @param values {Record<string, string>}
+ * @returns {SettingValue[]}
+ */
+function settingsSent(fields, values) {
+    return fields
+        .filter(function (f) {
+            return f.name in values && values[f.name] !== prefillOf(f);
+        })
+        .map(function (f) {
+            return { name: f.name, value: values[f.name] };
+        });
+}
+
+// Settings as the runner's `--set` options write them.
+/** @param settings {SettingValue[]} */
+function settingsCommandLine(settings) {
+    return settings
+        .map(function (s) {
+            return shellWord(s.name + "=" + s.value);
         })
         .join(" ");
 }
 
-// The value of `focusOptionKey` that gives the focus to the add button.
-const ADD_OPTION = "add";
+// The name of the setting that holds the seed for property tests, which the seed field gives.
+const SEED_SETTING = "Errata.seed";
 
 // A popup anchored to an element, in the style of the InfoView's own menus. It is portalled to the
 // document body, which puts it outside the disclosure summary that holds its anchor, so the
@@ -676,8 +688,11 @@ function NamedResult(props) {
         "details",
         {
             open,
+            // The browser reports a change that the widget made as a toggle too, and only a toggle
+            // away from what the widget drew is the reader's.
             onToggle: /** @param ev {React.SyntheticEvent<HTMLDetailsElement>} */ function (ev) {
-                props.onOpenChange(props.id, ev.currentTarget.open);
+                if (ev.currentTarget.open !== open)
+                    props.onOpenChange(props.id, ev.currentTarget.open);
             },
             style: { marginTop: "2px" },
         },
@@ -710,22 +725,25 @@ function NamedResult(props) {
 }
 
 /**
- * @typedef {"passed" | "failed" | "error" | "expectedFailure"} Status the verdict of a result, as
- *   Lean reports it
- * @typedef {Status | ""} ShownStatus a verdict, or blank while a result is still running
+ * @typedef {"pass" | "fail" | "error" | "expectedFailure"} Status the status of a result, as the
+ *   runner's events name it
+ * @typedef {Status | ""} ShownStatus a status, or blank while a result is still running
  * @typedef {{uri: string, startLine: number, startColumn: number, endLine: number,
  *            endColumn: number}} Source the span of a failed check
  * @typedef {{stream: string, text: string, time?: number, result?: number}} Chunk
  * @typedef {{id: number, parent: number, name: string, status: ShownStatus, durationMs: number,
  *            message: string, detail: string, location: Source | null,
  *            output: Chunk[]}} ResultNode
- * @typedef {{status: Status, durationMs: number, message?: string, detail?: string,
- *            location?: Source, results?: ResultNode[], description?: string,
- *            seed?: string, options?: {name: string, value: string}[],
- *            unreadOptions?: string[]}} Outcome
- * @typedef {{phase: string, chunks: Chunk[], results: ResultNode[], startTime: number,
- *            startedAt: number, buildMs: number, execStartTime: number,
- *            runId: string}} RunFields
+ * @typedef {{fixture: string, path: string[], status: string, message?: string,
+ *            durationMs: number}} Step a fixture phase that ran for the test
+ * @typedef {{level: string, message: string}} Issue a run-level issue that the runner reported
+ * @typedef {{status: Status | "inconclusive", durationMs: number, message?: string,
+ *            detail?: string, location?: Source, reason?: string, ran: boolean, seed?: string,
+ *            settings: SettingValue[], description?: string}} Outcome the outcome that the
+ *   runner reported for the test, or a failure of the driver before it reported one
+ * @typedef {{phase: string, chunks: Chunk[], results: ResultNode[], steps: Step[],
+ *            issues: Issue[], startTime: number, startedAt: number, buildMs: number,
+ *            execStartTime: number, runId: string}} RunFields
  *
  * The run's lifecycle as a single state, so the widget shows exactly one of a spinner, a verdict,
  * an error, or nothing:
@@ -759,6 +777,8 @@ function blankFields() {
         phase: "",
         chunks: [],
         results: [],
+        steps: [],
+        issues: [],
         startTime: 0,
         startedAt: 0,
         buildMs: 0,
@@ -865,29 +885,6 @@ function mergeResults(results, reply) {
 }
 
 /**
- * The results of a finished run, as the outcome records them. The runner streams each result's
- * output as it is written, so these hold none. A widget that has none of the run's live results
- * shows these.
- * @returns {ResultNode[]}
- */
-function resultsOfOutcome(outcome) {
-    const results = (outcome && outcome.results) || [];
-    return results.map(function (r) {
-        return {
-            ...blankResult(r.id || 0),
-            parent: r.parent || 0,
-            name: r.name || "",
-            status: r.status || "",
-            durationMs: r.durationMs || 0,
-            message: r.message || "",
-            detail: r.detail || "",
-            location: r.location || null,
-            output: r.output || [],
-        };
-    });
-}
-
-/**
  * Whether each result, or any result below it, failed or raised an error. A named result has a
  * higher identifier than the result that contains it, so one pass from the last result to the first
  * marks every result above a failure.
@@ -896,7 +893,7 @@ function resultsOfOutcome(outcome) {
  */
 function failingPaths(results) {
     const failing = results.map(function (result) {
-        return result.status === "failed" || result.status === "error";
+        return result.status === "fail" || result.status === "error";
     });
     for (let i = results.length - 1; i > 0; i--) {
         if (failing[i]) failing[results[i].parent] = true;
@@ -933,6 +930,8 @@ function fieldsOf(st) {
         phase: st.phase,
         chunks: st.chunks,
         results: st.results,
+        steps: st.steps,
+        issues: st.issues,
         startTime: st.startTime,
         startedAt: st.startedAt,
         buildMs: st.buildMs,
@@ -995,7 +994,12 @@ function step(st, ev) {
             // for the same test, say) begins from blank fields; otherwise the reply extends the run
             // shown. Zero-valued fields in a reply mean "no news"; the server's values otherwise win.
             const shown = fieldsOf(st);
-            const prev = isOtherRun(shown, res) ? blankFields() : shown;
+            const other = isOtherRun(shown, res);
+            // A run that the widget has settled, done, cancelled, or refused, stays as it is until
+            // a reply about another run arrives, and a reply about it that is still going is news
+            // from before it settled.
+            if (!res.done && !other && st.tag !== "idle" && st.tag !== "running") return st;
+            const prev = other ? blankFields() : shown;
             // The run's start on the client's clock is set once, from the first reply about the
             // run: the time the reply arrived, less how long the server says the run had been
             // going. Later replies leave it unchanged.
@@ -1007,6 +1011,9 @@ function step(st, ev) {
                     (res.chunks && res.chunks.length) || (res.results && res.results.length)
                         ? mergeResults(prev.results, res)
                         : prev.results,
+                // The server sends every step and issue in each reply.
+                steps: res.steps || prev.steps,
+                issues: res.issues || prev.issues,
                 startTime: res.startTime || prev.startTime,
                 startedAt: !synced && res.elapsedMs ? ev.now - res.elapsedMs : prev.startedAt,
                 buildMs: res.buildMs || prev.buildMs,
@@ -1032,6 +1039,12 @@ function step(st, ev) {
             return st;
     }
 }
+
+// The reducer and the helpers it merges replies with, on the page's global object, where the
+// browser suite checks them against orders of events that the server makes rare.
+Object.assign(globalThis, {
+    errataWidgetReducer: { step, idleState, blankFields, placeChunks, mergeResults },
+});
 
 /**
  * The InfoView reuses one widget instance for whichever test the cursor is on. Keying the inner
@@ -1065,13 +1078,13 @@ function TestRun(props) {
     const [edited, setEdited] = React.useState(false);
     // The seed for property tests as typed, or blank to generate a random seed.
     const [seed, setSeed] = React.useState("");
-    // The test options as typed, one row for each, in order. Each row has a key of
-    // its own, so removing a row leaves the text of the rows after it where it was.
-    const [options, setOptions] = React.useState([]);
-    const nextOptionKey = React.useRef(0);
-    // What takes the focus when the rows are next shown: the name field of the row with this key, or
-    // the add button for ADD_OPTION. A row that is added or removed sets it.
-    const focusOptionKey = React.useRef(null);
+    // The settings that the test takes, with the values that the profile gives them, as the server
+    // last reported them, and the text of each setting's field by name. A field holds the profile's
+    // value until the reader changes it.
+    const [settingFields, setSettingFields] = React.useState(/** @type {SettingField[]} */ ([]));
+    const [settingValues, setSettingValues] = React.useState(
+        /** @type {Record<string, string>} */ ({}),
+    );
     // Whether the run settings are shown, behind the gear button.
     const [settingsOpen, setSettingsOpen] = React.useState(false);
     // The error from the last cancel that failed, shown while the run it was meant to stop goes on.
@@ -1158,6 +1171,36 @@ function TestRun(props) {
         );
     }
 
+    // Asks the server for the test's settings and the values that the profile gives them. A field
+    // that still holds what it started with takes the profile's value as it now is, and a field the
+    // reader has changed keeps its text.
+    const fieldsRef = React.useRef(/** @type {SettingField[]} */ ([]));
+    function loadSettings() {
+        rsRef.current.call("Errata.Widget.testSettings", { decl: props.decl }).then(
+            function (reply) {
+                if (!alive.current) return;
+                const fields = (reply && reply.fields) || [];
+                const before = fieldsRef.current;
+                fieldsRef.current = fields;
+                setSettingFields(fields);
+                setSettingValues(function (values) {
+                    /** @type {Record<string, string>} */
+                    const next = {};
+                    for (const field of fields) {
+                        const old = before.find(function (f) {
+                            return f.name === field.name;
+                        });
+                        const typed =
+                            field.name in values && (!old || values[field.name] !== prefillOf(old));
+                        next[field.name] = typed ? values[field.name] : prefillOf(field);
+                    }
+                    return next;
+                });
+            },
+            function () {},
+        );
+    }
+
     function loop(myGen) {
         rsRef.current
             .call("Errata.Widget.awaitOutput", {
@@ -1236,6 +1279,7 @@ function TestRun(props) {
             loop(myGen);
             alive.current = true;
             checkFile();
+            loadSettings();
             return function () {
                 gen.current += 1;
                 alive.current = false;
@@ -1325,62 +1369,27 @@ function TestRun(props) {
     // travels as its digits.
     const seedValid = !seedSet || /^\d+$/.test(seedText);
     const seedHint = "The seed must be a natural number";
-    const optionsSent = options
-        .filter(function (opt) {
-            return !optionIsBlank(opt);
-        })
-        .map(function (opt) {
-            return { name: opt.name.trim(), value: opt.value };
-        });
-    const optionsSet = optionsSent.length > 0;
-    // The names of the options that the shown run gave the test and the test never read.
-    const unreadOptions = (st.tag === "done" && st.outcome.unreadOptions) || [];
-    // The first problem among the rows, which holds back the run until it is fixed.
-    const optionsHint = options.map(optionProblem).find(Boolean) || null;
-    const optionsValid = optionsHint === null;
+    // The values that the next run gives the test's settings, beyond the profile's.
+    const sent = settingsSent(settingFields, settingValues);
     // What the settings hold, named in the gear's tooltip so a run's settings show while the popup
     // is closed.
     const settingsSummary = (seedSet ? ["seed " + seedText] : [])
-        .concat(optionsSet ? ["options " + optionsCommandLine(optionsSent)] : [])
+        .concat(sent.length ? ["settings " + settingsCommandLine(sent)] : [])
         .join(", ");
 
-    function addOption() {
-        const key = nextOptionKey.current++;
-        focusOptionKey.current = key;
-        setOptions(function (opts) {
-            return opts.concat([{ key, name: "", value: "" }]);
+    function editSetting(name, text) {
+        setSettingValues(function (values) {
+            return { ...values, [name]: text };
         });
     }
 
-    // Fills the rows with the options of an earlier run, so the next run repeats them.
-    function repeatOptions(opts) {
-        setOptions(
-            opts.map(function (opt) {
-                return { key: nextOptionKey.current++, name: opt.name, value: opt.value };
-            }),
-        );
-    }
-
-    function editOption(key, field, text) {
-        setOptions(function (opts) {
-            return opts.map(function (opt) {
-                return opt.key === key ? { ...opt, [field]: text } : opt;
-            });
-        });
-    }
-
-    // Removes a row. The focus moves to the row that takes its place, or to the one before it when
-    // it was the last, or to the add button when no rows are left.
-    function removeOption(key) {
-        const i = options.findIndex(function (opt) {
-            return opt.key === key;
-        });
-        const next = options[i + 1] || options[i - 1];
-        focusOptionKey.current = next ? next.key : ADD_OPTION;
-        setOptions(function (opts) {
-            return opts.filter(function (opt) {
-                return opt.key !== key;
-            });
+    // Fills the fields with the values of an earlier run, so the next run repeats them.
+    /** @param used {SettingValue[]} */
+    function repeatSettings(used) {
+        setSettingValues(function (values) {
+            const next = { ...values };
+            for (const s of used) if (s.name in next) next[s.name] = s.value;
+            return next;
         });
     }
 
@@ -1400,11 +1409,6 @@ function TestRun(props) {
         setEdited(false);
         // Each run's results open as the settings and its failures decide.
         setOpenResults({});
-        setOptions(function (opts) {
-            return opts.filter(function (opt) {
-                return !optionIsBlank(opt);
-            });
-        });
         dispatch({ type: "start", now: Date.now(), runId });
         const request = {
             decl: props.decl,
@@ -1413,7 +1417,7 @@ function TestRun(props) {
             runId: runId,
         };
         if (seedSet) request.seed = seedText;
-        if (optionsSet) request.options = optionsSent;
+        if (sent.length) request.settings = sent;
         rsRef.current.call("Errata.Widget.startTest", request).then(
             function () {
                 if (gen.current !== myGen) return;
@@ -1553,7 +1557,7 @@ function TestRun(props) {
                   {
                       key: "run",
                       onClick: run,
-                      disabled: !clean || !seedValid || !optionsValid,
+                      disabled: !clean || !seedValid,
                       title:
                           clean === null
                               ? "Checking whether the file is saved"
@@ -1561,9 +1565,7 @@ function TestRun(props) {
                                 ? "Save the file to run the test"
                                 : !seedValid
                                   ? seedHint
-                                  : !optionsValid
-                                    ? optionsHint
-                                    : undefined,
+                                  : undefined,
                   },
                   st.tag === "idle" ? "Run" : "Run again",
               ),
@@ -1582,13 +1584,13 @@ function TestRun(props) {
               )
             : null,
         fileHint,
-        // The seed and the options live behind the gear, so a rejected one is named here as well,
-        // where the disabled button is.
-        clean && (!seedValid || !optionsValid) && !running
+        // The seed lives behind the gear, so a rejected one is named here as well, where the
+        // disabled button is.
+        clean && !seedValid && !running
             ? e(
                   "span",
                   { style: { color: errorColor, fontSize: dimSize } },
-                  (!seedValid ? "invalid seed" : "invalid option") + " — see run settings",
+                  "invalid seed — see run settings",
               )
             : null,
     );
@@ -1598,6 +1600,8 @@ function TestRun(props) {
         key: "settings",
         ref: gearRef,
         onClick: function () {
+            // The profile's values may have changed since the fields were filled.
+            if (!settingsOpen) loadSettings();
             setSettingsOpen(function (open) {
                 return !open;
             });
@@ -1628,43 +1632,21 @@ function TestRun(props) {
     };
 
     const hintStyle = { marginTop: "4px", fontSize: dimSize, color: errorColor };
-    // The buttons that add and remove options are disabled during a run, and look like links only
-    // while they can be clicked.
-    const iconButtonClass = running ? "codicon" : "link pointer dim codicon";
-    // Each option is laid out as it is written on the command line, `--name=value`, followed by its
-    // remove button and, for an option that the last run never read, a warning. Every row has the
-    // same columns, so the rows and the add button below them line up.
-    const optionRow = {
+    // Each of the test's settings is a row of its name and its field, and every row has the same
+    // columns, so the fields line up.
+    const settingFieldRow = {
         display: "grid",
-        gridTemplateColumns: "2ch 12ch 1ch 14ch 22px 22px",
+        gridTemplateColumns: "minmax(10ch, auto) 16ch",
+        gap: "6px",
         alignItems: "center",
         marginTop: "4px",
         fontFamily: monoFont,
         fontSize: dimSize,
     };
-    const optionField = {
-        width: "100%",
-        boxSizing: "border-box",
-        margin: 0,
-        fontFamily: monoFont,
-    };
-    const addOptionButton = e("button", {
-        ref: function (el) {
-            if (el && focusOptionKey.current === ADD_OPTION) {
-                focusOptionKey.current = null;
-                el.focus();
-            }
-        },
-        onClick: addOption,
-        disabled: running,
-        title: "Add an option for the test",
-        "aria-label": "Add option",
-        className: iconButtonClass + " codicon-add",
-        style: { ...iconButtonStyle(running), gridColumn: 5, justifySelf: "end" },
-    });
 
     // The settings themselves, in a popup below the gear: the seed for property tests, the reason
-    // for a rejected one, how the named results of a run first appear, and the test options.
+    // for a rejected one, how the named results of a run first appear, and a field for each setting
+    // that the test takes, which starts with the profile's value.
     const settingsPopup = settingsOpen
         ? e(
               Popup,
@@ -1707,82 +1689,39 @@ function TestRun(props) {
                   }),
                   "Expand named results",
               ),
-              // With no rows yet, the add button follows the heading.
-              e(
-                  "div",
-                  { style: { ...settingRow, marginTop: "4px" } },
-                  "Options:",
-                  options.length ? null : addOptionButton,
-              ),
-              options.map(function (opt) {
-                  // A row with a problem is marked, and Run waits for it to be fixed.
-                  const nameValid = optionProblem(opt) === null;
+              settingFields.length
+                  ? e("div", { style: { ...settingRow, marginTop: "4px" } }, "Settings:")
+                  : null,
+              settingFields.map(function (field) {
+                  const value = field.name in settingValues ? settingValues[field.name] : "";
                   return e(
-                      "div",
+                      "label",
                       {
-                          key: opt.key,
+                          key: field.name,
                           role: "group",
-                          "aria-label": "Option",
-                          style: optionRow,
+                          "aria-label": field.name,
+                          title: field.description || undefined,
+                          style: settingFieldRow,
                       },
-                      "--",
+                      e("span", { style: { overflowWrap: "anywhere" } }, field.name),
                       e("input", {
-                          ref: function (el) {
-                              if (el && focusOptionKey.current === opt.key) {
-                                  focusOptionKey.current = null;
-                                  el.focus();
-                              }
-                          },
                           type: "text",
-                          value: opt.name,
-                          placeholder: "name",
+                          value,
+                          placeholder: placeholderOf(field),
                           disabled: running,
-                          title: "Option name",
-                          "aria-invalid": !nameValid,
+                          title: "Value of " + field.name,
                           onChange: function (ev) {
-                              editOption(opt.key, "name", ev.target.value);
+                              editSetting(field.name, ev.target.value);
                           },
                           style: {
-                              ...optionField,
-                              outline: nameValid ? undefined : invalidOutline,
+                              width: "100%",
+                              boxSizing: "border-box",
+                              margin: 0,
+                              fontFamily: monoFont,
                           },
                       }),
-                      "=",
-                      e("input", {
-                          type: "text",
-                          value: opt.value,
-                          placeholder: "value",
-                          disabled: running,
-                          title: "Option value; blank for a flag",
-                          onChange: function (ev) {
-                              editOption(opt.key, "value", ev.target.value);
-                          },
-                          style: optionField,
-                      }),
-                      e("button", {
-                          onClick: function () {
-                              removeOption(opt.key);
-                          },
-                          disabled: running,
-                          title: "Remove this option",
-                          "aria-label": "Remove option",
-                          className: iconButtonClass + " codicon-close",
-                          style: { ...iconButtonStyle(running), justifySelf: "end" },
-                      }),
-                      unreadOptions.includes(opt.name.trim())
-                          ? e("span", {
-                                role: "img",
-                                title: "The test never read this option in the last run",
-                                "aria-label": "Never read",
-                                className: "codicon codicon-warning",
-                                style: { color: warningColor, justifySelf: "end" },
-                            })
-                          : null,
                   );
               }),
-              // Below the rows, the add button sits in the column of their remove buttons.
-              options.length ? e("div", { style: optionRow }, addOptionButton) : null,
-              optionsValid ? null : e("div", { style: hintStyle }, optionsHint),
           )
         : null;
 
@@ -1792,24 +1731,20 @@ function TestRun(props) {
 
     // The results the widget received, restored with the rest of a cached run, whose chunks have the
     // times the runner stamped on them. A run that reported no results, such as one whose build
-    // failed, has only its outcome's.
+    // failed, has only its outcome.
     const liveResults = timings ? timings.results : [];
     // The whole run's output, in the order the test produced it, and the output of each result.
     const allChunks = timings ? timings.chunks : [];
     const outputs = outputsByResult(outputCache, allChunks);
-    const results = (liveResults.length ? liveResults : resultsOfOutcome(outcome)).map(
-        function (r) {
-            const output = outputs.get(r.id);
-            return output ? { ...r, output } : r;
-        },
-    );
+    const results = liveResults.map(function (r) {
+        const output = outputs.get(r.id);
+        return output ? { ...r, output } : r;
+    });
     const kids = childrenOf(results);
     const failing = failingPaths(results);
     // What the test's own code reported, which is what the verdict line and the summary under it
-    // show. The outcome's message is the innermost failure's, and that result reports it in the
-    // tree itself, so taking it here as well would say it twice. The test's own result has a verdict
-    // once the test has ended. A run that ended before that, such as one whose build failed or whose
-    // runner exited early, has only the outcome to report.
+    // show. The test's own result has a status once the runner has reported the test's outcome. A
+    // run that ended before that, such as one whose build failed, has only the outcome to report.
     const own = results.length && results[0].status ? results[0] : null;
     const ownMessage = own ? own.message : (outcome && outcome.message) || "";
     const ownDetail = own ? own.detail : (outcome && outcome.detail) || "";
@@ -1890,18 +1825,17 @@ function TestRun(props) {
         primary = e("span", { style: { color: dimColor } }, "cancelled");
     }
 
-    // Dimmed badges after the status: text, and for the seed and the options, a click that fills
-    // the settings with them.
+    // Dimmed badges after the status: text, and for the seed and the settings, a click that fills
+    // the run settings with them. The run's duration, seed, and settings appear for a test that
+    // the runner started, and stay hidden for a build failure.
     const badges = [];
     if (timings && timings.startTime)
         badges.push({ text: "Start " + formatClock(timings.startTime) });
     if (timings && timings.buildMs)
         badges.push({ text: "Build " + formatDuration(timings.buildMs) });
-    // The seed is present exactly when the test itself ran, so the run's duration and seed appear
-    // for a test that ran and stay hidden for a build or runner failure.
-    if (outcome && typeof outcome.seed === "string") {
+    if (outcome && outcome.ran) badges.push({ text: "Run " + formatDuration(outcome.durationMs) });
+    if (outcome && outcome.ran && typeof outcome.seed === "string") {
         const seedUsed = outcome.seed;
-        badges.push({ text: "Run " + formatDuration(outcome.durationMs) });
         badges.push({
             text: "Seed " + seedUsed,
             title: "Use this seed for the next run",
@@ -1911,13 +1845,15 @@ function TestRun(props) {
             },
         });
     }
-    if (outcome && outcome.options && outcome.options.length) {
-        const optionsUsed = outcome.options;
+    const settingsUsed = ((outcome && outcome.ran && outcome.settings) || []).filter(function (s) {
+        return s.name !== SEED_SETTING;
+    });
+    if (settingsUsed.length) {
         badges.push({
-            text: "Options " + optionsCommandLine(optionsUsed),
-            title: "Use these options for the next run",
+            text: "Settings " + settingsCommandLine(settingsUsed),
+            title: "Use these settings for the next run",
             onClick: function () {
-                repeatOptions(optionsUsed);
+                repeatSettings(settingsUsed);
                 setSettingsOpen(true);
             },
         });
@@ -1978,15 +1914,33 @@ function TestRun(props) {
     const extras = [];
     if (outcome && ownMessage) extras.push(e("div", { key: "msg" }, block(ownMessage)));
     if (outcome && ownDetail) extras.push(e("div", { key: "detail" }, block(ownDetail)));
-    // An option that the test never read is most often a misspelled name.
-    if (unreadOptions.length)
+    // The fixture phases that ran for the test, each a step of the run with its status.
+    for (const [i, s] of (timings ? timings.steps : []).entries())
         extras.push(
             e(
                 "div",
-                { key: "unread", style: { color: warningColor, fontSize: dimSize } },
-                (unreadOptions.length === 1 ? "option" : "options") +
-                    " never read by this test: " +
-                    unreadOptions.join(", "),
+                { key: "step" + i, style: { fontSize: dimSize } },
+                e(
+                    "span",
+                    {
+                        role: "img",
+                        "aria-label": STATUS_LABELS[s.status] || s.status,
+                        style: { color: STATUS_COLORS[s.status] || dimColor, fontWeight: 600 },
+                    },
+                    STATUS_SYMBOLS[s.status] || "…",
+                ),
+                " fixture " + (s.path.length ? s.path.join(" ") : s.fixture),
+                s.message ? ": " + s.message : "",
+            ),
+        );
+    // The issues that the runner reported about the run, such as a setting that the configuration
+    // gives and no test declares.
+    for (const [i, issue] of (timings ? timings.issues : []).entries())
+        extras.push(
+            e(
+                "div",
+                { key: "issue" + i, style: { color: warningColor, fontSize: dimSize } },
+                issue.level + ": " + issue.message,
             ),
         );
 

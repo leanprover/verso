@@ -256,9 +256,9 @@ def optionSpecs : Array OptionSpec := #[
   { long := "ignore-default-filter", group := "Selection"
     help := "Draw the tests from the whole inventory, the profile's default filter set aside." },
   { long := "interpreted", value? := "MODULES", repeatable := true, group := "Selection"
-    help := "Run the tests of the named modules, separated by commas, through errata-interpret, \
-      which imports the built modules with no link. The libraries that hold them are the test \
-      executables. Repeatable." },
+    help := "Build the named modules, separated by commas, and run their tests through \
+      errata-interpret, which imports them with no link. The libraries that hold them are the \
+      test executables. Repeatable." },
   { long := "profile", short? := "-P", value? := "NAME", group := "Configuration"
     help := "The profile of errata.toml to use (ERRATA_PROFILE, or default)." },
   { long := "set", value? := "NAME=VALUE", repeatable := true, group := "Configuration"

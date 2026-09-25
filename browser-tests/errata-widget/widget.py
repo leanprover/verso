@@ -102,20 +102,14 @@ class Widget:
             "Seed for property tests; blank chooses one randomly"
         )
 
-    @property
-    def add_option_button(self) -> Locator:
-        return self.page.get_by_role("button", name="Add option")
+    def setting_field(self, name: str) -> Locator:
+        """The field of the test's setting `name` in the open settings popup."""
+        return self.page.get_by_title(f"Value of {name}", exact=True)
 
     @property
-    def option_rows(self) -> Locator:
-        return self.page.get_by_role("group", name="Option")
-
-    def add_option(self, name: str, value: str = "") -> None:
-        """Adds a row to the open settings popup and fills it in."""
-        self.add_option_button.click()
-        row = self.option_rows.last
-        row.get_by_title("Option name").fill(name)
-        row.get_by_title("Option value; blank for a flag").fill(value)
+    def setting_rows(self) -> Locator:
+        """The rows of the test's settings in the open settings popup."""
+        return self.page.locator("label[role=group]")
 
     @property
     def expand_named(self) -> Locator:
@@ -152,15 +146,15 @@ class Widget:
         return self.root.get_by_role("button", name=re.compile(r"^Seed \d+$"))
 
     @property
-    def options_badge(self) -> Locator:
-        return self.root.get_by_role("button", name=re.compile(r"^Options "))
+    def settings_badge(self) -> Locator:
+        return self.root.get_by_role("button", name=re.compile(r"^Settings "))
 
     def text(self, text: str) -> Locator:
         return self.root.get_by_text(text)
 
     def verdict(self, label: str) -> Locator:
         """The verdict of the run, such as `Passed` or `FAILED`."""
-        return self.root.get_by_text(re.compile(f"^[✓✗⚠] {label}$"))
+        return self.root.get_by_text(re.compile(f"^[✓✗⚠?] {label}$"))
 
     def result(self, name: str) -> Locator:
         """A named result that opens to show what it reported."""

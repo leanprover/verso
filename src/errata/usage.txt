@@ -26,8 +26,8 @@ Selection:
   --exact                       Match name filters and --skip patterns against whole names.
   --ignore-default-filter       Draw the tests from the whole inventory, the profile's default
                                 filter set aside.
-  --interpreted MODULES         Run the tests of the named modules, separated by commas, through
-                                errata-interpret, which imports the built modules with no link. The
+  --interpreted MODULES         Build the named modules, separated by commas, and run their tests
+                                through errata-interpret, which imports them with no link. The
                                 libraries that hold them are the test executables. Repeatable.
 
 Configuration:
