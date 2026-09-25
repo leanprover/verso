@@ -229,11 +229,13 @@ private def resultLines (h : HumanReporter) (r : Result) (name : String) : Array
 The summary line of the human-readable report, in nextest's shape: {lit}`Summary`, the run's
 duration in brackets, and the counts of results by outcome. When {name}`skipped?` gives them, the
 line ends with the number of listed tests that the filters left out, {lit}`N tests skipped`, and,
-when there are any, the number of test executables that the filters ruled out before they were
-built, {lit}`M executables skipped`, whose tests were never listed.
+when they are not zero, the number of libraries with tests that the filters ruled out before
+building, {lit}`M test libraries skipped`, and of the configuration's executables that they ruled
+out, {lit}`K executables skipped`. A ruled-out library counts when a module that an earlier build
+left on disk records a test; a library never built is not counted.
 -/
 def HumanReporter.summary (h : HumanReporter) (elapsedMs : Nat)
-    (skipped? : Option (Nat × Nat) := none) : String :=
+    (skipped? : Option (Nat × Nat × Nat) := none) : String :=
   let t := h.tally
   let c := h.color
   let count (n : Nat) (word : String) (s : Style) :=
@@ -243,11 +245,14 @@ def HumanReporter.summary (h : HumanReporter) (elapsedMs : Nat)
   let counts := [count t.passed "passed" .pass, count t.failed "failed" .fail,
     count t.errors "errors" .fail, count t.inconclusive "inconclusive" .fail] ++
     (match skipped? with
-      | some (tests, exes) =>
+      | some (tests, libs, exes) =>
         [count tests (if tests == 1 then "test skipped" else "tests skipped") .slow] ++
-          if exes == 0 then []
-          else
-            [count exes (if exes == 1 then "executable skipped" else "executables skipped") .slow]
+          (if libs == 0 then []
+            else [count libs
+              (if libs == 1 then "test library skipped" else "test libraries skipped") .slow]) ++
+          (if exes == 0 then []
+            else [count exes (if exes == 1 then "executable skipped" else "executables skipped")
+              .slow])
       | none => [])
   s!"{style.paint c (padLeft statusWidth "Summary")} {bracketedDuration elapsedMs} \
     {", ".intercalate counts}"

@@ -907,8 +907,9 @@ def noTestsToRun : Test := do
     assertBEq ExitCode.testRunFailed (← runWith #[basic ["pass", "fail"]]).code
 
 /--
-The summary counts the listed tests that the filters left out, as tests, and the test executables
-that the filters ruled out before building, whose tests were never listed.
+The summary counts the listed tests that the filters left out, as tests, then the libraries known to
+have tests that the filters ruled out before building, as test libraries, and the configuration's
+executables that they ruled out, each when it is not zero.
 -/
 @[test]
 def skippedCounts : Test := do
@@ -922,12 +923,18 @@ def skippedCounts : Test := do
   result "none()" do
     let r ← runWith #[exe] { filters := #["none()"], noTests := .pass }
     assertTrue ((summary r).endsWith ", 3 tests skipped") (summary r)
-  result "executables" do
+  result "test libraries and executables" do
     let config : Config := {
-      knownExecutables := #["basic", "Alpha", "Beta"]
-      ruledOut := #["Alpha", "Beta"], partialSelection := true }
+      knownExecutables := #["basic", "Alpha", "Beta", "Empty", "gamma"]
+      ruledOut := #["Alpha", "Beta", "Empty", "gamma"], skippedTestLibraries := #["Alpha", "Beta"]
+      skippedExecutables := #["gamma"], partialSelection := true }
     let r ← runWith #[basic ["pass"]] {} config
-    assertTrue ((summary r).endsWith ", 0 tests skipped, 2 executables skipped") (summary r)
+    assertTrue
+      ((summary r).endsWith ", 0 tests skipped, 2 test libraries skipped, 1 executable skipped")
+      (summary r)
+    let libsOnly := { config with skippedExecutables := #[], skippedTestLibraries := #["Alpha"] }
+    let r ← runWith #[basic ["pass"]] {} libsOnly
+    assertTrue ((summary r).endsWith ", 0 tests skipped, 1 test library skipped") (summary r)
 
 /--
 An `exe(…)` is judged against every test executable of the package, those that the filters ruled

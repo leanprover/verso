@@ -74,10 +74,10 @@ inductive Event where
   | testEnded (exe test : String) (exit : Exit) (durationMs : Nat)
   /--
   The run is over. The human report prints its summary when {name}`summary` is true, with the
-  numbers of listed tests and of test executables that the filters left out when {name}`skipped?`
-  gives them.
+  numbers of listed tests, of test libraries, and of the configuration's executables that the
+  filters left out when {name}`skipped?` gives them.
   -/
-  | ended (timeMs : Nat) (summary : Bool) (skipped? : Option (Nat × Nat))
+  | ended (timeMs : Nat) (summary : Bool) (skipped? : Option (Nat × Nat × Nat))
 deriving Inhabited
 
 /-- What the dispatcher asks of the reporters. -/

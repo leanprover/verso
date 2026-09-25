@@ -351,11 +351,13 @@ needed target's result, the libraries' test executables and the executables `add
 runner's arguments follow, and the package's directory, `cwd`, where tests run and which report
 paths in `errata.toml` are relative to. `known` names every test executable that the package can
 have, and `ruledOut` those among them that the command line's filters ruled out before building.
+Of those, `testLibraries` are the libraries known to have tests, and `addedOut` the executables that
+`errata.toml` adds.
 -/
 private def workspaceJson (needs : Array (String × String))
     (executables : Array (String × System.FilePath)) (added : Array AddedExecutable)
     (cwd : System.FilePath) (errataDir : String) (warnings : Array String) (invocation : String)
-    (known ruledOut : Array String) : Lean.Json :=
+    (known ruledOut testLibraries addedOut : Array String) : Lean.Json :=
   let added := added.map fun e =>
     Lean.Json.mkObj [("name", Lean.Json.str e.name),
       ("command", Lean.Json.arr (e.command.map Lean.Json.str)),
@@ -374,7 +376,9 @@ private def workspaceJson (needs : Array (String × String))
     ("invocation", Lean.Json.str invocation),
     ("packageDir", Lean.Json.str cwd.toString),
     ("knownExecutables", Lean.toJson known),
-    ("ruledOut", Lean.toJson ruledOut)
+    ("ruledOut", Lean.toJson ruledOut),
+    ("skippedTestLibraries", Lean.toJson testLibraries),
+    ("skippedExecutables", Lean.toJson addedOut)
   ] ++ (if ruledOut.isEmpty then [] else [("partial-selection", Lean.Json.bool true)])
 
 /--
@@ -550,6 +554,25 @@ script run (args) do
   let addedExes := added.filter (plan.executables.contains ·.name)
   let libs := ws.root.leanLibs.filter (plan.executables.contains <| libName ·)
   let ruledOut := candidates.filter (!plan.executables.contains ·)
+  -- A library that the filters ruled out is a test library when a module of it that an earlier
+  -- build left on disk records a test. Nothing is built for this, so a library that was never
+  -- built is not known to have tests, and the summary leaves it out of its count.
+  let ruledOutLibs := ws.root.leanLibs.filter (ruledOut.contains <| libName ·)
+  let ruledOutMods ← try
+      runBuild do
+        let mut found : Array (String × Array System.FilePath) := #[]
+        for lib in ruledOutLibs do
+          let mods ← (← lib.modules.fetch).await
+          found := found.push (libName lib, mods.map (·.oleanFile))
+        pure (Job.pure found)
+    catch _ => pure #[]
+  let mut skippedTestLibs : Array String := #[]
+  for (name, oleans) in ruledOutMods do
+    for olean in oleans do
+      unless ← olean.pathExists do continue
+      if (← moduleInfo olean).hasTests then
+        skippedTestLibs := skippedTestLibs.push name
+        break
   -- Build every module in the selected libraries; their compiled `.olean` headers are authoritative
   -- on which modules carry tests.
   let built ← try
@@ -631,7 +654,8 @@ script run (args) do
         let needs := needed.zipWith (fun (tgt, _) value => (tgt, value)) needValues
         -- Tests run from the root package's directory, where `lake test` runs.
         let content := (workspaceJson needs executables addedExes rootDir errataDir.toString
-          driverWarnings withArgs candidates ruledOut).pretty ++ "\n"
+          driverWarnings withArgs candidates ruledOut skippedTestLibs
+          (added.map (·.name) |>.filter ruledOut.contains)).pretty ++ "\n"
         addPureTrace (← IO.FS.readFile configFile) "config.json"
         addPureTrace content "workspace.json"
         buildFileUnlessUpToDate' (text := true) workspaceFile do

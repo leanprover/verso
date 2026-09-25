@@ -515,7 +515,11 @@ def usage (invocation : String) : String := Id.run do
     A test is selected when its name contains a name filter (equals one, under --exact), a filter\n\
     expression selects it, no --skip pattern is in its name, and the profile's default filter\n\
     selects it. Without name filters, or without filter expressions, that condition holds for\n\
-    every test. In a filter expression, default() stands for the default filter.\n"
+    every test. In a filter expression, default() stands for the default filter.\n\n\
+    A run's summary counts the results by outcome and the listed tests left out, then the test\n\
+    libraries and executables that the filters ruled out before building. A ruled-out library\n\
+    counts when a module that an earlier build left on disk records a test; a library never built\n\
+    is not counted.\n"
   let mut group := ""
   for s in optionSpecs do
     if s.group != group then

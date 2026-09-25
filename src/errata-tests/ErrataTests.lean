@@ -1158,6 +1158,8 @@ def driverSelectsProfilesAndExecutables : Test :=
       let out ← lake #["test", "--", "-E", "exe(extra)"]
       assertExitCode 0 out
       assertContains "1 passed, 0 failed" out.stdout
+      -- `TomlLib` has never been built in this copy, so it is not known to have tests.
+      assertContains "0 inconclusive, 0 tests skipped\n" out.stdout
       assertTrue (!(← stamp.pathExists)) "the default profile needs no target, and the stamp was built"
       let j ← config
       assertBEq #["extra"] (exeNames j)
@@ -1188,12 +1190,16 @@ def driverSelectsProfilesAndExecutables : Test :=
       assertExitCode 0 out
       assertBEq #["TomlLib"] (exeNames (← config))
       assertContains "1 passed, 0 failed, 0 errors, 0 inconclusive, 0 tests skipped, \
-        1 executable skipped" out.stdout
+        1 executable skipped\n" out.stdout
     result "a filter that rules out every executable" do
       let out ← lake #["test", "--", "-E", "exe(Nothing)"]
       assertExitCode 4 out
       assertBEq #[] (exeNames (← config))
       assertContains "no tests to run" out.stderr
+    result "a ruled-out library that an earlier build left with tests" do
+      let out ← lake #["test", "--", "-E", "exe(extra)"]
+      assertExitCode 0 out
+      assertContains "0 tests skipped, 1 test library skipped\n" out.stdout
 
 /--
 The copy of the runner's usage text that the driver prints for `--help` is the runner's, with a
@@ -1830,7 +1836,7 @@ def reportColors : Test := do
       let (h', ls) := h.test #[res]
       h := h'
       out := out ++ ls
-    return out.push (h.summary 1500 (some (2, 3)))
+    return out.push (h.summary 1500 (some (2, 3, 1)))
   -- The status lines, without the lines that explain an outcome below them.
   let colored := (lines true).filter (!·.startsWith "             ")
   let esc (code text : String) := s!"\x1b[{code}m{text}\x1b[0m"
@@ -1847,7 +1853,8 @@ def reportColors : Test := do
   assertContains s!"{esc "1" "2"} {esc "32;1" "passed"}" summary
   assertContains s!"{esc "1" "1"} {esc "31;1" "failed"}" summary
   assertContains s!"{esc "1" "2"} {esc "33;1" "tests skipped"}" summary
-  assertContains s!"{esc "1" "3"} {esc "33;1" "executables skipped"}" summary
+  assertContains s!"{esc "1" "3"} {esc "33;1" "test libraries skipped"}" summary
+  assertContains s!"{esc "1" "1"} {esc "33;1" "executable skipped"}" summary
   assertTrue (!(lines false).any hasEscapes) "no escape sequence without color"
   let report : RunReport := { results, seed := 0 }
   assertTrue (!hasEscapes (junitReport report) && !hasEscapes (jsonReport report) &&

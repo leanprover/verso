@@ -140,6 +140,13 @@ structure Config where
   knownExecutables : Array String := #[]
   /-- The names among {name}`Config.knownExecutables` that the filters ruled out before building. -/
   ruledOut : Array String := #[]
+  /--
+  The libraries among {name}`Config.ruledOut` that are known to have tests: a module of theirs that
+  an earlier build left on disk records a test.
+  -/
+  skippedTestLibraries : Array String := #[]
+  /-- The executables among {name}`Config.ruledOut` that the configuration file adds. -/
+  skippedExecutables : Array String := #[]
 deriving Repr, Inhabited, DecidableEq
 
 /-- The profile with the given name. The {lit}`default` profile always exists. -/
@@ -334,6 +341,8 @@ def Config.ofJson (config workspace : Json) (required? : Option String) : Except
     partialSelection := (← configField workspace "partial-selection").getD false
     knownExecutables := (← configField workspace "knownExecutables").getD #[]
     ruledOut := (← configField workspace "ruledOut").getD #[]
+    skippedTestLibraries := (← configField workspace "skippedTestLibraries").getD #[]
+    skippedExecutables := (← configField workspace "skippedExecutables").getD #[]
   }
 
 /-- The names of every test executable that the package can have. -/
@@ -359,7 +368,11 @@ def Config.workspaceJson (c : Config) : Json :=
     (if c.partialSelection then [("partial-selection", Json.bool true)] else []) ++
     (if c.knownExecutables.isEmpty then []
       else [("knownExecutables", ToJson.toJson c.knownExecutables)]) ++
-    (if c.ruledOut.isEmpty then [] else [("ruledOut", ToJson.toJson c.ruledOut)])
+    (if c.ruledOut.isEmpty then [] else [("ruledOut", ToJson.toJson c.ruledOut)]) ++
+    (if c.skippedTestLibraries.isEmpty then []
+      else [("skippedTestLibraries", ToJson.toJson c.skippedTestLibraries)]) ++
+    (if c.skippedExecutables.isEmpty then []
+      else [("skippedExecutables", ToJson.toJson c.skippedExecutables)])
 
 /-- Writes {lit}`config.json` and {lit}`workspace.json` for the configuration into {name}`dir`. -/
 def Config.write (c : Config) (dir : System.FilePath) :

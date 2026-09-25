@@ -14,6 +14,11 @@ expression selects it, no --skip pattern is in its name, and the profile's defau
 selects it. Without name filters, or without filter expressions, that condition holds for
 every test. In a filter expression, default() stands for the default filter.
 
+A run's summary counts the results by outcome and the listed tests left out, then the test
+libraries and executables that the filters ruled out before building. A ruled-out library
+counts when a module that an earlier build left on disk records a test; a library never built
+is not counted.
+
 Selection:
   -E, --filter EXPR             Select the tests that the filter expression selects. Repeatable;
                                 several are joined by union.

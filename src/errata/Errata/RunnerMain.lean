@@ -480,7 +480,8 @@ def printOnelineList (ctx : RunContext) (selected : Array (InventoryTest × Reso
 
 /--
 The selected tests as JSON: the profile, the run's seed, the number of listed tests selected and
-left out, the names of the test executables that the filters ruled out before building, the
+left out, under {lit}`not-built` the names of the libraries and executables that the filters ruled
+out before building, the
 settings that the test executables declare, and each test executable with its selected tests.
 Each test has its name, path, file, line, tags, and description, the values it receives, the
 mandatory settings without a value, whether its seed is derived from the run's, and its timeout,
@@ -512,7 +513,7 @@ def inventoryJson (ctx : RunContext) (profile : String) (listings : Array Listin
       ("tests", Json.arr (tests.map fun (t, r) => testJson t r))]
   return Json.mkObj [("profile", Json.str profile), ("seed", ToJson.toJson ctx.runSeed),
     ("selected", ToJson.toJson selected.size), ("skipped", ToJson.toJson skipped),
-    ("executables-skipped", ToJson.toJson ctx.config.ruledOut),
+    ("not-built", ToJson.toJson ctx.config.ruledOut),
     ("settings", Json.arr settings), ("executables", Json.arr executables)]
 
 /-- The message of a configuration that has no profile with the given name. -/
@@ -623,7 +624,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
     | some r => pure r
     | none => Registry.new
   let d := dispatcher
-  let finish (code : UInt32) (skipped? : Option (Nat × Nat) := none) :
+  let finish (code : UInt32) (skipped? : Option (Nat × Nat × Nat) := none) :
       IO (RunReport × UInt32) := do
     -- A listing runs nothing, so it has no counts to sum up.
     d.dispatch (.ended (← Protocol.nowMs) (!listing) skipped?)
@@ -709,7 +710,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
         ExitCode.noTestsRun
       else if s.results.all (·.outcome.isPass) && !s.issues.any (·.isError) then ExitCode.ok
       else ExitCode.testRunFailed
-    finish code (skipped, config.ruledOut.size)
+    finish code (skipped, config.skippedTestLibraries.size, config.skippedExecutables.size)
 
 /--
 The paths of the JUnit, JSON, and Markdown reports: the command line's, or else the profile's, which
