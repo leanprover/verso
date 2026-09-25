@@ -261,8 +261,9 @@ def Product.invoke (p : Product) (args : Array String) : IO IO.Process.Output :=
   let some cmd := p.exe.command[0]? | throw <| IO.userError "the command is empty"
   IO.Process.output {
     cmd, args := p.exe.command.extract 1 p.exe.command.size ++ args
-    env := #[("ERRATA_DIR", some (← errataDir).toString), ("LEAN_ABORT_ON_PANIC", some "1")] ++
-      p.exe.env.map fun (k, v) => (k, some v)
+    -- The process reads no lifeline, as a command run by hand does.
+    env := #[("ERRATA_DIR", some (← errataDir).toString), ("LEAN_ABORT_ON_PANIC", some "1"),
+      ("ERRATA_LIFELINE", none)] ++ p.exe.env.map fun (k, v) => (k, some v)
   }
 
 /-- Runs {name}`check` against each product in {name}`ps`, as a named result per product. -/
@@ -1480,6 +1481,22 @@ def killingTheDriversGroupEndsTheRun : Test := do
     let err := (← IO.wait errTask).toOption.getD ""
     assertTrue started s!"the test started its process; the runner wrote:\n{err}"
     assertTrue left.isEmpty s!"processes survived: {left}"
+
+/--
+Through the interpreted product, a test runs its helpers through the interpreter with the same
+modules: a helper that echoes its input and one that panics each behave as they do under the
+compiled test executable.
+-/
+@[test]
+def interpretedProductRunsHelpers : Test := do
+  IO.FS.withTempDir fun dir => do
+    for test in ["helpersRunInTheirOwnProcess", "arrayPanics"] do
+      result test do
+        let out := dir / s!"{test}.jsonl"
+        let r ← interpretedProduct.invoke #["errata-run", out.toString, test]
+        unless r.exitCode == 0 do
+          fail s!"exited with {r.exitCode}" (some (r.stdout ++ r.stderr))
+        assertBEq #[some "pass"] ((verdictsIn (← IO.FS.readFile out)).map (strField · "status"))
 
 /--
 A test executable of the Lean harness, run by hand without {lit}`ERRATA_LIFELINE` and with
