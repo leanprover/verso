@@ -1536,6 +1536,10 @@ def pytestHarness : Test := do
     -- The inventory lists the fixtures that some test uses.
     assertBEq #["stamped", "setup-fails", "prepare-fails", "teardown-fails", "dependent",
       "slow-setup", "threaded"] fixtures
+    -- The fixtures without a prepare say so, and the others leave the field out.
+    let unprepared := records.filter (isEvent "fixture") |>.filterMap fun r =>
+      if (r.getObjValAs? Bool "prepare").toOption == some false then strField r "name" else none
+    assertBEq #["setup-fails", "teardown-fails", "dependent", "slow-setup", "threaded"] unprepared
     let shared ← find "test_shared_a"
     assertBEq (some "[{\"exclusive\":false,\"name\":\"stamped\"}]")
       ((shared.getObjVal? "fixtures").toOption.map (·.compress))

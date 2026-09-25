@@ -30,6 +30,8 @@ structure FixtureSpec where
   threads : Nat := 1
   /-- The mandatory setting that has no value, when the fixture's setup cannot run without it. -/
   missing? : Option String := none
+  /-- Whether the fixture has a prepare, which runs before each test that uses it. -/
+  prepares : Bool := true
 deriving Repr, Inhabited, DecidableEq
 
 /-- A test, as the scheduler sees it. Tests are numbered by their positions in the queue. -/
@@ -234,7 +236,7 @@ def State.failFixture (s : State) (f : Nat) (phase : FixturePhase) (invoked : Bo
 def State.reservation (s : State) (t : Nat) : Nat :=
   let test := s.tests[t]!
   test.fixtures.foldl (init := s.grant test.threads) fun r (f, _) =>
-    max r (s.grant s.fixtures[f]!.threads)
+    if s.fixtures[f]!.prepares then max r (s.grant s.fixtures[f]!.threads) else r
 
 /-- Ends a test: releases its claims and its slots, and counts it out of its fixtures' users. -/
 def State.endTest (s : State) (t : Nat) : State := Id.run do
@@ -252,10 +254,13 @@ def State.endTest (s : State) (t : Nat) : State := Id.run do
   return { s with testStatus := s.testStatus.set! t .done }
 
 /--
-The command that starts a test's next step: the prepare of its fixture at {name}`next`, or the test.
+The command that starts a test's next step: the prepare of the first of its fixtures from the one at
+{name}`next` on that has a prepare, or the test.
 -/
 def State.nextStep (s : State) (t : Nat) (next : Nat) : State × Command :=
   let test := s.tests[t]!
+  let next := (List.range' next (test.fixtures.size - next)).find? (fun i =>
+    s.fixtures[test.fixtures[i]!.1]!.prepares) |>.getD test.fixtures.size
   match test.fixtures[next]? with
   | some (f, _) =>
     let values := s.valuesOf (#[f] ++ s.fixtures[f]!.deps)

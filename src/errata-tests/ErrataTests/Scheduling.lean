@@ -69,7 +69,8 @@ def scenario (seed : UInt64) : Scenario := Id.run do
     let deps := (List.range f).toArray.filter fun d => chance seed [12, f, d] 3
     let threads := 1 + draw seed [13, f] (pool + 1)
     let missing? := if chance seed [14, f] 9 then some s!"setting{f}" else none
-    fixtures := fixtures.push { deps, threads, missing? }
+    let prepares := !chance seed [22, f] 3
+    fixtures := fixtures.push { deps, threads, missing?, prepares }
   let testCount := 1 + draw seed [15] 9
   let mut tests := #[]
   for t in [0 : testCount] do
@@ -123,6 +124,10 @@ structure Sim where
 /-- The fixtures that a test needs, directly or through the fixtures that its fixtures take. -/
 def Sim.closure (s : Sim) (t : Nat) : Array Nat :=
   closureOf s.state.fixtures (s.state.tests[t]!.fixtures.map (·.1))
+
+/-- The first of a test's fixtures that has a prepare, where the test claims its fixtures. -/
+def Sim.firstPrepared? (s : Sim) (t : Nat) : Option Nat :=
+  s.state.tests[t]!.fixtures.map (·.1) |>.find? (s.state.fixtures[·]!.prepares)
 
 /-- Records a broken rule. -/
 def Sim.violate (s : Sim) (msg : String) : Sim :=
@@ -206,14 +211,14 @@ def Sim.perform (sc : Scenario) (s : Sim) (cmd : Command) : Sim := Id.run do
     match job with
     | .test t =>
       s := { s with outcomes := s.outcomes.modify t (· + 1) }
-      if s.state.tests[t]!.fixtures.isEmpty then s := s.claim t
+      if s.firstPrepared? t |>.isNone then s := s.claim t
       for f in s.closure t do
         unless s.setUp[f]! do s := s.violate s!"test {t} started before the setup of fixture {f}"
       s := needsValues (s.state.tests[t]!.fixtures.map (·.1)) s
       for (f, _) in s.state.tests[t]!.fixtures do
         if s.failedPrepares.contains (f, t) then
           s := s.violate s!"test {t} started after its prepare of fixture {f} failed"
-        unless s.prepared.contains (f, t) do
+        if s.state.fixtures[f]!.prepares && !s.prepared.contains (f, t) then
           s := s.violate s!"test {t} started before its prepare of fixture {f} ended"
       s := s.notTornDown job (s.closure t)
       unless s.holding.contains t do s := s.violate s!"test {t} started without its claims"
@@ -222,7 +227,9 @@ def Sim.perform (sc : Scenario) (s : Sim) (cmd : Command) : Sim := Id.run do
       s := needsValues s.state.fixtures[f]!.deps s
       s := s.notTornDown job (closureOf s.state.fixtures #[f])
     | .prepare f t =>
-      if s.state.tests[t]!.fixtures[0]?.map (·.1) == some f then s := s.claim t
+      unless s.state.fixtures[f]!.prepares do
+        s := s.violate s!"the prepare of {f}, which has none, ran for {t}"
+      if s.firstPrepared? t == some f then s := s.claim t
       s := needsValues #[f] s
       s := s.notTornDown job (s.closure t)
       unless s.holding.contains t do s := s.violate s!"the prepare of {f} for {t} ran unclaimed"
@@ -334,6 +341,26 @@ def sharedUsersOverlap : Test := do
   let (s, _) := step s (.valueProduced 0 "v")
   let (_, cmds) := step s (.exited (.setup 0) true)
   assertBEq #[Command.spawn (.prepare 0 0) 1 #[(0, "v")], .spawn (.prepare 0 1) 1 #[(0, "v")]] cmds
+
+/--
+A test's fixtures without a prepare start nothing before it: the test runs once the setups have
+ended, after the prepares of its other fixtures, and still takes its turn among exclusive users.
+-/
+@[test]
+def fixturesWithoutPrepareStartNothing : Test := do
+  let tests : Array TestSpec :=
+    #[{ fixtures := #[(0, true), (1, false)] }, { fixtures := #[(0, true)] }]
+  let s := State.init 4 tests #[{ prepares := false }, {}]
+  let (s, _) := step s .begin
+  let (s, _) := step s (.exited (.setup 0) true)
+  let (s, cmds) := step s (.exited (.setup 1) true)
+  assertBEq #[Command.spawn (.prepare 1 0) 1 #[(1, "")]] cmds
+  let (s, cmds) := step s (.exited (.prepare 1 0) true)
+  assertBEq #[Command.spawn (.test 0) 1 #[(0, ""), (1, "")]] cmds
+  let (s, cmds) := step s (.exited (.test 0) true)
+  assertBEq #[Command.spawn (.teardown 1) 1 #[(1, "")], .spawn (.test 1) 1 #[(0, "")]] cmds
+  let (_, cmds) := step s (.exited (.test 1) true)
+  assertBEq #[Command.spawn (.teardown 0) 1 #[(0, "")]] cmds
 
 /-- Two exclusive users of one fixture run one after the other, in queue order. -/
 @[test]

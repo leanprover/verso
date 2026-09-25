@@ -144,6 +144,10 @@ structure FixtureInfo where
   fixtures? : Option (Array String) := none
   /-- The number of hardware threads that the fixture's phases ask for; one when absent. -/
   threads? : Option Nat := none
+  /--
+  Whether the fixture has a prepare, which runs before each test that uses it; true when absent.
+  -/
+  prepare? : Option Bool := none
 deriving Repr, Inhabited, DecidableEq
 
 /-- An inventory entry for a test. Only the name is required of a test executable. -/
@@ -249,7 +253,7 @@ def Record.toJson : Record → Json
   | .fixture i =>
     Json.mkObj <| ("type", Json.str "fixture") :: opt "name" i.name? ++
       opt "description" i.description? ++ opt "settings" i.settings? ++
-      opt "fixtures" i.fixtures? ++ opt "threads" i.threads?
+      opt "fixtures" i.fixtures? ++ opt "threads" i.threads? ++ opt "prepare" i.prepare?
   | .test i =>
     Json.mkObj <| ("type", Json.str "test") :: opt "name" i.name? ++ opt "path" i.path? ++
       opt "file" i.file? ++ opt "line" i.line? ++ opt "col" i.col? ++
@@ -321,7 +325,7 @@ def Record.decode? (j : Json) : Except String (Option Record) := do
     return some (.fixture {
       name? := ← field j "name", description? := ← field j "description",
       settings? := ← field j "settings", fixtures? := ← field j "fixtures",
-      threads? := ← field j "threads"
+      threads? := ← field j "threads", prepare? := ← field j "prepare"
     })
   | "test" =>
     return some (.test {

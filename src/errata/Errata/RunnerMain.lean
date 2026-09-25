@@ -289,7 +289,7 @@ def listExecutable (ctx : RunContext) (idx : Nat) (exe : ExecutableConfig) :
           return fail s!"its fixture {name} takes the fixture {d}, which is not declared before it"
         fixtures := fixtures.push {
           name, description? := info.description?, settings := info.settings?.getD #[]
-          fixtures := deps, threads? := info.threads?
+          fixtures := deps, threads? := info.threads?, prepares := info.prepare?.getD true
         }
       | .test info =>
         unless sawProtocol do return fail "its list file does not begin with a protocol record"
@@ -559,7 +559,7 @@ def RunContext.fixturePlan (ctx : RunContext) (pool : Nat) (listings : Array Lis
       fixtures := fixtures.push (e, f, r)
       specs := specs.push {
         deps := f.fixtures.filterMap (fun d => index.get? (e, d)), threads := f.threads?.getD 1
-        missing? := r.missing[0]? }
+        missing? := r.missing[0]?, prepares := f.prepares }
   let testSpecs := selected.map fun (t, r) => {
     fixtures := t.fixtures.filterMap fun d => (index.get? (t.exeIdx, d.name)).map (·, d.exclusive)
     threads := t.threads?.getD 1, missing? := r.missing[0]? : Scheduler.TestSpec }
@@ -619,8 +619,9 @@ def Plan.testArgs (plan : Plan) (out : String) (t : Nat) (values : Array (Nat ×
 
 /--
 The command that reproduces a job by hand: the setups of the fixtures it needs, each after those it
-takes, then the prepares and the test for a test, or the job itself for a fixture's phase, then the
-teardowns, in the reverse order of the setups. The chain supplies the fixtures' values.
+takes, then the prepares of the fixtures that have them and the test for a test, or the job itself
+for a fixture's phase, then the teardowns, in the reverse order of the setups. The chain supplies
+the fixtures' values.
 -/
 def RunContext.reproduceJob (ctx : RunContext) (plan : Plan) (job : Scheduler.Job) : String :=
   let out := "/dev/stderr"
@@ -628,8 +629,9 @@ def RunContext.reproduceJob (ctx : RunContext) (plan : Plan) (job : Scheduler.Jo
     match job with
     | .test t =>
       let direct := plan.testSpecs[t]!.fixtures.map (·.1)
+      let prepared := direct.filter (plan.fixtureSpecs[·]!.prepares)
       (plan.tests[t]!.1.exeIdx, direct,
-        direct.map (plan.phaseArgs out · .prepare #[]) ++ #[plan.testArgs out t #[]],
+        prepared.map (plan.phaseArgs out · .prepare #[]) ++ #[plan.testArgs out t #[]],
         plan.testThreads t)
     | .setup f | .teardown f => (plan.fixtures[f]!.1, #[f], #[], plan.fixtureThreads f)
     | .prepare f _ =>

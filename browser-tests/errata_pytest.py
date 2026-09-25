@@ -33,10 +33,12 @@ optionally `fixtures`, the names of fixtures declared before it that it takes; o
 `threads`; and the callables `setup(context)`, which returns the value as a string,
 `prepare(value, context)`, and `teardown(value, context)`, whose value is `None` when the setup
 produced none. The context has the attributes `settings` and `fixtures`, dictionaries from names to
-values, and `threads`. If a fixture declares no prepare or teardown, that phase does nothing. Tests
-take fixtures through the marker `errata_fixture(NAME)`, which uses the fixture alone among its
-users, or `errata_fixture(NAME, exclusive=False)`, which shares it with other shared users, and read
-the values through the `errata_fixtures` fixture, a dictionary from names to values.
+values, `threads`, and `config`, the pytest configuration of the loaded suite, which holds the
+suite's command-line options. If a fixture declares no prepare or teardown, that phase does
+nothing, and the inventory marks a fixture without a prepare, before whose users the runner then
+runs none. Tests take fixtures through the marker `errata_fixture(NAME)`, which uses the fixture
+alone among its users, or `errata_fixture(NAME, exclusive=False)`, which shares it with other shared
+users, and read the values through the `errata_fixtures` fixture, a dictionary from names to values.
 
 pytest's own output, and what a test prints, goes to standard output and standard error, which the
 runner captures as the test's output; the records go only to OUT.
@@ -211,13 +213,17 @@ def declared_fixtures(config):
 
 
 class FixtureContext:
-    """What a fixture's phase receives: its settings, its fixtures' values, and its thread grant."""
+    """
+    What a fixture's phase receives: its settings, its fixtures' values, its thread grant, and the
+    pytest configuration of the suite.
+    """
 
-    def __init__(self, settings, fixtures, threads):
-        """A context with the given settings, fixtures' values, and thread grant."""
+    def __init__(self, settings, fixtures, threads, config):
+        """A context with the given settings, fixtures' values, thread grant, and configuration."""
         self.settings = settings
         self.fixtures = fixtures
         self.threads = threads
+        self.config = config
 
 
 def declared_settings(config):
@@ -338,6 +344,9 @@ class ListPlugin:
                 record["fixtures"] = list(info["fixtures"])
             if "threads" in info:
                 record["threads"] = int(info["threads"])
+            if info.get("prepare") is None:
+                # The runner then starts no prepare before the fixture's users.
+                record["prepare"] = False
             fixture_records.append(record)
         for name, info in declared.items():
             if name in used:
@@ -517,17 +526,19 @@ class FixturePlugin:
     """Learns the Errata fixtures that the suite's `conftest.py` files declare."""
 
     def __init__(self):
-        """Starts with no fixtures."""
+        """Starts with no fixtures and no configuration."""
         self.fixtures = {}
         self.problems = []
+        self.config = None
 
     def pytest_configure(self, config):
         """Registers the markers through which a test takes a setting or uses a fixture."""
         register_markers(config)
 
     def pytest_collection_finish(self, session):
-        """Reads the fixtures' declarations once every conftest.py is loaded."""
+        """Reads the fixtures' declarations and keeps the suite's configuration."""
         self.fixtures, self.problems = declared_fixtures(session.config)
+        self.config = session.config
 
 
 # What a fixture's phase may raise and the harness reports as the phase's verdict: any error, and
@@ -592,7 +603,7 @@ def run_fixture(pytest_args, out_path, name, phase, rest):
             message = f"the fixture {name} declares no setup"
             write_record(out, {"type": "verdict", "status": "error", "message": message})
             return 1, None
-        context = FixtureContext(settings, fixtures, threads)
+        context = FixtureContext(settings, fixtures, threads, plugin.config)
         start = time.monotonic()
         try:
             if phase == "setup":
