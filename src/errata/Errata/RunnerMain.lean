@@ -139,6 +139,37 @@ def Registry.cancel (r : Registry) (graceMs : Nat) : IO Unit := do
     IO.sleep pollMs
   for g in groups do g.kill
 
+/--
+What a lifeline that outlives its invocation serves: a fixture, whose setup's lifeline lasts until
+its teardown ends, or a test, whose prepares' lifelines last until the test ends.
+-/
+inductive LifelineOwner where
+  /-- The fixture of that name in the executable of that name. -/
+  | fixture (exe name : String)
+  /-- The test of that name in the executable of that name. -/
+  | test (exe name : String)
+deriving BEq
+
+/--
+The lifelines that the run holds after their invocations have ended, each the write end of an
+invocation's standard input, with what it serves. The services that a setup or a prepare starts
+inherit the lifeline and end when it closes. A lifeline closes when the runner drops it.
+-/
+structure Lifelines where
+  /-- The held lifelines. -/
+  held : Std.Mutex (Array (LifelineOwner × IO.FS.Handle))
+
+/-- No held lifelines. -/
+def Lifelines.new : BaseIO Lifelines := return { held := ← Std.Mutex.new #[] }
+
+/-- Holds {name}`h` until what {name}`owner` names ends. -/
+def Lifelines.hold (l : Lifelines) (owner : LifelineOwner) (h : IO.FS.Handle) : BaseIO Unit :=
+  l.held.atomically (modify (·.push (owner, h)))
+
+/-- Drops the lifelines that {name}`owner` holds, which closes them. -/
+def Lifelines.release (l : Lifelines) (owner : LifelineOwner) : BaseIO Unit :=
+  l.held.atomically (modify (·.filter (·.1 != owner)))
+
 /-- What the parts of a run share. -/
 structure RunContext where
   /-- The configuration. -/
@@ -155,6 +186,8 @@ structure RunContext where
   dispatcher : Dispatcher
   /-- The processes that are running, and whether the run has been cancelled. -/
   registry : Registry
+  /-- The lifelines of setups and prepares, held after their invocations end. -/
+  lifelines : Lifelines
   /-- How long a test executable may take to list its tests, in milliseconds. -/
   listTimeoutMs : Nat := defaultTimeoutMs
   /-- How long a listing that ran past its timeout has before it is killed, in milliseconds. -/
@@ -416,6 +449,21 @@ def RunContext.ended (ctx : RunContext) (inv : Invocation) (exit : Exit) (durati
   return { exit, succeeded := own?.any (·.outcome.isPass), value? }
 
 /--
+Settles the lifeline of an invocation that has ended. A setup's lifeline is held until the
+fixture's teardown ends, and a prepare's until the test it prepared ends, since the services they
+start end when it closes; a test's and a teardown's close now, with the lifelines they end. The rest
+close when the run's context goes, at the end of the run.
+-/
+def RunContext.keepLifeline (ctx : RunContext) (inv : Invocation) (g : Group) : BaseIO Unit := do
+  let p := inv.planned
+  match p.kind, p.path[1]?, p.path[2]? with
+  | .fixture, some "setup", _ => ctx.lifelines.hold (.fixture p.exe p.test) g.child.stdin
+  | .fixture, some "prepare", some test => ctx.lifelines.hold (.test p.exe test) g.child.stdin
+  | .fixture, some "teardown", _ => ctx.lifelines.release (.fixture p.exe p.test)
+  | .test, _, _ => ctx.lifelines.release (.test p.exe p.test)
+  | _, _, _ => pure ()
+
+/--
 Watches an invocation's process from its start to its end, as {lit}`RunContext.launch` describes,
 and returns how it ended.
 -/
@@ -464,6 +512,7 @@ def RunContext.watch (ctx : RunContext) (inv : Invocation) (g : Group) (file : S
   fileLock.atomically (tail.finish onFileLine deadline?)
   releasePipes g [outTask, errTask]
   ctx.registry.release g
+  ctx.keepLifeline inv g
   let exit := match timedOut with
     | some (ms, killed) => Exit.timedOut ms killed
     | none => .exited code
@@ -1024,7 +1073,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
       return ← finish code
   IO.FS.withTempDir fun dir => do
     let ctx : RunContext := {
-      config, opts, runSeed, runId, dir, dispatcher, registry
+      config, opts, runSeed, runId, dir, dispatcher, registry, lifelines := ← Lifelines.new
       listTimeoutMs := opts.timeoutMs? <|> profile.timeoutMs? |>.getD defaultTimeoutMs
       listGracePeriodMs := opts.gracePeriodMs? <|> profile.gracePeriodMs? |>.getD defaultGracePeriodMs
     }
