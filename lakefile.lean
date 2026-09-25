@@ -502,45 +502,53 @@ private def tomlFilterOf (fileMap : Lean.FileMap) (key : String) (v : Lake.Toml.
     return none
 
 /--
+The leaves of a settings table below the name `namePrefix`, each with its dotted name: every
+value other than a table, every table with the key `needs`, and every empty table. The other tables
+hold more of a name, and their leaves are named below it.
+-/
+private partial def settingLeaves (namePrefix : String) (t : Lake.Toml.Table) :
+    Array (String × Lake.Toml.Value) :=
+  t.items.foldl (init := #[]) fun out (k, v) =>
+    let name := if namePrefix.isEmpty then tomlKey k else s!"{namePrefix}.{tomlKey k}"
+    match v with
+    | .table _ inner =>
+      if inner.items.isEmpty || (inner.find? `needs).isSome then out.push (name, v)
+      else out ++ settingLeaves name inner
+    | _ => out.push (name, v)
+
+/--
 The settings table. A setting's name is its fully qualified declaration name, written as a quoted
 dotted key (`"A.B.c" = …`), a bare dotted key, or a key in a nested table (`[….settings.A.B]` with
-`c = …`); nested tables are flattened into dotted names. Each value is a string or
-`{ needs = "target" }`, with no coercion: a table with the key `needs` is a needed target, and any other
-table holds more of the name.
+`c = …`); `settingLeaves` flattens nested tables into dotted names. Each value is a string or
+`{ needs = "target" }`, with no coercion, and each name is given once.
 -/
-private partial def tomlSettings (v : Lake.Toml.Value) : TomlM (Array (String × TomlSetting)) := do
+private def tomlSettings (v : Lake.Toml.Value) : TomlM (Array (String × TomlSetting)) := do
   let .table _ t := v
     | tomlProblem v.ref s!"'settings' must be a table, and it is {tomlKind v}"
       return #[]
   let shape := "a string or { needs = \"target\" }"
-  let rec go (namePrefix : String) (t : Lake.Toml.Table) (out : Array (String × TomlSetting)) :
-      TomlM (Array (String × TomlSetting)) := do
-    let mut out := out
-    for (k, sv) in t.items do
-      let name := if namePrefix.isEmpty then tomlKey k else s!"{namePrefix}.{tomlKey k}"
-      match sv with
-      | .string ref s =>
-        if out.any (·.1 == name) then tomlProblem ref s!"the setting '{name}' is given twice"
-        else out := out.push (name, .value s)
-      | .table ref inner =>
-        match inner.find? `needs with
-        | some (.string r tgt) =>
-          if inner.items.size != 1 then
-            tomlProblem ref s!"the setting '{name}' must be {shape}, and its table has keys \
-              besides 'needs'"
-          else if out.any (·.1 == name) then tomlProblem ref s!"the setting '{name}' is given twice"
-          else out := out.push (name, .needs tgt r)
-        | some other =>
-          tomlProblem other.ref s!"'needs' must name a Lake target as a string, and it is \
-            {tomlKind other}"
-        | none =>
-          if inner.items.isEmpty then
-            tomlProblem ref s!"the setting '{name}' must be {shape}, and it is an empty table"
-          else out ← go name inner out
-      | other =>
-        tomlProblem other.ref s!"the setting '{name}' must be {shape}, and it is {tomlKind other}"
-    return out
-  go "" t #[]
+  let mut out := #[]
+  for (name, sv) in settingLeaves "" t do
+    match sv with
+    | .string ref s =>
+      if out.any (·.1 == name) then tomlProblem ref s!"the setting '{name}' is given twice"
+      else out := out.push (name, .value s)
+    | .table ref inner =>
+      match inner.find? `needs with
+      | some (.string r tgt) =>
+        if inner.items.size != 1 then
+          tomlProblem ref s!"the setting '{name}' must be {shape}, and its table has keys \
+            besides 'needs'"
+        else if out.any (·.1 == name) then tomlProblem ref s!"the setting '{name}' is given twice"
+        else out := out.push (name, .needs tgt r)
+      | some other =>
+        tomlProblem other.ref s!"'needs' must name a Lake target as a string, and it is \
+          {tomlKind other}"
+      | none =>
+        tomlProblem ref s!"the setting '{name}' must be {shape}, and it is an empty table"
+    | other =>
+      tomlProblem other.ref s!"the setting '{name}' must be {shape}, and it is {tomlKind other}"
+  return out
 
 /-- The keys of an override. -/
 private def overrideKeys : List String :=

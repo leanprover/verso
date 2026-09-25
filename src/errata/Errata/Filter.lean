@@ -678,21 +678,21 @@ The filter as text that parses back to the same filter, with parentheses where t
 operators calls for them.
 -/
 def Expr.print (e : Expr) : String :=
-  go e 0
+  printAt e 0
 where
   /--
   The filter at a place that needs the given level: 0 for a union, 1 for an intersection or a
   difference, and 2 for a complement or an atom.
   -/
-  go (e : Expr) (level : Nat) : String :=
+  printAt (e : Expr) (level : Nat) : String :=
     let (own, text) : Nat × String := match e with
       | .atom p m _ => (2, s!"{p.keyword}({m.print p})")
       | .all _ => (2, "all()")
       | .none _ => (2, "none()")
-      | .not e _ => (2, "!" ++ go e 2)
-      | .and a b _ => (1, s!"{go a 1} & {go b 2}")
-      | .diff a b _ => (1, s!"{go a 1} \\ {go b 2}")
-      | .or a b _ => (0, s!"{go a 0} | {go b 1}")
+      | .not e _ => (2, "!" ++ printAt e 2)
+      | .and a b _ => (1, s!"{printAt a 1} & {printAt b 2}")
+      | .diff a b _ => (1, s!"{printAt a 1} \\ {printAt b 2}")
+      | .or a b _ => (0, s!"{printAt a 0} | {printAt b 1}")
     if own < level then s!"({text})" else text
 
 /-- Several filters as one, joined by union. The union of no filters selects every test. -/

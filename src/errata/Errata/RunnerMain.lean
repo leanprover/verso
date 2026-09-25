@@ -167,20 +167,22 @@ arguments. Arguments after a {lit}`--` stay where they are.
 -/
 partial def takeRepeatable (args : List String) :
     Except String (Array String × Array String × List String) :=
-  go #[] #[] #[] args
+  collect #[] #[] #[] args
 where
-  go (sets filters : Array String) (rest : Array String) :
+  /-- Adds the values and the other arguments in the list to those collected so far. -/
+  collect (sets filters : Array String) (rest : Array String) :
       List String → Except String (Array String × Array String × List String)
     | [] => .ok (sets, filters, rest.toList)
     | "--" :: after => .ok (sets, filters, (rest.push "--").toList ++ after)
-    | "--set" :: v :: more => go (sets.push v) filters rest more
+    | "--set" :: v :: more => collect (sets.push v) filters rest more
     | ["--set"] => .error "--set expects NAME=VALUE"
-    | "--filter" :: v :: more => go sets (filters.push v) rest more
+    | "--filter" :: v :: more => collect sets (filters.push v) rest more
     | ["--filter"] => .error "--filter expects a filter"
     | arg :: more =>
-      if let some v := arg.dropPrefix? "--set=" then go (sets.push v.copy) filters rest more
-      else if let some v := arg.dropPrefix? "--filter=" then go sets (filters.push v.copy) rest more
-      else go sets filters (rest.push arg) more
+      if let some v := arg.dropPrefix? "--set=" then collect (sets.push v.copy) filters rest more
+      else if let some v := arg.dropPrefix? "--filter=" then
+        collect sets (filters.push v.copy) rest more
+      else collect sets filters (rest.push arg) more
 
 /--
 Splits a {lit}`--set` value at its first {lit}`=`. The value is everything after it, taken verbatim.
