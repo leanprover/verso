@@ -155,6 +155,10 @@ structure HumanReporter where
   color : Bool := false
   /-- The counts of the results reported so far. -/
   tally : Tally := {}
+  /-- The executable of the test whose own line was printed last. -/
+  lastExe? : Option String := none
+  /-- The path of the test whose own line was printed last. -/
+  lastPath : Array String := #[]
 deriving Repr, Inhabited
 
 /-- How many results of one test are printed at {name}`Verbosity.quiet` before the rest are counted. -/
@@ -173,23 +177,31 @@ def styleTestName (color : Bool) (name : String) (path : Array String) : String 
   else Style.testName.paint color name
 
 /--
-A result's name in its styles: the test's name, then the path of its named result, separated by
-{lit}` / `.
+Components of a name joined by {lit}`.`, the last in the style of names and the others in the style
+of namespaces.
 -/
-private def styledName (color : Bool) (r : Result) : String :=
-  r.resultPath.foldl (init := styleTestName color r.test r.path) fun acc part =>
-    acc ++ " / " ++ Style.testName.paint color part
+private def styleComponents (color : Bool) (parts : Array String) : String :=
+  match parts.back? with
+  | some last =>
+    let front := parts.pop.foldl (fun acc p => acc ++ p ++ ".") ""
+    Style.namespaces.paint color front ++ Style.testName.paint color last
+  | none => ""
+
+/-- The number of leading components that two paths share. -/
+private def sharedPrefix (a b : Array String) : Nat :=
+  (a.zip b).takeWhile (fun (x, y) => x == y) |>.size
 
 /--
 The lines of one result: its status line, with nextest's shape (the status word, the duration in
-brackets, the executable, and the name), then what explains an outcome other than a pass, its
-docstring when shown, its captured output, and the command that reproduces it.
+brackets, the executable, and then {name}`name`, the name column), then what explains an outcome
+other than a pass, its docstring when shown, its captured output, and the command that reproduces
+it.
 -/
-private def resultLines (h : HumanReporter) (r : Result) : Array String := Id.run do
+private def resultLines (h : HumanReporter) (r : Result) (name : String) : Array String := Id.run do
   let (word, style) := statusWord r
   let exe := if r.exe.isEmpty then "" else Style.exe.paint h.color r.exe ++ " "
   let mut out := #[s!"{style.paint h.color (padLeft statusWidth word)} \
-    {bracketedDuration r.durationMs} {exe}{styledName h.color r}"]
+    {bracketedDuration r.durationMs} {exe}{name}"]
   let detail (text : String) := indentLines text.trimAsciiEnd.copy detailIndent
   match r.outcome with
   | .reported .pass => pure ()
@@ -233,7 +245,14 @@ def HumanReporter.summary (h : HumanReporter) (elapsedMs : Nat) (skipped? : Opti
 
 /--
 Reports the results of one test: the test's own result first, then its named results, each on a
-status line of its own that names the executable and the test.
+status line of its own whose status word, duration, and executable stand in fixed columns.
+
+The name column nests. When the test's own line follows one of the same executable whose path
+shares leading components with the test's, it is indented by two spaces per shared component and
+shows the rest of the path joined by {lit}`.`; otherwise it shows the test's full name. A named
+result is indented two spaces below the name of its closest printed ancestor, the test's own line
+included, and shows the rest of its path joined by {lit}` / `; with no printed ancestor, it shows
+the test's full name and its path.
 
 Failures, errors, and inconclusive results are printed at every verbosity.
 {name}`Verbosity.quiet` adds passing results, printing at most a fixed number of lines per test and
@@ -261,7 +280,41 @@ def HumanReporter.test (h : HumanReporter) (results : Array Result) :
         shown := shown.push r
         count := count + 1
   if shown.isEmpty then return (h, #[])
-  let mut out : Array String := shown.flatMap (resultLines h)
+  let c := h.color
+  let spaces (n : Nat) : String := "".pushn ' ' n
+  let mut h := h
+  let mut out : Array String := #[]
+  -- The result paths printed so far for this test, the test's own as the empty path, each with the
+  -- indentation of its name.
+  let mut printed : Array (Array String × Nat) := #[]
+  for r in shown do
+    let mut name := ""
+    let mut indent := 0
+    if r.resultPath.isEmpty then
+      let path := if r.path.isEmpty then #[r.test] else r.path
+      let shared :=
+        if h.lastExe? == some r.exe then min (sharedPrefix path h.lastPath) (path.size - 1)
+        else 0
+      h := { h with lastExe? := some r.exe, lastPath := path }
+      indent := 2 * shared
+      name := if shared == 0 then styleTestName c r.test r.path
+        else spaces indent ++ styleComponents c (path.extract shared path.size)
+    else
+      -- The closest printed ancestor: the longest printed proper prefix of the result's path.
+      let ancestor? := printed.foldl (init := none) fun best (p, i) =>
+        if p.size < r.resultPath.size && p.isPrefixOf r.resultPath &&
+            (best.all fun (b, _) => b.size < p.size) then some (p, i)
+        else best
+      match ancestor? with
+      | some (a, ai) =>
+        let rest := r.resultPath.extract a.size r.resultPath.size
+        indent := ai + 2
+        name := spaces indent ++ " / ".intercalate (rest.toList.map (Style.testName.paint c))
+      | none =>
+        name := r.resultPath.foldl (init := styleTestName c r.test r.path) fun acc part =>
+          acc ++ " / " ++ Style.testName.paint c part
+    printed := printed.push (r.resultPath, indent)
+    out := out ++ resultLines h r name
   if more > 0 then
     out := out.push s!"{detailIndent}(... and {more} more passed)"
   return (h, out)

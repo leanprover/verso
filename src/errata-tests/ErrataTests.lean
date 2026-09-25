@@ -189,18 +189,24 @@ Second line.")
 
 /--
 Each line of the human-readable report has nextest's shape: the status word, right-aligned in twelve
-characters, the duration in seconds in brackets, the executable, and the test's full name. The
-summary line has the same shape, with the counts of the results.
+characters, the duration in seconds in brackets, the executable, and the name column. The name
+column nests: a test whose path shares leading components with the previous test of the same
+executable is indented two spaces per shared component and shows the rest of its path, and a test
+that shares nothing, or follows another executable, shows its full name. The summary line has the
+same shape, with the counts of the results.
 -/
 @[test]
 def reportLinesNameExecutableAndTest : Test := do
-  let at_ (path : Array String) (ms : Nat) : Result :=
-    { exe := "Lib", test := ".".intercalate path.toList, path, outcome := .reported .pass
-      durationMs := ms }
+  let at_ (exe : String) (path : Array String) (ms : Nat) : Result :=
+    { exe, test := ".".intercalate path.toList, path, outcome := .reported .pass, durationMs := ms }
   let out ← captureOutput do
-    discard <| humanReport .verbose #[at_ #["A", "B", "one"] 5, at_ #["four"] 12345]
-  assertBEq ["        PASS [   0.005s] Lib A.B.one", "        PASS [  12.345s] Lib four",
-    "     Summary [  12.350s] 2 passed, 0 failed, 0 errors, 0 inconclusive", ""]
+    discard <| humanReport .verbose #[at_ "Lib" #["A", "B", "one"] 12,
+      at_ "Lib" #["A", "B", "two"] 3, at_ "Lib" #["A", "C", "three"] 5, at_ "Lib" #["four"] 12345,
+      at_ "Other" #["four", "five"] 0]
+  assertBEq ["        PASS [   0.012s] Lib A.B.one", "        PASS [   0.003s] Lib     two",
+    "        PASS [   0.005s] Lib   C.three", "        PASS [  12.345s] Lib four",
+    "        PASS [   0.000s] Other four.five",
+    "     Summary [  12.365s] 5 passed, 0 failed, 0 errors, 0 inconclusive", ""]
     (out.stdout.splitOn "\n")
 
 /-- An inconclusive test is reported with its reason, its output, and the command that reproduces it. -/
@@ -1331,14 +1337,15 @@ def reportShowsTestOutputAboveFailedNamedResult : Test := do
   -- The named result follows the test's own result.
   let after := (out.stdout.splitOn own)[1]?.getD ""
   let next := (after.splitOn "\n").headD ""
-  assertTrue (next.startsWith "        FAIL [" && next.endsWith "] inner / check")
+  assertTrue (next.startsWith "        FAIL [" && next.endsWith "]   check")
     "the named result's line follows the test's output"
   assertContains "0 passed, 2 failed, 0 errors, 0 inconclusive" out.stdout
   assertBEq 2 (← failures.get)
 
 /--
-Named results print on status lines of their own, after their test's, named by the test's name and
-the path of the named result.
+Named results print on status lines of their own, after their test's, indented in the name column
+two spaces below their closest printed ancestor, by their own names. A named result whose ancestors
+were not printed is named by the test's name and its path.
 -/
 @[test]
 def reportNamesNamedResultsByPath : Test := do
@@ -1348,7 +1355,13 @@ def reportNamesNamedResultsByPath : Test := do
   let out ← captureOutput do discard <| humanReport .verbose results
   let names := (out.stdout.splitOn "\n").filterMap fun l =>
     if l.startsWith "        PASS [" then (l.splitOn "] ")[1]? else none
-  assertBEq ["inner", "inner / b", "inner / c", "inner / c / d"] names
+  assertBEq ["inner", "  b", "  c", "    d"] names
+  let failing ← resultsOf do
+    result "c" (result "d" (assertBEq 1 2))
+  let silent ← captureOutput do
+    discard <| humanReport .silent (failing.filter (·.resultPath != #[]))
+  assertContains "] inner / c\n" silent.stdout
+  assertContains "]   d\n" silent.stdout
 
 /--
 The time of a named result that `expectFail` drops is still the named result's own, so the test's
