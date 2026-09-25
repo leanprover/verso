@@ -79,7 +79,7 @@ structure Options where
   listFilters? : Option (Array String) := none
 deriving Repr, Inhabited
 
-/-- The form of a duration, as the driver's and the runner's messages state it. -/
+/-- The form of a duration, as the messages about malformed durations state it. -/
 def durationForm : String :=
   "one or more whole numbers, each followed by one of the units h, m, s, ms, used at most once \
   each and in that order, such as 90s, 10m, or 2m30s"

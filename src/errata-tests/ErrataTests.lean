@@ -1315,6 +1315,33 @@ def runnerHelpNamesInvocation : Test := do
     assertContains s!"{invocation} [FLAGS]" out.all
 
 /--
+Settings that need a Lake target receive the path that the workspace's configuration gives for the
+target. When it gives none, the setting is left out, and if the profile is the run's, then the
+missing target is an error that names it.
+-/
+@[test]
+def runnerResolvesNeededTargets : Test := do
+  let needing := Lean.Json.mkObj [("needs", "stamp"), ("line", 2), ("col", 20)]
+  let settings := Lean.Json.mkObj [("a", needing), ("b", "given")]
+  let config := Lean.Json.mkObj [("protocol", 1),
+    ("profiles", Lean.Json.mkObj [("default", Lean.Json.mkObj [("settings", settings)])])]
+  let workspace (needs : List (String × Lean.Json)) :=
+    Lean.Json.mkObj [("protocol", 1), ("needs", Lean.Json.mkObj needs)]
+  let settingsOf (c : Runner.Config) := (c.profile? "default").map (·.settings)
+  result "a target with a result" do
+    match Runner.Config.ofJson config (workspace [("stamp", "/out/stamp.txt")]) (some "default") with
+    | .ok c => assertBEq (some #[("a", "/out/stamp.txt"), ("b", "given")]) (settingsOf c)
+    | .error e => fail e
+  result "a target without a result, in another profile's run" do
+    match Runner.Config.ofJson config (workspace []) (some "other") with
+    | .ok c => assertBEq (some #[("b", "given")]) (settingsOf c)
+    | .error e => fail e
+  result "a target without a result, in the profile's run" do
+    match Runner.Config.ofJson config (workspace []) (some "default") with
+    | .ok _ => fail "the configuration was accepted"
+    | .error e => assertContains "profiles.default.settings.a: the target 'stamp'" e
+
+/--
 The runner's command line: the two configuration files first, the `-v` forms select the verbosity,
 declared flags parse, `--set` and `--filter` repeat, and `list` begins the subcommand.
 -/
