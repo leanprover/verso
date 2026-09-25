@@ -1,7 +1,10 @@
 """
 Tests that show the conformance suite how a pytest test can end: passing, failing, with an error in
-its setup, parameterized, with an odd parameter id, marked, inside a class, and taking settings.
+its setup, parameterized, with an odd parameter id, marked, inside a class, taking settings, and
+printing the run's identifier.
 """
+
+import os
 
 import pytest
 
@@ -50,6 +53,11 @@ class TestGroup:
 def test_greets(errata_settings):
     """A test that prints the greeting it receives."""
     print(f"received greeting={errata_settings['greeting']}")
+
+
+def test_run_id():
+    """A test that prints the run's identifier."""
+    print(f"run id: {os.environ.get('ERRATA_RUN_ID', '')}")
 
 
 @pytest.mark.errata_setting("needed")

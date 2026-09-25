@@ -2,8 +2,8 @@
 # A test executable for a browser suite whose site a Lake workspace of its own builds. When a test
 # runs, the script builds the site, then hands the invocation to Verso's pytest harness with
 # `--site-dir` naming the site; a listing needs no site and starts the harness at once. The site is
-# built once for each process that starts the tests, which is the runner in a run: a stamp records
-# that process's identifier and start time. A lock directory per test project makes the check and
+# built once per run: a stamp named after the runner's ERRATA_RUN_ID records the site, and without
+# the variable every invocation builds it. A lock directory per test project makes the check and
 # the build one step, so two suites of one test project never build at once. This script stands in
 # for a fixture that builds the site.
 #
@@ -84,26 +84,24 @@ release_lock() {
 }
 
 if [ "${1:-}" = errata-run ]; then
-  stamp="$stamp_dir/$kind-$(basename "$project").stamp"
-  # The process that starts the tests, the runner in a run, identified by its process identifier
-  # and its start time. Without a start time, every invocation builds the site.
-  started=$(ps -o lstart= -p "$PPID" 2>/dev/null || true)
-  starter=""
-  [ -n "$started" ] && starter="$PPID $started"
+  # The stamps of this site are named after the runs that built it. Outside a run, which gives no
+  # ERRATA_RUN_ID, every invocation builds the site.
+  prefix="$stamp_dir/$kind-$(basename "$project")"
+  run_id="${ERRATA_RUN_ID:-}"
+  stamp="$prefix.$run_id.stamp"
   take_lock
   trap release_lock EXIT
   site=""
-  if [ -n "$starter" ] && [ -f "$stamp" ] && [ "$(sed -n 1p "$stamp")" = "$starter" ]; then
-    site=$(sed -n 2p "$stamp")
+  if [ -n "$run_id" ] && [ -f "$stamp" ]; then
+    site=$(cat "$stamp")
   fi
   if [ -z "$site" ] || [ ! -d "$site" ]; then
     echo "Building the site of $project..."
     site=$(build_site)
-    if [ -n "$starter" ]; then
-      printf '%s\n%s\n' "$starter" "$site" > "$stamp.$$"
+    rm -f "$prefix".*.stamp
+    if [ -n "$run_id" ]; then
+      printf '%s\n' "$site" > "$stamp.$$"
       mv "$stamp.$$" "$stamp"
-    else
-      rm -f "$stamp"
     fi
   fi
   release_lock

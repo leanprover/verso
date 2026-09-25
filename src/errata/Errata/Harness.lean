@@ -278,6 +278,11 @@ declaration, to rewrite golden files. When the environment variable {lit}`ERRATA
 closes, the executable ends its own process group and exits. Otherwise the command runs by hand with
 any standard input, {lit}`/dev/null` included. The test itself reads an empty standard input.
 
+The runner also sets {lit}`ERRATA_DIR` to the directory of Errata's sources, where the shell
+harness lives, and {lit}`ERRATA_RUN_ID` to the run's identifier, which is the same for every process
+of one run and differs between runs, so that a test can do work once per run. The Lean harness reads
+neither, and a test reads them from its environment.
+
 {lit}`errata-helper <name> [ARG]...` runs the helper in {name}`helpers` with that name, passing it the
 arguments that follow, and exits with the helper's exit code, which the process that started it sees
 modulo 256, as the operating system reports it. The helper runs with the process's own standard

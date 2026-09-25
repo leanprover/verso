@@ -316,6 +316,8 @@ structure RunContext where
   opts : Options
   /-- The run's seed. -/
   runSeed : Nat
+  /-- The run's identifier, which every test executable receives as {lit}`ERRATA_RUN_ID`. -/
+  runId : String := ""
   /-- A directory for the result files of the run. -/
   dir : System.FilePath
   /-- The dispatcher. -/
@@ -333,12 +335,20 @@ end when it closes.
 -/
 def lifelineVariable : String := "ERRATA_LIFELINE"
 
+/-- A new run identifier: 64 random bits, written as 16 hexadecimal digits. -/
+def newRunId : IO String := do
+  let bytes ← IO.getRandomBytes 8
+  let hex (n : Nat) : String := String.singleton (Nat.digitChar n)
+  return bytes.foldl (init := "") fun acc b => acc ++ hex (b.toNat / 16) ++ hex (b.toNat % 16)
+
 /--
 The environment variables that every test executable receives. {lit}`LEAN_ABORT_ON_PANIC` is
-{lit}`1`, so a panic ends the process that panicked.
+{lit}`1`, so a panic ends the process that panicked, and {lit}`ERRATA_RUN_ID` is the run's
+identifier, the same for every process of one run.
 -/
 def RunContext.env (ctx : RunContext) (exe : ExecutableConfig) : Array (String × Option String) :=
-  #[("LEAN_ABORT_ON_PANIC", some "1"), (lifelineVariable, some "1")] ++
+  #[("LEAN_ABORT_ON_PANIC", some "1"), (lifelineVariable, some "1"),
+      ("ERRATA_RUN_ID", some ctx.runId)] ++
     (ctx.config.errataDir?.map fun d => #[("ERRATA_DIR", some d)]).getD #[] ++
     exe.env.map fun (k, v) => (k, some v)
 
@@ -689,10 +699,12 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
   let runSeed ← match opts.seed with
     | some s => pure s
     | none => IO.rand 0 (2 ^ 32 - 1)
+  let runId ← newRunId
   let dispatcher : Dispatcher :=
     { state := ← Std.Mutex.new { human := { verbosity := opts.verbosity }, wfail := opts.wfail }
       sinks }
-  sinks.event (Json.mkObj [("type", Json.str "protocol"), ("version", ToJson.toJson Protocol.version)])
+  sinks.event (Json.mkObj [("type", Json.str "protocol"), ("version", ToJson.toJson Protocol.version),
+    ("run_id", Json.str runId)])
   let registry ← match registry with
     | some r => pure r
     | none => Registry.new
@@ -701,7 +713,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
     -- A listing runs nothing, so it has no counts to sum up.
     d.dispatch (.ended (← Protocol.nowMs) (summary := !opts.list))
     let s ← d.get
-    return { results := s.results, issues := s.issues, seed := runSeed }
+    return { results := s.results, issues := s.issues, seed := runSeed, runId }
   for w in config.warnings do
     d.dispatch (.issue { isError := false, message := w })
   let some profile := config.profile? opts.profile
@@ -720,7 +732,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
       return ← finish
   IO.FS.withTempDir fun dir => do
     let ctx : RunContext := {
-      config, opts, runSeed, dir, dispatcher, registry
+      config, opts, runSeed, runId, dir, dispatcher, registry
       listTimeoutMs := opts.timeoutMs? <|> profile.timeoutMs? |>.getD defaultTimeoutMs
       listGracePeriodMs := opts.gracePeriodMs? <|> profile.gracePeriodMs? |>.getD defaultGracePeriodMs
     }
@@ -799,7 +811,7 @@ def listSubcommand (config : Config) (opts : Options) (filters : Array String)
   }
   IO.FS.withTempDir fun dir => do
     let ctx : RunContext := {
-      config, opts, runSeed := 0, dir, dispatcher, registry
+      config, opts, runSeed := 0, runId := ← newRunId, dir, dispatcher, registry
       listTimeoutMs := opts.timeoutMs?.getD defaultTimeoutMs
       listGracePeriodMs := opts.gracePeriodMs?.getD defaultGracePeriodMs
     }

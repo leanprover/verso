@@ -115,6 +115,8 @@ structure Product where
   needsSetting : Role
   /-- A mandatory setting without a default. -/
   needed : String
+  /-- A test that prints {lit}`run id: ` and the value of {lit}`ERRATA_RUN_ID`. -/
+  printsRunId : Role
   /-- Whether the product is a shell script whose tests stage the scripted behaviors. -/
   scripted : Bool := false
 
@@ -128,6 +130,7 @@ def shellProduct (name script : String) : Product where
   greeting := "greeting"
   needsSetting := { test := "needs-setting" }
   needed := "needed"
+  printsRunId := { test := "run-id" }
   scripted := true
 
 /-- `basic.sh`, which speaks the protocol by itself. -/
@@ -160,6 +163,7 @@ def pytestProduct : Product where
   greeting := "greeting"
   needsSetting := pytestTest "test_needs_setting"
   needed := "needed"
+  printsRunId := pytestTest "test_run_id"
 
 /-- The built test executable of this library, a product of the Lean harness. -/
 def leanExe : System.FilePath := ".lake/build/bin/errata-test-ErrataTests"
@@ -178,6 +182,7 @@ def leanProduct : Product where
   greeting := "ErrataTests.Settings.greeting"
   needsSetting := { test := "ErrataTests.Roles.needsSetting" }
   needed := "ErrataTests.Roles.required"
+  printsRunId := { test := "ErrataTests.Roles.printsRunId" }
 
 /-- Every product. -/
 def products : Array Product := #[basicProduct, errataShProduct, pytestProduct, leanProduct]
@@ -678,6 +683,35 @@ def chainsRunInOrder : Test := forEach products fun p => do
       assertBEq 2 (verdictsIn (← IO.FS.readFile out)).size
 
 /--
+Every test executable of one run receives the same {lit}`ERRATA_RUN_ID`, which is the run's
+identifier in the report and in the events file's {lit}`protocol` record, and the next run's
+identifier differs.
+-/
+@[test]
+def runIdIsSharedWithinARun : Test := do
+  for p in products do p.check
+  let exes := products.map (·.exe)
+  let filters := products.map fun p => s!"name(={Filter.escapeText p.printsRunId.test})"
+  let runOnce : TestM (String × Array String) := do
+    let r ← runWith exes { filters }
+    let ids ← products.mapM fun p => do
+      let some res := r.report.results.find? fun res =>
+          res.exe == p.exe.name && res.test == p.printsRunId.test && res.resultPath.isEmpty
+        | fail s!"{p.name}: no result"
+      -- pytest prints the test's output after its own progress on the same line.
+      let some rest := (res.output.stdout.splitOn "run id: ")[1]?
+        | fail s!"{p.name}: no run id in its output" (some res.output.stdout)
+      return ((rest.splitOn "\n").headD "").trimAscii.copy
+    assertBEq (some r.report.runId) (r.events[0]?.bind (strField · "run_id"))
+    return (r.report.runId, ids)
+  let (first, ids) ← runOnce
+  assertTrue (first.length == 16) s!"the run id is {first}"
+  assertBEq (products.map fun _ => first) ids
+  let (second, ids') ← runOnce
+  assertTrue (second != first) "two runs have one identifier"
+  assertBEq (products.map fun _ => second) ids'
+
+/--
 A test executable's result file begins with the {lit}`protocol` record. The runner reads a result
 file whose first record is another as unreadable.
 -/
@@ -1059,7 +1093,7 @@ def pytestHarness : Test := do
       (squares.getObjValAs? (Array String) "path").toOption
     assertBEq (some "A parameterized test.") (strField squares "description")
     assertBEq (some file) (strField squares "file")
-    assertBEq (some 25) (squares.getObjValAs? Nat "line").toOption
+    assertBEq (some 28) (squares.getObjValAs? Nat "line").toOption
     let inside ← find "TestGroup::test_inside"
     assertBEq (some #["TestGroup", "test_inside"])
       ((inside.getObjValAs? (Array String) "path").toOption.map fun a => a.extract (a.size - 2) a.size)
@@ -1079,7 +1113,7 @@ def pytestHarness : Test := do
     | some (.reported (.fail f)) =>
       assertBEq "AssertionError: the value is off" f.message
       assertBEq (some file) (f.location?.map (·.file))
-      assertBEq (some 17) (f.location?.map (·.startPos.line))
+      assertBEq (some 20) (f.location?.map (·.startPos.line))
       assertContains "assert value == 4" (f.detail?.getD "")
     | o => fail s!"expected a failure, got {repr o}"
   result "an error in setup" do

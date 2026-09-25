@@ -24,8 +24,11 @@
 # A test's body runs in a subshell with `set -e`: a command that fails ends the test with its status,
 # and `errata_fail`, which returns 1, ends it as failed unless the body catches the status.
 #
-# The runner sets ERRATA_DIR to the directory of Errata's sources in every test executable's
-# environment. The library needs bash 3.2 or later and the POSIX utilities that ship with macOS and
+# The runner sets three variables in every test executable's environment: ERRATA_DIR, the directory
+# of Errata's sources; ERRATA_RUN_ID, the run's identifier, the same for every process of one run and
+# different in the next, for work a script does once per run; and ERRATA_LIFELINE=1, which marks
+# standard input as a pipe that closes when the runner ends. The runner ends a shell test's process
+# group itself, and the library reads none of the three. The library needs bash 3.2 or later and the POSIX utilities that ship with macOS and
 # Linux. It writes the records to file descriptor 9, which it opens on the file that the runner
 # names, so the script's own standard output and standard error stay free for the test's output.
 

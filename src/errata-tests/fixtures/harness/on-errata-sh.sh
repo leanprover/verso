@@ -21,7 +21,7 @@ errata_tests() {
   local t settings tags
   for t in pass fail verdict-fail silent unknown-records mismatch-pass mismatch-fail exits sleeps \
       stubborn spawns panics garbled records twice flood lingers greets needs-setting errexit \
-      fail-goes-on; do
+      fail-goes-on run-id; do
     settings="Errata.seed,optional(marker),optional(note)"
     case "$t" in
       greets) settings="$settings,greeting" ;;
@@ -68,6 +68,9 @@ errata_run_test() {
       # contradicts its verdict.
       errata_fail "it failed" || true
       exit 0
+      ;;
+    run-id)
+      echo "run id: ${ERRATA_RUN_ID:-}"
       ;;
     errexit)
       false

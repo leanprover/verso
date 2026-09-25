@@ -6,7 +6,8 @@
 # invocation runs in the script's own process.
 
 tests=(pass fail verdict-fail silent unknown-records mismatch-pass mismatch-fail exits sleeps
-       stubborn spawns panics garbled records twice flood lingers greets needs-setting protocol-late)
+       stubborn spawns panics garbled records twice flood lingers greets needs-setting protocol-late
+       run-id)
 # A suite that needs only some of the tests names them here, separated by spaces.
 if [ -n "$BASIC_TESTS" ]; then
   read -r -a tests <<< "$BASIC_TESTS"
@@ -167,6 +168,10 @@ case "$mode" in
         ;;
       needs-setting)
         echo "ran without its setting"
+        exit 0
+        ;;
+      run-id)
+        echo "run id: $ERRATA_RUN_ID"
         exit 0
         ;;
       protocol-late)

@@ -289,6 +289,8 @@ structure RunReport where
   issues : Array RunReport.Issue := #[]
   /-- The run's seed. -/
   seed : Nat
+  /-- The run's identifier, which its test executables receive as {lit}`ERRATA_RUN_ID`. -/
+  runId : String := ""
 deriving Repr, Inhabited
 
 /-- Whether an issue fails the run. -/
@@ -451,10 +453,12 @@ instance : FromJson Result where
 
 /--
 Renders the report as a JSON object: the results as an array of objects under {lit}`results`, the
-run's issues under {lit}`issues`, and the run's seed under {lit}`seed`.
+run's issues under {lit}`issues`, the run's seed under {lit}`seed`, and the run's identifier under
+{lit}`run_id`.
 -/
 def jsonReport (report : RunReport) : String :=
-  (json%{ "results": $report.results, "issues": $report.issues, "seed": $report.seed }).pretty
+  (json%{ "results": $report.results, "issues": $report.issues, "seed": $report.seed,
+    "run_id": $report.runId }).pretty
 
 /-- The length of the longest run of consecutive backticks in {name}`s`. -/
 private def longestBacktickRun (s : String) : Nat :=

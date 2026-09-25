@@ -40,6 +40,11 @@ def endsAsAsked (how? : Option outcome) : Test := do
   | some "error" => throwThe IO.Error (IO.userError "thrown on request")
   | _ => pure ()
 
+/-- Prints the run's identifier, which the runner gives every test executable. -/
+@[test]
+def printsRunId : Test := do
+  IO.println s!"run id: {(← IO.getEnv "ERRATA_RUN_ID").getD ""}"
+
 /-- Passes once it has the value it needs, which it prints. -/
 @[test]
 def needsSetting (value : required) : Test := do
