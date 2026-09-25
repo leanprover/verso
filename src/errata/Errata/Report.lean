@@ -573,8 +573,8 @@ private def junitIssue (indent : String) (issue : RunReport.Issue) : String :=
   xmlElements indent "testcase" [("name", issue.headline), ("classname", runSuite)] content
 
 /--
-The results in the report's {name}`RunReport.order`: each by its key's position there, results with
-one key in the order they were reported, and results whose keys the order lacks last.
+The results in the report's {name}`RunReport.order`: each by its key's position there, results that
+share a key in the order they were reported, and results whose keys the order lacks last.
 -/
 def RunReport.orderedResults (report : RunReport) : Array Result := Id.run do
   if report.order.isEmpty then return report.results

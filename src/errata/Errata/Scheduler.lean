@@ -182,8 +182,8 @@ def closureOf (fixtures : Array FixtureSpec) (roots : Array Nat) : Array Nat := 
   return (List.range fixtures.size).toArray.filter wanted.contains
 
 /--
-The state at the start of a run with {name}`pool` slots, the tests in the order of the queue, and
-the fixtures. The queue's order is the scheduler's own, and tests may not rely on it.
+The state at the start of a run with {name}`pool` slots, the tests in the scheduling order, which
+is the queue's order, and the fixtures. Tests may not rely on the order in which they run.
 -/
 def State.init (pool : Nat) (tests : Array TestSpec) (fixtures : Array FixtureSpec) : State :=
   let pool := max pool 1
@@ -310,16 +310,16 @@ def State.startTeardowns (s : State) : State × Array Command := Id.run do
   return (s, out)
 
 /--
-Starts what may start, in queue order. Tests that are reported without running wait until every test
-before them has ended, so reports keep the queue's order where the pool allows it. Tests start once
-their fixtures are set up, their claims are free, and their slots are free: exclusive claims need
-the fixture free of other users, and shared claims need it free of exclusive ones. Earlier waiting
-tests go first: fixtures that one of them wants exclusively wait for it, and fixtures that one of
-them wants at all wait for it before an exclusive claim. The order in which the users of a fixture
-take it is the scheduler's, and tests may not rely on it. Once a job waits for slots, the jobs after
-it wait too, so large requests are served. Setups start as their first users reach them, after the
-setups of the fixtures they take. Tests that a failed fixture already dooms start no setups, so
-fixtures are set up only for users that can run.
+Starts what may start, in the queue's order. Tests that are reported without running wait until
+every test before them has ended, so reports keep the queue's order where the pool allows it. Tests
+start once their fixtures are set up, their claims are free, and their slots are free: exclusive
+claims need the fixture free of other users, and shared claims need it free of exclusive ones.
+Earlier waiting tests go first: fixtures that one of them wants exclusively wait for it, and
+fixtures that one of them wants at all wait for it before an exclusive claim. The order in which the
+users of a fixture take it is the scheduler's, and tests may not rely on it. Once a job waits for
+slots, the jobs after it wait too, so large requests are served. Setups start as their first users
+reach them, after the setups of the fixtures they take. Tests that a failed fixture already dooms
+start no setups, so fixtures are set up only for users that can run.
 
 Once the run is cancelled, the tests that have not started are dropped without a report, and every
 fixture whose setup was invoked is torn down once its running users have ended.
@@ -479,9 +479,9 @@ def shuffle (gen : StdGen) (xs : Array α) : Array α := Id.run do
 The scheduling order that the run's seed {name}`seed` gives tests whose group keys are
 {name}`keys`, as the tests' positions. Tests with equal keys form a group, and each group's tests
 stand together. Each group has a generator of its own, derived from the seed and the group's key:
-its first draw places the group among the others, and its later draws order the group's tests. A
-group's place among the others and the order of its tests therefore depend on the seed, its key,
-and its own tests alone.
+its first draw ranks the group among the others, and its later draws order the group's tests. Each
+group's rank and the order of its tests therefore depend on the seed, the group's key, and the
+group's own tests alone.
 -/
 def groupedOrder (seed : Nat) (keys : Array String) : Array Nat := Id.run do
   let mut groups : Array (String × Array Nat) := #[]

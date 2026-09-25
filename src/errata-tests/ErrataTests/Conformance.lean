@@ -1689,7 +1689,7 @@ def seededOrder : Config := { profiles := #[{ name := "default", order? := some 
 
 /--
 The checks of `exclusiveUsersNeverOverlap` for the product {name}`p` in the order that
-{name}`config` gives, and whether the shared users overlap when {name}`sharedOverlap` is true.
+{name}`config` gives, and, when {name}`sharedOverlap` is true, that the shared users overlap.
 -/
 def exclusiveUsersInOrder (p : Product) (config : Config) (sharedOverlap : Bool) : Test := do
   IO.FS.withTempDir fun dir => do
@@ -1724,7 +1724,7 @@ def exclusiveUsersInOrder (p : Product) (config : Config) (sharedOverlap : Bool)
 
 /--
 With two slots, the users of `stamped` alone among its users never overlap one another or its shared
-users, in the inventory's order and in an order drawn from a random run seed. In the inventory's
+users, in the inventory's order and in an order drawn from the run's seed. In the inventory's
 order, where the shared users stand next to each other, they run at the same time. The setup comes
 first, a prepare ends before each user starts, and the teardown comes last, once.
 -/
@@ -2030,7 +2030,9 @@ def cancelledRunTearsDown : Test := do
 
 /-! # The scheduling order -/
 
-/-- The tests of `basic.sh` that the checks of the scheduling order run, in inventory order. -/
+/--
+The tests of `basic.sh` that the checks of the scheduling order run, in the inventory's order.
+-/
 def orderTests : List String :=
   ["pass", "exclusive-a", "silent", "records", "shared-a", "uses-dependent", "unknown-records",
     "exclusive-b", "shared-b", "run-id", "greets", "verdict-fail"]

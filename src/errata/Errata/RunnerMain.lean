@@ -763,9 +763,9 @@ def Plan.reorder (plan : Plan) (positions : Array Nat) : Plan :=
     tests := positions.map (plan.tests[·]!), testSpecs := positions.map (plan.testSpecs[·]!) }
 
 /--
-The key of each test's group in the scheduling order: the names of the fixtures that the test takes,
-directly or through other fixtures, or the test's own name when it takes none, so that each test
-without fixtures is a group of its own.
+The key of each test's group in the scheduling order: the executables and names of the fixtures that
+the test takes, directly or through other fixtures, or the test's own executable and name when it
+takes none. Each test without fixtures is thus a group of its own.
 -/
 def RunContext.groupKeys (ctx : RunContext) (plan : Plan) : Array String :=
   (List.range plan.tests.size).toArray.map fun t =>
@@ -795,11 +795,11 @@ def Plan.teardownOrder (plan : Plan) (fs : Array Nat) : Array Nat := Id.run do
 
 /--
 The keys of the tests and fixtures' phases of a plan in the order of the JUnit report. The tests
-stand in the plan's order, each after the prepares of its fixtures, in the order it names them. The
-setups of the fixtures that a test needs, directly or through other fixtures, stand before the first
-test that needs them, each after the setups of the fixtures it takes, and their teardowns after the
-last such test, each before the teardowns of the fixtures it takes. A plan in the inventory's order
-gives the inventory's order.
+stand in the plan's order, each after the prepares of its fixtures, in the order it names them.
+Fixtures' setups stand before the first test that needs the fixture, directly or through other
+fixtures, each after the setups of the fixtures it takes. Their teardowns stand after the last such
+test, each before the teardowns of the fixtures it takes. A plan in the inventory's order gives the
+inventory's order.
 -/
 def RunContext.reportOrder (ctx : RunContext) (plan : Plan) : Array Result.Key := Id.run do
   let closures := plan.testSpecs.map fun spec =>
@@ -1148,12 +1148,12 @@ executable of the package. The {lit}`list` command then prints the selected test
 format. The Run phase runs the selected tests and the phases of the fixtures they use as the
 scheduler directs, in the scheduling order as far as the fixtures' claims and the slots of the pool
 allow. The scheduling order is the inventory's, or under the profile's {lit}`order = "shuffle"` the
-order that {name}`Scheduler.groupedOrder` draws from the run's seed, with the tests grouped by the
-fixtures they take. The report's JUnit order is the inventory's whatever the scheduling order. The
-pool has the slots that {lit}`--jobs` or else the profile's {lit}`jobs` gives, or else one per CPU
-available to the runner. When {name}`progress?` gives a progress display, the run
-starts it as the Run phase begins, and the dispatcher keeps it up to date. However the run ends, it
-closes the held lifelines and clears the progress display.
+order that {name}`Scheduler.groupedOrder` draws from the run's seed, in which tests that take the
+same fixtures stand together. The JUnit report lists the tests in the inventory's order whatever the
+scheduling order. The pool has the slots that {lit}`--jobs` or else the profile's {lit}`jobs` gives,
+or else one per CPU available to the runner. When {name}`progress?` gives a progress display, the
+run starts it as the Run phase begins, and the dispatcher keeps it up to date. However the run ends,
+it closes the held lifelines and clears the progress display.
 -/
 def execute (config : Config) (opts : Options) (sinks : Sinks)
     (registry : Option Registry := none) (color : Bool := false)
