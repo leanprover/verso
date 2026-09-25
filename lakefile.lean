@@ -380,12 +380,13 @@ runner's arguments follow, and the package's directory, `cwd`, where tests run a
 paths in `errata.toml` are relative to. `known` names every test executable that the package can
 have, and `ruledOut` those among them that the command line's filters ruled out before building.
 Of those, `testLibraries` are the libraries known to have tests, and `addedOut` the executables that
-`errata.toml` adds.
+`errata.toml` adds. The selection is partial when some executable is ruled out or when `someTests`
+says that the executables run only some of their tests.
 -/
 private def workspaceJson (needs : Array (String × String))
     (executables : Array LibraryExecutable) (added : Array AddedExecutable)
     (cwd : System.FilePath) (errataDir : String) (warnings : Array String) (invocation : String)
-    (known ruledOut testLibraries addedOut : Array String) : Lean.Json :=
+    (known ruledOut testLibraries addedOut : Array String) (someTests : Bool) : Lean.Json :=
   let added := added.map fun e =>
     Lean.Json.mkObj [("name", Lean.Json.str e.name),
       ("command", Lean.Json.arr (e.command.map Lean.Json.str)),
@@ -410,7 +411,7 @@ private def workspaceJson (needs : Array (String × String))
     ("ruledOut", Lean.toJson ruledOut),
     ("skippedTestLibraries", Lean.toJson testLibraries),
     ("skippedExecutables", Lean.toJson addedOut)
-  ] ++ (if ruledOut.isEmpty then [] else [("partial-selection", Lean.Json.bool true)])
+  ] ++ (if ruledOut.isEmpty && !someTests then [] else [("partial-selection", Lean.Json.bool true)])
 
 /--
 How the Errata driver (the `Errata.run` script in this file) should be invoked: the command that
@@ -732,7 +733,7 @@ script run (args) do
         -- Tests run from the root package's directory, where `lake test` runs.
         let content := (workspaceJson needs executables addedExes rootDir errataDir.toString
           driverWarnings withArgs candidates ruledOut skippedTestLibs
-          (added.map (·.name) |>.filter ruledOut.contains)).pretty ++ "\n"
+          (added.map (·.name) |>.filter ruledOut.contains) !interpreted.isEmpty).pretty ++ "\n"
         addPureTrace (← IO.FS.readFile configFile) "config.json"
         addPureTrace content "workspace.json"
         buildFileUnlessUpToDate' (text := true) workspaceFile do
