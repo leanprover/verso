@@ -7,8 +7,9 @@ Author: David Thrane Christiansen
 /-
 Tests that the conformance suite runs through this library's own test executable, each playing a part
 that the suite's checks ask of every test executable: one that fails or throws when a setting asks it
-to, and one that takes a setting without a default. `errata.toml` gives that setting a value, so the
-tests pass in an ordinary run.
+to, one that takes a setting without a default, and one that leaves a process running when a
+setting names it. `errata.toml` gives the setting without a default a value, so the tests pass in an
+ordinary run.
 -/
 module
 
@@ -49,5 +50,22 @@ def printsRunId : Test := do
 @[test]
 def needsSetting (value : required) : Test := do
   IO.println s!"received {value}"
+
+/-- A text that names the processes that a test leaves running, so that a check can find them. -/
+@[setting, expose]
+def marker : Setting where
+  type := String
+  fromString s := some s
+
+/--
+With a marker, starts a process whose command line holds the marker and that runs for five minutes,
+and waits for it; without one, passes at once.
+-/
+@[test]
+def lingers (marker? : Option marker) : Test := do
+  let some m := marker? | return
+  let child ← IO.Process.spawn
+    { cmd := "sh", args := #["-c", s!"sleep 300; : errata-conformance-{m}"] }
+  discard child.wait
 
 end ErrataTests.Roles

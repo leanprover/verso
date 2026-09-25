@@ -8,7 +8,8 @@ Author: David Thrane Christiansen
 The conformance suite: the runner, driven as a library, runs test executables and reports how each of
 their tests ended. The checks that apply to any test executable run against the products of every
 harness: a script that speaks the protocol by itself, a script on Errata's shell harness, a pytest
-suite on Verso's pytest harness, and this library's own Lean test executable. The checks that need a
+suite on Verso's pytest harness, this library's own Lean test executable, and this library's tests
+through the interpreted product of the Lean harness. The checks that need a
 scripted behavior, such as a test that sleeps forever or contradicts its exit code, run against the
 two shell scripts. Each test executable under `fixtures/harness` shows the runner one way that a test
 can end.
@@ -195,8 +196,37 @@ def leanProduct : Product where
   needed := "ErrataTests.Roles.required"
   printsRunId := { test := "ErrataTests.Roles.printsRunId" }
 
+/-- The built interpreted product of the Lean harness. -/
+def interpreter : System.FilePath := ".lake/build/bin/errata-interpret"
+
+/--
+The search path for the interpreted product, relative to the workspace, where the tests run: this
+workspace's build directory and those of the packages that the tests import.
+-/
+def interpreterLeanPath : String :=
+  System.SearchPath.separator.toString.intercalate <|
+    ".lake/build/lib/lean" :: ["plausible", "Cli"].map (s!".lake/packages/{·}/.lake/build/lib/lean")
+
+/--
+This library's tests through the interpreted product of the Lean harness, which imports the modules
+that hold the tests that play the roles.
+-/
+def interpretedProduct : Product := { leanProduct with
+  name := "interpreted"
+  exe := {
+    name := "ErrataTests"
+    command := #[interpreter.toString, "ErrataTests", "ErrataTests.Roles", "ErrataTests.Settings",
+      "--"]
+    env := #[("LEAN_PATH", interpreterLeanPath)]
+  }
+  unavailable := do
+    if ← interpreter.pathExists then return none
+    return some s!"the interpreted product is not built at {interpreter}"
+}
+
 /-- Every product. -/
-def products : Array Product := #[basicProduct, errataShProduct, pytestProduct, leanProduct]
+def products : Array Product :=
+  #[basicProduct, errataShProduct, pytestProduct, leanProduct, interpretedProduct]
 
 /-- The products whose tests stage the scripted behaviors. -/
 def scriptedProducts : Array Product := products.filter (·.scripted)
@@ -231,7 +261,8 @@ def Product.invoke (p : Product) (args : Array String) : IO IO.Process.Output :=
   let some cmd := p.exe.command[0]? | throw <| IO.userError "the command is empty"
   IO.Process.output {
     cmd, args := p.exe.command.extract 1 p.exe.command.size ++ args
-    env := #[("ERRATA_DIR", some (← errataDir).toString), ("LEAN_ABORT_ON_PANIC", some "1")]
+    env := #[("ERRATA_DIR", some (← errataDir).toString), ("LEAN_ABORT_ON_PANIC", some "1")] ++
+      p.exe.env.map fun (k, v) => (k, some v)
   }
 
 /-- Runs {name}`check` against each product in {name}`ps`, as a named result per product. -/
@@ -1405,6 +1436,50 @@ def runnerLifeline : Test := do
     assertContains "standard input closed" err
     assertTrue left.isEmpty s!"processes survived: {left}"
     assertTrue (!(← json.pathExists)) "no report was written"
+
+/--
+Killing the process group of the driver, as the editor widget's cancel does, leaves no process of
+the run: the runner is a member of the group and dies with it, and the interpreted test executable,
+in a session of its own, ends its own group, with the process that its test started, when its
+lifeline from the runner closes. A shell that starts the runner stands in for the driver.
+-/
+@[test]
+def killingTheDriversGroupEndsTheRun : Test := do
+  unless ← runnerExe.pathExists do fail s!"the runner is not built at {runnerExe}"
+  interpretedProduct.check
+  let marker := toString (← IO.rand 0 (2 ^ 30))
+  IO.FS.withTempDir fun dir => do
+    let (config, workspace) ← ({ executables := #[interpretedProduct.exe] } : Config).write dir
+    let driver ← IO.Process.spawn {
+      cmd := "bash"
+      args := #["-c", "\"$@\"; exit $?", "driver", runnerExe.toString, config.toString,
+        workspace.toString, "--filter", "name(=ErrataTests.Roles.lingers)",
+        "--set", s!"ErrataTests.Roles.marker={marker}"]
+      stdin := .piped, stdout := .piped, stderr := .piped, setsid := true
+      env := #[("ERRATA_LIFELINE", some "1")]
+    }
+    let outTask ← IO.asTask (prio := .dedicated) driver.stdout.readToEnd
+    let errTask ← IO.asTask (prio := .dedicated) driver.stderr.readToEnd
+    let mut started := false
+    for _ in [0 : 600] do
+      if !(← processesWith s!"errata-conformance-{marker}").isEmpty then
+        started := true
+        break
+      IO.sleep 50
+    driver.kill
+    discard driver.wait
+    let mut left := ""
+    for _ in [0 : 200] do
+      left ← processesWith s!"errata-conformance-{marker}"
+      if left.isEmpty then break
+      IO.sleep 50
+    unless left.isEmpty do
+      discard <| IO.Process.output
+        { cmd := "pkill", args := #["-9", "-f", s!"errata-conformance-{marker}"] }
+    discard <| IO.wait outTask
+    let err := (← IO.wait errTask).toOption.getD ""
+    assertTrue started s!"the test started its process; the runner wrote:\n{err}"
+    assertTrue left.isEmpty s!"processes survived: {left}"
 
 /--
 A test executable of the Lean harness, run by hand without {lit}`ERRATA_LIFELINE` and with
