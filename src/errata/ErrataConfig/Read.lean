@@ -276,9 +276,11 @@ def inherit (profiles : Array Profile) : CheckM (Array Profile) := do
           broken := true
           break
       if chain.any (·.name == parent.name) then
-        if let some (_, r) := p.inherits? then
-          let names := (chain.map (·.name)).toList ++ [parent.name]
-          problem r s!"the profiles inherit in a cycle: {" → ".intercalate names}"
+        -- Each profile on the cycle reports it; a profile that only leads into it is left out.
+        if parent.name == p.name then
+          if let some (_, r) := p.inherits? then
+            let names := (chain.map (·.name)).toList ++ [parent.name]
+            problem r s!"the profiles inherit in a cycle: {" → ".intercalate names}"
         broken := true
         break
       chain := chain.push parent
@@ -355,8 +357,10 @@ def parse (text : String) : IO (Except (Array String) File) := do
     | .error log => return .error (← log.toList.toArray.mapM fun m => m.toString)
   let (file, problems) := ((readFile table).run ictx.fileMap).run #[]
   if problems.isEmpty then return .ok file
-  let sorted := problems.qsort fun a b =>
-    (a.ref.getPos?.map (·.byteIdx)).getD 0 < (b.ref.getPos?.map (·.byteIdx)).getD 0
-  return .error (sorted.map (·.render ictx.fileMap))
+  -- Problems at the same position stay in the order they were found.
+  let position (p : Problem) := (p.ref.getPos?.map (·.byteIdx)).getD 0
+  let sorted := problems.zipIdx.qsort fun (a, i) (b, j) =>
+    position a < position b || (position a == position b && i < j)
+  return .error (sorted.map (·.1.render ictx.fileMap))
 
 end ErrataConfig

@@ -24,9 +24,16 @@ public def main (args : List String) : IO UInt32 := do
       return 2
   let file : System.FilePath := file
   let out : System.FilePath := out
-  let result ←
-    if ← file.pathExists then parse (← IO.FS.readFile file)
-    else pure (.ok {})
+  let text? ←
+    if ← file.pathExists then
+      try pure (some (← IO.FS.readFile file))
+      catch e =>
+        IO.eprintln s!"errata-config: cannot read {file}: {e}"
+        return 1
+    else pure none
+  let result ← match text? with
+    | some text => parse text
+    | none => pure (.ok {})
   match result with
   | .ok f =>
     if let some parent := out.parent then IO.FS.createDirAll parent

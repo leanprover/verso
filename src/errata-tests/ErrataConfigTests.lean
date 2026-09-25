@@ -116,7 +116,8 @@ def reportsStructuralProblems : Test := do
       "[[profile.default.override]]\nfilter = \"all()\"\njobs = 2\n",
       "errata.toml:3:7: unknown key 'jobs' in an override of the profile 'default'"),
     ("a repeated executable",
-      "[[executable]]\nname = \"x\"\ncommand = [\"a\"]\n[[executable]]\nname = \"x\"\ncommand = [\"b\"]\n",
+      "[[executable]]\nname = \"x\"\ncommand = [\"a\"]\n\
+        [[executable]]\nname = \"x\"\ncommand = [\"b\"]\n",
       "the [[executable]] name 'x' is used more than once"),
     ("a needs table with other keys",
       "[profile.default.settings]\nx = { needs = \"t\", other = \"u\" }\n",
@@ -129,6 +130,33 @@ def reportsStructuralProblems : Test := do
       "the setting 'A.b' is given twice")]
   for (name, text, message) in cases do
     result name do assertContains message (← problemsOf text)
+
+/--
+Problems are reported in the order of the file, and problems at one position in the order they
+were found. A cycle is named by its own profiles, each of which reports it, and a profile that only
+leads into it adds nothing.
+-/
+@[test]
+def reportsProblemsInOrder : Test := do
+  result "a bare [[executable]]" do
+    assertBEq "errata.toml:1:0: an [[executable]] needs a 'name'\n\
+      errata.toml:1:0: an [[executable]] needs a 'command'" (← problemsOf "[[executable]]\n")
+  result "a profile that leads into a cycle" do
+    let text := "[profile.b]\ninherits = \"c\"\n[profile.c]\ninherits = \"d\"\n\
+      [profile.d]\ninherits = \"c\"\n"
+    assertBEq "errata.toml:4:11: the profiles inherit in a cycle: c → d → c\n\
+      errata.toml:6:11: the profiles inherit in a cycle: d → c → d" (← problemsOf text)
+
+/-- The built `errata-config` reports a file that it cannot read, and exits with `1`. -/
+@[test]
+def configBinaryReportsUnreadableFile : Test := do
+  let exe : System.FilePath := ".lake/build/bin/errata-config"
+  unless ← exe.pathExists do fail s!"errata-config is not built at {exe}"
+  IO.FS.withTempDir fun dir => do
+    let out ← IO.Process.output
+      { cmd := exe.toString, args := #[dir.toString, (dir / "config.json").toString] }
+    assertBEq 1 out.exitCode
+    assertContains s!"errata-config: cannot read {dir}:" out.stderr
 
 /-- Compound durations such as `2m30s` reach the elaborated file as their totals in milliseconds. -/
 @[test]
@@ -149,7 +177,8 @@ def compoundDurations : Test := do
     result (if text.isEmpty then "the empty string" else text) do
       assertBEq none (ErrataConfig.durationMs? text)
   result "a very large number" do
-    assertBEq (some (99999999999999999999 * 1000)) (ErrataConfig.durationMs? "99999999999999999999s")
+    assertBEq (some (99999999999999999999 * 1000))
+      (ErrataConfig.durationMs? "99999999999999999999s")
 
 /--
 Errors in filters are reported at the line and column in the file of the character where they were
