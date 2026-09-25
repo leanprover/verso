@@ -269,8 +269,9 @@ def globCases : Test := do
       assertBEq none (globMatches glob "")
 
 /--
-Globs match in time proportional to the pattern and the string, so patterns with many `*` against
-long strings that almost match finish at once.
+A glob matches in time bounded by the product of the pattern's length and the string's, and linear
+in the string for a given pattern, so patterns with many `*` against long strings that almost match
+finish at once.
 -/
 @[test]
 def globMatchingIsLinear : Test := do
