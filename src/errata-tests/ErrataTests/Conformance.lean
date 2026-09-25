@@ -271,6 +271,8 @@ def pytestProduct : Product where
     usesThreaded := (pytestTest "test_uses_threaded").test
     failingUser := (pytestTest "test_fails_with_fixture").test
     threadedTest? := none }
+  -- Each invocation starts `uv`, Python, and a pytest session, which take over a second under load.
+  startMs := 2000
 
 /-- The built test executable of this library, a product of the Lean harness. -/
 def leanExe : System.FilePath := ".lake/build/bin/errata-test-ErrataTests"
