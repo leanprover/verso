@@ -358,7 +358,7 @@ def split_chain(argv):
 
 def main(argv):
     """
-    Carries out the invocation that the arguments give, or each invocation of a chain whose
+    Performs the invocation that the arguments give, or each invocation of a chain whose
     invocations are separated by `;` arguments, in order, stopping at the first that exits
     non-zero, and returns the exit code of the last that ran. The pytest arguments precede the
     first invocation and serve them all.
@@ -386,7 +386,7 @@ def main(argv):
 
 
 def invoke(pytest_args, link):
-    """Carries out one invocation, and returns its exit code."""
+    """Performs one invocation, and returns its exit code."""
     mode, rest = (link[0], link[1:]) if link else ("", [])
     if mode == "errata-list" and len(rest) == 1:
         return list_tests(pytest_args, rest[0])

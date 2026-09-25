@@ -226,7 +226,7 @@ def chainLinks (args : List String) : List (List String) :=
   done ++ [last]
 
 /--
-Carries out the invocations of a chain in order with {name}`dispatch`, stopping at the first that
+Performs the invocations of a chain in order with {name}`dispatch`, stopping at the first that
 exits non-zero, and returns the exit code of the last that ran.
 -/
 def dispatchChain (entries : Array TestEntry) (links : List (List String))
@@ -291,7 +291,7 @@ input, output, and error. This mode belongs to the Lean harness, and
 executable writes a message to standard error and exits with {lit}`2`.
 
 Several {lit}`errata-list` and {lit}`errata-run` invocations may be chained, each separated by a
-{lit}`;` argument. The executable carries them out in order, stops at the first that exits non-zero,
+{lit}`;` argument. The executable performs them in order, stops at the first that exits non-zero,
 and exits with the status of the last that ran.
 
 With any other arguments, the executable prints its usage and exits with {lit}`2`.

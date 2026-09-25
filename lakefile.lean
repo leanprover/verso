@@ -722,7 +722,7 @@ private def loadErrataToml (ws : Workspace) : IO (Except (Array String) ErrataTo
     return .error (sorted.map (renderTomlProblem ictx.fileMap))
   return .ok { config, text, fileMap := ictx.fileMap, needs }
 
-/-- A filter's text and position as the runner's configuration carries them. -/
+/-- A filter's text and position as the runner's configuration holds them. -/
 private def filterJson (f : TomlFilter) : Lean.Json :=
   Lean.Json.mkObj [("text", Lean.Json.str f.text), ("file", Lean.Json.str "errata.toml"),
     ("line", Lean.toJson f.line), ("col", Lean.toJson f.col)]

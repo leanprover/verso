@@ -1814,7 +1814,7 @@ private def greetsEntry : TestM TestEntry := do
   return e
 
 /--
-A test's entry carries its tags and the settings it takes, in the order of its parameters, each with
+A test's entry lists its tags and the settings it takes, in the order of its parameters, each with
 its description and its declared default.
 -/
 @[test]

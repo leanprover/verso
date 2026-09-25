@@ -126,7 +126,7 @@ structure Result where
   /-- A command line that runs the test again by hand, for a test that did not pass. -/
   reproduce? : Option String := none
   /--
-  The settings that the test received, in the order it received them. The test's own result carries
+  The settings that the test received, in the order it received them. The test's own result includes
   them.
   -/
   settings : Array (String × String) := #[]

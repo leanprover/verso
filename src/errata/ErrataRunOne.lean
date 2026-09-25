@@ -18,7 +18,7 @@ Evaluates the test named by {lean}`declName`, defined in {lean}`module`, to a te
 discovery builds one.
 
 The entry's action is the definition that {lit}`@[test]` compiled beside the test, reached through
-{lit}`import all` of its module. The entry's settings carry their declared defaults, read from the
+{lit}`import all` of its module. The entry's settings hold their declared defaults, read from the
 settings' values. The entry's package name is empty.
 -/
 unsafe def evalTestEntry (module declName : Name) : CoreM Errata.TestEntry :=

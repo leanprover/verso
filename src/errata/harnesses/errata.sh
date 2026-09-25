@@ -282,7 +282,7 @@ _errata_known_test() {
   return 1
 }
 
-# Carries out one invocation, and returns its exit status.
+# Performs one invocation, and returns its exit status.
 _errata_invoke() {
   case "${1:-}" in
     errata-list)
@@ -364,7 +364,7 @@ _errata_invoke() {
   esac
 }
 
-# The main of a test executable. It carries out the invocation that its arguments give, or each
+# The main of a test executable. It performs the invocation that its arguments give, or each
 # invocation of a chain whose invocations are separated by a ';' argument, in order, stopping at the
 # first that exits non-zero, and exits with the status of the last that ran. `errata-list` writes the
 # inventory: the settings that `errata_settings` declares, then the tests that `errata_tests`

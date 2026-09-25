@@ -22,7 +22,7 @@ record() {
 # `needs-setting` one that nothing gives a value.
 common='{"name":"Errata.seed","optional":false},{"name":"marker","optional":true},{"name":"note","optional":true}'
 
-# Carries out one invocation and exits with its status.
+# Performs one invocation and exits with its status.
 invoke() {
 mode="$1"
 out="$2"

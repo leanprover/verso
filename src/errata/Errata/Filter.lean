@@ -8,7 +8,7 @@ Author: David Thrane Christiansen
 Filters over the inventory: the predicates `name(…)`, `file(…)`, `exe(…)`, and `tag(…)`, the
 constants `all()` and `none()`, and the operators `|`, `&`, `\`, and `!`. A filter is parsed in three
 layers: the expression, the text of each predicate's matcher with its escapes, and, for a glob
-matcher, the glob. Every node of a parsed filter carries its span in the filter's text.
+matcher, the glob. Every node of a parsed filter has its span in the filter's text.
 -/
 module
 
@@ -379,7 +379,7 @@ def Matcher.matches (m : Matcher) (s : String) : Bool :=
   | .contains => (s.find? m.text).isSome
   | .glob => m.glob.matches s
 
-/-- A parsed filter. Every node carries its span in the filter's text. -/
+/-- A parsed filter. Every node has its span in the filter's text. -/
 inductive Expr where
   /-- A predicate applied to a matcher. -/
   | atom (predicate : Predicate) (matcher : Matcher) (span : Span)

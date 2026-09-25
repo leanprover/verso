@@ -18,7 +18,7 @@ errata_tests() {
 }
 
 # Runs one case. Its output streams to the test's output as it arrives and is also kept, so that a
-# failure's verdict can carry it as its detail.
+# failure's verdict can include it as its detail.
 errata_run_test() {
   local log status output
   log=$(mktemp)

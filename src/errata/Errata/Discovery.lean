@@ -314,9 +314,9 @@ syntax testModules := ident ("." "*")?
 named modules, and expands to the array of {name}`TestEntry` values that run them. A name with a
 trailing {lit}`.*` also names every imported module below it. Even if a module is named more than
 once, its tests are not duplicated. Each module must be imported so its tests are reachable. Each
-test is named by its fully qualified declaration name, and carries its tags and the settings it
-takes, each with its description and a reference to its declared default. Unsafe tests are wrapped
-in {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
+test is named by its fully qualified declaration name, and its entry lists its tags and the settings
+it takes, each with its description and a reference to its declared default. Unsafe tests are
+wrapped in {kw (of := Lean.Parser.Term.unsafe)}`unsafe`.
 -/
 syntax (name := getAllTests) "getAllTests%" str testModules* : term
 

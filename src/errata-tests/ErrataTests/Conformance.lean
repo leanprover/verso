@@ -819,7 +819,7 @@ def defaultFilterAndCommandLine : Test := do
     assertBEq "--filter:9: expected ')' to end the matcher" issue.message
 
 /--
-Once the inventory is known, a `tag(…)` that no test carries, an `exe(…)` that names no test
+Once the inventory is known, a `tag(…)` that matches no test's tag, an `exe(…)` that names no test
 executable, and a filter that selects no test are warnings at their places, which `--wfail` makes
 errors. The configuration's filters draw them only in a run of every test executable.
 -/
