@@ -164,6 +164,13 @@ lean_exe «errata-run-one» where
   root := `ErrataRunOne
   supportInterpreter := true
 
+-- The interpreted product of the Lean harness, which imports test modules and runs their tests with
+-- no generated main and no link. The driver's `--interpreted` flag runs tests through it.
+lean_exe «errata-interpret» where
+  srcDir := "src/errata"
+  root := `ErrataInterpret
+  supportInterpreter := true
+
 -- The runner, which lists and runs the tests of the test executables that the driver builds.
 lean_exe «errata-runner» where
   srcDir := "src/errata"
@@ -344,6 +351,27 @@ private def addedExecutables (config : Lean.Json) : Array AddedExecutable :=
              line := jsonNat e "line", col := jsonNat e "col" }
   | _ => #[]
 
+/-- A library's test executable, as `workspace.json` records it. -/
+private structure LibraryExecutable where
+  name : String
+  command : Array String
+  env : Array (String × String) := #[]
+
+/-! ## The interpreted product -/
+
+/--
+The test executable of a library whose tests run through the interpreted product at `interpreter`:
+the interpreter with the library's test modules among `modules`, then `--`, with the workspace's
+search path in its environment.
+-/
+private def interpretedExecutable (ws : Workspace) (interpreter : System.FilePath) (name : String)
+    (libModules modules : Array Lean.Name) : LibraryExecutable where
+  name
+  command := #[interpreter.toString] ++
+    (modules.filter libModules.contains |>.map (·.toString)) ++ #["--"]
+  env := #[("LEAN_PATH", ws.augmentedLeanPath.toString),
+    ("LEAN_SYSROOT", ws.lakeEnv.lean.sysroot.toString)]
+
 /--
 What the workspace contributes to the run, `.lake/errata/workspace.json`, as JSON: the path of each
 needed target's result, the libraries' test executables and the executables `added` that
@@ -355,7 +383,7 @@ Of those, `testLibraries` are the libraries known to have tests, and `addedOut` 
 `errata.toml` adds.
 -/
 private def workspaceJson (needs : Array (String × String))
-    (executables : Array (String × System.FilePath)) (added : Array AddedExecutable)
+    (executables : Array LibraryExecutable) (added : Array AddedExecutable)
     (cwd : System.FilePath) (errataDir : String) (warnings : Array String) (invocation : String)
     (known ruledOut testLibraries addedOut : Array String) : Lean.Json :=
   let added := added.map fun e =>
@@ -367,10 +395,13 @@ private def workspaceJson (needs : Array (String × String))
   Lean.Json.mkObj <| [
     ("protocol", Lean.toJson (1 : Nat)),
     ("needs", Lean.Json.mkObj (needs.toList.map fun (tgt, path) => (tgt, Lean.Json.str path))),
-    ("executables", Lean.Json.arr <| (executables.map fun (name, path) =>
-      Lean.Json.mkObj [("name", Lean.Json.str name),
-        ("command", Lean.Json.arr #[Lean.Json.str path.toString]),
-        ("cwd", Lean.Json.str cwd.toString)]) ++ added),
+    ("executables", Lean.Json.arr <| (executables.map fun e =>
+      Lean.Json.mkObj <| [("name", Lean.Json.str e.name),
+        ("command", Lean.Json.arr (e.command.map Lean.Json.str)),
+        ("cwd", Lean.Json.str cwd.toString)] ++
+        (if e.env.isEmpty then []
+          else [("env", Lean.Json.mkObj (e.env.toList.map fun (k, v) => (k, Lean.Json.str v)))]))
+      ++ added),
     ("errataDir", Lean.Json.str errataDir),
     ("warnings", Lean.toJson warnings),
     ("invocation", Lean.Json.str invocation),
@@ -422,7 +453,8 @@ private def buildFailedCode : UInt32 := 101
 /--
 What the runner's planning mode says about the command line: whether it printed the usage text, the
 profile, the test executables that the filters do not rule out, whether the targets of the
-profile's settings are needed, and whether the phases are named as they begin.
+profile's settings are needed, whether the phases are named as they begin, and the modules whose
+tests run through the interpreted product.
 -/
 private structure Plan where
   help : Bool
@@ -430,6 +462,7 @@ private structure Plan where
   executables : Array String
   needs : Bool
   phases : Bool
+  interpreted : Array Lean.Name
 
 /-- The plan that the runner wrote as JSON. -/
 private def Plan.ofJson (j : Lean.Json) : Plan where
@@ -438,6 +471,7 @@ private def Plan.ofJson (j : Lean.Json) : Plan where
   executables := (j.getObjValAs? (Array String) "executables").toOption.getD #[]
   needs := (j.getObjValAs? Bool "needs").toOption.getD true
   phases := (j.getObjValAs? Bool "phases").toOption.getD false
+  interpreted := (j.getObjValAs? (Array String) "interpreted").toOption.getD #[] |>.map (·.toName)
 
 -- The script's name is the one `driverInvocation` looks up.
 @[test_driver]
@@ -551,13 +585,31 @@ script run (args) do
   if plan.phases then
     IO.println "== Discovery"
     (← IO.getStdout).flush
-  let addedExes := added.filter (plan.executables.contains ·.name)
-  let libs := ws.root.leanLibs.filter (plan.executables.contains <| libName ·)
-  let ruledOut := candidates.filter (!plan.executables.contains ·)
+  -- Under `--interpreted`, the libraries that hold the named modules are the selection, and no
+  -- executable that `errata.toml` adds is. Each named module belongs to a library of the root
+  -- package that the filters leave in.
+  let interpreted := plan.interpreted
+  for m in interpreted do
+    let some mod := ws.findModule? m
+      | IO.eprintln s!"error: no library in the workspace holds the module '{m}'"
+        return setupErrorCode
+    unless mod.pkg.baseName == ws.root.baseName && plan.executables.contains (libName mod.lib) do
+      IO.eprintln s!"error: no selected library holds the module '{m}' that --interpreted names"
+      return setupErrorCode
+  let libs :=
+    if interpreted.isEmpty then ws.root.leanLibs.filter (plan.executables.contains <| libName ·)
+    else ws.root.leanLibs.filter fun lib =>
+      interpreted.any fun m => (ws.findModule? m).any (·.lib.name == lib.name)
+  let addedExes :=
+    if interpreted.isEmpty then added.filter (plan.executables.contains ·.name) else #[]
+  let selected := libs.map libName ++ addedExes.map (·.name)
+  let ruledOut := candidates.filter (!selected.contains ·)
   -- Libraries that the filters ruled out are test libraries when a module of theirs that an earlier
   -- build left on disk records a test. Nothing is built for this check, so the summary's count
-  -- covers only libraries whose modules an earlier build left on disk.
-  let ruledOutLibs := ws.root.leanLibs.filter (ruledOut.contains <| libName ·)
+  -- covers only libraries whose modules an earlier build left on disk. Under `--interpreted`, which
+  -- runs a few tests soon after an edit, no library is checked.
+  let ruledOutLibs :=
+    if interpreted.isEmpty then ws.root.leanLibs.filter (ruledOut.contains <| libName ·) else #[]
   let ruledOutMods ← try
       runBuild do
         let mut found : Array (String × Array System.FilePath) := #[]
@@ -616,10 +668,13 @@ script run (args) do
   -- Each library with tests gets a test executable, whose main is generated in its package's Lake
   -- directory. The main changes only when the library's test modules do, so Lake's own traces
   -- rebuild what depends on it.
+  -- Under `--interpreted`, a library's tests are those of its modules that the flag names.
   let testLibs := libMods.filterMap fun (lib, mods) =>
-    let own := mods.filter (testMods.contains ·)
+    let own := mods.filter fun m =>
+      testMods.contains m && (interpreted.isEmpty || interpreted.contains m)
     if own.isEmpty then none else some (lib, own)
-  for (lib, mods) in testLibs do
+  -- The interpreted product needs no generated main.
+  for (lib, mods) in if interpreted.isEmpty then testLibs else #[] do
     let file := Lean.modToFilePath (errataRunnerSrcDir lib.pkg) (errataMainModule lib) "lean"
     let src := mainSource lib.pkg.prettyName mods
     if let some parent := file.parent then IO.FS.createDirAll parent
@@ -638,19 +693,35 @@ script run (args) do
     | none => IO.FS.realPath self.dir
   let rootDir ← IO.FS.realPath ws.root.dir
   let workspaceFile := errataOut / "workspace.json"
+  let some interpreterExe := self.findLeanExe? `«errata-interpret»
+    | IO.eprintln "error: the package that defines the Errata driver has no errata-interpret"
+      return 1
   -- Build the test executables and every target that a setting of the selected profile needs, then
   -- `workspace.json`. Lake writes it again when `config.json`, the discovery results, the
   -- executables, or a needed target change: each needed target's trace flows into the continuation
   -- that writes the file.
   try
     runBuild do
-      let exeJobs ← testLibs.mapM fun (lib, _) => (lib.facet `errataExe).fetch
+      -- Each library's test executable, or under `--interpreted` the interpreted product with the
+      -- library's modules.
+      let libExesJob : Job (Array LibraryExecutable) ←
+        if interpreted.isEmpty then do
+          let exeJobs ← testLibs.mapM fun (lib, _) => (lib.facet `errataExe).fetch
+          (Job.collectArray exeJobs).mapM fun exePaths => do
+            let mut out : Array LibraryExecutable := #[]
+            for ((lib, _), path) in testLibs.zip exePaths do
+              let command := #[(← IO.FS.realPath path).toString]
+              out := out.push { name := libName lib, command }
+            return out
+        else do
+          let interpreterJob ← interpreterExe.exe.fetch
+          interpreterJob.mapM fun path => do
+            let path ← IO.FS.realPath path
+            return testLibs.map fun (lib, mods) =>
+              interpretedExecutable ws path (libName lib) mods interpreted
       let needJobs ← needed.mapM fun (_, spec) => spec.query .text
       (Job.collectArray needJobs).bindM fun needValues => do
-      (Job.collectArray exeJobs).mapM fun exePaths => do
-        let mut executables := #[]
-        for ((lib, _), path) in testLibs.zip exePaths do
-          executables := executables.push (libName lib, ← IO.FS.realPath path)
+      libExesJob.mapM fun executables => do
         let needs := needed.zipWith (fun (tgt, _) value => (tgt, value)) needValues
         -- Tests run from the root package's directory, where `lake test` runs.
         let content := (workspaceJson needs executables addedExes rootDir errataDir.toString

@@ -55,13 +55,22 @@ rewrites golden files when it is {lit}`true`. The runner passes it for {lit}`--u
 def harnessSettings : List String := ["updateGolden"]
 
 /--
-The context for a test run with the given settings. The harness's own setting configures it. Tests
-reach their helpers through this test executable's {lit}`errata-helper` mode.
+The command that starts this test executable: {name}`invocation` when it is non-empty, and otherwise
+the path of the running program.
 -/
-def contextOf (settings : Array (String × String)) : IO TestContext := do
+def selfCommand (invocation : Array String) : IO (Array String) := do
+  if invocation.isEmpty then return #[(← IO.appPath).toString] else return invocation
+
+/--
+The context for a test run with the given settings. The harness's own setting configures it. Tests
+reach their helpers through this test executable's {lit}`errata-helper` mode, which
+{name}`invocation` starts as {name}`selfCommand` describes.
+-/
+def contextOf (settings : Array (String × String)) (invocation : Array String := #[]) :
+    IO TestContext := do
   let lookup (name : String) : Option String := (settings.findRev? (·.1 == name)).map (·.2)
   let ctx ← mkContext (updateGolden := lookup "updateGolden" == some "true")
-  return { ctx with helperCommand := some #[(← IO.appPath).toString, "errata-helper"] }
+  return { ctx with helperCommand := some ((← selfCommand invocation).push "errata-helper") }
 
 /--
 The settings that the tests in {name}`entries` take, each once, in the order in which the entries
@@ -196,10 +205,11 @@ def runHelperNamed (helpers : Array Helper) (name : String) (args : List String)
 Carries out one invocation of a test executable, and returns its exit code. {lit}`errata-list`
 writes the inventory; {lit}`errata-run` runs the named test, with the settings that follow its name;
 {lit}`errata-helper` runs the named helper from {name}`helpers` with the arguments that follow its
-name; anything else prints the usage message.
+name; anything else prints the usage message. A test reaches its helpers through
+{name}`invocation`, as {name}`contextOf` describes.
 -/
-def dispatch (entries : Array TestEntry) (args : List String) (helpers : Array Helper := #[]) :
-    IO UInt32 := do
+def dispatch (entries : Array TestEntry) (args : List String) (helpers : Array Helper := #[])
+    (invocation : Array String := #[]) : IO UInt32 := do
   match args with
   | "errata-helper" :: name :: rest => runHelperNamed helpers name rest
   | ["errata-list", outPath] =>
@@ -213,7 +223,7 @@ def dispatch (entries : Array TestEntry) (args : List String) (helpers : Array H
       | writeRecord out (.verdict { status? := some .error, message? := some s!"no test is named {name}" })
         return 1
     let settings := settingsOf rest
-    let ctx ← contextOf settings
+    let ctx ← contextOf settings invocation
     runTest entry ctx (settings.filter (!harnessSettings.contains ·.1)) out
   | _ =>
     IO.eprintln usage
@@ -230,10 +240,10 @@ Performs the invocations of a chain in order with {name}`dispatch`, stopping at 
 exits non-zero, and returns the exit code of the last that ran.
 -/
 def dispatchChain (entries : Array TestEntry) (links : List (List String))
-    (helpers : Array Helper := #[]) : IO UInt32 := do
+    (helpers : Array Helper := #[]) (invocation : Array String := #[]) : IO UInt32 := do
   let mut code := 0
   for link in links do
-    code ← dispatch entries link helpers
+    code ← dispatch entries link helpers invocation
     unless code == 0 do break
   return code
 
@@ -295,21 +305,25 @@ Several {lit}`errata-list` and {lit}`errata-run` invocations may be chained, eac
 and exits with the status of the last that ran.
 
 With any other arguments, the executable prints its usage and exits with {lit}`2`.
+
+{name}`invocation` is the command that starts this test executable, which a test's helpers run
+through. The compiled test executable leaves it empty, which stands for the program's own path; the
+interpreted product gives the interpreter with its modules.
 -/
-def main (entries : Array TestEntry) (args : List String) (helpers : Array Helper := #[]) :
-    IO UInt32 := do
+def main (entries : Array TestEntry) (args : List String) (helpers : Array Helper := #[])
+    (invocation : Array String := #[]) : IO UInt32 := do
   match args with
-  | "errata-helper" :: _ => dispatch entries args helpers
+  | "errata-helper" :: _ => dispatch entries args helpers invocation
   | _ =>
     let links := chainLinks args
     unless links.any (·.head? == some "errata-run") do
-      return ← dispatchChain entries links helpers
+      return ← dispatchChain entries links helpers invocation
     -- The read blocks on a thread of its own, which it holds for the length of the run.
     if (← IO.getEnv "ERRATA_LIFELINE") == some "1" then
       let _ ← IO.asTask (prio := .dedicated) (exitWhenStdinCloses (← IO.getStdin))
     -- The main thread, where the test runs, reads an empty standard input from here on.
     discard <| IO.setStdin (IO.FS.Stream.ofBuffer (← IO.mkRef {}))
-    let code ← try dispatchChain entries links catch e => do
+    let code ← try dispatchChain entries links helpers invocation catch e => do
       IO.eprintln s!"uncaught exception: {e}"
       pure 1
     -- The thread that reads standard input runs until the pipe closes, and a Lean program that

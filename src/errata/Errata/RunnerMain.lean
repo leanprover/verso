@@ -830,8 +830,9 @@ runs before it builds any test executable. {name}`request` is a JSON object with
 {lit}`executables`. The mode reads the command line {name}`args` as a run would, checks the profile
 and the filters, and writes to the file {name}`out` a JSON object with the command, the profile,
 the executables that the filters do not rule out by their names alone, whether the targets that
-the profile's settings need must be built, and whether the phases are named as they begin. When the
-command line asks for the usage text, the mode prints it and writes {lit}`{"help": true}`. The
+the profile's settings need must be built, whether the phases are named as they begin, and the
+modules that {lit}`--interpreted` names. When the command line asks for the usage text, the mode
+prints it and writes {lit}`{"help": true}`. The
 result is the exit code: {name}`ExitCode.ok`, or the code of the problem, which the mode reports.
 -/
 def plan (request out : String) (args : List String) : IO UInt32 := do
@@ -867,7 +868,8 @@ def plan (request out : String) (args : List String) : IO UInt32 := do
       ("profile", Json.str profile.name),
       ("executables", ToJson.toJson (candidates.filter selection.mayContain)),
       ("needs", Json.bool opts.resolvesSettings),
-      ("phases", Json.bool (opts.command == .run && opts.verbosity.showsPasses))]
+      ("phases", Json.bool (opts.command == .run && opts.verbosity.showsPasses)),
+      ("interpreted", ToJson.toJson opts.interpreted)]
     return ExitCode.ok
 
 /--

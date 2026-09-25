@@ -162,6 +162,11 @@ structure Options where
   color : ColorChoice := .auto
   /-- The format of what {lit}`list` prints. -/
   messageFormat : MessageFormat := .human
+  /--
+  The modules from {lit}`--interpreted`, as the command line writes them, whose tests run through
+  the interpreted product. The driver acts on them.
+  -/
+  interpreted : Array String := #[]
   /-- Whether the usage text was asked for. -/
   help : Bool := false
 deriving Repr, Inhabited
@@ -250,6 +255,10 @@ def optionSpecs : Array OptionSpec := #[
     help := "Match name filters and --skip patterns against whole names." },
   { long := "ignore-default-filter", group := "Selection"
     help := "Draw the tests from the whole inventory, the profile's default filter set aside." },
+  { long := "interpreted", value? := "MODULES", repeatable := true, group := "Selection"
+    help := "Run the tests of the named modules, separated by commas, through errata-interpret, \
+      which imports the built modules with no link. The libraries that hold them are the test \
+      executables. Repeatable." },
   { long := "profile", short? := "-P", value? := "NAME", group := "Configuration"
     help := "The profile of errata.toml to use (ERRATA_PROFILE, or default)." },
   { long := "set", value? := "NAME=VALUE", repeatable := true, group := "Configuration"
@@ -413,6 +422,10 @@ def applyOption (opts : Options) (g : GivenOption) : Except String Options := do
   | "skip" => return { opts with skips := opts.skips.push value }
   | "exact" => return { opts with exact := true }
   | "ignore-default-filter" => return { opts with ignoreDefaultFilter := true }
+  | "interpreted" =>
+    let modules := value.splitOn "," |>.filter (!·.isEmpty)
+    if modules.isEmpty then throw s!"{g.written} expects the names of modules"
+    return { opts with interpreted := opts.interpreted ++ modules.toArray }
   | "profile" =>
     if value.isEmpty then throw s!"{g.written} expects the name of a profile"
     return { opts with profile := value }
