@@ -67,6 +67,8 @@ structure TestDecl where
   docstring? : Option String := none
   /-- The test's tags, from the attribute's {lit}`tags` argument. -/
   tags : Array String := #[]
+  /-- The number of hardware threads that the test asks for, from the attribute's {lit}`threads`. -/
+  threads? : Option Nat := none
   /-- The settings that the test takes as parameters, in the order of its parameters. -/
   settings : Array SettingUse := #[]
   /-- The fixtures that the test takes as parameters, in the order of its parameters. -/

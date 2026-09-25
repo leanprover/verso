@@ -66,6 +66,8 @@ structure TestEntry where
   docstring? : Option String := none
   /-- The test's tags. -/
   tags : Array String := #[]
+  /-- The number of hardware threads that the test asks for, when it asks. -/
+  threads? : Option Nat := none
   /-- The settings that the test takes as parameters, in the order of its parameters. -/
   settings : Array SettingRef := #[]
   /-- The fixtures that the test takes as parameters, in the order of its parameters. -/

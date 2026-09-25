@@ -61,13 +61,14 @@ meta def testAction (decl : Name) : MetaM (Expr × Array SettingUse × Array Fix
       return (← mkLambdaFVars #[settings, fixtures] action, settingUses, fixtureUses)
 
 /--
-Records a declaration as a test with the given tags. The action that runs it is compiled, with the
-{name}`IsTest` instance in force here, into an exported definition beside it. Test executables
-reach that definition through a plain {lit}`import` of the test's module. Tests must themselves be
-exported: in a module, they are public, which a {lit}`public section` arranges. Docstrings are
-read here, from the live environment, and stored with each test.
+Records a declaration as a test with the given tags and thread request. The action that runs it is
+compiled, with the {name}`IsTest` instance in force here, into an exported definition beside it.
+Test executables reach that definition through a plain {lit}`import` of the test's module. Tests
+must themselves be exported: in a module, they are public, which a {lit}`public section` arranges.
+Docstrings are read here, from the live environment, and stored with each test.
 -/
-meta def recordTest (decl : Name) (tags : Array String := #[]) : AttrM Unit := do
+meta def recordTest (decl : Name) (tags : Array String := #[]) (threads? : Option Nat := none) :
+    AttrM Unit := do
   if (testExt.getState (← getEnv)).any (·.name == decl) then
     throwError m!"`{privateToUserName decl}` is already marked as a test"
   ensureExported decl
@@ -81,24 +82,53 @@ meta def recordTest (decl : Name) (tags : Array String := #[]) : AttrM Unit := d
   let docstring? ← findDocString? (← getEnv) decl
   modifyEnv (testExt.addEntry · {
     name := decl, run, isUnsafe := val.safety == .unsafe, file := ← getFileName, docstring?,
-    tags, settings, fixtures
+    tags, threads?, settings, fixtures
   })
 
 /--
-The arguments of the {lit}`test` attribute: {lit}`@[test]`, or {lit}`@[test (tags := a, b)]` with the
-test's tags.
+A value of a keyword argument of the {lit}`test` attribute: a name, such as a tag, or a number.
 -/
-syntax (name := test) "test" (" (" ident " := " ident,+ ")")? : attr
+syntax testArgValue := ident <|> num
 
-/-- The tags that the attribute's syntax gives. The one keyword argument is {lit}`tags`. -/
-meta def testTags (stx : Syntax) : AttrM (Array String) := do
-  match stx with
-  | `(attr| test) => return #[]
-  | `(attr| test ($key := $tags,*)) =>
-    unless key.getId == `tags do
-      throwErrorAt key m!"`@[test]` has no argument `{key.getId}`; its one argument is `tags`"
-    return (tags.getElems.map (·.getId.toString (escape := false)))
-  | _ => throwUnsupportedSyntax
+/-- A keyword argument of the {lit}`test` attribute, such as {lit}`(tags := a, b)`. -/
+syntax testArg := " (" ident " := " testArgValue,+ ")"
+
+/--
+The arguments of the {lit}`test` attribute: {lit}`@[test]`, or with keyword arguments, such as
+{lit}`@[test (tags := a, b) (threads := 4)]` for a test with two tags that asks for four hardware
+threads.
+-/
+syntax (name := test) "test" testArg* : attr
+
+/--
+The tags and the thread request that the attribute's syntax gives, from its keyword arguments
+{lit}`tags` and {lit}`threads`.
+-/
+meta def testArgs (stx : Syntax) : AttrM (Array String × Option Nat) := do
+  let `(attr| test $args:testArg*) := stx | throwUnsupportedSyntax
+  let mut tags := #[]
+  let mut threads? := none
+  for arg in args do
+    let `(testArg| ($key := $vals,*)) := arg | throwUnsupportedSyntax
+    match key.getId with
+    | `tags =>
+      for v in vals.getElems do
+        match v with
+        | `(testArgValue| $i:ident) => tags := tags.push (i.getId.toString (escape := false))
+        | _ => throwErrorAt v m!"`tags` takes names"
+    | `threads =>
+      match vals.getElems with
+      | #[v] =>
+        match v with
+        | `(testArgValue| $n:num) =>
+          if n.getNat == 0 then throwErrorAt n m!"A test asks for at least one thread"
+          threads? := some n.getNat
+        | _ => throwErrorAt v m!"`threads` takes a number"
+      | _ => throwErrorAt key m!"`threads` takes one number"
+    | other =>
+      throwErrorAt key m!"`@[test]` has no argument `{other}`; its arguments are `tags` and \
+        `threads`"
+  return (tags, threads?)
 
 /-- A synthetic syntax carrying the given source range, used to position the widget. -/
 meta def rangeSyntax [Monad m] [MonadFileMap m]
@@ -179,9 +209,9 @@ meta initialize
     -- Applied after compilation so the declaration's docstring is in the environment to capture.
     applicationTime := .afterCompilation
     add := fun decl stx kind => do
-      let tags ← testTags stx
+      let (tags, threads?) ← testArgs stx
       unless kind == AttributeKind.global do throwAttrMustBeGlobal `test kind
-      recordTest decl tags
+      recordTest decl tags threads?
       -- The widget reaches the editor through the info tree, which the language server keeps and a
       -- build leaves out, so a build skips the work of placing the widget.
       unless (← getInfoState).enabled do return
@@ -343,11 +373,14 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
         let fixtures ← test.fixtures.mapM fun use =>
           `({ name := $(quote (settingNameOf use.decl)), exclusive := $(quote use.exclusive)
               : Errata.FixtureRef })
+        let threadsStx ← match test.threads? with
+          | some n => `(some $(quote n))
+          | none => `((none : Option Nat))
         entries := entries.push <| ←
           `({ package := $(quote package), moduleName := $(quote moduleStr),
               name := $(quote testName), path := $(quote path),
               location := $(← exprToSyntax (toExpr location)),
-              docstring? := $docStx, tags := $(quote test.tags),
+              docstring? := $docStx, tags := $(quote test.tags), threads? := $threadsStx,
               settings := #[$settings,*], fixtures := #[$fixtures,*], run := $run
               : Errata.TestEntry })
   elabTerm (← `(#[$entries,*])) expectedType?

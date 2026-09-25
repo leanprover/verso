@@ -186,6 +186,9 @@ meta def settingOfParameter? (env : Environment) (type : Expr) : Option SettingU
   | .app (.const ``Option _) inner => (known inner).map ({ decl := ·, optional := true })
   | _ => (known type).map ({ decl := ·, optional := false })
 
+/-- The number of parameters that a fixture may take, one for each coercion to its value's type. -/
+meta def maxParameters : Nat := 8
+
 /-- What the parameters of a test or of a fixture may be, for messages about the others. -/
 meta def parametersMessage (what : String) : String :=
   s!"{what} parameters are settings and fixtures: `S` or `Option S` for a declaration `S` marked \
@@ -193,7 +196,7 @@ meta def parametersMessage (what : String) : String :=
 
 /--
 Classifies the parameters of {name}`decl`, a test or a fixture (as {name}`what` says), as settings
-and fixtures, with a message naming any other parameter.
+and fixtures, with a message naming any other parameter and any fixture taken twice.
 -/
 meta def classifyParameters (decl : Name) (what : String) (params : Array Expr) :
     MetaM (Array Parameter) := do
@@ -216,6 +219,9 @@ meta def classifyParameters (decl : Name) (what : String) (params : Array Expr) 
       if let some use := settingOfParameter? env ty then
         out := out.push (.setting use)
       else if let some (use, fixture) := fixtureOfParameter? env ty then
+        if out.any (fun | .fixture u _ => u.decl == use.decl | _ => false) then
+          throwError m!"`{userName}` takes the fixture `{use.decl}` twice. A {what} takes each \
+            fixture once, exclusively or shared."
         out := out.push (.fixture use fixture)
       else
         -- Parameters whose types are definitions that stand for settings name the settings
@@ -293,6 +299,8 @@ meta def fixtureAction (decl : Name) : MetaM (Expr × Array SettingUse × Array 
       throwError m!"`@[fixture]` requires the type `Errata.Fixture`, after the fixture's \
         parameters, and `{userName}` has the type{indentExpr info.type}"
     let uses ← classifyParameters decl "fixture" params
+    unless info.levelParams.isEmpty do
+      throwError m!"A fixture must not be universe polymorphic"
     let mut settingUses := #[]
     let mut fixtureUses := #[]
     for u in uses do
@@ -304,13 +312,27 @@ meta def fixtureAction (decl : Name) : MetaM (Expr × Array SettingUse × Array 
             no meaning on a fixture's parameters: tests claim fixtures, exclusively or shared. \
             Write `{use.decl}`."
         fixtureUses := fixtureUses.push use.decl
-    -- The value's type crosses between processes as the type of every value, so it is the same
+    -- A test's parameter stands for the fixture's value's type through the fixture applied to
+    -- default arguments, which needs an `Inhabited` instance for each parameter's type.
+    if params.size > maxParameters then
+      throwError m!"`{userName}` has {params.size} parameters, and a fixture takes at most \
+        {maxParameters}."
+    for p in params do
+      let ty ← inferType p
+      if (← trySynthInstance (mkApp (mkConst ``Inhabited [.succ .zero]) ty)) matches .none then
+        throwError m!"The parameter `{(← p.fvarId!.getDecl).userName}` of `{userName}` has the \
+          type{indentExpr ty}\nwhich has no `Inhabited` instance. A fixture's parameters need one, \
+          since a test's parameter stands for the fixture's value through the fixture applied to \
+          default arguments."
+    -- The value crosses between processes as a string, with the same type, printer, and parser
     -- whatever the parameters are.
     let applied := mkAppN (mkConst decl) params
-    let valueType ← whnf (mkApp (mkConst ``Errata.Fixture.type) applied)
-    if valueType.hasFVar then
-      throwError m!"The type of `{userName}`'s value depends on its parameters. A fixture's \
-        `type`, `toString`, and `fromString` are the same for every value of its parameters."
+    for field in [``Errata.Fixture.type, ``Errata.Fixture.toString, ``Errata.Fixture.fromString] do
+      let value ← whnf (mkApp (mkConst field) applied)
+      if (← instantiateMVars value).hasFVar then
+        throwError m!"The field `{field.getString!}` of `{userName}` depends on its parameters. A \
+          fixture's `type`, `toString`, and `fromString` are the same for every value of its \
+          parameters."
     let action ← mkAppM ``Fixture.runPhase #[applied, toExpr (settingNameOf decl), phase, own]
     let action ← bindParameters params uses settings fixtures (mkConst ``FixtureM)
       (mkApp (mkConst ``Option [.zero]) (mkConst ``String)) action
@@ -330,9 +352,6 @@ meta def recordFixture (decl : Name) (threads? : Option Nat) : AttrM Unit := do
   if isMarkedMeta env decl then
     throwError m!"A fixture must not be `meta`"
   ensureExported decl
-  let info ← getConstInfo decl
-  unless info.levelParams.isEmpty do
-    throwError m!"A fixture must not be universe polymorphic"
   match (env.setExporting true).find? decl with
   | some (.defnInfo _) => pure ()
   | _ =>
@@ -358,7 +377,10 @@ meta def recordFixture (decl : Name) (threads? : Option Nat) : AttrM Unit := do
 
 /--
 The arguments of the {lit}`fixture` attribute: {lit}`@[fixture]`, or
-{lit}`@[fixture (threads := N)]` for a fixture whose phases ask for {lit}`N` hardware threads.
+{lit}`@[fixture (threads := N)]` for a fixture whose phases ask for {lit}`N` hardware threads. Each
+phase runs with {lit}`LEAN_NUM_THREADS` set to its grant, one without a request, and the processes
+it starts inherit it, so a fixture whose setup runs a Lake build asks for the threads that the
+build should use.
 -/
 syntax (name := fixture) "fixture" (" (" &"threads" " := " num ")")? : attr
 
