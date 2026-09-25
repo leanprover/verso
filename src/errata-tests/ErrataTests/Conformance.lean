@@ -99,6 +99,76 @@ structure Role where
   sets : Array (String × String) := #[]
 
 /--
+The fixtures of a product and the tests that use them, which play the parts that the checks of
+fixtures ask for. Each product has fixtures of the same shapes: `stamped`, whose value is the file
+that its setting names, which its setup, prepares, and teardown stamp and its users stamp as they
+start and end; one that fails in each phase; one that takes a setting and `stamped`; one whose setup
+sleeps; and one that asks for three threads and prints its grant.
+-/
+structure FixtureRoles where
+  /-- The fixture whose value is the stamp file. -/
+  stamped : String
+  /-- The setting that names the stamp file. -/
+  stampFile : String
+  /-- The fixture whose setup fails. -/
+  setupFails : String
+  /-- The fixture whose first prepare fails. -/
+  prepareFails : String
+  /-- The fixture whose teardown fails. -/
+  teardownFails : String
+  /-- The fixture that takes the greeting and `stamped`. -/
+  dependent : String
+  /-- The fixture whose setup sleeps. -/
+  slowSetup : String
+  /-- The fixture that asks for three threads. -/
+  threaded : String
+  /-- The settings that make the failing fixtures fail. -/
+  failSets : Array (String × String) := #[]
+  /-- The settings that make the sleeping setup sleep past a short timeout. -/
+  sleepSets : Array (String × String) := #[]
+  /-- The users of `stamped` alone among its users. -/
+  exclusive : Array String
+  /-- The users of `stamped` that share it. -/
+  shared : Array String
+  /-- The user of the fixture whose setup fails. -/
+  afterSetupFailure : String
+  /-- The two users of the fixture whose first prepare fails. -/
+  afterPrepareFailure : Array String
+  /-- The user of the fixture whose teardown fails. -/
+  beforeTeardownFailure : String
+  /-- The user of the fixture that takes a setting and a fixture. -/
+  usesDependent : String
+  /-- The user of the fixture whose setup sleeps. -/
+  afterSlowSetup : String
+  /-- The user of the fixture that asks for threads. -/
+  usesThreaded : String
+  /--
+  A test that asks for three threads, shares `stamped`, stamps the file, and prints its grant,
+  when the product has one.
+  -/
+  threadedTest? : Option String := none
+
+/-- The fixtures and their users in the two shell scripts, which have the same names. -/
+def shellFixtures : FixtureRoles where
+  stamped := "stamped"
+  stampFile := "stamp-file"
+  setupFails := "setup-fails"
+  prepareFails := "prepare-fails"
+  teardownFails := "teardown-fails"
+  dependent := "dependent"
+  slowSetup := "slow-setup"
+  threaded := "threaded"
+  exclusive := #["exclusive-a", "exclusive-b"]
+  shared := #["shared-a", "shared-b"]
+  afterSetupFailure := "after-setup-failure"
+  afterPrepareFailure := #["after-prepare-failure-a", "after-prepare-failure-b"]
+  beforeTeardownFailure := "before-teardown-failure"
+  usesDependent := "uses-dependent"
+  afterSlowSetup := "after-slow-setup"
+  usesThreaded := "uses-threaded"
+  threadedTest? := some "threaded-test"
+
+/--
 A test executable that the checks run against: a product of a harness, with the tests that play the
 parts the checks ask for.
 -/
@@ -127,6 +197,8 @@ structure Product where
   printsRunId : Role
   /-- Whether the product is a shell script whose tests stage the scripted behaviors. -/
   scripted : Bool := false
+  /-- The product's fixtures and their users. -/
+  fixtures : FixtureRoles
 
 /-- A shell script in the harness directory, with the tests of `basic.sh`. -/
 def shellProduct (name script : String) : Product where
@@ -140,6 +212,7 @@ def shellProduct (name script : String) : Product where
   needed := "needed"
   printsRunId := { test := "run-id" }
   scripted := true
+  fixtures := shellFixtures
 
 /-- `basic.sh`, which speaks the protocol by itself. -/
 def basicProduct : Product := shellProduct "basic" "basic.sh"
@@ -175,6 +248,19 @@ def pytestProduct : Product where
   needsSetting := pytestTest "test_needs_setting"
   needed := "needed"
   printsRunId := pytestTest "test_run_id"
+  fixtures := {
+    shellFixtures with
+    exclusive := #[(pytestTest "test_exclusive_a").test, (pytestTest "test_exclusive_b").test]
+    shared := #[(pytestTest "test_shared_a").test, (pytestTest "test_shared_b").test]
+    afterSetupFailure := (pytestTest "test_after_setup_failure").test
+    afterPrepareFailure :=
+      #[(pytestTest "test_after_prepare_failure_a").test,
+        (pytestTest "test_after_prepare_failure_b").test]
+    beforeTeardownFailure := (pytestTest "test_before_teardown_failure").test
+    usesDependent := (pytestTest "test_uses_dependent").test
+    afterSlowSetup := (pytestTest "test_after_slow_setup").test
+    usesThreaded := (pytestTest "test_uses_threaded").test
+    threadedTest? := none }
 
 /-- The built test executable of this library, a product of the Lean harness. -/
 def leanExe : System.FilePath := ".lake/build/bin/errata-test-ErrataTests"
@@ -194,6 +280,26 @@ def leanProduct : Product where
   needsSetting := { test := "ErrataTests.Roles.needsSetting" }
   needed := "ErrataTests.Roles.required"
   printsRunId := { test := "ErrataTests.Roles.printsRunId" }
+  fixtures := {
+    stamped := "ErrataTests.Resources.stamped"
+    stampFile := "ErrataTests.Resources.stampFile"
+    setupFails := "ErrataTests.Resources.setupFails"
+    prepareFails := "ErrataTests.Resources.prepareFails"
+    teardownFails := "ErrataTests.Resources.teardownFails"
+    dependent := "ErrataTests.Resources.dependent"
+    slowSetup := "ErrataTests.Resources.slowSetup"
+    threaded := "ErrataTests.Resources.threaded"
+    failSets := #[("ErrataTests.Resources.failing", "true")]
+    sleepSets := #[("ErrataTests.Resources.sleepMs", "30000")]
+    exclusive := #["ErrataTests.Resources.exclusiveA", "ErrataTests.Resources.exclusiveB"]
+    shared := #["ErrataTests.Resources.sharedA", "ErrataTests.Resources.sharedB"]
+    afterSetupFailure := "ErrataTests.Resources.afterSetupFailure"
+    afterPrepareFailure :=
+      #["ErrataTests.Resources.afterPrepareFailureA", "ErrataTests.Resources.afterPrepareFailureB"]
+    beforeTeardownFailure := "ErrataTests.Resources.beforeTeardownFailure"
+    usesDependent := "ErrataTests.Resources.usesDependent"
+    afterSlowSetup := "ErrataTests.Resources.afterSlowSetup"
+    usesThreaded := "ErrataTests.Resources.usesThreaded" }
 
 /-- The built interpreted product of the Lean harness. -/
 def interpreter : System.FilePath := ".lake/build/bin/errata-interpret"
@@ -208,14 +314,14 @@ def interpreterLeanPath : String :=
 
 /--
 This library's tests through the interpreted product of the Lean harness, which imports the modules
-that hold the tests that play the roles.
+that hold the tests that play the roles and use the fixtures.
 -/
 def interpretedProduct : Product := { leanProduct with
   name := "interpreted"
   exe := {
     name := "ErrataTests"
     command := #[interpreter.toString, "ErrataTests", "ErrataTests.Roles", "ErrataTests.Settings",
-      "--"]
+      "ErrataTests.Resources", "--"]
     env := #[("LEAN_PATH", interpreterLeanPath)]
   }
   unavailable := do
@@ -252,8 +358,8 @@ def Product.runTests (p : Product) (tests : Array String) (opts : Options := {})
   p.run (tests.map ({ test := · })) opts config
 
 /--
-Starts the product's test executable by hand with the given arguments, as the runner would, and
-returns what it wrote.
+Starts the product's test executable by hand with the given arguments, as a person would, and returns
+what it wrote, without the lifeline that the runner gives the test executables it starts.
 -/
 def Product.invoke (p : Product) (args : Array String) : IO IO.Process.Output := do
   p.check
@@ -273,36 +379,47 @@ def forEach (ps : Array Product) (check : Product → Test) : Test := do
 /-! # Checks of every product -/
 
 /--
-The problems with an inventory: the {lit}`protocol` record must come first, and then the settings
-before the tests; every setting and test has a name, no name appears twice, and every setting that a
-test takes was declared before it.
+The problems with an inventory: the {lit}`protocol` record must come first, then the settings, then
+the fixtures, then the tests; every setting, fixture, and test has a name, no name appears twice,
+and every setting and fixture that a fixture or a test takes was declared before it.
 -/
 def inventoryProblems (records : Array Json) : Array String := Id.run do
   let mut problems := #[]
   if (records[0]?.bind (strField · "type")) != some "protocol" then
     problems := problems.push "the first record is not the protocol record"
   let mut settings : Array String := #[]
+  let mut fixtures : Array String := #[]
   let mut tests : Array String := #[]
   for r in records do
-    match strField r "type" with
-    | some "setting" =>
-      let some name := strField r "name"
-        | problems := problems.push s!"a setting without a name: {r.compress}"; continue
-      unless tests.isEmpty do problems := problems.push s!"the setting {name} follows a test"
+    let kind := (strField r "type").getD ""
+    unless kind == "setting" || kind == "fixture" || kind == "test" do continue
+    let some name := strField r "name"
+      | problems := problems.push s!"a {kind} without a name: {r.compress}"; continue
+    match kind with
+    | "setting" =>
+      unless tests.isEmpty && fixtures.isEmpty do
+        problems := problems.push s!"the setting {name} follows a fixture or a test"
       if settings.contains name then problems := problems.push s!"the setting {name} is declared twice"
       settings := settings.push name
-    | some "test" =>
-      let some name := strField r "name"
-        | problems := problems.push s!"a test without a name: {r.compress}"; continue
+    | "fixture" =>
+      unless tests.isEmpty do problems := problems.push s!"the fixture {name} follows a test"
+      if fixtures.contains name then problems := problems.push s!"the fixture {name} is declared twice"
+      for f in (r.getObjValAs? (Array String) "fixtures").toOption.getD #[] do
+        unless fixtures.contains f do
+          problems := problems.push s!"the fixture {name} takes the fixture {f}, which is not declared before it"
+      fixtures := fixtures.push name
+    | _ =>
       if tests.contains name then problems := problems.push s!"the test {name} is listed twice"
       tests := tests.push name
-      let deps := (r.getObjValAs? (Array Json) "settings").toOption.getD #[]
-      for d in deps do
-        let some s := strField d "name"
-          | problems := problems.push s!"the test {name} takes a setting without a name"; continue
-        unless settings.contains s do
-          problems := problems.push s!"the test {name} takes the setting {s}, which is not declared before it"
-    | _ => pure ()
+      for d in (r.getObjValAs? (Array Json) "fixtures").toOption.getD #[] do
+        let f := (strField d "name").getD ""
+        unless fixtures.contains f do
+          problems := problems.push s!"the test {name} uses the fixture {f}, which is not declared before it"
+    for d in (r.getObjValAs? (Array Json) "settings").toOption.getD #[] do
+      let some s := strField d "name"
+        | problems := problems.push s!"the {kind} {name} takes a setting without a name"; continue
+      unless settings.contains s do
+        problems := problems.push s!"the {kind} {name} takes the setting {s}, which is not declared before it"
   if tests.isEmpty then problems := problems.push "the inventory lists no test"
   return problems
 
@@ -322,14 +439,25 @@ def Product.inventory (p : Product) : TestM (Array Json) := do
     return records
 
 /--
-Every product's inventory begins with the protocol record and declares its settings before its tests,
-each with a name, none twice, and every setting a test takes declared before the test.
+Every product's inventory begins with the protocol record and declares its settings, then its
+fixtures, then its tests, each with a name, none twice, and every setting and fixture that a fixture
+or a test takes declared before it. The fixtures record their settings, their fixtures, and the
+threads they ask for.
 -/
 @[test]
 def inventoryWellFormed : Test := forEach products fun p => do
   let records ← p.inventory
   let problems := inventoryProblems records
   assertTrue problems.isEmpty s!"the inventory of {p.name} is malformed" (some ("\n".intercalate problems.toList))
+  let fixture (name : String) : TestM Json := do
+    let some r := records.find? fun r =>
+        strField r "type" == some "fixture" && strField r "name" == some name
+      | fail s!"no fixture record for {name}"
+    return r
+  let dependent ← fixture p.fixtures.dependent
+  assertBEq (some #[p.fixtures.stamped]) (dependent.getObjValAs? (Array String) "fixtures").toOption
+  assertContains p.greeting ((dependent.getObjVal? "settings").toOption.map (·.compress) |>.getD "")
+  assertBEq (some 3) ((← fixture p.fixtures.threaded).getObjValAs? Nat "threads").toOption
 
 /--
 Known passing tests pass, known failing tests fail, and tests that throw end with an error.
@@ -395,7 +523,7 @@ def undeclaredSettingRejected : Test := do
   result "the declared settings of basic.sh" do
     let r ← runWith #[basic ["pass"]] { sets := #[("nonsense", "1")] }
     let some issue := r.report.issues.find? (·.isError) | fail "no error"
-    assertContains "the declared settings are Errata.seed, marker, note, greeting, needed"
+    assertContains "the declared settings are Errata.seed, marker, note, greeting, needed, stamp-file"
       issue.message
   result "in a profile" do
     let config : Config := { profiles := #[{ name := "default", settings := #[("other", "x")] }] }
@@ -1258,8 +1386,10 @@ def readRecords (path : System.FilePath) : TestM (Array Json) := do
 
 /--
 Errata's shell harness writes names and descriptions with any character as JSON strings, rejects a
-list value with a newline and a setting declared after a test, rejects `errata-fixture` and unknown
-modes with exit code 2, and reports an undeclared test as an error.
+list value with a newline, a setting declared after a test or a fixture, and a fixture declared after
+a test, rejects unknown modes and phases with exit code 2, and reports an undeclared test or fixture
+as an error. A prepare or a teardown without a function has nothing to do, and a setup without one
+is an error.
 -/
 @[test]
 def shellHarness : Test := do
@@ -1292,10 +1422,44 @@ def shellHarness : Test := do
       let records ← readRecords out
       assertBEq (some "error") (records.back?.bind (strField · "status"))
       assertTrue (!records.any (isEvent "start")) "the unknown test did not start"
-    result "fixtures and usage" do
-      assertExitCode 2 (← p.invoke #["errata-fixture", out.toString, "f", "setup"])
+    result "an unknown fixture, an unknown phase, and usage" do
+      assertExitCode 1 (← p.invoke #["errata-fixture", out.toString, "f", "setup"])
+      assertExitCode 2 (← p.invoke #["errata-fixture", out.toString, "stamped", "clean"])
       assertExitCode 2 (← p.invoke #["errata-list"])
       assertExitCode 2 (← p.invoke #[])
+    result "a fixture declared after a test" do
+      let r ← listScript "errata_test t; errata_fixture_decl late \"A fixture.\""
+      assertExitCode 2 r
+      assertContains "the fixture late is declared after a test" r.stderr
+    result "a setting declared after a fixture" do
+      let script := dir / "late.sh"
+      IO.FS.writeFile script <|
+        "source \"$ERRATA_DIR/harnesses/errata.sh\"\n" ++
+        "errata_fixtures() { errata_fixture_decl f \"A fixture.\"; errata_setting_decl s \"A setting.\"; }\n" ++
+        "errata_main \"$@\"\n"
+      IO.FS.writeFile out ""
+      let r ← IO.Process.output {
+        cmd := "bash", args := #[script.toString, "errata-list", out.toString]
+        env := #[("ERRATA_DIR", some (← errataDir).toString)]
+      }
+      assertExitCode 2 r
+      assertContains "the setting s is declared after a fixture" r.stderr
+    result "a prepare and a teardown without a function" do
+      let script := dir / "bare.sh"
+      IO.FS.writeFile script <|
+        "source \"$ERRATA_DIR/harnesses/errata.sh\"\n" ++
+        "errata_fixtures() { errata_fixture_decl f \"A fixture.\"; }\n" ++
+        "errata_main \"$@\"\n"
+      let run (args : Array String) : IO IO.Process.Output := do
+        IO.FS.writeFile out ""
+        IO.Process.output {
+          cmd := "bash", args := #[script.toString] ++ args
+          env := #[("ERRATA_DIR", some (← errataDir).toString)]
+        }
+      assertExitCode 0 (← run #["errata-fixture", out.toString, "f", "prepare"])
+      assertExitCode 0 (← run #["errata-fixture", out.toString, "f", "teardown"])
+      assertExitCode 1 (← run #["errata-fixture", out.toString, "f", "setup"])
+      assertContains "defines no errata_fixture_setup" (← IO.FS.readFile out)
     result "escaping" do
       let script := dir / "odd.sh"
       let name := "a \"quoted\"\\name\twith\ncontrol \x01 and é"
@@ -1319,9 +1483,10 @@ def shellHarness : Test := do
 
 /--
 Verso's pytest harness lists each collected item with its node id as its name, the node id's parts
-as its path, its markers as its tags, its docstring, file, and line, and the settings it takes. It
-runs one item and reports a failure with its message, location, and detail, and an error in a
-fixture's setup as an error.
+as its path, its markers as its tags, its docstring, file, and line, and the settings and Errata
+fixtures it takes, after the settings and the fixtures that the items take. It runs one item and
+reports a failure with its message, location, and detail, and an error in a pytest fixture's setup as
+an error.
 -/
 @[test]
 def pytestHarness : Test := do
@@ -1338,7 +1503,7 @@ def pytestHarness : Test := do
       (squares.getObjValAs? (Array String) "path").toOption
     assertBEq (some "A parameterized test.") (strField squares "description")
     assertBEq (some file) (strField squares "file")
-    assertBEq (some 28) (squares.getObjValAs? Nat "line").toOption
+    assertBEq (some 29) (squares.getObjValAs? Nat "line").toOption
     let inside ← find "TestGroup::test_inside"
     assertBEq (some #["TestGroup", "test_inside"])
       ((inside.getObjValAs? (Array String) "path").toOption.map fun a => a.extract (a.size - 2) a.size)
@@ -1351,14 +1516,21 @@ def pytestHarness : Test := do
     assertBEq (some "[{\"name\":\"greeting\",\"optional\":false}]")
       ((greets.getObjVal? "settings").toOption.map (·.compress))
     let settings := records.filter (isEvent "setting") |>.filterMap (strField · "name")
-    assertBEq #["greeting", "needed"] settings
+    assertBEq #["greeting", "needed", "stamp-file"] settings
+    let fixtures := records.filter (isEvent "fixture") |>.filterMap (strField · "name")
+    assertBEq #["stamped", "setup-fails", "prepare-fails", "teardown-fails", "dependent",
+      "slow-setup", "threaded"] fixtures
+    let shared ← find "test_shared_a"
+    assertBEq (some "[{\"exclusive\":false,\"name\":\"stamped\"}]")
+      ((shared.getObjVal? "fixtures").toOption.map (·.compress))
+    assertBEq none (shared.getObjValAs? (Array String) "tags").toOption
   result "a failure" do
     let r ← p.run #[p.fails]
     match r.outcome? p.fails.test with
     | some (.reported (.fail f)) =>
       assertBEq "AssertionError: the value is off" f.message
       assertBEq (some file) (f.location?.map (·.file))
-      assertBEq (some 20) (f.location?.map (·.startPos.line))
+      assertBEq (some 21) (f.location?.map (·.startPos.line))
       assertContains "assert value == 4" (f.detail?.getD "")
     | o => fail s!"expected a failure, got {repr o}"
   result "an error in setup" do
@@ -1377,6 +1549,247 @@ def pytestHarness : Test := do
       assertBEq #[some "error"] (verdicts.map (strField · "status"))
       assertContains "pytest ended with exit code 4 (USAGE_ERROR) before it ran the test"
         ((verdicts[0]?.bind (strField · "message")).getD "")
+
+/-! # Fixtures -/
+
+/-- Runs a reproduction line in a shell, as a person would, without a lifeline. -/
+def runLine (cmd : String) : IO IO.Process.Output :=
+  IO.Process.output { cmd := "bash", args := #["-c", cmd], env := #[("ERRATA_LIFELINE", none)] }
+
+/-- The result of a fixture's phase, by the fixture's name and the phase's path. -/
+def Run.fixtureResult? (r : Run) (fixture : String) (path : Array String) : Option Result :=
+  r.report.results.find? fun res =>
+    res.kind == .fixture && res.test == fixture && res.path == path && res.resultPath.isEmpty
+
+/-- Asserts that a fixture's phase ended with an outcome that satisfies {name}`p`. -/
+def expectPhase (r : Run) (fixture : String) (path : Array String) (p : Outcome → Bool)
+    (what : String) : TestM Result := do
+  let some res := r.fixtureResult? fixture path
+    | fail s!"{path}: no result for the fixture's phase" (some s!"{r.report.results.map (·.path)}")
+  assertTrue (p res.outcome) s!"{path}: expected {what}, got {repr res.outcome}"
+  return res
+
+/--
+The problems with a stamp file's lines, in which each user of `stamped` writes `start NAME` and
+`end NAME`: an exclusive user, whose name mentions `exclusive`, or a user that asked for the whole
+pool, whose name mentions `threaded`, that starts or runs while another user runs, and a shared user
+that starts while an exclusive one runs. The second result says whether two users ran at once.
+-/
+def stampProblems (lines : Array String) : Array String × Bool := Id.run do
+  let alone (n : String) : Bool := (n.find? "xclusive").isSome || (n.find? "threaded").isSome
+  let mut running : Array String := #[]
+  let mut problems := #[]
+  let mut overlapped := false
+  for l in lines do
+    if let some name := l.dropPrefix? "start " then
+      let name := name.copy
+      if !running.isEmpty && alone name then
+        problems := problems.push s!"{name} started while {running} ran"
+      if running.any alone then
+        problems := problems.push s!"{name} started while {running} ran alone"
+      if !running.isEmpty then overlapped := true
+      running := running.push name
+    else if let some name := l.dropPrefix? "end " then
+      running := running.filter (· != name.copy)
+  return (problems, overlapped)
+
+/-- The lines of a file, without empty ones. -/
+def fileLines (path : System.FilePath) : IO (Array String) := do
+  return ((← IO.FS.readFile path).splitOn "\n").toArray.filter (!·.isEmpty)
+
+/--
+With two slots, the users of `stamped` alone among its users never overlap one another or its shared
+users, and its shared users run at the same time. The setup comes first, a prepare ends before each
+user starts, and the teardown comes last, once.
+-/
+@[test]
+def exclusiveUsersNeverOverlap : Test := forEach products fun p => do
+  IO.FS.withTempDir fun dir => do
+    let stamps := dir / "stamps"
+    let fx := p.fixtures
+    let r ← p.runTests (fx.exclusive ++ fx.shared)
+      { jobs := 2, sets := #[(fx.stampFile, stamps.toString)] }
+    for t in fx.exclusive ++ fx.shared do
+      expectOutcome r t (· matches .reported .pass) "a pass"
+    let lines ← fileLines stamps
+    let (problems, overlapped) := stampProblems lines
+    assertTrue problems.isEmpty "users overlapped" (some ("\n".intercalate problems.toList))
+    assertTrue overlapped s!"the shared users ran one after the other: {lines}"
+    assertBEq (some "setup") lines[0]?
+    assertBEq (some "teardown") (lines.back?.bind fun l => (l.splitOn " ")[0]?)
+    assertBEq 1 (lines.filter (·.startsWith "setup")).size
+    assertBEq 1 (lines.filter (·.startsWith "teardown")).size
+    assertBEq 4 (lines.filter (· == "prepare end")).size
+    discard <| expectPhase r fx.stamped #[fx.stamped, "setup"] (·.isPass) "a pass"
+    discard <| expectPhase r fx.stamped #[fx.stamped, "teardown"] (·.isPass) "a pass"
+    result "JUnit names fixtures' phases apart from tests" do
+      assertContains s!"classname=\"{xmlEscape fx.stamped} (fixture)\"" (junitReport r.report)
+    result "the events file has the phases' outcomes" do
+      assertTrue (r.events.any fun e => isEvent "outcome" (some ("kind", "fixture")) e &&
+        strField e "test" == some fx.stamped) "no outcome of a fixture's phase"
+
+/--
+A setup that fails reports its fixture's users as inconclusive, with the fixture and the phase
+named, without running them; its teardown still runs, without a value.
+-/
+@[test]
+def setupFailureStopsUsers : Test := forEach products fun p => do
+  let fx := p.fixtures
+  let r ← p.runTests #[fx.afterSetupFailure, p.passes.test] { sets := fx.failSets }
+  match r.outcome? fx.afterSetupFailure with
+  | some (.inconclusive (.fixtureFailed f .setup)) => assertBEq fx.setupFails f
+  | o => fail s!"expected fixtureFailed in the setup, got {repr o}"
+  let some user := r.result? fx.afterSetupFailure | fail "no result"
+  assertNotContains "received" user.output.all
+  discard <| expectPhase r fx.setupFails #[fx.setupFails, "setup"] (!·.isPass) "a failure"
+  let teardown ← expectPhase r fx.setupFails #[fx.setupFails, "teardown"] (·.isPass) "a pass"
+  assertContains "teardown received no value" teardown.output.all
+  expectOutcome r p.passes.test (· matches .reported .pass) "a pass"
+  result "the reproduction line runs the chain" do
+    let some cmd := user.reproduce? | fail "no reproduction line"
+    let out ← runLine cmd
+    assertBEq #[some "fail"] ((verdictsIn out.stderr).map (strField · "status"))
+    -- The Lean harness writes what the phases print to their records, on standard error here.
+    assertContains "teardown received no value" (out.stdout ++ out.stderr)
+    assertNotContains "received fixture" (out.stdout ++ out.stderr)
+
+/-- A prepare that fails stops only the test it prepares, and the fixture's next user runs. -/
+@[test]
+def prepareFailureStopsOneTest : Test := forEach products fun p => do
+  let fx := p.fixtures
+  let r ← p.runTests fx.afterPrepareFailure { sets := fx.failSets }
+  let (first, second) := (fx.afterPrepareFailure[0]!, fx.afterPrepareFailure[1]!)
+  match r.outcome? first with
+  | some (.inconclusive (.fixtureFailed f .prepare)) => assertBEq fx.prepareFails f
+  | o => fail s!"expected fixtureFailed in the prepare, got {repr o}"
+  expectOutcome r second (· matches .reported .pass) "a pass"
+  discard <| expectPhase r fx.prepareFails #[fx.prepareFails, "prepare", first] (!·.isPass)
+    "a failure"
+  discard <| expectPhase r fx.prepareFails #[fx.prepareFails, "prepare", second] (·.isPass) "a pass"
+  result "the reproduction line runs the chain" do
+    let some cmd := (r.result? first).bind (·.reproduce?) | fail "no reproduction line"
+    let out ← runLine cmd
+    assertBEq #[some "fail"] ((verdictsIn out.stderr).map (strField · "status"))
+
+/-- A teardown that fails is reported on its own, after the test it served, which passes. -/
+@[test]
+def teardownFailureReportedAlone : Test := forEach products fun p => do
+  let fx := p.fixtures
+  let r ← p.runTests #[fx.beforeTeardownFailure] { sets := fx.failSets }
+  expectOutcome r fx.beforeTeardownFailure (· matches .reported .pass) "a pass"
+  discard <| expectPhase r fx.teardownFails #[fx.teardownFails, "teardown"] (!·.isPass) "a failure"
+  let idx (test kind : String) : Option Nat := r.events.findIdx? fun e =>
+    isEvent "outcome" (some ("kind", kind)) e && strField e "test" == some test &&
+      (kind == "test" ||
+        (e.getObjValAs? (Array String) "path").toOption.bind (·.back?) == some "teardown")
+  match idx fx.beforeTeardownFailure "test", idx fx.teardownFails "fixture" with
+  | some user, some teardown => assertTrue (user < teardown) "the teardown ran first"
+  | _, _ => fail "an outcome is missing from the events"
+  assertTrue (!r.report.succeeded) "the failed teardown fails the run"
+
+/--
+A setup that its timeout stops is inconclusive, its fixture's users are reported as inconclusive
+without running, and its teardown still runs, without a value.
+-/
+@[test]
+def killedSetupTearsDown : Test := forEach products fun p => do
+  let fx := p.fixtures
+  let config : Config :=
+    { profiles := #[{ name := "default", fixtureTimeoutMs? := some 500, gracePeriodMs? := some 300 }] }
+  let start ← IO.monoMsNow
+  let r ← p.runTests #[fx.afterSlowSetup] { sets := fx.sleepSets } config
+  assertTrue ((← IO.monoMsNow) - start < 20000) "the setup was stopped"
+  discard <| expectPhase r fx.slowSetup #[fx.slowSetup, "setup"]
+    (· matches .inconclusive (.timedOut ..)) "a timeout"
+  match r.outcome? fx.afterSlowSetup with
+  | some (.inconclusive (.fixtureFailed f .setup)) => assertBEq fx.slowSetup f
+  | o => fail s!"expected fixtureFailed in the setup, got {repr o}"
+  let teardown ← expectPhase r fx.slowSetup #[fx.slowSetup, "teardown"] (·.isPass) "a pass"
+  assertContains "teardown received no value" teardown.output.all
+
+/--
+A fixture that takes a setting and another fixture receives both: its value joins the greeting and
+the other fixture's value, which its user prints.
+-/
+@[test]
+def fixturesReceiveSettings : Test := forEach products fun p => do
+  IO.FS.withTempDir fun dir => do
+    let fx := p.fixtures
+    let stamps := (dir / "stamps").toString
+    let r ← p.runTests #[fx.usesDependent]
+      { sets := #[(p.greeting, "hi"), (fx.stampFile, stamps)] }
+    expectOutcome r fx.usesDependent (· matches .reported .pass) "a pass"
+    let some res := r.result? fx.usesDependent | fail "no result"
+    assertContains s!"hi and {stamps}" res.output.all
+    let setup ← expectPhase r fx.dependent #[fx.dependent, "setup"] (·.isPass) "a pass"
+    assertBEq (some "hi") ((setup.settings.find? (·.1 == p.greeting)).map (·.2))
+
+/--
+A fixture's phases and a test that ask for threads receive the grant as {lit}`threads:N` and as
+{lit}`LEAN_NUM_THREADS`: the request when the pool holds it, and the whole pool otherwise, in which
+case the test runs alone.
+-/
+@[test]
+def threadGrants : Test := forEach products fun p => do
+  let fx := p.fixtures
+  for (jobs, grant) in [(2, 2), (4, 3)] do
+    result s!"with {jobs} slots" do
+      let r ← p.runTests #[fx.usesThreaded] { jobs }
+      let setup ← expectPhase r fx.threaded #[fx.threaded, "setup"] (·.isPass) "a pass"
+      assertContains s!"threads: {grant}; LEAN_NUM_THREADS: {grant}" setup.output.all
+  if let some test := fx.threadedTest? then
+    result "a test that asks for more than the pool runs alone" do
+      IO.FS.withTempDir fun dir => do
+        let stamps := dir / "stamps"
+        let r ← p.runTests (#[fx.shared[0]!, test] ++ fx.shared.extract 1)
+          { jobs := 2, sets := #[(fx.stampFile, stamps.toString)] }
+        let some res := r.result? test | fail "no result"
+        assertContains "threads: 2; LEAN_NUM_THREADS: 2" res.output.all
+        let lines ← fileLines stamps
+        let (problems, _) := stampProblems lines
+        assertTrue problems.isEmpty "users overlapped" (some ("\n".intercalate problems.toList))
+        assertTrue (lines.contains s!"start {test}") s!"{lines}"
+
+/-- Test executables asked for a fixture outside their inventory exit non-zero. -/
+@[test]
+def unknownFixtureFails : Test := forEach products fun p => do
+  IO.FS.withTempDir fun dir => do
+    let out := dir / "out.jsonl"
+    IO.FS.writeFile out ""
+    let r ← p.invoke #["errata-fixture", out.toString, "no-such-fixture", "setup"]
+    assertTrue (r.exitCode != 0) "the exit code is not zero"
+    assertNotContains "\"type\":\"value\"" (← IO.FS.readFile out)
+
+/--
+A chain of fixture phases and a test runs in order in one process: each setup's value reaches the
+later invocations, and after an invocation fails only teardowns run, the teardown of a fixture whose
+setup failed without a value.
+-/
+@[test]
+def fixtureChains : Test := forEach products fun p => do
+  IO.FS.withTempDir fun dir => do
+    let fx := p.fixtures
+    let out := (dir / "out.jsonl").toString
+    let stamps := dir / "stamps"
+    let phase (f name : String) (extra : Array String := #[]) : Array String :=
+      #["errata-fixture", out, f, name] ++ extra
+    let settings := p.fixtures.failSets.map fun (k, v) => s!"setting:{k}={v}"
+    result "a chain that passes" do
+      let r ← p.invoke (phase fx.stamped "setup" #[s!"setting:{fx.stampFile}={stamps}"] ++ #[";"] ++
+        phase fx.stamped "prepare" ++ #[";", "errata-run", out, fx.exclusive[0]!, ";"] ++
+        phase fx.stamped "teardown")
+      assertExitCode 0 r
+      let lines ← fileLines stamps
+      assertBEq #["setup", "prepare start", "prepare end"] (lines.extract 0 3)
+      assertBEq (some "teardown") (lines.back?.bind fun l => (l.splitOn " ")[0]?)
+      assertTrue (lines.any (·.startsWith "start ")) s!"the test ran: {lines}"
+    result "teardowns after a failure" do
+      let r ← p.invoke (phase fx.setupFails "setup" settings ++
+        #[";", "errata-run", out, fx.afterSetupFailure, ";"] ++ phase fx.setupFails "teardown")
+      -- The Lean harness writes what the phases print to their records.
+      let printed := r.stdout ++ (← IO.FS.readFile out)
+      assertContains "teardown received no value" printed
+      assertNotContains "received fixture" printed
 
 /-! # Processes -/
 

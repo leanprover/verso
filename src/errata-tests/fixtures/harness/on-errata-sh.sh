@@ -13,15 +13,31 @@ errata_settings() {
   errata_setting_decl note "A note."
   errata_setting_decl greeting "A greeting." --default hello
   errata_setting_decl needed "A setting without a default."
+  errata_setting_decl stamp-file "A file that users stamp."
+}
+
+# Declares one fixture per way that a fixture's phases end, as `basic.sh` does.
+errata_fixtures() {
+  errata_fixture_decl stamped "Its value is the stamp file." --settings "optional(stamp-file)"
+  errata_fixture_decl setup-fails "Its setup fails."
+  errata_fixture_decl prepare-fails "Its first prepare fails."
+  errata_fixture_decl teardown-fails "Its teardown fails."
+  errata_fixture_decl dependent "It joins a greeting and another fixture's value." \
+    --settings greeting --fixtures stamped
+  errata_fixture_decl slow-setup "Its setup sleeps."
+  errata_fixture_decl threaded "It asks for threads." --threads 3
 }
 
 # Declares one test per behavior. Every test takes the seed and optionally the marker and the note;
-# `greets` also takes the greeting, and `needs-setting` the setting that nothing gives a value.
+# `greets` also takes the greeting, and `needs-setting` the setting that nothing gives a value. The
+# fixtures' users take their fixtures.
 errata_tests() {
-  local t settings tags
+  local t settings tags extra
   for t in pass fail verdict-fail silent unknown-records mismatch-pass mismatch-fail exits sleeps \
       stubborn spawns panics garbled records twice flood lingers greets needs-setting errexit \
-      fail-goes-on run-id; do
+      fail-goes-on run-id exclusive-a exclusive-b shared-a shared-b after-setup-failure \
+      after-prepare-failure-a after-prepare-failure-b before-teardown-failure uses-dependent \
+      after-slow-setup uses-threaded threaded-test; do
     settings="Errata.seed,optional(marker),optional(note)"
     case "$t" in
       greets) settings="$settings,greeting" ;;
@@ -31,9 +47,75 @@ errata_tests() {
     case "$t" in
       sleeps | stubborn | flood | lingers) tags=shell,slow ;;
     esac
+    extra=()
+    case "$t" in
+      exclusive-*) extra=(--fixtures stamped) ;;
+      shared-*) extra=(--fixtures "shared(stamped)") ;;
+      after-setup-failure) extra=(--fixtures setup-fails) ;;
+      after-prepare-failure-*) extra=(--fixtures prepare-fails) ;;
+      before-teardown-failure) extra=(--fixtures teardown-fails) ;;
+      uses-dependent) extra=(--fixtures dependent) ;;
+      after-slow-setup) extra=(--fixtures slow-setup) ;;
+      uses-threaded) extra=(--fixtures threaded) ;;
+      threaded-test) extra=(--threads 3 --fixtures "shared(stamped)") ;;
+    esac
     errata_test "$t" --path "on-errata-sh,$t" --file on-errata-sh.sh --tags "$tags" \
-      --settings "$settings"
+      --settings "$settings" ${extra[@]+"${extra[@]}"}
   done
+}
+
+# Runs one phase of a fixture, as the fixture of the same name in `basic.sh` does. The teardowns of
+# the fixtures other than `stamped` print whether they received their value.
+errata_fixture_setup() {
+  case "$1" in
+    stamped)
+      local file
+      file=$(errata_setting stamp-file) || file=""
+      if [ -n "$file" ]; then echo setup >> "$file"; fi
+      errata_value "$file"
+      ;;
+    setup-fails) errata_fail "the setup failed on request" ;;
+    prepare-fails) errata_value "$(mktemp -d)" ;;
+    dependent) errata_value "$(errata_setting greeting) and $(errata_fixture_value stamped)" ;;
+    slow-setup)
+      echo "setting up"
+      sleep 30
+      errata_value slept
+      ;;
+    threaded)
+      echo "threads: $(errata_threads); LEAN_NUM_THREADS: ${LEAN_NUM_THREADS:-}"
+      errata_value "$(errata_threads)"
+      ;;
+  esac
+}
+
+errata_fixture_prepare() {
+  local value
+  value=$(errata_fixture_value "$1") || value=""
+  case "$1" in
+    stamped)
+      if [ -n "$value" ]; then echo "prepare start" >> "$value"; fi
+      sleep 0.1
+      if [ -n "$value" ]; then echo "prepare end" >> "$value"; fi
+      ;;
+    prepare-fails)
+      if [ ! -e "$value/failed-once" ]; then
+        : > "$value/failed-once"
+        errata_fail "the prepare failed on request"
+      fi
+      ;;
+  esac
+}
+
+errata_fixture_teardown() {
+  local value
+  if value=$(errata_fixture_value "$1"); then :; else value=""; fi
+  case "$1" in
+    stamped) if [ -n "$value" ]; then echo teardown >> "$value"; fi ;;
+    prepare-fails) if [ -n "$value" ]; then rm -rf "$value"; fi ;;
+    teardown-fails) errata_fail "the teardown failed on request" ;;
+    *) echo "teardown received ${value:-no value}" ;;
+  esac
 }
 
 # Runs one test. Each shows one way that a test can end, as the test of the same name in `basic.sh`
@@ -143,6 +225,26 @@ errata_run_test() {
       ;;
     needs-setting)
       echo "ran without its setting"
+      ;;
+    exclusive-* | shared-* | threaded-test)
+      # Stamps the file that the fixture's value names as it starts and as it ends; the test that
+      # asks for threads also prints its grant.
+      if [ "$1" = threaded-test ]; then
+        echo "threads: $(errata_threads); LEAN_NUM_THREADS: ${LEAN_NUM_THREADS:-}"
+      fi
+      local file
+      file=$(errata_fixture_value stamped) || file=""
+      if [ -n "$file" ]; then echo "start $1" >> "$file"; fi
+      sleep 0.4
+      if [ -n "$file" ]; then echo "end $1" >> "$file"; fi
+      ;;
+    after-* | before-* | uses-*)
+      local f
+      for f in stamped setup-fails prepare-fails teardown-fails dependent slow-setup threaded; do
+        if errata_fixture_value "$f" > /dev/null; then
+          echo "received fixture:$f=$(errata_fixture_value "$f")"
+        fi
+      done
       ;;
   esac
 }

@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 # A test executable written in shell, for the conformance suite. Each test shows one way that a test
 # executable can end: with or without a verdict, with a verdict that contradicts its exit code, with
-# a result file that cannot be read, after a timeout, or by a signal. Invocations chained with ';'
-# arguments run in order, each in a subshell, stopping at the first that exits non-zero; a single
-# invocation runs in the script's own process.
+# a result file that cannot be read, after a timeout, or by a signal. Its fixtures show the ways a
+# fixture's phases can end, and their users stamp a shared file as they run. Invocations chained
+# with ';' arguments run in order, each in a subshell, and each value that a setup produces reaches
+# the later invocations; after an invocation exits non-zero only teardowns run. A single invocation
+# runs in the script's own process.
 
 tests=(pass fail verdict-fail silent unknown-records mismatch-pass mismatch-fail exits sleeps
        stubborn spawns panics garbled records twice flood lingers greets needs-setting protocol-late
-       run-id)
+       run-id exclusive-a exclusive-b shared-a shared-b after-setup-failure after-prepare-failure-a
+       after-prepare-failure-b before-teardown-failure uses-dependent after-slow-setup uses-threaded
+       threaded-test)
 # A suite that needs only some of the tests names them here, separated by spaces.
 if [ -n "$BASIC_TESTS" ]; then
   read -r -a tests <<< "$BASIC_TESTS"
@@ -34,6 +38,14 @@ case "$mode" in
     record '{"type":"setting","name":"note","description":"A note."}'
     record '{"type":"setting","name":"greeting","description":"A greeting.","default":"hello"}'
     record '{"type":"setting","name":"needed","description":"A setting without a default."}'
+    record '{"type":"setting","name":"stamp-file","description":"A file that users stamp."}'
+    record '{"type":"fixture","name":"stamped","description":"Its value is the stamp file.","settings":[{"name":"stamp-file","optional":true}]}'
+    record '{"type":"fixture","name":"setup-fails","description":"Its setup fails."}'
+    record '{"type":"fixture","name":"prepare-fails","description":"Its first prepare fails."}'
+    record '{"type":"fixture","name":"teardown-fails","description":"Its teardown fails."}'
+    record '{"type":"fixture","name":"dependent","settings":[{"name":"greeting","optional":false}],"fixtures":["stamped"]}'
+    record '{"type":"fixture","name":"slow-setup","description":"Its setup sleeps."}'
+    record '{"type":"fixture","name":"threaded","description":"It asks for threads.","threads":3}'
     for t in "${tests[@]}"; do
       settings="$common"
       case "$t" in
@@ -44,8 +56,118 @@ case "$mode" in
       case "$t" in
         sleeps|stubborn|flood|lingers) tags='["shell","slow"]' ;;
       esac
-      record "{\"type\":\"test\",\"name\":\"$t\",\"path\":[\"basic\",\"$t\"],\"file\":\"basic.sh\",\"tags\":$tags,\"settings\":[$settings]}"
+      extra=""
+      case "$t" in
+        exclusive-*) extra=',"fixtures":[{"name":"stamped","exclusive":true}]' ;;
+        shared-*) extra=',"fixtures":[{"name":"stamped","exclusive":false}]' ;;
+        after-setup-failure) extra=',"fixtures":[{"name":"setup-fails"}]' ;;
+        after-prepare-failure-*) extra=',"fixtures":[{"name":"prepare-fails"}]' ;;
+        before-teardown-failure) extra=',"fixtures":[{"name":"teardown-fails"}]' ;;
+        uses-dependent) extra=',"fixtures":[{"name":"dependent"}]' ;;
+        after-slow-setup) extra=',"fixtures":[{"name":"slow-setup"}]' ;;
+        uses-threaded) extra=',"fixtures":[{"name":"threaded"}]' ;;
+        threaded-test) extra=',"threads":3,"fixtures":[{"name":"stamped","exclusive":false}]' ;;
+      esac
+      record "{\"type\":\"test\",\"name\":\"$t\",\"path\":[\"basic\",\"$t\"],\"file\":\"basic.sh\",\"tags\":$tags,\"settings\":[$settings]$extra}"
     done
+    exit 0
+    ;;
+  errata-fixture)
+    name="$3"
+    phase="$4"
+    shift 4
+    stamp_file=""
+    value=""
+    for arg in "$@"; do
+      case "$arg" in
+        setting:stamp-file=*) stamp_file="${arg#setting:stamp-file=}" ;;
+        "fixture:$name="*) value="${arg#fixture:"$name"=}" ;;
+      esac
+    done
+    record '{"type":"protocol","version":1}'
+    # Tells a chain the value that a setup produced.
+    produce() {
+      record "{\"type\":\"value\",\"text\":\"$1\"}"
+      if [ -n "$CHAIN_VALUE_FILE" ]; then printf '%s=%s' "$name" "$1" > "$CHAIN_VALUE_FILE"; fi
+    }
+    case "$name/$phase" in
+      stamped/setup)
+        [ -n "$stamp_file" ] && echo setup >> "$stamp_file"
+        produce "$stamp_file"
+        ;;
+      stamped/prepare)
+        [ -n "$value" ] && echo "prepare start" >> "$value"
+        sleep 0.1
+        [ -n "$value" ] && echo "prepare end" >> "$value"
+        ;;
+      stamped/teardown)
+        [ -n "$value" ] && echo "teardown" >> "$value"
+        ;;
+      setup-fails/setup)
+        record '{"type":"verdict","status":"fail","message":"the setup failed on request"}'
+        exit 1
+        ;;
+      prepare-fails/setup)
+        produce "$(mktemp -d)"
+        ;;
+      prepare-fails/prepare)
+        if [ ! -e "$value/failed-once" ]; then
+          : > "$value/failed-once"
+          record '{"type":"verdict","status":"fail","message":"the prepare failed on request"}'
+          exit 1
+        fi
+        ;;
+      prepare-fails/teardown)
+        [ -n "$value" ] && rm -rf "$value"
+        ;;
+      teardown-fails/teardown)
+        record '{"type":"verdict","status":"fail","message":"the teardown failed on request"}'
+        exit 1
+        ;;
+      dependent/setup)
+        greeting=""
+        stamped=""
+        for arg in "$@"; do
+          case "$arg" in
+            setting:greeting=*) greeting="${arg#setting:greeting=}" ;;
+            fixture:stamped=*) stamped="${arg#fixture:stamped=}" ;;
+          esac
+        done
+        produce "$greeting and $stamped"
+        ;;
+      slow-setup/setup)
+        echo "setting up"
+        sleep 30
+        produce slept
+        ;;
+      threaded/setup)
+        grant=1
+        for arg in "$@"; do
+          case "$arg" in
+            threads:*) grant="${arg#threads:}" ;;
+          esac
+        done
+        echo "threads: $grant; LEAN_NUM_THREADS: ${LEAN_NUM_THREADS:-}"
+        produce "$grant"
+        ;;
+      */setup|*/prepare|*/teardown)
+        case "$name" in
+          stamped|setup-fails|prepare-fails|teardown-fails|dependent|slow-setup|threaded)
+            # The teardowns print whether they received their fixture's value.
+            [ "$phase" = teardown ] && echo "teardown received ${value:-no value}"
+            ;;
+          *)
+            echo "no fixture is named $name" >&2
+            record "{\"type\":\"verdict\",\"status\":\"error\",\"message\":\"no fixture is named $name\"}"
+            exit 1
+            ;;
+        esac
+        ;;
+      *)
+        echo "usage: basic.sh errata-fixture <out> <name> setup|prepare|teardown" >&2
+        exit 2
+        ;;
+    esac
     exit 0
     ;;
   errata-run)
@@ -180,6 +302,44 @@ case "$mode" in
         record '{"type":"protocol","version":1}'
         exit 0
         ;;
+      exclusive-*|shared-*)
+        # Stamps the file that the fixture's value names as it starts and as it ends.
+        file=""
+        for arg in "$@"; do
+          case "$arg" in
+            fixture:stamped=*) file="${arg#fixture:stamped=}" ;;
+          esac
+        done
+        [ -n "$file" ] && echo "start $name" >> "$file"
+        sleep 0.4
+        [ -n "$file" ] && echo "end $name" >> "$file"
+        exit 0
+        ;;
+      after-*|before-*|uses-*)
+        # The test prints what it received.
+        for arg in "$@"; do
+          case "$arg" in
+            fixture:*) echo "received $arg" ;;
+          esac
+        done
+        exit 0
+        ;;
+      threaded-test)
+        # Prints its grant, and stamps the file as the users of `stamped` do.
+        grant=1
+        file=""
+        for arg in "$@"; do
+          case "$arg" in
+            threads:*) grant="${arg#threads:}" ;;
+            fixture:stamped=*) file="${arg#fixture:stamped=}" ;;
+          esac
+        done
+        echo "threads: $grant; LEAN_NUM_THREADS: ${LEAN_NUM_THREADS:-}"
+        [ -n "$file" ] && echo "start $name" >> "$file"
+        sleep 0.4
+        [ -n "$file" ] && echo "end $name" >> "$file"
+        exit 0
+        ;;
       *)
         record '{"type":"protocol","version":1}'
         record "{\"type\":\"verdict\",\"status\":\"error\",\"message\":\"no test is named $name\"}"
@@ -188,7 +348,8 @@ case "$mode" in
     esac
     ;;
   *)
-    echo "usage: basic.sh errata-list <out> | errata-run <out> <name> [setting:K=V]..." >&2
+    echo "usage: basic.sh errata-list <out> | errata-run <out> <name> [ARG]... |" \
+      "errata-fixture <out> <name> <phase> [ARG]..." >&2
     exit 2
     ;;
 esac
@@ -202,6 +363,9 @@ for arg in "$@"; do
 done
 [ -n "$chained" ] || invoke "$@"
 status=2
+failed=""
+carried=()
+CHAIN_VALUE_FILE=$(mktemp)
 while [ $# -gt 0 ]; do
   link=()
   while [ $# -gt 0 ] && [ "$1" != ";" ]; do
@@ -209,8 +373,16 @@ while [ $# -gt 0 ]; do
     shift
   done
   [ $# -gt 0 ] && shift
+  # After a link fails, only teardowns run.
+  if [ -n "$failed" ] && [ "${link[3]:-}" != teardown ]; then continue; fi
+  case "${link[0]}" in
+    errata-run|errata-fixture) link+=(${carried[@]+"${carried[@]}"}) ;;
+  esac
+  : > "$CHAIN_VALUE_FILE"
   (invoke "${link[@]}")
   status=$?
-  [ "$status" -eq 0 ] || break
+  if [ -s "$CHAIN_VALUE_FILE" ]; then carried+=("fixture:$(cat "$CHAIN_VALUE_FILE")"); fi
+  [ "$status" -eq 0 ] || failed=1
 done
+rm -f "$CHAIN_VALUE_FILE"
 exit "$status"

@@ -21,6 +21,8 @@ import ErrataTests.Settings
 import ErrataTests.Roles
 import ErrataTests.Filter
 import ErrataTests.WidgetState
+import ErrataTests.Resources
+import ErrataTests.Scheduling
 
 open Errata
 
@@ -2416,6 +2418,11 @@ which is neither a setting nor a fixture. A fixture's parameters are settings an
   toString := toString
   fromString := String.toInt?
   setup := return n
+
+-- Tests take fixtures exclusively and shared, beside settings.
+#test_msgs in
+@[test] def takesFixtures (a : countFixture) (b : shared countFixture) (s : seed) : Bool :=
+  a + b + s ≥ 2
 
 /-- error: `@[test]` has no argument `flavor`; its one argument is `tags` -/
 #test_msgs in
