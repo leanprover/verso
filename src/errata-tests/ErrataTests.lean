@@ -1942,6 +1942,43 @@ def reportColors : Test := do
   assertTrue (!hasEscapes (junitReport report) && !hasEscapes (jsonReport report) &&
     !hasEscapes (markdownReport report)) "no escape sequence in the report files"
 
+/-- Every string in a JSON value. -/
+partial def jsonStrings : Lean.Json → Array String
+  | .str s => #[s]
+  | .arr a => a.flatMap jsonStrings
+  | .obj o => o.toArray.flatMap (jsonStrings ·.2)
+  | _ => #[]
+
+/--
+The human-readable report pads the executable column to the width it is given, so the name column
+starts at one position on every status line, fixture phases' lines included, and it prints names
+with their control characters escaped as a filter's text escapes them. The report files keep the
+names as they are.
+-/
+@[test]
+def reportAlignsColumnsAndEscapesNames : Test := do
+  let r (exe test : String) (resultPath : Array String := #[]) (kind := Result.Kind.test)
+      (path : Array String := #[test]) : Result :=
+    { exe, test, path, resultPath, kind, outcome := .reported .pass }
+  let results := #[#[r "ErrataConfigTests" "a"], #[r "interactive" "b"],
+    #[r "Lib" "F" (kind := .fixture) (path := #["F", "setup"])],
+    #[r "Lib" "c", r "Lib" "c" #["'''\nab'''"], r "Lib" "c" #["tab\there\x01"]]]
+  let mut h : HumanReporter := { verbosity := .verbose, exeWidth := "ErrataConfigTests".length }
+  let mut lines := #[]
+  for rs in results do
+    let (h', ls) := h.test rs
+    h := h'
+    lines := lines ++ ls
+  -- The status word, the bracketed duration, and the executable, each with a space after it.
+  let nameColumn := 12 + 1 + 11 + 1 + "ErrataConfigTests".length + 1
+  let starts := lines.map fun l => (l.drop nameColumn).copy
+  assertBEq #["a", "b", "F setup", "c", "  '''\\nab'''", "  tab\\there\\u{1}"] starts
+  assertTrue (lines.all (!·.contains '\n')) "a line holds a newline"
+  let report : RunReport := { results := results.flatten, seed := 0 }
+  let some json := (Lean.Json.parse (jsonReport report)).toOption
+    | fail "the JSON report is not JSON"
+  assertTrue (jsonStrings json |>.contains "'''\nab'''") "the JSON report keeps the raw name"
+
 /--
 With `--color auto`, the output is colored on a terminal, unless `NO_COLOR` is set and not empty,
 and `CLICOLOR_FORCE` set to anything but `0` colors it anywhere; `always` and `never` decide alone.

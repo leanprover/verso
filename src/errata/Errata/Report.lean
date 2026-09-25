@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 module
 
 public import Errata.Result
+public import Errata.Filter
 public import Lean.Data.Json
 
 public section
@@ -159,28 +160,35 @@ structure HumanReporter where
   lastExe? : Option String := none
   /-- The path of the test whose own line was printed last. -/
   lastPath : Array String := #[]
+  /--
+  The width of the executable column: the length of the longest name among the run's executables,
+  so the name column starts at one position on every status line.
+  -/
+  exeWidth : Nat := 0
 deriving Repr, Inhabited
 
 /-- How many results of one test are printed at {name}`Verbosity.quiet` before the rest are counted. -/
 private def truncationCap : Nat := 50
 
 /--
-A test's name in its styles. When the name ends with the last component of its path, the part
-before that component is in the style of namespaces and the component is in the style of names;
-otherwise the whole name is in the style of names.
+A test's name in its styles, with its control characters escaped as a filter's text escapes them.
+When the name ends with the last component of its path, the part before that component is in the
+style of namespaces and the component is in the style of names; otherwise the whole name is in the
+style of names.
 -/
 def styleTestName (color : Bool) (name : String) (path : Array String) : String :=
   let last := path.back?.getD name
   if !last.isEmpty && name.endsWith last then
-    Style.namespaces.paint color (name.dropEnd last.length).copy ++
-      Style.testName.paint color last
-  else Style.testName.paint color name
+    Style.namespaces.paint color (Filter.escapeControls (name.dropEnd last.length).copy) ++
+      Style.testName.paint color (Filter.escapeControls last)
+  else Style.testName.paint color (Filter.escapeControls name)
 
 /--
 Components of a name joined by {lit}`.`, the last in the style of names and the others in the style
-of namespaces.
+of namespaces, with their control characters escaped.
 -/
 private def styleComponents (color : Bool) (parts : Array String) : String :=
+  let parts := parts.map Filter.escapeControls
   match parts.back? with
   | some last =>
     let front := parts.pop.foldl (fun acc p => acc ++ p ++ ".") ""
@@ -193,13 +201,15 @@ private def sharedPrefix (a b : Array String) : Nat :=
 
 /--
 The lines of one result: its status line, with nextest's shape (the status word, the duration in
-brackets, the executable, and then {name}`name`, the name column), then what explains an outcome
+brackets, the executable padded to the reporter's width, and then {name}`name`, the name column),
+then what explains an outcome
 other than a pass, its docstring when shown, its captured output, and the command that reproduces
 it.
 -/
 private def resultLines (h : HumanReporter) (r : Result) (name : String) : Array String := Id.run do
   let (word, style) := statusWord r
-  let exe := if r.exe.isEmpty then "" else Style.exe.paint h.color r.exe ++ " "
+  let exe := if r.exe.isEmpty && h.exeWidth == 0 then ""
+    else Style.exe.paint h.color r.exe ++ "".pushn ' ' (h.exeWidth - r.exe.length) ++ " "
   let slow := if r.slow then " " ++ Style.slow.paint h.color "[slow]" else ""
   let mut out := #[s!"{style.paint h.color (padLeft statusWidth word)} \
     {bracketedDuration r.durationMs} {exe}{name}{slow}"]
@@ -308,7 +318,8 @@ def HumanReporter.test (h : HumanReporter) (results : Array Result) :
       -- A fixture's phase is named in full: the fixture, then the phase, such as `prepare T`.
       h := { h with lastExe? := some r.exe, lastPath := #[] }
       let phase := " ".intercalate (r.path.extract 1 r.path.size).toList
-      name := styleTestName c r.test #[] ++ " " ++ Style.testName.paint c phase
+      name := styleTestName c r.test #[] ++ " " ++
+        Style.testName.paint c (Filter.escapeControls phase)
     else if r.resultPath.isEmpty then
       let path := if r.path.isEmpty then #[r.test] else r.path
       let shared :=
@@ -328,10 +339,11 @@ def HumanReporter.test (h : HumanReporter) (results : Array Result) :
       | some (a, ai) =>
         let rest := r.resultPath.extract a.size r.resultPath.size
         indent := ai + 2
-        name := spaces indent ++ " / ".intercalate (rest.toList.map (Style.testName.paint c))
+        name := spaces indent ++
+          " / ".intercalate (rest.toList.map (Style.testName.paint c ∘ Filter.escapeControls))
       | none =>
         name := r.resultPath.foldl (init := styleTestName c r.test r.path) fun acc part =>
-          acc ++ " / " ++ Style.testName.paint c part
+          acc ++ " / " ++ Style.testName.paint c (Filter.escapeControls part)
     printed := printed.push (r.resultPath, indent)
     out := out ++ resultLines h r name
   if more > 0 then

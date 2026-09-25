@@ -692,6 +692,27 @@ def parse (text : String) : Except ParseError Expr := do
 
 /-! # Printing -/
 
+/--
+The escape of a control character as a matcher's text writes it: {lit}`\n`, {lit}`\t`, {lit}`\r`,
+and {lit}`\u{…}` with the character's code in hexadecimal for the others; {lean}`none` for any other
+character.
+-/
+def escapeControl? (c : Char) : Option String :=
+  match c with
+  | '\n' => some "\\n"
+  | '\t' => some "\\t"
+  | '\r' => some "\\r"
+  | c =>
+    if c.toNat < 0x20 || c.toNat == 0x7f then
+      some ("\\u{" ++ String.ofList (Nat.toDigits 16 c.toNat) ++ "}")
+    else none
+
+/-- The text with its control characters escaped as {name}`escapeControl?` escapes them. -/
+def escapeControls (s : String) : String :=
+  s.foldl (init := "") fun acc c => match escapeControl? c with
+    | some e => acc ++ e
+    | none => acc.push c
+
 /-- A matcher's text written with the escapes that make it read back as the same text. -/
 def escapeText (s : String) : String :=
   s.foldl (init := "") fun acc c =>
@@ -699,13 +720,9 @@ def escapeText (s : String) : String :=
     | ')' => acc ++ "\\)"
     | ',' => acc ++ "\\,"
     | '\\' => acc ++ "\\\\"
-    | '\n' => acc ++ "\\n"
-    | '\t' => acc ++ "\\t"
-    | '\r' => acc ++ "\\r"
-    | c =>
-      if c.toNat < 0x20 || c.toNat == 0x7f then
-        acc ++ "\\u{" ++ String.ofList (Nat.toDigits 16 c.toNat) ++ "}"
-      else acc.push c
+    | c => match escapeControl? c with
+      | some e => acc ++ e
+      | none => acc.push c
 
 /-- A matcher as the argument of the predicate {name}`pred`. -/
 def Matcher.print (pred : Predicate) (m : Matcher) : String :=

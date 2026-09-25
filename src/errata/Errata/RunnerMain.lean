@@ -1132,6 +1132,9 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
         let (n, warning?) ← availableParallelism
         if let some w := warning? then d.dispatch (.issue { isError := false, message := w })
         pure n
+    -- The executable column is as wide as the longest name among the executables that run tests.
+    let exeWidth := selected.foldl (init := 0) fun w (t, _) => max w (exeName t).length
+    d.state.atomically (modify fun s => { s with human := { s.human with exeWidth } })
     d.dispatch (.phase "Run" (← Protocol.nowMs) (some pool))
     let plan := ctx.fixturePlan pool listings resolution selected
     for w in plan.settingConflicts do
