@@ -124,9 +124,9 @@ inductive FixtureStatus where
 deriving Repr, Inhabited, DecidableEq
 
 /--
-The scheduler's state. The pool is a number of slots, one per hardware thread, and each running job
-holds the slots of its grant. A test claims each fixture that it uses, exclusively or shared, from
-its first prepare until it ends.
+The scheduler's state. The pool is a number of slots, and each running job holds the slots of its
+grant. Tests claim each fixture that they use, exclusively or shared, from their first prepare until
+they end.
 -/
 structure State where
   /-- The number of hardware-thread slots in the pool. -/

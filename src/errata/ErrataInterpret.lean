@@ -5,9 +5,9 @@ Author: David Thrane Christiansen
 -/
 
 /-
-The interpreted product of the Lean harness: one fixed executable that imports test modules and runs
-the harness over the tests, helpers, and fixtures that they record, with no generated main and no
-link.
+The interpreted product of the Lean harness: one fixed executable that runs the harness over the
+tests, helpers, and fixtures that test modules record, with no generated main and no link. It
+imports the modules, and lists their tests from their `.olean` files when those suffice.
 -/
 module
 
@@ -147,10 +147,10 @@ def splitArgs (args : List String) : Option (Array Name × List String) :=
 
 /--
 Runs the harness over the modules with the arguments after {lit}`--`. A lone {lit}`errata-list`
-reads the inventory from the modules' {lit}`.olean` files when every default it lists was recorded
-there (see {name}`Errata.OleanListing.listed?`); every other invocation, and such a listing
-otherwise, imports the modules and reads the tables from the environment. The modules are found
-through the search path that {lit}`LEAN_PATH` gives.
+reads the inventory from the modules' {lit}`.olean` files when they record every default it lists
+and every test's declaration range (see {name}`Errata.OleanListing.listed?`); every other
+invocation, and such a listing otherwise, imports the modules and reads the tables from the
+environment. The modules are found through the search path that {lit}`LEAN_PATH` gives.
 -/
 unsafe def interpret (args : List String) : IO UInt32 := do
   let some (modules, harnessArgs) := splitArgs args
@@ -180,8 +180,8 @@ fixtures that every imported module records, and runs {name}`Errata.Harness.main
 arguments after {lit}`--`. Every mode of the harness behaves as it does in a library's compiled test
 executable; the helpers of tests and fixture phases run through this same command and modules. A
 lone {lit}`errata-list` writes the same inventory from the modules' {lit}`.olean` files, which
-record each test with its declaration range, its settings, and the fixtures it reaches, unless a
-listed setting's default was not evaluated when {lit}`@[setting]` was applied.
+record each test with its declaration range, its settings, and the fixtures it reaches, when the
+files hold every listed setting's default and every test's range.
 -/
 public def main (args : List String) : IO UInt32 := do
   try interpretImpl args catch e => do

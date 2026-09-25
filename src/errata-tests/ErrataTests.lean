@@ -768,7 +768,7 @@ def lakeIn (ws : System.FilePath) (args : Array String) : IO IO.Process.Output :
 /--
 The driver tells users how it should be invoked, and works that out from the workspace it runs in.
 
-The fixture workspaces under `fixtures` require Verso (and thus Errata) by path. `driver-bare`
+The workspaces under `fixtures` require Verso (and thus Errata) by path. `driver-bare`
 neither names a test driver nor defines a script, so the command is a bare `lake run Errata.run`.
 `driver-configured` names Verso's driver as its test driver, so the command is `lake test`.
 `driver-shadowed` has an `Errata.run` script of its own that a bare name would run, so Verso's must
@@ -1099,9 +1099,9 @@ private partial def copyTree (src dst : System.FilePath) : IO Unit := do
     else IO.FS.writeBinFile (dst / entry.fileName) (← IO.FS.readBinFile entry.path)
 
 /--
-Copies a fixture workspace into {name}`dir`, so that a test changes and builds its own copy. The
-lakefile's relative paths to Verso and to Verso's packages become absolute, so the copy builds
-wherever it is.
+Copies a workspace under {lit}`fixtures` into {name}`dir`, so that a test changes and builds its own
+copy. The lakefile's relative paths to Verso and to Verso's packages become absolute, so the copy
+builds wherever it is.
 -/
 private def copyFixture (fixture dir : System.FilePath) : IO Unit := do
   let root ← IO.FS.realPath "."

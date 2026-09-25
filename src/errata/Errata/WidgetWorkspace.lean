@@ -175,7 +175,7 @@ def libraryOf (libs : Array LibraryModules) (mod : Lean.Name) : Option String :=
 structure ProfileChoice where
   /-- The profile's name. -/
   name : String
-  /-- Whether the profile's default filter leaves the test out, as the fallback's does. -/
+  /-- Whether the profile is the fallback, offered when no default filter selects the test. -/
   fallback : Bool := false
   /--
   The values that the test receives from the profile: for each setting, the first override that
@@ -208,7 +208,7 @@ def profileValues (profile : Runner.Profile) (record : Filter.Record) (dflt : Bo
 The profiles of {name}`config` that a run of the test {name}`record` can use: those whose default
 filter selects the test, or that have none, the {lit}`default` profile first and the others in the
 configuration's order. When none selects the test, the one choice is the {lit}`default` profile,
-marked as the fallback. A default filter that cannot be read selects nothing.
+marked as the fallback. Default filters that cannot be read select nothing.
 -/
 def profileChoices (config : Runner.Config) (record : Filter.Record) : Array ProfileChoice :=
   let names := #["default"] ++ config.profileNames.filter (· != "default")

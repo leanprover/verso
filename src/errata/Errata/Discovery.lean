@@ -66,7 +66,8 @@ compiled, with the {name}`IsTest` instance in force here, into an exported defin
 Test executables reach that definition through a plain {lit}`import` of the test's module. Tests
 must themselves be exported: in a module, they are public, which a {lit}`public section` arranges.
 Docstrings are read here, from the live environment, and stored with each test, together with the
-fixtures that the test reaches, so that a test executable lists the test from its record alone.
+fixtures that the test reaches and, for a declaration of another module, its declaration range, so
+that the interpreted product lists the test from its record alone.
 -/
 meta def recordTest (decl : Name) (tags : Array String := #[]) (threads? : Option Nat := none) :
     AttrM Unit := do
@@ -84,7 +85,7 @@ meta def recordTest (decl : Name) (tags : Array String := #[]) (threads? : Optio
   let reachedFixtures :=
     reachedFixtureDecls (fixtureExt.getState (← getEnv)) (fixtures.map (·.decl))
   let file ← getFileName
-  -- An imported declaration's ranges are in its own module's data, when that data is loaded, while
+  -- Imported declarations' ranges are in their own modules' data, when that data is loaded, and
   -- those of this module's declarations are complete when the module is written
   -- (`TestDecl.withRange`).
   let location? ← if ((← getEnv).getModuleIdxFor? decl).isSome then

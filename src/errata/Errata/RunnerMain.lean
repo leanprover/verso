@@ -152,21 +152,21 @@ deriving BEq
 
 /--
 The lifelines that the run holds after their invocations have ended, each the write end of an
-invocation's standard input, with what it serves. The services that a setup or a prepare starts
-inherit the lifeline and end when it closes. A lifeline closes when the runner drops it.
+invocation's standard input, with what it serves. The processes that a setup or a prepare starts
+inherit its lifeline and end when it closes. Lifelines close when the runner drops them.
 -/
 structure Lifelines where
   /-- The held lifelines. -/
   held : Std.Mutex (Array (LifelineOwner × IO.FS.Handle))
 
-/-- No held lifelines. -/
+/-- A new set of held lifelines, empty. -/
 def Lifelines.new : BaseIO Lifelines := return { held := ← Std.Mutex.new #[] }
 
 /-- Holds {name}`h` until what {name}`owner` names ends. -/
 def Lifelines.hold (l : Lifelines) (owner : LifelineOwner) (h : IO.FS.Handle) : BaseIO Unit :=
   l.held.atomically (modify (·.push (owner, h)))
 
-/-- Drops the lifelines that {name}`owner` holds, which closes them. -/
+/-- Drops the lifelines held for {name}`owner`, which closes them. -/
 def Lifelines.release (l : Lifelines) (owner : LifelineOwner) : BaseIO Unit :=
   l.held.atomically (modify (·.filter (·.1 != owner)))
 
@@ -449,10 +449,11 @@ def RunContext.ended (ctx : RunContext) (inv : Invocation) (exit : Exit) (durati
   return { exit, succeeded := own?.any (·.outcome.isPass), value? }
 
 /--
-Settles the lifeline of an invocation that has ended. A setup's lifeline is held until the
-fixture's teardown ends, and a prepare's until the test it prepared ends, since the services they
-start end when it closes; a test's and a teardown's close now, with the lifelines they end. The rest
-close when the run's context goes, at the end of the run.
+Settles the lifelines when an invocation ends. Setups' lifelines are held until their fixtures'
+teardowns end, and prepares' until the tests they prepared end. When a teardown ends, the lifeline
+held for its fixture closes, and when a test ends, those held for it close; their own lifelines
+close with them. Held lifelines that remain close when the run's context goes, at the end of the
+run.
 -/
 def RunContext.keepLifeline (ctx : RunContext) (inv : Invocation) (g : Group) : BaseIO Unit := do
   let p := inv.planned
@@ -1032,11 +1033,11 @@ lists every executable, then checks the configuration against the inventory: val
 command line gives to settings that no executable declares are errors, and those that the profile
 gives are warnings; the filters are evaluated, with a warning for each atom and each filter that
 selects nothing. The configuration's filters draw these warnings only when the run has every test
-executable of the package. The {lit}`list` command then prints the
-selected tests in its message format. The Run phase runs the selected tests and the phases of the
-fixtures they use as the scheduler directs, in inventory order as far as the fixtures' claims and
-the slots of the pool allow. The pool has the slots that {lit}`--jobs` or else the profile's
-{lit}`jobs` gives, or else one per CPU available to the runner.
+executable of the package. The {lit}`list` command then prints the selected tests in its message
+format. The Run phase runs the selected tests and the phases of the fixtures they use as the
+scheduler directs, in inventory order as far as the fixtures' claims and the slots of the pool
+allow. The pool has the slots that {lit}`--jobs` or else the profile's {lit}`jobs` gives, or else
+one per CPU available to the runner.
 -/
 def execute (config : Config) (opts : Options) (sinks : Sinks)
     (registry : Option Registry := none) (color : Bool := false) : IO (RunReport × UInt32) := do

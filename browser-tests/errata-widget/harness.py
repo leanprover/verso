@@ -251,7 +251,7 @@ class LspPeer:
 
 class LeanServer(LspPeer):
     """
-    A Lean language server started in the fixture workspace, speaking LSP over its stdio.
+    A Lean language server started in the widget's workspace, speaking LSP over its stdio.
 
     `lake env` starts the server as a child process, and the server starts a file worker per
     document, which starts the builds and runs of the widget. Stopping the server stops all of them.
@@ -303,7 +303,7 @@ class LeanServer(LspPeer):
             self.on_exit()
 
     def initialize(self):
-        """Initializes the server for the fixture workspace and returns its reply."""
+        """Initializes the server for the widget's workspace and returns its reply."""
         result = self.request(
             "initialize",
             {"processId": None, "rootUri": FIXTURE.as_uri(), "capabilities": {}},
@@ -697,6 +697,7 @@ class Rule:
     """A change to how the relay passes on calls of one RPC method, for a number of calls."""
 
     def __init__(self, lock, method, action, count, after=0):
+        """A rule that applies `action` to `count` calls of `method` after the first `after`."""
         # The relay's lock, which guards whether the rule is released and what it holds.
         self.lock = lock
         self.method = method
@@ -723,6 +724,7 @@ class Rule:
         self.release()
 
     def wait_until_matched(self, timeout=60):
+        """Waits until a call matches the rule, or raises `TimeoutError` after `timeout` seconds."""
         if not self.matched.wait(timeout):
             raise TimeoutError(f"no call of {self.method} within {timeout}s")
 
@@ -731,6 +733,7 @@ class LspRelay:
     """Serves the test page and relays LSP messages between it and the Lean server."""
 
     def __init__(self):
+        """Starts serving on a free local port, with no server connected."""
         self.lean = None
         self.inbox = []
         self.inbox_ready = threading.Condition()
@@ -750,10 +753,14 @@ class LspRelay:
         relay = self
 
         class Handler(BaseHTTPRequestHandler):
+            """Answers the page: its files, its collections of messages, and its posts."""
+
             def log_message(self, *args):
+                """Logs nothing, so the requests stay out of the tests' output."""
                 pass
 
             def do_GET(self):
+                """Serves the page's files and answers its collections of messages."""
                 if self.path.startswith("/lsp?page="):
                     relay._serve_inbox(self, self.path.removeprefix("/lsp?page="))
                 elif self.path == "/":
@@ -768,6 +775,7 @@ class LspRelay:
                     self.send_error(404)
 
             def do_POST(self):
+                """Takes a message that the page sends to the server."""
                 length = int(self.headers.get("Content-Length", "0"))
                 message = json.loads(self.rfile.read(length))
                 self.send_response(204)
@@ -780,10 +788,12 @@ class LspRelay:
 
     @property
     def url(self):
+        """The address of the test page."""
         host, port = self.server.server_address
         return f"http://{host}:{port}/"
 
     def close(self):
+        """Stops relaying and stops serving the page."""
         self.connected.clear()
         self.server.shutdown()
         self.server.server_close()
@@ -819,6 +829,7 @@ class LspRelay:
         """
 
         def arrived():
+            """Whether such a reply has reached the page."""
             return any(
                 m == method and (decl is None or d == decl) and place > after
                 for m, d, place in self.delivered
@@ -830,6 +841,7 @@ class LspRelay:
                 raise TimeoutError(f"no reply to {method}{about} within {timeout}s")
 
     def _add_rule(self, method, action, count, after=0):
+        """Adds a rule for calls of `method` and returns it, for the test to release or stop."""
         rule = Rule(self.lock, method, action, count, after)
         with self.lock:
             self.rules.append(rule)
@@ -861,11 +873,16 @@ class LspRelay:
         return None, False
 
     def _deliver(self, message):
+        """Puts a message in the page's inbox and wakes the page's waiting collection."""
         with self.inbox_ready:
             self.inbox.append(message)
             self.inbox_ready.notify_all()
 
     def _from_page(self, message):
+        """
+        Passes a message from the page to the server. Requests are counted in the order of the
+        page's requests and go through the rules, which can reject them or hold them.
+        """
         request_id = message.get("id")
         if request_id is not None:
             method = message.get("method")
@@ -925,12 +942,17 @@ class LspRelay:
             )
 
     def _to_server(self, message):
-        # A server only reads requests once it has been initialized, so messages wait until then.
+        """Sends a message to the connected server, waiting up to 120 seconds for one."""
+        # A server reads requests once it has been initialized, so messages wait until then.
         if not self.connected.wait(timeout=120):
             raise TimeoutError("no Lean server was connected within 120s")
         self.lean.send(message)
 
     def from_server(self, message):
+        """
+        Passes a message from the server to the page. Replies go through the rules, which can
+        replace them with an error or hold them.
+        """
         request_id = message.get("id")
         if request_id is None:
             self._deliver(message)
@@ -956,6 +978,7 @@ class LspRelay:
             self._deliver_reply(request, message)
 
     def _deliver_reply(self, request, message):
+        """Delivers a reply to the page and records it for `wait_for_reply`."""
         self._deliver(message)
         with self.delivered_changed:
             self.delivered.append(request)
@@ -985,6 +1008,7 @@ class LspRelay:
         handler.wfile.write(body)
 
     def _serve_file(self, handler, path):
+        """Answers a request with the file at `path`, or with 404 when there is none."""
         if not path.is_file():
             handler.send_error(404)
             return
@@ -1001,11 +1025,13 @@ class LspRelay:
 
 class Editor:
     """
-    The editor that the tests drive: it opens fixture files in the Lean server, moves the cursor,
-    edits and saves, and restarts the server, telling the InfoView of each as VS Code would.
+    The editor that the tests drive: it opens the workspace's test modules in the Lean server, moves
+    the cursor, edits and saves, and restarts the server, telling the InfoView of each as VS Code
+    would.
     """
 
     def __init__(self, page, relay, session):
+        """An editor on `page` with no open documents, using the relay and the session's server."""
         self.page = page
         self.relay = relay
         self.session = session
@@ -1015,10 +1041,12 @@ class Editor:
 
     @property
     def lean(self):
+        """The session's Lean server."""
         return self.session.lean
 
     @property
     def initialize_result(self):
+        """The session's server's reply to `initialize`."""
         return self.session.initialize_result
 
     def start(self):
@@ -1129,10 +1157,11 @@ class Editor:
         return self.lean.runner_processes(decl)
 
     def path(self, module):
-        """The file of a fixture module, given by its name below `WidgetFixtures`."""
+        """The file of a test module of the workspace, given by its name below `WidgetFixtures`."""
         return FIXTURE / "WidgetFixtures" / (module.replace(".", "/") + ".lean")
 
     def open(self, module):
+        """Opens the module in the Lean server with the text of its file."""
         path = self.path(module)
         text = path.read_text(encoding="utf-8")
         self.documents[module] = {"text": text, "version": 1}
@@ -1149,7 +1178,7 @@ class Editor:
         )
 
     def location_of(self, module, decl):
-        """The place in a fixture module just inside the name of the declaration `decl`."""
+        """The place in an open module just inside the name of the declaration `decl`."""
         text = self.documents[module]["text"]
         for line, content in enumerate(text.split("\n")):
             if content.startswith(f"def {decl} "):
@@ -1191,6 +1220,7 @@ class Editor:
         )
 
     def move_to(self, module, decl):
+        """Opens the module if need be and moves the InfoView's cursor to `decl`."""
         if module not in self.documents:
             self.open(module)
         self.page.evaluate(
@@ -1241,9 +1271,11 @@ class Editor:
         )
 
     def editor_calls(self):
+        """The calls that the InfoView has made to the editor, as the page recorded them."""
         return self.page.evaluate("window.harness.editorCalls")
 
     def copied(self):
+        """The text that the InfoView has copied to the clipboard, as the page recorded it."""
         return self.page.evaluate("window.harness.copied")
 
 

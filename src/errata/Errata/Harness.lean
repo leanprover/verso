@@ -106,10 +106,11 @@ def contextOf (settings : Array (String × String)) (threads : Nat := 1)
     helperCommand := some ((← selfCommand invocation).push "errata-helper"), threads }
 
 /--
-Adds the fixture named {name}`name` from {name}`byName` to {name}`order`, the fixtures added so far
-with their names, after the fixtures it takes, each once.
+Adds the fixture named {name}`name`, looked up in {name}`byName`, to {name}`order` after the
+fixtures it takes, each once. {name}`order` holds the fixtures added so far and the set of their
+names.
 -/
--- A fixture is marked seen before the fixtures it takes are added, so a fixture is visited once.
+-- Each fixture is marked seen before the fixtures it takes are added, so each is visited once.
 partial def addFixtureAfterItsFixtures (byName : Std.HashMap String FixtureInfo) (name : String)
     (order : Array FixtureInfo × Std.HashSet String) : Array FixtureInfo × Std.HashSet String :=
   let (out, seen) := order
@@ -465,10 +466,10 @@ reads itself, with no declaration, to rewrite golden files. When the environment
 {lit}`ERRATA_LIFELINE` is {lit}`1`, as the runner sets it, the executable's standard input is its
 lifeline: when the pipe closes, the executable ends its own process group and exits. Otherwise the
 command runs by hand with any standard input, {lit}`/dev/null` included. The test itself reads an
-empty standard input. The runner holds the other end of a setup's standard input until the
-fixture's teardown ends, and of a prepare's until the test it prepared ends, so a process that a
-setup or a prepare starts and that inherits its standard input reads its end then, or when the run
-ends, however the runner ends. A test's and a teardown's standard input close when they end.
+empty standard input. The runner holds the other end of setups' standard inputs until their
+fixtures' teardowns end, and of prepares' until the tests they prepared end, so processes that a
+setup or a prepare starts and that inherit its standard input read its end then, or when the run
+ends, however the runner ends. Tests' and teardowns' standard inputs close when they end.
 
 The runner also sets {lit}`ERRATA_DIR` to the directory of Errata's sources, where the shell
 harness lives, and {lit}`ERRATA_RUN_ID` to the run's identifier, which is the same for every process

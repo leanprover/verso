@@ -2100,9 +2100,9 @@ def generatedMain : System.FilePath :=
   ".lake/errata-runner/ErrataGenerated_verso/ErrataTests.lean"
 
 /--
-The interpreted product lists a library's tests from the modules' {lit}`.olean` files, and its
-inventory is the compiled test executable's, record for record, when it names the modules that the
-compiled executable's generated main names, in the same order.
+The interpreted product's inventory of a library is the compiled test executable's, record for
+record, when it names the modules that the compiled executable's generated main names, in the same
+order.
 -/
 @[test]
 def interpretedInventoryIsCompiledInventory : Test := do
@@ -2133,7 +2133,7 @@ def interpretedInventoryIsCompiledInventory : Test := do
 def interpretedList (modules : Array String) (chained : Bool := false) : TestM (Array String) := do
   IO.FS.withTempDir fun dir => do
     let out := dir / "list.jsonl"
-    -- A chain imports the modules, as every invocation but a lone `errata-list` does.
+    -- Chains import the modules, as every invocation but a lone `errata-list` does.
     let chain := if chained then #[";", "errata-list", (dir / "again.jsonl").toString] else #[]
     let r ← IO.Process.output {
       cmd := interpreter.toString
@@ -2217,7 +2217,7 @@ def manyTests (n : Nat) : IO ExecutableConfig := do
            env := #[("ERRATA_MANY", toString n)] }
 
 /--
-The runner closes a test's files once the test has ended: with four slots and a limit of 256 open
+The runner closes tests' files once they end: with four slots and a limit of 256 open
 files, as macOS gives a login shell, a run of 300 tests passes.
 -/
 @[test]

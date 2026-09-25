@@ -89,8 +89,8 @@ deriving Inhabited
 /--
 A recorded test: its declaration name, the definition that runs it, the source file that defines
 it, and what a test executable lists about it. The file, the docstring, the settings, and the
-fixtures are captured when the attribute is applied; the declaration's range is added when the
-module is written, once the declaration ranges are available.
+fixtures are captured when the attribute is applied; the declaration's range is added when it is
+known, as {name (full := TestDecl.location?)}`location?` describes.
 -/
 structure TestDecl where
   /-- The test declaration's name. -/

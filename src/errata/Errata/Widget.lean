@@ -477,7 +477,7 @@ meta structure ProfileOption where
   default filter selects the test.
   -/
   fallback : Bool := false
-  /-- A field for each setting that the test takes, other than the seed, with the profile's values. -/
+  /-- A field for each setting that the test takes but the seed, with the profile's values. -/
   fields : Array SettingField
 deriving Lean.FromJson, Lean.ToJson
 

@@ -21,10 +21,10 @@ A setting: a value that the configuration file or the command line gives as a st
 test takes as a parameter of the setting's {name (full := Setting.type)}`type`. Declarations of this
 type marked {lit}`@[setting]` declare settings, and their docstrings describe them.
 
-A setting's {name (full := Setting.default?)}`default?` is a constant expression: it gives the same
-value wherever and whenever it is evaluated. Test executables list it, and the interpreted product
-lists the value that {lit}`@[setting]` recorded, so a default that reads the environment, a file,
-or the clock would make the two disagree.
+Settings' {name (full := Setting.default?)}`default?` values are constant expressions, which give
+the same value wherever and whenever they are evaluated. Test executables evaluate the default when
+they list it, and the interpreted product lists the value that {lit}`@[setting]` recorded; defaults
+that read the environment, a file, or the clock make the two listings disagree.
 -/
 structure Setting where
   /-- The type of the value that a test receives. -/

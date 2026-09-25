@@ -24,8 +24,8 @@ PLAYWRIGHT_EXPECT_TIMEOUT = 5_000
 
 def check_fixture_workspace():
     """
-    Checks that the InfoView is installed, and removes the fixture workspace's manifest so that Lake
-    resolves the workspace against Verso's own dependencies.
+    Checks that the InfoView is installed, and removes the manifest of the widget's workspace so
+    that Lake resolves the workspace against Verso's own dependencies.
     """
     if not INFOVIEW.is_dir():
         raise RuntimeError("the InfoView is missing; run `npm ci` in the repository root first")

@@ -41,15 +41,17 @@
 # `errata_fail` writes a failing verdict and returns 1, which ends the body unless the body catches
 # the status; the test fails either way. Fixtures' phases run the same way, through
 # `errata_fixture_setup`, `errata_fixture_prepare`, and `errata_fixture_teardown`, each given the
-# fixture's name. If a script defines no prepare or teardown function, that phase does nothing.
+# fixture's name. The prepare and teardown functions are optional: in scripts that leave one out,
+# that phase is trivial and succeeds.
 #
 # The runner sets three variables in every test executable's environment: ERRATA_DIR, the directory
 # of Errata's sources; ERRATA_RUN_ID, the run's identifier, the same for every process of one run and
 # different in the next, for work a script does once per run; and ERRATA_LIFELINE=1, which marks
-# standard input as a pipe that closes when the runner ends. Scripts read the first two from their
-# environment, and the runner itself ends the process group of each shell test. When tests run
-# concurrently, every test and fixture phase also receives LEAN_NUM_THREADS, the same number as
-# `errata_threads` prints.
+# standard input as a lifeline: a pipe that closes when a test or a teardown ends, when the
+# fixture's teardown ends for a setup, and when the prepared test ends for a prepare, and at the
+# latest when the runner ends. Scripts read the first two from their environment, and the runner
+# itself ends the process group of each shell test. When tests run concurrently, every test and
+# fixture phase also receives LEAN_NUM_THREADS, the same number as `errata_threads` prints.
 #
 # The library needs bash 3.2 or later and the POSIX utilities that ship with macOS and Linux. It
 # writes the records to file descriptor 9, which it opens on the file that the runner names, so the
@@ -567,7 +569,7 @@ _errata_invoke() {
       fi
       if ! declare -F "errata_fixture_$phase" > /dev/null; then
         status=0
-        # Prepares and teardowns without a function have nothing to do; a setup needs one.
+        # Prepares and teardowns without a function are trivial; a setup needs one.
         if [ "$phase" = setup ]; then
           _errata_error "the script declares fixtures and defines no errata_fixture_setup"
           status=1

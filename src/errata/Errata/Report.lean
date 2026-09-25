@@ -161,8 +161,8 @@ structure HumanReporter where
   /-- The path of the test whose own line was printed last. -/
   lastPath : Array String := #[]
   /--
-  The width of the executable column: the length of the longest name among the run's executables,
-  so the name column starts at one position on every status line.
+  The width of the executable column: the length of the longest name among the executables whose
+  tests the run selected, so the name column starts at one position on every status line.
   -/
   exeWidth : Nat := 0
 deriving Repr, Inhabited
@@ -202,9 +202,8 @@ private def sharedPrefix (a b : Array String) : Nat :=
 /--
 The lines of one result: its status line, with nextest's shape (the status word, the duration in
 brackets, the executable padded to the reporter's width, and then {name}`name`, the name column),
-then what explains an outcome
-other than a pass, its docstring when shown, its captured output, and the command that reproduces
-it.
+then what explains an outcome other than a pass, its docstring when shown, its captured output, and
+the command that reproduces it.
 -/
 private def resultLines (h : HumanReporter) (r : Result) (name : String) : Array String := Id.run do
   let (word, style) := statusWord r

@@ -1,6 +1,6 @@
 """
 The fields for the settings that a test declares, which start with the values that the profile of
-the fixture workspace's `errata.toml` gives them.
+the widget's workspace's `errata.toml` gives them.
 """
 
 import shutil

@@ -184,8 +184,8 @@ function shellWord(text) {
  *   with the value that the profile gives it, or the target whose result the profile gives it
  * @typedef {{name: string, value: string}} SettingValue
  * @typedef {{name: string, fallback?: boolean, fields: SettingField[]}} ProfileOption a profile
- *   offered for the test's runs, with the values that the test receives from it; a fallback
- *   profile's default filter leaves the test out, which a run of the one test sets aside
+ *   offered for the test's runs, with the values that the test receives from it; the fallback's
+ *   default filter leaves the test out, and the run of the one test sets that filter aside
  */
 
 // How a profile is named in the profile menu.
@@ -1104,11 +1104,11 @@ function TestRun(props) {
     const [edited, setEdited] = React.useState(false);
     // The seed for property tests as typed, or blank to generate a random seed.
     const [seed, setSeed] = React.useState("");
-    // The profiles offered for the test's runs, each with the test's settings and the values that it
-    // gives them, as the server last reported them; the settings as the server reported them for a
-    // workspace whose configuration it has not read yet; the profile of the next run; and the text of
-    // each field that the reader has changed, by name. A field shows the chosen profile's value until
-    // the reader changes it, and its reset button returns it there.
+    // The profiles offered for the test's runs, each with the test's settings and the values that
+    // it gives them, as the server last reported them; the settings as the server reported them
+    // for a workspace whose configuration it has not read yet; the profile of the next run; and the
+    // text of each field that the reader has changed, by name. Fields show the chosen profile's value
+    // until the reader changes them, and their reset buttons return them there.
     const [profileOptions, setProfileOptions] = React.useState(/** @type {ProfileOption[]} */ ([]));
     const [plainFields, setPlainFields] = React.useState(/** @type {SettingField[]} */ ([]));
     const [profile, setProfile] = React.useState(/** @type {string | null} */ (null));
@@ -1207,8 +1207,8 @@ function TestRun(props) {
     }
 
     // Asks the server for the test's settings, the profiles offered for its runs, and the values
-    // that each profile gives the settings. A field that the reader has left shows the chosen
-    // profile's value as it now is, and a field the reader has changed keeps its text. The chosen
+    // that each profile gives the settings. Fields that the reader has left show the chosen
+    // profile's value as it now is, and fields the reader has changed keep their text. The chosen
     // profile stays chosen while it is offered, and otherwise the server's first choice is taken.
     function loadSettings() {
         rsRef.current.call("Errata.Widget.testSettings", { decl: props.decl }).then(

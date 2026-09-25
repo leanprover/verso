@@ -68,9 +68,8 @@ def commandExists (cmd : String) (cwd : Option System.FilePath := none)
     return false
 
 /--
-The operating system's identifier of the child process. The runtime's function reads the child and
-leaves it with the caller, as the borrowed parameter here says, so the child's pipes close when the
-caller's last reference to it goes.
+The operating system's identifier of the child process. The runtime's function borrows the child,
+so the child's pipes close when the caller's last reference to it goes.
 -/
 @[extern "lean_io_process_child_pid"]
 opaque childPid {cfg : @& IO.Process.StdioConfig} : @& IO.Process.Child cfg → UInt32
