@@ -271,8 +271,11 @@ class LeanServer(LspPeer):
     A Lean language server started in the widget's workspace, speaking LSP over its stdio.
 
     `lake env` starts the server as a child process, and the server starts a file worker per
-    document, which starts the builds and runs of the widget. Stopping the server stops all of them.
-    When the server's output ends, `on_exit` runs.
+    document, which starts the builds and runs of the widget. All of them run in a process group of
+    their own, and stopping the server stops the group. When `lake env` exits, because the server
+    has died, the group's remaining processes are killed, which ends the server's output. When the
+    server's output ends, `on_exit` runs. The server runs without `LEAN_NUM_THREADS`, since it
+    serves every test at once and its load is the tests' own.
     """
 
     def __init__(self, on_message, on_exit=None):
@@ -280,12 +283,15 @@ class LeanServer(LspPeer):
         Starts the server and its readers. The server's messages that are not replies to the
         harness go to `on_message`.
         """
+        env = {k: v for k, v in os.environ.items() if k != "LEAN_NUM_THREADS"}
         self.proc = subprocess.Popen(
             ["lake", "env", "lean", "--server"],
             cwd=FIXTURE,
+            env=env,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            process_group=0,
         )
         super().__init__(self.proc.stdout, self.proc.stdin, on_message, "harness-")
         self.on_exit = on_exit
@@ -296,6 +302,22 @@ class LeanServer(LspPeer):
         ]
         for reader in self.readers:
             reader.start()
+        threading.Thread(target=self._watch_exit, daemon=True).start()
+
+    def _watch_exit(self):
+        """
+        Waits for `lake env` to exit, then kills what is left of the server's process group: file
+        workers whose server died hold the server's output open until they end.
+        """
+        self.proc.wait()
+        self._kill_group()
+
+    def _kill_group(self):
+        """Kills every process of the server's process group that is still running."""
+        try:
+            os.killpg(self.proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
 
     @property
     def running(self):
@@ -332,6 +354,7 @@ class LeanServer(LspPeer):
         """Kills the server and every process below it, and waits for the server to exit."""
         kill_trees([self.proc.pid])
         self.proc.wait()
+        self._kill_group()
         # The readers end at the end of their pipes, which the server's exit closed, and the pipes
         # are closed after them, so a session that starts several servers holds the pipes of one.
         for reader in self.readers:

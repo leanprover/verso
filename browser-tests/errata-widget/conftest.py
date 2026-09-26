@@ -72,14 +72,16 @@ def lean_server_teardown(address, context):
 
 
 # The Lean server that the tests share. Each test opens documents in modules of its own, ends its
-# runs and closes its documents when it ends, and the host closes what a test's connection left
-# open, so the prepare is trivial. The tests marked `lean_server_alone` use the server alone among
-# its users. Its phases ask for the threads of the server's workers and the builds they start,
-# which run under the grant of the phase that started the server.
+# runs and closes its documents when it ends, and the host closes what a test's connection still
+# owns; the fixture has no prepare. The tests marked `lean_server_alone` use the server alone among
+# its users. Every phase of the fixture and every test that uses it takes one slot of the pool, so
+# as many widget tests run at once as the pool has slots. The host starts the server without
+# `LEAN_NUM_THREADS`: the server serves every test at once, and its load is the tests' own, which
+# the pool counts.
 errata_fixtures_decl = {
     "leanServer": {
         "description": "A Lean server in the widget's fixture workspace, which the tests share.",
-        "threads": 4,
+        "threads": 1,
         "setup": lean_server_setup,
         "teardown": lean_server_teardown,
     },
@@ -201,14 +203,15 @@ def pytest_configure(config):
 def pytest_collection_modifyitems(config, items):
     """
     Marks the widget tests `slow`, since each takes several seconds, and marks the tests that use a
-    Lean server as using the Errata fixture `leanServer`: alone among its users for the tests marked
-    `lean_server_alone`, and shared with the others otherwise.
+    Lean server or test modules as using the Errata fixture `leanServer`: alone among its users for
+    the tests marked `lean_server_alone`, and shared with the others otherwise. The fixture's setup
+    and teardown remove test modules, so they never overlap a test that holds some.
     """
     here = Path(__file__).parent
     for item in items:
         if here in Path(item.path).parents:
             item.add_marker(pytest.mark.slow)
-            if "lean_session" in item.fixturenames:
+            if {"lean_session", "lean_host", "test_modules"} & set(item.fixturenames):
                 alone = item.get_closest_marker("lean_server_alone") is not None
                 item.add_marker(pytest.mark.errata_fixture("leanServer", exclusive=alone))
 
