@@ -28,8 +28,8 @@ fixture, a dictionary from names to values.
 Suites declare Errata fixtures, resources that the runner sets up once per run and shares between
 tests, in a module-level dictionary `errata_fixtures_decl` in a `conftest.py`. It maps each
 fixture's name to a dictionary with its `description`; optionally `settings`, the names of the
-settings it takes; optionally `fixtures`, the names of fixtures declared before it that it takes; optionally
-`threads`; and the callables `setup(context)`, which returns the value as a string,
+settings it takes; optionally `fixtures`, the names of fixtures declared before it that it takes;
+optionally `threads`; and the callables `setup(context)`, which returns the value as a string,
 `prepare(value, context)`, and `teardown(value, context)`, whose value is `None` when the setup
 produced none. The context has the attributes `settings` and `fixtures`, dictionaries from names to
 values, `threads`, and `config`, the pytest configuration of the loaded suite, which holds the

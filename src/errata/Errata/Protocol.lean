@@ -11,8 +11,7 @@ unknown type and the unknown fields of a record.
 
 A fixture or test record names the settings it depends on in its `settings` array. Writers put each
 setting's name there as a string. Readers accept a string, and also an object with a `name`, whose
-other fields they skip, which is how test executables written against earlier versions of the
-harnesses list their settings.
+other fields they skip.
 -/
 module
 
@@ -283,7 +282,9 @@ private def spanField (j : Json) (key : String) : Except String (Option Span) :=
   | .ok v => some <$> decodeSpan v
   | .error _ => pure none
 
-/-- A setting's name in a record's {lit}`settings` array: a string, or an object with a {lit}`name`. -/
+/--
+A setting's name in a record's {lit}`settings` array: a string, or an object with a {lit}`name`.
+-/
 private def decodeSettingName (j : Json) : Except String String :=
   match j with
   | .str s => pure s

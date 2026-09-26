@@ -320,8 +320,8 @@ meta def settingRefs (uses : Array SettingUse) : TermElabM (Array Term) :=
     let docStx ← match use.description? with
       | some doc => `(some $(quote doc))
       | none => `((none : Option String))
-    `({ name := $(quote (settingNameOf use.decl)), description? := $docStx, default? := Errata.Setting.default? @$(mkCIdent use.decl)
-        : Errata.SettingRef })
+    `({ name := $(quote (settingNameOf use.decl)), description? := $docStx,
+        default? := Errata.Setting.default? @$(mkCIdent use.decl) : Errata.SettingRef })
 
 /--
 {lit}`getAllTests% "package" Mod.A Mod.B.* ...` reads the tests recorded by {lit}`@[test]` in the

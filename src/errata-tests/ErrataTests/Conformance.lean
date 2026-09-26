@@ -1506,9 +1506,9 @@ def readRecords (path : System.FilePath) : TestM (Array Json) := do
 /--
 Errata's shell harness writes names and descriptions with any character as JSON strings and settings
 by their names, rejects a list value with a newline, a setting written `optional(…)`, a setting
-declared after a test or a fixture, and a fixture declared after a test, rejects unknown modes and phases with exit code 2, and reports an undeclared test or fixture
-as an error. Prepares and teardowns without a function do nothing, and setups without one are
-errors.
+declared after a test or a fixture, and a fixture declared after a test, rejects unknown modes and
+phases with exit code 2, and reports an undeclared test or fixture as an error. Prepares and
+teardowns without a function do nothing, and setups without one are errors.
 -/
 @[test]
 def shellHarness : Test := do
@@ -1750,14 +1750,15 @@ def pytestSettingProblems : Test := do
       "@pytest.mark.errata_fixture(\"greeter\")\n" ++
       "def test_greeter():\n    pass\n"
     let cmd := pytestProduct.exe.command.pop.push suite.toString
+    let list := #["errata-list", (dir / "list.jsonl").toString]
     let out ← IO.Process.output {
-      cmd := cmd[0]!, args := cmd.extract 1 cmd.size ++ #["errata-list", (dir / "list.jsonl").toString]
+      cmd := cmd[0]!, args := cmd.extract 1 cmd.size ++ list
       env := #[("ERRATA_DIR", some (← errataDir).toString), ("ERRATA_LIFELINE", none)] }
     assertBEq 1 out.exitCode
     assertContains "test_problems.py::test_marked marks the setting greeting with the keyword \
       arguments optional; errata_setting takes names alone" out.stderr
-    assertContains "the fixture greeter takes the setting {'name': 'greeting', 'optional': True}; a \
-      fixture's settings are names alone" out.stderr
+    assertContains "the fixture greeter takes the setting {'name': 'greeting', \
+      'optional': True}; a fixture's settings are names alone" out.stderr
 
 /-! # Fixtures -/
 
@@ -2093,7 +2094,8 @@ def fixtureChains : Test := forEach products fun p => do
       assertTrue (lines.any (·.startsWith "start ")) s!"the test ran: {lines}"
     result "teardowns after a failure" do
       let r ← p.invoke (phase fx.setupFails "setup" settings ++
-        #[";", "errata-run", out, fx.afterSetupFailure, ";"] ++ phase fx.setupFails "teardown" settings)
+        #[";", "errata-run", out, fx.afterSetupFailure, ";"] ++
+        phase fx.setupFails "teardown" settings)
       -- The Lean harness writes what the phases print to their records.
       let printed := r.stdout ++ (← IO.FS.readFile out)
       assertContains "teardown received no value" printed

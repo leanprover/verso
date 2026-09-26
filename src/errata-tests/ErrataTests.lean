@@ -2318,7 +2318,8 @@ def settingsAreParsed : Test := do
     let some r := rs[0]? | fail "the test has no result"
     return r
   result "values reach the test" do
-    let r ← run #[(greetingName, "hi"), (repeatsName, "1"), (repeatsName, "3"), (quietName, "false")]
+    let r ← run
+      #[(greetingName, "hi"), (repeatsName, "1"), (repeatsName, "3"), (quietName, "false")]
     assertTrue r.status.isSuccess
     assertBEq "hi\nhi\nhi\n" r.output.stdout
   result "a Boolean setting" do
@@ -2387,11 +2388,13 @@ def settingReferencesAreRead : Test := do
     | .test info => assertBEq (some #["a", "b", "c"]) info.settings?
     | r => fail s!"unexpected record {repr r}"
   result "a fixture" do
-    match ← decode "{\"type\":\"fixture\",\"name\":\"f\",\"settings\":[{\"name\":\"a\"},\"b\"]}" with
+    match ← decode
+        "{\"type\":\"fixture\",\"name\":\"f\",\"settings\":[{\"name\":\"a\"},\"b\"]}" with
     | .fixture info => assertBEq (some #["a", "b"]) info.settings?
     | r => fail s!"unexpected record {repr r}"
   result "a setting without a name" do
-    match Protocol.Record.parseLine "{\"type\":\"test\",\"name\":\"t\",\"settings\":[{\"optional\":true}]}" with
+    let nameless := "{\"type\":\"test\",\"name\":\"t\",\"settings\":[{\"optional\":true}]}"
+    match Protocol.Record.parseLine nameless with
     | .error e => assertContains "field settings" e
     | .ok _ => fail "accepted"
 
