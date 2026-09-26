@@ -130,8 +130,8 @@ _errata_json_list() {
   _errata_json="[$out]"
 }
 
-# Makes a comma-separated list of settings' names the JSON array of a record's `settings` field. A
-# setting has a declared default or is mandatory, so an item written `optional(name)` is an error.
+# Makes a comma-separated list of settings' names the JSON array of a record's `settings` field.
+# Items written `optional(name)` are errors.
 _errata_json_settings() {
   local items=() item name
   IFS=',' read -r -a items <<< "$1"

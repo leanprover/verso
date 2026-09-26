@@ -2307,8 +2307,8 @@ def testsCarryTagsAndSettings : Test := do
 /--
 Tests' actions parse the values of the settings they take and apply the tests to them. The last
 value given for a setting counts, and missing settings and values that their parsers reject end the
-tests with errors that name the settings. The runner applies declared defaults, so the actions
-receive a value for every setting.
+tests with errors that name the settings. The runner applies declared defaults before the actions
+receive the settings.
 -/
 @[test]
 def settingsAreParsed : Test := do
@@ -2487,15 +2487,15 @@ error: The parameter `n?` of `optionalSettingFixture` has the type `Option Errat
   fromString := String.toNat?
   setup := return n?.getD 0
 
--- A setting without a declared default is mandatory.
+-- Settings without a declared default are mandatory.
 #test_msgs in
 /-- A count with no default. -/
 @[setting, expose] def mandatoryCount : Setting where
   type := Nat
   fromString s := s.toNat?
 
--- A fixture takes a mandatory setting as the setting's type. No test uses the fixture, so no run
--- needs a value for the setting.
+-- The fixture `countsTo` takes the mandatory setting as its type. No test uses the fixture, so no
+-- run needs a value for the setting.
 #test_msgs in
 /-- A fixture whose value is its setting's. -/
 @[fixture, expose] def countsTo (n : mandatoryCount) : Fixture where

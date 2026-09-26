@@ -74,7 +74,7 @@ def threadsOf (args : List String) : Nat :=
   (grants.getLast?.filter (· > 0)).getD 1
 
 /--
-The name of the setting that the Lean harness reads itself, whether or not a test takes it:
+The name of the setting that the Lean harness reads itself, whether or not tests take it:
 {name}`Errata.updateGolden`, which rewrites golden files when it is {lit}`true`. The runner passes
 it for {lit}`--update-golden`.
 -/

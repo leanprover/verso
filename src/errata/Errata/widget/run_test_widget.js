@@ -215,7 +215,7 @@ function placeholderOf(field, typed) {
 
 /**
  * The values that a run gives the test's settings: the text of each field that the reader has
- * changed. The profile gives the others.
+ * changed. The profile and the declared defaults give the others.
  * @param fields {SettingField[]}
  * @param values {Record<string, string>} the text of each field that the reader has changed
  * @returns {SettingValue[]}

@@ -297,8 +297,8 @@ deriving Repr, Inhabited, DecidableEq
 
 /--
 The places where the command line, the profile, or its overrides give {lit}`Errata.updateGolden` a
-value, each as an error message. The run sets that setting through {lit}`--update-golden` and the
-{lit}`update-golden` key alone, so that every test receives the same value.
+value as a setting, each as an error message. The run sets that setting through
+{lit}`--update-golden` and the {lit}`update-golden` key of a profile or an override.
 -/
 def ResolutionContext.updateGoldenValues (ctx : ResolutionContext) : Array String := Id.run do
   let message (place : String) : String :=

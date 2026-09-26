@@ -598,9 +598,9 @@ def settingsArriveInOrder : Test := forEach scriptedProducts fun p => do
     assertTrue (r.lines.contains "        Errata.seed: derived from the run's seed") s!"{r.lines}"
 
 /--
-Under `--update-golden`, the runner gives the Lean harness `Errata.updateGolden`, and a golden check
-rewrites its expected file; without it, the check reports the difference and leaves the file as it
-was. The same holds for a profile's `update-golden`.
+Under `--update-golden`, the runner gives the Lean harness `Errata.updateGolden`, and golden checks
+rewrite their expected files; without it, the checks report the difference and leave the files as
+they were. The same holds for a profile's `update-golden`.
 -/
 @[test]
 def updateGoldenRewritesFiles : Test := forEach #[leanProduct, interpretedProduct] fun p => do
@@ -628,9 +628,9 @@ def updateGoldenRewritesFiles : Test := forEach #[leanProduct, interpretedProduc
       assertTrue (r.lines.contains "        Errata.updateGolden = \"true\"") s!"{r.lines}"
 
 /--
-A setting whose type is an `Option` encodes its absence in its own type: its empty default reaches
-the test as `none`, a value that its parser reads reaches it as `some`, and a value that its parser
-rejects ends the test with an error that names the setting.
+The setting `ErrataTests.Roles.choice`, whose type is `Option Bool`, encodes its absence in its own
+type: its empty default reaches the test as `none`, a value that its parser reads reaches it as
+`some`, and a value that its parser rejects ends the test with an error that names the setting.
 -/
 @[test]
 def optionTypedSetting : Test := forEach #[leanProduct, interpretedProduct] fun p => do
@@ -677,8 +677,8 @@ def updateGoldenIsNotASetSetting : Test := do
       "the override at configuration:0"
 
 /--
-The arguments that a test receives under golden updating keep the order of the settings it takes:
-`Errata.updateGolden` stands where the test takes it, and at the end when the test takes it nowhere.
+Under golden updating, tests receive their settings in the order they take them:
+`Errata.updateGolden` stands where they take it, and at the end when they take it nowhere.
 -/
 @[test]
 def updateGoldenKeepsItsPlace : Test := do

@@ -21,7 +21,7 @@ reaches the later invocations, and after an invocation exits non-zero only teard
 
 Suites declare the settings their tests take in a module-level dictionary `errata_settings_decl` in
 a `conftest.py`, which maps each setting's name to a dictionary with its `description` and
-optionally its `default`; a setting without a default is mandatory. Tests take settings through the
+optionally its `default`; settings without a default are mandatory. Tests take settings through the
 marker `errata_setting(NAME)` and read the values they receive through the `errata_settings`
 fixture, a dictionary from names to values.
 
@@ -211,8 +211,8 @@ def item_settings(item):
 
 def setting_marker_problems(item):
     """
-    The problems with an item's `errata_setting` markers: a marker with keyword arguments, which the
-    marker takes none of, since a setting has a declared default or is mandatory.
+    The problems with an item's `errata_setting` markers: one for each marker with keyword
+    arguments, since the marker takes names alone.
     """
     return [
         f"{item.nodeid} marks the setting {', '.join(marker.args)} with the keyword arguments "

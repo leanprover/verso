@@ -133,7 +133,7 @@ def readsSettings (word : greeting) (strict : strict) : Test := do
   if strict then
     fail "strict was set"
 
-/-- Whom `greetsAudience` greets. It has no default, so a run needs a value for it. -/
+/-- Whom `greetsAudience` greets: a mandatory setting. -/
 @[setting, expose]
 def audience : Setting where
   type := String

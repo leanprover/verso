@@ -987,7 +987,7 @@ def printHumanList (ctx : RunContext) (color verbose : Bool) (listings : Array L
       let tags := if t.tags.isEmpty then "" else s!"  [{", ".intercalate t.tags.toList}]"
       line s!"    {name}{loc}{tags}"
       if let some d := t.description? then line (indented "        " d)
-      -- The settings are those that the run sends, so the listing and the run agree.
+      -- The settings are those that the run sends.
       for (k, v) in r.arguments do
         -- Seeds derived from a random run seed differ in every run, so their values say nothing.
         if k == seedSetting && r.derivedSeed && ctx.opts.seed.isNone then

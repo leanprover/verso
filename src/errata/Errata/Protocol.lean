@@ -9,9 +9,9 @@ The records that a test executable writes to its list file or its result file, o
 line. Every record has a `type`, and every other field is optional. A reader skips the records of an
 unknown type and the unknown fields of a record.
 
-A fixture or test record names the settings it depends on in its `settings` array. Writers put each
-setting's name there as a string. Readers accept a string, and also an object with a `name`, whose
-other fields they skip.
+Fixture and test records name the settings they depend on in their `settings` arrays. Writers put
+each setting's name there as a string. Readers accept a string, and also an object with a `name`,
+whose other fields they skip.
 -/
 module
 

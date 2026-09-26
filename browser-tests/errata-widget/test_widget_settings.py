@@ -20,8 +20,8 @@ def test_the_fields_start_with_the_profile_and_the_run_uses_it(editor):
     widget.gear.click()
     expect(widget.setting_rows).to_have_count(2)
     expect(widget.setting_field("greeting")).to_have_value("good day")
-    # A setting that the profile leaves out starts blank, and the field shows the declared default,
-    # which the test receives.
+    # `strict`, which the profile leaves out, starts blank, and its field shows the declared
+    # default, which the test receives.
     expect(widget.setting_field("strict")).to_have_value("")
     expect(widget.setting_field("strict")).to_have_attribute("placeholder", "false")
     editor.page.keyboard.press("Escape")
