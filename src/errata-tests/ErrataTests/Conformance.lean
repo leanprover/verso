@@ -150,6 +150,11 @@ structure FixtureRoles where
   when the product has one.
   -/
   threadedTest? : Option String := none
+  /--
+  The user of a fixture that takes the mandatory setting without a default, when the product has
+  one.
+  -/
+  missingSettingUser? : Option String := none
 
 /-- The fixtures and their users in the two shell scripts, which have the same names. -/
 def shellFixtures : FixtureRoles where
@@ -171,6 +176,7 @@ def shellFixtures : FixtureRoles where
   usesThreaded := "uses-threaded"
   failingUser := "fails-with-fixture"
   threadedTest? := some "threaded-test"
+  missingSettingUser? := some "after-missing-setting"
 
 /--
 A test executable that the checks run against: a product of a harness, with the tests that play the
@@ -270,7 +276,8 @@ def pytestProduct : Product where
     afterSlowSetup := (pytestTest "test_after_slow_setup").test
     usesThreaded := (pytestTest "test_uses_threaded").test
     failingUser := (pytestTest "test_fails_with_fixture").test
-    threadedTest? := none }
+    threadedTest? := none
+    missingSettingUser? := none }
   -- Each invocation starts `uv`, Python, and a pytest session, which take over a second under load.
   startMs := 2000
 
@@ -954,6 +961,35 @@ def reproductionLine : Test := do
     let script := p.exe.command[1]!
     assertContains s!"{script} errata-run /dev/stderr fail setting:Errata.seed=" cmd
     assertContains "'setting:note=it'\\''s'" cmd
+
+/--
+Tests kept from running by a mandatory setting without a value have no command that reproduces
+them. The human report names the setting in its place, with the fixture that takes it for a user of
+that fixture, and the JSON report and the events file leave the command out.
+-/
+@[test]
+def missingSettingInPlaceOfReproduction : Test := forEach scriptedProducts fun p => do
+  let some user := p.fixtures.missingSettingUser? | fail "the product has no such user"
+  let r ← p.runTests #[p.needsSetting.test, user]
+  expectOutcome r p.needsSetting.test (· matches .inconclusive (.settingMissing _))
+    "settingMissing"
+  expectOutcome r user (· matches .inconclusive (.fixtureFailed _ .setup)) "fixtureFailed"
+  result "the human report" do
+    let text := "\n".intercalate r.lines.toList
+    assertContains s!"setting: {p.needed} has no value" text
+    assertContains s!"setting: {p.needed} of fixture needs-needed has no value" text
+    assertNotContains "reproduce:" text
+  result "the JSON report" do
+    let json ← IO.ofExcept (Lean.Json.parse (jsonReport r.report))
+    let results ← IO.ofExcept (json.getObjValAs? (Array Json) "results")
+    for test in [p.needsSetting.test, user] do
+      let some own := results.find? (strField · "test" == some test) | fail s!"no result of {test}"
+      assertBEq none (strField own "reproduce")
+      assertBEq (some p.needed) (strField (own.getObjValD "missingSetting") "setting")
+  result "the events file" do
+    let outcomes := r.events.filter (isEvent "outcome" none)
+    assertTrue (outcomes.all (strField · "reproduce" |>.isNone))
+      s!"an outcome has a reproduction line: {outcomes.map (·.compress)}"
 
 /-- The arguments that run a role's test, with the settings it needs. -/
 def Role.args (r : Role) (out : System.FilePath) : Array String :=

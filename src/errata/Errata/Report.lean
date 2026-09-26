@@ -203,7 +203,7 @@ private def sharedPrefix (a b : Array String) : Nat :=
 The lines of one result: its status line, with nextest's shape (the status word, the duration in
 brackets, the executable padded to the reporter's width, and then {name}`name`, the name column),
 then what explains an outcome other than a pass, its docstring when shown, its captured output, and
-the command that reproduces it.
+the command that reproduces it, or the mandatory setting whose absence kept it from running.
 -/
 private def resultLines (h : HumanReporter) (r : Result) (name : String) : Array String := Id.run do
   let (word, style) := statusWord r
@@ -232,6 +232,12 @@ private def resultLines (h : HumanReporter) (r : Result) (name : String) : Array
     unless r.output.isEmpty do
       out := out.push (detail s!"output:\n{dropFinalNewline r.output.all}")
     if let some cmd := r.reproduce? then out := out.push (detail s!"reproduce: {cmd}")
+    match r.missingSetting? with
+    | some { setting, fixture? := some f } =>
+      out := out.push (detail s!"setting: {setting} of fixture {f} has no value")
+    | some { setting, fixture? := none } =>
+      out := out.push (detail s!"setting: {setting} has no value")
+    | none => pure ()
   return out
 
 /--
@@ -618,6 +624,11 @@ instance : ToJson Result where
       (if r.output.isEmpty then [] else [("output", ToJson.toJson r.output)]) ++
       (match r.description? with | some d => [("description", Json.str d)] | none => []) ++
       (match r.reproduce? with | some c => [("reproduce", Json.str c)] | none => []) ++
+      (match r.missingSetting? with
+        | some m =>
+          [("missingSetting", Json.mkObj <| [("setting", Json.str m.setting)] ++
+            (m.fixture?.map (("fixture", Json.str ·))).toList)]
+        | none => []) ++
       (if r.settings.isEmpty then []
         else [("settings", Json.arr (r.settings.map fun (k, v) =>
           Json.mkObj [("name", Json.str k), ("value", Json.str v)]))]) ++
@@ -631,6 +642,13 @@ def resultSettings (j : Json) : Except String (Array (String × String)) := do
     let items ← v.getArr?
     items.mapM fun item => do
       return (← item.getObjValAs? String "name", ← item.getObjValAs? String "value")
+
+/-- Decodes the missing setting of a result, when it has one. -/
+def missingSetting? (j : Json) : Except String (Option MissingSetting) := do
+  match j.getObjVal? "missingSetting" with
+  | .error _ => return none
+  | .ok m =>
+    return some { setting := ← m.getObjValAs? String "setting", fixture? := ← optField m "fixture" }
 
 instance : FromJson Result where
   fromJson? j := do
@@ -649,6 +667,7 @@ instance : FromJson Result where
       output := (← optField j "output").getD {},
       description? := ← optField j "description",
       reproduce? := ← optField j "reproduce",
+      missingSetting? := ← missingSetting? j,
       settings := ← resultSettings j,
       slow := (← optField j "slow").getD false
     }

@@ -154,6 +154,11 @@ structure State where
   results : Array Result := #[]
   /-- The issues with the run as a whole. -/
   issues : Array RunReport.Issue := #[]
+  /--
+  The mandatory setting of each fixture whose setup never ran for want of it, by the fixture's
+  executable and name. A fixture's result arrives before its users' results.
+  -/
+  missingSettings : Std.HashMap (String × String) String := {}
 deriving Inhabited
 
 /-- Adds the executable's and the test's names to a record from a test executable. -/
@@ -237,9 +242,11 @@ def nodeResults (p : Planned) (nodes : Array Node) : Array Result := Id.run do
 
 /--
 The results of a finished test: its own, whose duration is the process's by the runner's clock, then
-its named results, each with its own duration.
+its named results, each with its own duration. A test that did not pass has the command that
+reproduces it, unless {name}`missing?` names a mandatory setting whose absence kept it from running.
 -/
-def testResults (r : Running) (exit : Exit) (durationMs : Nat) : Array Result :=
+def testResults (r : Running) (exit : Exit) (durationMs : Nat)
+    (missing? : Option MissingSetting := none) : Array Result :=
   let p := r.planned
   let outcome := mergeOutcome r.verdict? r.unreadable? exit
   let named := nodeResults p r.nodes
@@ -248,14 +255,19 @@ def testResults (r : Running) (exit : Exit) (durationMs : Nat) : Array Result :=
     durationMs
     output := { log := r.output }
     description? := p.description?
-    reproduce? := if outcome.isPass || exit matches .settingMissing _ then none else some p.reproduce
+    reproduce? := if outcome.isPass || missing?.isSome then none else some p.reproduce
+    missingSetting? := missing?
     settings := p.settings
     slow := durationMs ≥ p.slowAfterMs
   }
   #[own] ++ named
 
-/-- The events-file record for the outcome of a test or a fixture's phase. -/
-def outcomeEvent (p : Planned) (outcome : Outcome) (durationMs : Nat) : Json :=
+/--
+The events-file record for the outcome of a test or a fixture's phase, with the command that
+reproduces it when {name}`reproduce?` gives one.
+-/
+def outcomeEvent (p : Planned) (outcome : Outcome) (durationMs : Nat)
+    (reproduce? : Option String) : Json :=
   Json.mkObj <|
     [("type", Json.str "outcome"), ("exe", Json.str p.exe), ("test", Json.str p.test),
       ("kind", Json.str p.kind.name), ("path", ToJson.toJson p.path)] ++
@@ -264,7 +276,7 @@ def outcomeEvent (p : Planned) (outcome : Outcome) (durationMs : Nat) : Json :=
     (match p.seed? with | some s => [("seed", Json.str s)] | none => []) ++
     [("settings", Json.mkObj (p.settings.toList.map fun (k, v) => (k, Json.str v)))] ++
     (match p.description? with | some d => [("description", Json.str d)] | none => []) ++
-    (if outcome.isPass then [] else [("reproduce", Json.str p.reproduce)])
+    (match reproduce? with | some c => [("reproduce", Json.str c)] | none => [])
 
 /-- Whether a running test or fixture's phase has the given executable, name, and key. -/
 private def Running.is (r : Running) (exe test key : String) : Bool :=
@@ -382,12 +394,22 @@ def step (s : State) : Event → State × Array Action
     | none => (s, #[])
     | some i =>
       let r := s.running[i]!
-      let results := testResults r exit durationMs
+      let missing? : Option MissingSetting := match exit with
+        | .settingMissing setting => some { setting }
+        | .fixtureFailed f _ =>
+          (s.missingSettings.get? (exe, f)).map fun setting => { setting, fixture? := some f }
+        | _ => none
+      let missingSettings := match exit, r.planned.kind with
+        | .settingMissing setting, .fixture => s.missingSettings.insert (exe, test) setting
+        | _, _ => s.missingSettings
+      let results := testResults r exit durationMs missing?
       let outcome := (results[0]?.map (·.outcome)).getD (.reported .pass)
+      let reproduce? := results[0]?.bind (·.reproduce?)
       let (human, lines) := s.human.test results
       let s := { s with
-        running := s.running.eraseIdx! i, results := s.results ++ results, human }
-      (s, #[.event (outcomeEvent r.planned outcome durationMs)] ++ lines.map .print)
+        running := s.running.eraseIdx! i, results := s.results ++ results, human
+        missingSettings }
+      (s, #[.event (outcomeEvent r.planned outcome durationMs reproduce?)] ++ lines.map .print)
   | .ended timeMs summary skipped? =>
     let t := s.human.tally
     let line := s.human.summary (timeMs - s.startMs) skipped?

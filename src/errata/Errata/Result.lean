@@ -100,6 +100,14 @@ def Result.Kind.name : Result.Kind → String
   | .test => "test"
   | .fixture => "fixture"
 
+/-- A mandatory setting with no value, which kept a test or a fixture's phase from running. -/
+structure MissingSetting where
+  /-- The setting's name. -/
+  setting : String
+  /-- The fixture that takes the setting, when a fixture the test uses takes it. -/
+  fixture? : Option String := none
+deriving Repr, Inhabited, DecidableEq
+
 /--
 One entry collected during a run and rendered by the reporters: a test's own result, or one of its
 named results.
@@ -125,6 +133,11 @@ structure Result where
   description? : Option String := none
   /-- A command line that runs the test again by hand, for a test that did not pass. -/
   reproduce? : Option String := none
+  /--
+  The mandatory setting whose absence kept the test from running, directly or through a fixture it
+  uses. Such a result has no command line that runs it again.
+  -/
+  missingSetting? : Option MissingSetting := none
   /--
   The settings that the test received, in the order it received them. The test's own result includes
   them.

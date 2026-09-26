@@ -255,6 +255,7 @@ deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Outcome
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Output
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for OutputLog
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Result.Kind
+deriving instance Plausible.Shrinkable, Plausible.Arbitrary for MissingSetting
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Result
 
 /-- The JSON encoding of a result round-trips: decoding the encoding recovers the result. -/

@@ -11,7 +11,8 @@ tests=(pass fail verdict-fail silent unknown-records mismatch-pass mismatch-fail
        stubborn spawns panics garbled records twice flood lingers greets needs-setting protocol-late
        run-id exclusive-a exclusive-b shared-a shared-b after-setup-failure after-prepare-failure-a
        after-prepare-failure-b before-teardown-failure uses-dependent after-slow-setup uses-threaded
-       threaded-test fails-with-fixture slow-user slow-named pair-after-failure)
+       threaded-test fails-with-fixture slow-user slow-named pair-after-failure
+       after-missing-setting)
 # A suite that needs only some of the tests names them here, separated by spaces.
 if [ -n "$BASIC_TESTS" ]; then
   read -r -a tests <<< "$BASIC_TESTS"
@@ -48,6 +49,7 @@ case "$mode" in
     record '{"type":"fixture","name":"dependent","settings":[{"name":"greeting","optional":false}],"fixtures":["stamped"]}'
     record '{"type":"fixture","name":"slow-setup","description":"Its setup sleeps."}'
     record '{"type":"fixture","name":"threaded","description":"It asks for threads.","threads":3}'
+    record '{"type":"fixture","name":"needs-needed","description":"It takes the setting without a default.","settings":["needed"]}'
     for t in "${tests[@]}"; do
       settings="$common"
       case "$t" in
@@ -72,6 +74,7 @@ case "$mode" in
         uses-dependent) extra=',"fixtures":[{"name":"dependent"}]' ;;
         after-slow-setup) extra=',"fixtures":[{"name":"slow-setup"}]' ;;
         uses-threaded) extra=',"fixtures":[{"name":"threaded"}]' ;;
+        after-missing-setting) extra=',"fixtures":[{"name":"needs-needed"}]' ;;
         threaded-test) extra=',"threads":3,"fixtures":[{"name":"stamped","exclusive":false}]' ;;
       esac
       record "{\"type\":\"test\",\"name\":\"$t\",\"path\":[\"basic\",\"$t\"],\"file\":\"basic.sh\",\"tags\":$tags,\"settings\":[$settings]$extra}"
@@ -158,7 +161,7 @@ case "$mode" in
         ;;
       */setup|*/prepare|*/teardown)
         case "$name" in
-          stamped|setup-fails|prepare-fails|teardown-fails|dependent|slow-setup|threaded)
+          stamped|setup-fails|prepare-fails|teardown-fails|dependent|slow-setup|threaded|needs-needed)
             # The teardowns print whether they received their fixture's value.
             [ "$phase" = teardown ] && echo "teardown received ${value:-no value}"
             ;;
