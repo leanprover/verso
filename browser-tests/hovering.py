@@ -1,4 +1,4 @@
-from playwright.sync_api import Locator
+from playwright.sync_api import Locator, TimeoutError
 
 # The hovers that `hover_for_tooltip` makes before it gives up on a `mouseenter` reaching the
 # tooltip's reference.
@@ -8,6 +8,30 @@ HOVER_ATTEMPTS = 5
 LISTEN_FOR_MOUSEENTER = """el => {
     el.__hoverEntered = false;
     el.addEventListener('mouseenter', () => { el.__hoverEntered = true; }, { once: true });
+}"""
+
+# Describes the state of a tooltip's reference and of the element under the center of the hovered
+# target, for the message of a tooltip that never became visible.
+DESCRIBE_HOVER = """(el, box) => {
+    const describe = e => e ? `${e.tagName.toLowerCase()}.${[...e.classList].join('.')}` : 'none';
+    const x = box.x + box.width / 2, y = box.y + box.height / 2;
+    const under = document.elementFromPoint(x, y);
+    const chain = [];
+    for (let e = under; e && e !== el.parentElement; e = e.parentElement) {
+        chain.push(describe(e) + (e._tippy ? ' (tippy)' : ''));
+    }
+    const state = el._tippy ? el._tippy.state : null;
+    const toggle = el.querySelector(':scope > input.tactic-toggle');
+    return JSON.stringify({
+        reference: describe(el),
+        tippyState: state && {
+            isEnabled: state.isEnabled, isVisible: state.isVisible,
+            isShown: state.isShown, isMounted: state.isMounted, isDestroyed: state.isDestroyed },
+        toggleChecked: toggle ? toggle.checked : null,
+        pointAt: [Math.round(x), Math.round(y)],
+        underPointer: chain,
+        tippyBoxes: document.querySelectorAll('.tippy-box').length,
+    });
 }"""
 
 
@@ -31,12 +55,21 @@ def hover_for_tooltip(target: Locator, tooltip: Locator, reference: Locator | No
         reference = target
     reference.wait_for(state="attached")
     page.wait_for_function("el => !!el._tippy", arg=reference.element_handle())
+    missed = 0
     for _ in range(HOVER_ATTEMPTS):
         reference.evaluate(LISTEN_FOR_MOUSEENTER)
         target.hover()
         if reference.evaluate("el => el.__hoverEntered"):
-            tooltip.wait_for(state="visible")
+            try:
+                tooltip.wait_for(state="visible")
+            except TimeoutError as error:
+                raise AssertionError(
+                    f"{tooltip} never became visible after mouseenter reached {reference} "
+                    f"({missed} hovers without mouseenter before it): "
+                    f"{reference.evaluate(DESCRIBE_HOVER, target.bounding_box())}"
+                ) from error
             return
+        missed += 1
         page.mouse.move(0, 0)
     raise AssertionError(
         f"The pointer's mouseenter never reached {reference} in {HOVER_ATTEMPTS} hovers of {target}"
