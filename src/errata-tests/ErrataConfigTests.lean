@@ -389,8 +389,8 @@ def orderIsAProfileKey : Test := do
       | .error problems => assertBEq #[message] problems
 
 /--
-A profile bounds its fixtures' phases with `fixture-timeout`. The key in an override is a problem at
-its position, since a fixture's phases serve several tests.
+A profile bounds its fixtures' phases with `fixture-timeout`. In an override, the key is a problem at
+its position.
 -/
 @[test]
 def fixtureTimeoutIsAProfileKey : Test := do

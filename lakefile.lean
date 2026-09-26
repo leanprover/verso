@@ -497,7 +497,7 @@ private def drawRunId : IO String := do
   let hex (n : Nat) : String := String.singleton (Nat.digitChar n)
   return bytes.foldl (init := "") fun acc b => acc ++ hex (b.toNat / 16) ++ hex (b.toNat % 16)
 
-/-- The age past which a run directory that an earlier invocation left is removed: one day. -/
+/-- The age past which the run directories that earlier invocations left are removed: one day. -/
 private def staleRunAgeSecs : Int := 24 * 60 * 60
 
 /--
@@ -575,8 +575,9 @@ script run (args) do
           addPureTrace (← if ← tomlPath.pathExists then IO.FS.readFile tomlPath else pure "")
             "errata.toml"
           buildFileUnlessUpToDate' (text := true) configFile do
-            -- The file is named relative to the package's directory, so that its problems and its
-            -- filters' positions name it as the driver's own messages do.
+            -- `errata-config` runs in the package's directory and reads the file as `errata.toml`,
+            -- the name that its problems and its filters' positions show, as the driver's own
+            -- messages do.
             let out ← IO.Process.output
               { cmd := exePath.toString, args := #["errata.toml", configOut.toString],
                 cwd := ws.root.dir }
@@ -636,10 +637,11 @@ script run (args) do
   let libName (lib : Lake.LeanLib) : String := lib.name.toString (escape := false)
   let candidates := ws.root.leanLibs.map libName ++ added.map (·.name)
   -- The run's identifier is drawn once, here, and reaches the runner's `plan` and `run` through
-  -- `ERRATA_RUN_ID`. Each invocation keeps its files in a directory named by it, so invocations in
-  -- one workspace at once never read each other's files, and removes the directory when it ends.
-  -- Directories that invocations killed or cancelled before their ends left behind are removed
-  -- once they are older than a day, which leaves those of the invocations that run at once.
+  -- `ERRATA_RUN_ID`. Each invocation keeps its files in a directory named by it and removes the
+  -- directory when it ends, so invocations in one workspace at once read only their own files.
+  -- Invocations that are killed leave their directories behind. Each invocation removes those
+  -- older than a day and leaves the recent ones, which include those of invocations that run at
+  -- once.
   let runId ← drawRunId
   let runsDir := errataOut / "runs"
   let runDir := runsDir / runId

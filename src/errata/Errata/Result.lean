@@ -150,11 +150,14 @@ structure Result where
   output : OutputLog := {}
   /-- The test's docstring, rendered as Markdown, when it has one. -/
   description? : Option String := none
-  /-- A command line that runs the test again by hand, for a test that did not pass. -/
+  /--
+  A command line that runs the test again by hand, for a test that did not pass and has no
+  {name}`Result.missingSetting?`.
+  -/
   reproduce? : Option String := none
   /--
-  The mandatory setting whose absence kept the test from running, directly or through a fixture it
-  uses. Such a result has no command line that runs it again.
+  The mandatory setting whose absence kept the test from running, as its own setting or through the
+  fixtures it reaches.
   -/
   missingSetting? : Option MissingSetting := none
   /--

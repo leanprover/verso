@@ -156,7 +156,7 @@ structure HumanReporter where
   color : Bool := false
   /-- The counts of the results reported so far. -/
   tally : Tally := {}
-  /-- The number of tests whose results were reported so far, without fixture phases. -/
+  /-- The number of tests whose own results were reported so far. -/
   testsRun : Nat := 0
   /-- The executable of the test whose own line was printed last. -/
   lastExe? : Option String := none
@@ -205,7 +205,8 @@ private def sharedPrefix (a b : Array String) : Nat :=
 The lines of one result: its status line, with nextest's shape (the status word, the duration in
 brackets, the executable padded to the reporter's width, and then {name}`name`, the name column),
 then what explains an outcome other than a pass, its docstring when shown, its captured output, and
-the command that reproduces it, or the mandatory setting whose absence kept it from running.
+the command that reproduces it, or the mandatory setting whose absence kept it from running, with
+the fixtures that lead to that setting.
 -/
 private def resultLines (h : HumanReporter) (r : Result) (name : String) : Array String := Id.run do
   let (word, style) := statusWord r
@@ -240,12 +241,12 @@ private def resultLines (h : HumanReporter) (r : Result) (name : String) : Array
 
 /--
 The summary line of the human-readable report, in nextest's shape: {lit}`Summary`, the run's
-duration in brackets, the number of tests run, {lit}`N tests run`, which counts neither fixture
-phases nor named results, and the counts of results by outcome. When {name}`skipped?` gives them,
-the line ends with the number of listed tests that the filters left out, {lit}`N tests skipped`,
-and, when they are not zero, the number of libraries with tests that the filters ruled out before
-building, {lit}`M test libraries skipped`, and of the configuration's executables that they ruled
-out, {lit}`K executables skipped`. Ruled-out libraries count only when a module of theirs that an
+duration in brackets, the number of tests whose own results were reported, {lit}`N tests run`, and
+the counts of results by outcome. When {name}`skipped?` gives them, the line ends with the number
+of listed tests that the filters left out, {lit}`N tests skipped`, and, when they are not zero, the
+number of libraries with tests that the filters ruled out before building,
+{lit}`M test libraries skipped`, and of the configuration's executables that they ruled out,
+{lit}`K executables skipped`. Ruled-out libraries count only when a module of theirs that an
 earlier build left on disk records a test.
 -/
 def HumanReporter.summary (h : HumanReporter) (elapsedMs : Nat)

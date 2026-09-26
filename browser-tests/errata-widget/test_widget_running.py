@@ -145,9 +145,9 @@ def test_a_process_the_test_leaves_running_lets_the_run_end(editor):
     The helper that the test starts holds the runner's output pipes open for 37 seconds after the
     test has ended. The runner ends a test's lingering processes after its pipe grace, so the time
     from the test's output to the verdict is about a second, and a run that waited for the helper
-    takes at least 37. That interval starts once the output is visible, since the time from the
-    click also includes the widget's Discovery, which runs under the workspace's build lock that
-    other tests' runs share.
+    would take at least 37. The interval starts once the output is visible. The time from the click
+    includes the widget's Discovery, which runs under the workspace's build lock that other tests'
+    runs share.
     """
     editor.show("Passing", "lingeringProcess")
     widget = Widget(editor.page)

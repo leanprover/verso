@@ -69,7 +69,7 @@ inductive Exit where
   /-- The mandatory setting {name}`setting` has no value, so the runner started no process. -/
   | settingMissing (setting : String)
   /--
-  A fixture that the test needs failed in the given phase, so the runner started no process.
+  A fixture that the test reaches failed in the given phase, so the runner started no process.
   {name}`chain` lists the fixtures from one the test takes to the failed one, each taking the next.
   -/
   | fixtureFailed (fixture : String) (phase : FixturePhase) (chain : Array String)
@@ -158,8 +158,8 @@ structure State where
   /-- The issues with the run as a whole. -/
   issues : Array RunReport.Issue := #[]
   /--
-  The mandatory setting of each fixture whose setup never ran for want of it, by the fixture's
-  executable and name. A fixture's result arrives before its users' results.
+  The mandatory setting without a value that kept each fixture's phase from running, by the
+  fixture's executable and name. A fixture's result arrives before its users' results.
   -/
   missingSettings : Std.HashMap (String × String) String := {}
 deriving Inhabited
@@ -245,8 +245,9 @@ def nodeResults (p : Planned) (nodes : Array Node) : Array Result := Id.run do
 
 /--
 The results of a finished test: its own, whose duration is the process's by the runner's clock, then
-its named results, each with its own duration. A test that did not pass has the command that
-reproduces it, unless {name}`missing?` names a mandatory setting whose absence kept it from running.
+its named results, each with its own duration. When the test did not pass, its own result has the
+command that reproduces it, or, when {name}`missing?` gives one, the mandatory setting whose absence
+kept it from running.
 -/
 def testResults (r : Running) (exit : Exit) (durationMs : Nat)
     (missing? : Option MissingSetting := none) : Array Result :=

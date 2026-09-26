@@ -214,8 +214,8 @@ def reportLinesNameExecutableAndTest : Test := do
     (out.stdout.splitOn "\n")
 
 /--
-The summary line counts the tests run apart from the results: fixture phases and named results
-count as results alone, and one test is written in the singular.
+The summary line's count of tests run covers tests' own results, while fixture phases and named
+results count among the outcomes. A count of one reads `1 test run`.
 -/
 @[test]
 def summaryCountsTestsRun : Test := do
@@ -1476,7 +1476,7 @@ The runner reads the whole command line before anything is built: an unknown opt
 the other command, and a malformed value end the run with the exit code of a usage error, and an
 unknown profile with the exit code of a setup error. If the first argument is neither `run` nor
 `list`, then it begins the options and filters of a run. A run that selects no test under
-`--no-tests warn` and `--wfail` exits with 4, since `--wfail` makes the warning a failure.
+`--no-tests warn` and `--wfail` exits with 4: `--wfail` makes the warning a failure.
 -/
 @[test]
 def driverChecksCommandLine : Test := do

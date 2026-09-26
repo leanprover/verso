@@ -181,8 +181,8 @@ structure FixtureRoles where
   -/
   missingSettingUser? : Option String := none
   /--
-  The user of a fixture that takes the fixture that takes the mandatory setting, and that fixture,
-  when the product has them.
+  A test that uses a fixture which takes the fixture with the mandatory setting, and the fixture
+  between them, when the product has them.
   -/
   missingSettingTwoAway? : Option (String × String) := none
 
@@ -996,9 +996,9 @@ def reproductionLine : Test := do
 
 /--
 Tests kept from running by a mandatory setting without a value have no command that reproduces
-them. The human report names the setting in its place, with the chain of fixtures from the test to
-the one that takes it for a user of such a fixture, and the JSON report and the events file leave
-the command out.
+them. The human report names the setting in its place. If a fixture takes the setting, then the
+human report and the JSON report also name each fixture from the test to that one. The JSON report
+and the events file leave the command out.
 -/
 @[test]
 def missingSettingInPlaceOfReproduction : Test := forEach scriptedProducts fun p => do

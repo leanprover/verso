@@ -214,8 +214,8 @@ function placeholderOf(field, typed) {
 }
 
 /**
- * The names of the settings that need a value before a run: those without a default or a target
- * to build whose fields are empty.
+ * The names of the settings that must have a value before a run: those with empty fields, other
+ * than the settings that have a default or a need.
  * @param fields {SettingField[]}
  * @param values {Record<string, string>} the text of each field that the reader has changed
  * @returns {string[]}
@@ -1419,7 +1419,7 @@ function TestRun(props) {
     const seedHint = "The seed must be a natural number";
     // The values that the next run gives the test's settings, beyond the profile's.
     const sent = settingsSent(settingFields, settingValues);
-    // The settings that need a value typed before Run is enabled.
+    // The settings that must have a value typed before Run is enabled.
     const lacking = settingsLackingValues(settingFields, settingValues);
     const lackingHint =
         (lacking.length === 1 ? "The setting " : "The settings ") +
