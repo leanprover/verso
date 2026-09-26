@@ -31,8 +31,8 @@ namespace Errata
 /--
 Builds the action that runs a declaration as a test, using the {name}`IsTest` instance for its type
 that is visible at the declaration, and returns it with the settings and the fixtures that the test
-takes. Every parameter of the declaration is a setting {lit}`S` or {lit}`Option S`, or a fixture
-{lit}`F` or {lit}`shared F`. The action receives the settings and the fixtures' values as name and
+takes. Every parameter of the declaration is a setting {lit}`S` or a fixture {lit}`F` or
+{lit}`shared F`. The action receives the settings and the fixtures' values as name and
 value pairs, parses each parameter's value with its setting's or its fixture's parser, and applies
 the test to the values. The declaration must be a runtime declaration with no universe parameters.
 -/
