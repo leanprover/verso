@@ -2864,11 +2864,12 @@ def pipedRunHasNoProgressDisplay : Test := do
     assertNotContains "\x1b[" r.stderr
 
 /--
-Runs the tests of {name}`basic` with a progress display over a buffer, 100 columns wide, and gives
-the run, the display's last frame, and what the display wrote. The lines of the human-readable
-report reach both the run's lines and the display.
+Runs the tests of {name}`basic` with the options {name}`opts` and a progress display over a buffer,
+100 columns wide, and gives the run, the display's last frame, and what the display wrote. The lines
+of the human-readable report reach both the run's lines and the display.
 -/
-def runWithDisplay (tests : List String) : IO (Run × Progress.Frame × String) := do
+def runWithDisplay (tests : List String) (opts : Options := {}) :
+    IO (Run × Progress.Frame × String) := do
   let buf ← IO.mkRef ({} : IO.FS.Stream.Buffer)
   let p ← Progress.Display.new (IO.FS.Stream.ofBuffer buf) false (size? := some { cols := 101 })
   let events ← IO.mkRef #[]
@@ -2879,7 +2880,7 @@ def runWithDisplay (tests : List String) : IO (Run × Progress.Frame × String) 
     line := fun l => do
       lines.modify (·.push l)
       p.print l }
-  let (report, code) ← execute config { jobs? := some 1 } sinks (progress? := some p)
+  let (report, code) ← execute config { opts with jobs? := some 1 } sinks (progress? := some p)
   let run : Run := { report, code, events := ← events.get, lines := ← lines.get }
   return (run, ← p.frame, String.fromUTF8! (← buf.get).data)
 
@@ -2905,6 +2906,24 @@ def progressDisplayFollowsTheRun : Test := do
     assertBEq (1, 1, 1, 0, 1)
       (frame.total, frame.completed, frame.passed, frame.failed, frame.fixturesFailed)
     assertContains "1/1 tests completed (1 passed, 0 failed, 1 fixture failed) [" written
+
+/--
+The summary line counts tests: a test that passes, a test whose named result fails under a passing
+verdict, a test whose setting is missing, and a test whose fixture's teardown fails make four tests
+run, of which two passed, one failed, and one is inconclusive, with one fixture phase failed; a
+test that the filters leave out is skipped. The progress display's last frame agrees.
+-/
+@[test]
+def summaryCountsTests : Test := do
+  let (r, frame, _) ← runWithDisplay
+    ["pass", "named-fails", "needs-setting", "before-teardown-failure", "greets"]
+    { nameFilters := #["pass", "named-fails", "needs-setting", "before-teardown-failure"] }
+  assertBEq ExitCode.testRunFailed r.code
+  let summary := (r.lines.find? (·.startsWith "     Summary")).getD ""
+  assertBEq "4 tests run: 2 passed, 1 failed, 0 errors, 1 inconclusive, 1 fixture phase failed. \
+    1 test skipped." ((summary.splitOn "s] ").getLast!)
+  assertBEq (4, 4, 2, 2, 1)
+    (frame.total, frame.completed, frame.passed, frame.failed, frame.fixturesFailed)
 
 /-- The number of files that the process {name}`pid` holds open, or {lean}`none` without `lsof`. -/
 def openFiles (pid : UInt32) : IO (Option Nat) := do
