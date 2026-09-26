@@ -15,8 +15,12 @@ LISTEN_FOR_MOUSEENTER = """el => {
     if (!el.__hoverTrace) {
         el.__hoverTrace = [];
         const note = what => el.__hoverTrace.push(`${what}@${Math.round(performance.now())}`);
+        const describe = e => e && e.tagName ?
+            `${e.tagName.toLowerCase()}.${[...e.classList].join('.')}` : 'outside the page';
         for (const type of ['mouseenter', 'mouseleave', 'mouseover', 'mouseout']) {
-            el.addEventListener(type, () => note(type));
+            el.addEventListener(type, event => note(
+                ['mouseout', 'mouseleave'].includes(type) ?
+                    `${type}(to ${describe(event.relatedTarget)})` : type));
         }
         if (el._tippy && el._tippy.setProps) {
             el._tippy.setProps({
