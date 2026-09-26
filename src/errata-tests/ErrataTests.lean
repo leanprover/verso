@@ -1494,8 +1494,8 @@ def dependencyLibrariesAreNotSelected (ws : driverConfigured) : Test := do
   assertExitCode 0 out
   assertContains "App:" out.stdout
   assertNotContains "depTest" out.stdout
-  let workspace ← IO.FS.readFile (ws / ".lake" / "errata" / "workspace.json")
-  assertNotContains "DepLib" workspace
+  let executables ← IO.FS.readFile (ws / ".lake" / "errata" / "executables.json")
+  assertNotContains "DepLib" executables
 
 /--
 A root without a `module` header that imports a module-system child, each with a test, has each
