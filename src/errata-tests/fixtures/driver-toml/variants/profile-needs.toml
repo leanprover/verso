@@ -3,6 +3,9 @@
 [profile.stamped.settings]
 "TomlLib.stampFile" = { needs = "stamp" }
 
+[needs]
+stamp = "stamp"
+
 [[executable]]
 name = "extra"
 command = ["bash", "-c", '''

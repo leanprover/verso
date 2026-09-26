@@ -83,12 +83,32 @@ structure FilterString where
   positions? : Option (Array (Nat × Nat)) := none
 deriving Repr, Inhabited, BEq
 
-/-- The value of a setting: a string, or the Lake target whose result is its value. -/
+/--
+The value of a setting: a string, or a reference to a need, whose target's result is the value.
+-/
 inductive SettingValue where
   /-- A string that the file gives. -/
   | value (s : String)
-  /-- The Lake target named by {name}`target`, written at {name}`line` and {name}`col`. -/
-  | needs (target : String) (line col : Nat)
+  /--
+  A reference to the need named {name}`name` in the {lit}`[needs]` table, written at {name}`line`
+  and {name}`col`.
+  -/
+  | needs (name : String) (line col : Nat)
+deriving Repr, Inhabited, BEq
+
+/--
+A need: a name that the {lit}`[needs]` table binds to a Lake target, which settings refer to by the
+name.
+-/
+structure Need where
+  /-- The need's name. -/
+  name : String
+  /-- The Lake target, in the workspace's target syntax. -/
+  target : String
+  /-- The line of the target's string, counted from one. -/
+  line : Nat
+  /-- The column of the target's string, counted from zero. -/
+  col : Nat
 deriving Repr, Inhabited, BEq
 
 /-- A per-test override of a profile. -/
@@ -184,6 +204,8 @@ structure File where
   path : String
   /-- The filter that selects the tests to run when neither a profile nor the command line does. -/
   defaultFilter? : Option FilterString := none
+  /-- The needs of the {lit}`[needs]` table, in the file's order. -/
+  needs : Array Need := #[]
   /-- The test executables that the file adds. -/
   executables : Array Executable := #[]
   /-- The profiles, with inheritance applied. -/

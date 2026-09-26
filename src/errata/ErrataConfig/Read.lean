@@ -109,14 +109,16 @@ partial def settingLeaves (namePrefix : String) (t : Lake.Toml.Table) :
 The settings table. Settings' names are their fully qualified declaration names, written as quoted
 dotted keys ({lit}`"A.B.c" = …`), bare dotted keys, or keys in nested tables
 ({lit}`[….settings.A.B]` with {lit}`c = …`); {name}`settingLeaves` flattens nested tables into
-dotted names. Each value is a string or {lit}`{ needs = "target" }`, with no coercion, and each name
-is given once.
+dotted names. Each value is a string or {lit}`{ needs = "name" }`, with no coercion, and each name
+is given once. A reference to a need names an entry of the {lit}`[needs]` table, whose names are
+{name}`needs`.
 -/
-def readSettings (v : Lake.Toml.Value) : CheckM (Array (String × SettingValue)) := do
+def readSettings (needs : Array String) (v : Lake.Toml.Value) :
+    CheckM (Array (String × SettingValue)) := do
   let .table _ t := v
     | problem v.ref s!"'settings' must be a table, and it is {kindOf v}"
       return #[]
-  let shape := "a string or { needs = \"target\" }"
+  let shape := "a string or { needs = \"name\" }"
   let mut out := #[]
   for (name, sv) in settingLeaves "" t do
     match sv with
@@ -125,17 +127,20 @@ def readSettings (v : Lake.Toml.Value) : CheckM (Array (String × SettingValue))
       else out := out.push (name, .value s)
     | .table ref inner =>
       match inner.find? `needs with
-      | some (.string r tgt) =>
+      | some (.string r need) =>
         if inner.items.size != 1 then
           problem ref s!"the setting '{name}' must be {shape}, and its table has keys \
             besides 'needs'"
         else if out.any (·.1 == name) then problem ref s!"the setting '{name}' is given twice"
+        else if !needs.contains need then
+          problem r s!"the setting '{name}' refers to the need '{need}', and the [needs] table \
+            has no entry of that name"
         else
           let (line, col) ← positionOf r
-          out := out.push (name, .needs tgt line col)
+          out := out.push (name, .needs need line col)
       | some other =>
-        problem other.ref s!"'needs' must name a Lake target as a string, and it is \
-          {kindOf other}"
+        problem other.ref s!"'needs' must name an entry of the [needs] table as a string, and it \
+          is {kindOf other}"
       | none =>
         problem ref s!"the setting '{name}' must be {shape}, and it is an empty table"
     | other =>
@@ -146,8 +151,12 @@ def readSettings (v : Lake.Toml.Value) : CheckM (Array (String × SettingValue))
 def overrideKeys : List String :=
   ["filter", "timeout", "grace-period", "slow-after", "update-golden", "settings"]
 
-/-- An override of the profile {name}`profile`. -/
-def readOverride (profile : String) (v : Lake.Toml.Value) : CheckM (Option Override) := do
+/--
+An override of the profile {name}`profile`. Its settings refer to the needs whose names are
+{name}`needs`.
+-/
+def readOverride (needs : Array String) (profile : String) (v : Lake.Toml.Value) :
+    CheckM (Option Override) := do
   let .table ref t := v
     | problem v.ref s!"each override of the profile '{profile}' must be a table, and it is \
         {kindOf v}"
@@ -172,7 +181,7 @@ def readOverride (profile : String) (v : Lake.Toml.Value) : CheckM (Option Overr
     o := { o with slowAfterMs? := ← readDuration "slow-after" x }
   if let some x := t.find? `«update-golden» then
     o := { o with updateGolden? := ← readBool "update-golden" x }
-  if let some x := t.find? `settings then o := { o with settings := ← readSettings x }
+  if let some x := t.find? `settings then o := { o with settings := ← readSettings needs x }
   return some o
 
 /-- The keys of a profile. -/
@@ -195,8 +204,12 @@ def readOrder (v : Lake.Toml.Value) : CheckM (Option Order) := do
       {kindOf other}"
     return none
 
-/-- The profile named {name}`name`, as the file gives it. -/
-def readProfile (name : String) (v : Lake.Toml.Value) : CheckM (Option Profile) := do
+/--
+The profile named {name}`name`, as the file gives it. Its settings refer to the needs whose names
+are {name}`needs`.
+-/
+def readProfile (needs : Array String) (name : String) (v : Lake.Toml.Value) :
+    CheckM (Option Profile) := do
   let .table ref t := v
     | problem v.ref s!"the profile '{name}' must be a table, and it is {kindOf v}"
       return none
@@ -222,13 +235,13 @@ def readProfile (name : String) (v : Lake.Toml.Value) : CheckM (Option Profile) 
   if let some x := t.find? `order then p := { p with order? := ← readOrder x }
   if let some x := t.find? `«update-golden» then
     p := { p with updateGolden? := ← readBool "update-golden" x }
-  if let some x := t.find? `settings then p := { p with settings := ← readSettings x }
+  if let some x := t.find? `settings then p := { p with settings := ← readSettings needs x }
   if let some x := t.find? `override then
     match x with
     | .array _ items =>
       let mut overrides := #[]
       for item in items do
-        if let some o ← readOverride name item then overrides := overrides.push o
+        if let some o ← readOverride needs name item then overrides := overrides.push o
       p := { p with overrides }
     | other =>
       problem other.ref s!"'override' must be an array of tables, written \
@@ -342,10 +355,38 @@ def inherit (profiles : Array Profile) : CheckM (Array Profile) := do
     out := out.push merged
   return out
 
+/--
+The {lit}`[needs]` table: each key is a need's name, and each value a string that names a Lake
+target in the workspace's target syntax. The result is the needs, and the names of every key of the
+table, those whose values are wrong included, for the references to check against.
+-/
+def readNeeds (v : Lake.Toml.Value) : CheckM (Array Need × Array String) := do
+  let .table _ t := v
+    | problem v.ref s!"'needs' must be a table, written [needs], and it is {kindOf v}"
+      return (#[], #[])
+  let mut needs := #[]
+  let mut names := #[]
+  for (k, x) in t.items do
+    let name := keyName k
+    names := names.push name
+    match x with
+    | .string ref target =>
+      let (line, col) ← positionOf ref
+      needs := needs.push { name, target, line, col }
+    | other =>
+      problem other.ref s!"the need '{name}' must name a Lake target as a string, and it is \
+        {kindOf other}"
+  return (needs, names)
+
 /-- Validates the whole of the table of the configuration file at {name}`path`. -/
 def readFile (path : String) (t : Lake.Toml.Table) : CheckM File := do
-  checkKeys path ["default-filter", "executable", "profile"] t
+  checkKeys path ["default-filter", "executable", "needs", "profile"] t
   let mut file : File := { path }
+  let mut needNames := #[]
+  if let some x := t.find? `needs then
+    let (needs, names) ← readNeeds x
+    file := { file with needs }
+    needNames := names
   if let some x := t.find? `«default-filter» then
     file := { file with defaultFilter? := ← readFilter "default-filter" x }
   if let some x := t.find? `executable then
@@ -366,7 +407,7 @@ def readFile (path : String) (t : Lake.Toml.Table) : CheckM File := do
     | .table _ profiles =>
       let mut ps := #[]
       for (k, v) in profiles.items do
-        if let some p ← readProfile (keyName k) v then ps := ps.push p
+        if let some p ← readProfile needNames (keyName k) v then ps := ps.push p
       file := { file with profiles := ← inherit ps }
     | other =>
       problem other.ref s!"'profile' must be a table of profiles, written [profile.NAME], and it \

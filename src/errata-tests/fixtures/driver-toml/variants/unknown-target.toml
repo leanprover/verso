@@ -1,2 +1,5 @@
 [profile.default.settings]
-"TomlLib.stampFile" = { needs = "nonexistent" }
+"TomlLib.stampFile" = { needs = "stamp" }
+
+[needs]
+stamp = "nonexistent"

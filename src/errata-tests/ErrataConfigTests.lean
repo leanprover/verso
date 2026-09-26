@@ -42,9 +42,9 @@ def validationReportsPositions : Test := do
   let cases : List (String × List String) := [
     ("syntax", ["errata.toml:1:16:"]),
     ("wrong-type", ["errata.toml:2:22: the setting 'TomlLib.stampFile' must be a string or \
-      { needs = \"target\" }, and it is an integer"]),
+      { needs = \"name\" }, and it is an integer"]),
     ("nested-wrong-type", ["errata.toml:2:20: the setting 'TomlLib.stampFile' must be a string or \
-      { needs = \"target\" }, and it is a boolean"]),
+      { needs = \"name\" }, and it is a boolean"]),
     ("unknown-key", ["errata.toml:3:9: unknown key 'flavor' in the profile 'default'"]),
     ("cycle", ["errata.toml:2:11: the profiles inherit in a cycle: a → b → a",
       "errata.toml:5:11: the profiles inherit in a cycle: b → a → b"]),
@@ -64,8 +64,8 @@ def validationReportsPositions : Test := do
 
 /--
 Settings' names may be written as nested tables as well as quoted dotted keys, and a file may begin
-with a byte-order mark and give durations with spaces around them. A setting that needs a target
-names the target and the position of its name.
+with a byte-order mark and give durations with spaces around them. A setting that refers to a need
+names the need and the position of its name.
 -/
 @[test]
 def readsTomlForms : Test := do
@@ -101,9 +101,50 @@ def problemsOf (text : String) : TestM String := do
   | .error problems => return "\n".intercalate problems.toList
 
 /--
+The `[needs]` table binds names to Lake targets, each with the position of its target's string, and
+the elaborated file holds it under `needs`. Settings of profiles and of overrides refer to its
+names, and each reference keeps the name. A reference to a name that the table lacks is a problem at
+the reference, and so is a value of the table that is not a string, at the value.
+-/
+@[test]
+def needsTable : Test := do
+  let text := "[needs]\nexe = \"verso\"\nsite = \"pkg/:site\"\n\n\
+    [profile.default.settings]\na = { needs = \"exe\" }\n\n\
+    [[profile.default.override]]\nfilter = \"all()\"\nsettings = { b = { needs = \"site\" } }\n"
+  match ← ErrataConfig.parse "errata.toml" text with
+  | .error problems => fail s!"the file was rejected: {problems}"
+  | .ok f =>
+    result "the table" do
+      assertBEq #[("exe", "verso", 2, 6), ("site", "pkg/:site", 3, 7)]
+        (f.needs.map fun n => (n.name, n.target, n.line, n.col))
+      let needs := f.toJson.getObjValD "needs"
+      assertBEq (some "pkg/:site") ((needs.getObjValD "site").getObjValAs? String "target").toOption
+    let p ← profileOf f "default"
+    result "a profile's reference" do
+      assertTrue (p.settings.any fun (k, v) => k == "a" && v matches .needs "exe" ..)
+        s!"the reference was not read: {repr p.settings}"
+    result "an override's reference" do
+      let settings := p.overrides.flatMap (·.settings)
+      assertTrue (settings.any fun (k, v) => k == "b" && v matches .needs "site" ..)
+        s!"the reference was not read: {repr settings}"
+  let cases : List (String × String × String) := [
+    ("a name that the table lacks", "[profile.default.settings]\na = { needs = \"nope\" }\n",
+      "errata.toml:2:14: the setting 'a' refers to the need 'nope', and the [needs] table has no \
+        entry of that name"),
+    ("a name that the table lacks, in an override",
+      "[needs]\nx = \"t\"\n[[profile.default.override]]\nfilter = \"all()\"\n\
+        settings = { a = { needs = \"y\" } }\n",
+      "errata.toml:5:27: the setting 'a' refers to the need 'y', and the [needs] table has no \
+        entry of that name"),
+    ("a value of the table that is not a string", "[needs]\nexe = 3\n",
+      "errata.toml:2:6: the need 'exe' must name a Lake target as a string, and it is an integer")]
+  for (name, text, message) in cases do
+    result name do assertBEq message (← problemsOf text)
+
+/--
 Validation reports inheritance from a missing profile or from the profile itself, keys that
 overrides do not take, a repeated `[[executable]]` name, `needs` tables with other keys or a
-non-string target, and a setting given both in a nested table and as a dotted key.
+non-string name, and a setting given both in a nested table and as a dotted key.
 -/
 @[test]
 def reportsStructuralProblems : Test := do
@@ -121,10 +162,10 @@ def reportsStructuralProblems : Test := do
       "the [[executable]] name 'x' is used more than once"),
     ("a needs table with other keys",
       "[profile.default.settings]\nx = { needs = \"t\", other = \"u\" }\n",
-      "the setting 'x' must be a string or { needs = \"target\" }, and its table has keys besides \
+      "the setting 'x' must be a string or { needs = \"name\" }, and its table has keys besides \
         'needs'"),
-    ("a non-string target", "[profile.default.settings]\ny = { needs = 1 }\n",
-      "'needs' must name a Lake target as a string, and it is an integer"),
+    ("a non-string need", "[profile.default.settings]\ny = { needs = 1 }\n",
+      "'needs' must name an entry of the [needs] table as a string, and it is an integer"),
     ("a setting nested and flat",
       "[profile.default.settings]\n\"A.b\" = \"1\"\n[profile.default.settings.A]\nb = \"2\"\n",
       "the setting 'A.b' is given twice")]

@@ -5,3 +5,6 @@ tag(x) &
 
 [profile.default.settings]
 "TomlLib.stampFile" = { needs = "stamp" }
+
+[needs]
+stamp = "stamp"

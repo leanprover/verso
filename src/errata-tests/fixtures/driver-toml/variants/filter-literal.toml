@@ -3,3 +3,6 @@ default-filter = 'tag(x) & name(y'
 
 [profile.default.settings]
 "TomlLib.stampFile" = { needs = "stamp" }
+
+[needs]
+stamp = "stamp"
