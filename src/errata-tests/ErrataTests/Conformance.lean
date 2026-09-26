@@ -180,6 +180,11 @@ structure FixtureRoles where
   one.
   -/
   missingSettingUser? : Option String := none
+  /--
+  The user of a fixture that takes the fixture that takes the mandatory setting, and that fixture,
+  when the product has them.
+  -/
+  missingSettingTwoAway? : Option (String × String) := none
 
 /-- The fixtures and their users in the two shell scripts, which have the same names. -/
 def shellFixtures : FixtureRoles where
@@ -202,6 +207,7 @@ def shellFixtures : FixtureRoles where
   failingUser := "fails-with-fixture"
   threadedTest? := some "threaded-test"
   missingSettingUser? := some "after-missing-setting"
+  missingSettingTwoAway? := some ("after-missing-setting-two-away", "on-needs-needed")
 
 /--
 A test executable that the checks run against: a product of a harness, with the tests that play the
@@ -302,7 +308,8 @@ def pytestProduct : Product where
     usesThreaded := (pytestTest "test_uses_threaded").test
     failingUser := (pytestTest "test_fails_with_fixture").test
     threadedTest? := none
-    missingSettingUser? := none }
+    missingSettingUser? := none
+    missingSettingTwoAway? := none }
   -- Each invocation starts `uv`, Python, and a pytest session, which take over a second under load.
   startMs := 2000
 
@@ -989,28 +996,40 @@ def reproductionLine : Test := do
 
 /--
 Tests kept from running by a mandatory setting without a value have no command that reproduces
-them. The human report names the setting in its place, with the fixture that takes it for a user of
-that fixture, and the JSON report and the events file leave the command out.
+them. The human report names the setting in its place, with the chain of fixtures from the test to
+the one that takes it for a user of such a fixture, and the JSON report and the events file leave
+the command out.
 -/
 @[test]
 def missingSettingInPlaceOfReproduction : Test := forEach scriptedProducts fun p => do
   let some user := p.fixtures.missingSettingUser? | fail "the product has no such user"
-  let r ← p.runTests #[p.needsSetting.test, user]
+  let some (farUser, between) := p.fixtures.missingSettingTwoAway?
+    | fail "the product has no such user"
+  let r ← p.runTests #[p.needsSetting.test, user, farUser]
   expectOutcome r p.needsSetting.test (· matches .inconclusive (.settingMissing _))
     "settingMissing"
-  expectOutcome r user (· matches .inconclusive (.fixtureFailed _ .setup)) "fixtureFailed"
+  for u in [user, farUser] do
+    expectOutcome r u (· matches .inconclusive (.fixtureFailed _ .setup)) "fixtureFailed"
   result "the human report" do
     let text := "\n".intercalate r.lines.toList
     assertContains s!"setting: {p.needed} has no value" text
-    assertContains s!"setting: {p.needed} of fixture needs-needed has no value" text
+    assertContains
+      s!"setting: {user} needed needs-needed, and needs-needed lacks a value for {p.needed}" text
+    assertContains
+      (s!"setting: {farUser} needed {between}, {between} needed needs-needed, " ++
+        s!"and needs-needed lacks a value for {p.needed}") text
     assertNotContains "reproduce:" text
   result "the JSON report" do
     let json ← IO.ofExcept (Lean.Json.parse (jsonReport r.report))
     let results ← IO.ofExcept (json.getObjValAs? (Array Json) "results")
-    for test in [p.needsSetting.test, user] do
+    let chains := [(p.needsSetting.test, none), (user, some #["needs-needed"]),
+      (farUser, some #[between, "needs-needed"])]
+    for (test, chain) in chains do
       let some own := results.find? (strField · "test" == some test) | fail s!"no result of {test}"
       assertBEq none (strField own "reproduce")
-      assertBEq (some p.needed) (strField (own.getObjValD "missingSetting") "setting")
+      let missing := own.getObjValD "missingSetting"
+      assertBEq (some p.needed) (strField missing "setting")
+      assertBEq chain (missing.getObjValAs? (Array String) "chain" |>.toOption)
   result "the events file" do
     let outcomes := r.events.filter (isEvent "outcome" none)
     assertTrue (outcomes.all (strField · "reproduce" |>.isNone))

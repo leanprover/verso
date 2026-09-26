@@ -68,8 +68,11 @@ inductive Exit where
   | spawnFailed (message : String)
   /-- The mandatory setting {name}`setting` has no value, so the runner started no process. -/
   | settingMissing (setting : String)
-  /-- A fixture that the test needs failed in the given phase, so the runner started no process. -/
-  | fixtureFailed (fixture : String) (phase : FixturePhase)
+  /--
+  A fixture that the test needs failed in the given phase, so the runner started no process.
+  {name}`chain` lists the fixtures from one the test takes to the failed one, each taking the next.
+  -/
+  | fixtureFailed (fixture : String) (phase : FixturePhase) (chain : Array String)
 deriving Repr, Inhabited
 
 /--
@@ -195,7 +198,7 @@ def mergeOutcome (verdict? : Option Protocol.VerdictInfo) (unreadable? : Option 
     (exit : Exit) : Outcome :=
   match exit with
   | .settingMissing s => .inconclusive (.settingMissing s)
-  | .fixtureFailed f p => .inconclusive (.fixtureFailed f p)
+  | .fixtureFailed f p _ => .inconclusive (.fixtureFailed f p)
   | .spawnFailed m => .inconclusive (.spawnFailed m)
   | .timedOut ms killed => .inconclusive (.timedOut ms killed)
   | .exited code =>
@@ -396,8 +399,9 @@ def step (s : State) : Event → State × Array Action
       let r := s.running[i]!
       let missing? : Option MissingSetting := match exit with
         | .settingMissing setting => some { setting }
-        | .fixtureFailed f _ =>
-          (s.missingSettings.get? (exe, f)).map fun setting => { setting, fixture? := some f }
+        | .fixtureFailed f _ chain =>
+          (s.missingSettings.get? (exe, f)).map fun setting =>
+            { setting, chain := if chain.isEmpty then #[f] else chain }
         | _ => none
       let missingSettings := match exit, r.planned.kind with
         | .settingMissing setting, .fixture => s.missingSettings.insert (exe, test) setting

@@ -412,6 +412,19 @@ def Schedule.of (pool : Nat) (selected : Array (InventoryTest × Resolved))
   return { pool, tests := selected, fixtures, testSpecs, fixtureSpecs := specs }
 
 /--
+The positions of the fixtures from one of {name}`starts` to {name}`target`, each taking the next and
+the last being {name}`target`; empty when none of {name}`starts` reaches it.
+-/
+partial def Schedule.fixtureChain (schedule : Schedule) (starts : Array Nat) (target : Nat) :
+    Array Nat :=
+  let viaStart (f : Nat) : Option (Array Nat) :=
+    if f == target then some #[target]
+    else
+      let rest := schedule.fixtureChain schedule.fixtureSpecs[f]!.deps target
+      if rest.isEmpty then none else some (#[f] ++ rest)
+  (starts.findSome? viaStart).getD #[]
+
+/--
 Warnings about settings that a test receives with one value and a fixture it reaches, directly or
 through other fixtures, with another, as an override that selects the test can make happen.
 -/
@@ -654,7 +667,12 @@ def RunContext.runScheduled (ctx : RunContext) (schedule : Schedule) : IO Unit :
         let p := ctx.plannedJob schedule job
         let exit : Exit := match reason with
           | .settingMissing s => .settingMissing s
-          | .fixtureFailed f phase => .fixtureFailed schedule.fixtures[f]!.2.1.name phase
+          | .fixtureFailed f phase =>
+            let starts := match job with
+              | .test t => schedule.testSpecs[t]!.fixtures.map (·.1)
+              | .setup g | .prepare g _ | .teardown g => schedule.fixtureSpecs[g]!.deps
+            let chain := (schedule.fixtureChain starts f).map (schedule.fixtures[·]!.2.1.name)
+            .fixtureFailed schedule.fixtures[f]!.2.1.name phase chain
         d.dispatch (.testStarted p)
         d.dispatch (.testEnded p.exe p.test p.key exit 0)
       | .spawn job _ values =>

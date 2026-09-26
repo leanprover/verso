@@ -232,12 +232,8 @@ private def resultLines (h : HumanReporter) (r : Result) (name : String) : Array
     unless r.output.isEmpty do
       out := out.push (detail s!"output:\n{dropFinalNewline r.output.all}")
     if let some cmd := r.reproduce? then out := out.push (detail s!"reproduce: {cmd}")
-    match r.missingSetting? with
-    | some { setting, fixture? := some f } =>
-      out := out.push (detail s!"setting: {setting} of fixture {f} has no value")
-    | some { setting, fixture? := none } =>
-      out := out.push (detail s!"setting: {setting} has no value")
-    | none => pure ()
+    if let some m := r.missingSetting? then
+      out := out.push (detail s!"setting: {m.sentence r.test}")
   return out
 
 /--
@@ -627,7 +623,8 @@ instance : ToJson Result where
       (match r.missingSetting? with
         | some m =>
           [("missingSetting", Json.mkObj <| [("setting", Json.str m.setting)] ++
-            (m.fixture?.map (("fixture", Json.str ·))).toList)]
+            (m.fixture?.map (("fixture", Json.str ·))).toList ++
+            (if m.chain.isEmpty then [] else [("chain", ToJson.toJson m.chain)]))]
         | none => []) ++
       (if r.settings.isEmpty then []
         else [("settings", Json.arr (r.settings.map fun (k, v) =>
@@ -643,13 +640,18 @@ def resultSettings (j : Json) : Except String (Array (String × String)) := do
     items.mapM fun item => do
       return (← item.getObjValAs? String "name", ← item.getObjValAs? String "value")
 
-/-- Decodes the missing setting of a result, when it has one. -/
+/--
+Decodes the missing setting of a result, when it has one. An object with a fixture and no chain
+stands for the chain of that fixture alone.
+-/
 def missingSetting? (j : Json) : Except String (Option MissingSetting) := do
   match j.getObjVal? "missingSetting" with
   | .error _ => return none
   | .ok m =>
+    let fixture? : Option String ← optField m "fixture"
+    let chain : Option (Array String) ← optField m "chain"
     return some
-      { setting := ← m.getObjValAs? String "setting", fixture? := ← optField m "fixture" }
+      { setting := ← m.getObjValAs? String "setting", chain := chain.getD fixture?.toArray }
 
 instance : FromJson Result where
   fromJson? j := do

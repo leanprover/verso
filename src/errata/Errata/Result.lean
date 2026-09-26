@@ -104,9 +104,28 @@ def Result.Kind.name : Result.Kind → String
 structure MissingSetting where
   /-- The setting's name. -/
   setting : String
-  /-- The fixture that takes the setting, when a fixture the test uses takes it. -/
-  fixture? : Option String := none
+  /--
+  The fixtures from the one the test takes to the one that takes the setting, each taking the next;
+  empty when the test takes the setting itself.
+  -/
+  chain : Array String := #[]
 deriving Repr, Inhabited, DecidableEq
+
+/-- The fixture that takes the setting, when the test reaches it through its fixtures. -/
+def MissingSetting.fixture? (m : MissingSetting) : Option String := m.chain.back?
+
+/--
+The missing setting as the human report states it for {name}`test`: {lit}`NAME has no value` for
+the test's own setting, and otherwise each step of the chain, as in
+{lit}`T needed A, A needed B, and B lacks a value for NAME`.
+-/
+def MissingSetting.sentence (m : MissingSetting) (test : String) : String :=
+  match m.chain.back? with
+  | none => s!"{m.setting} has no value"
+  | some last =>
+    let users := #[test] ++ m.chain.pop
+    let steps := (users.zip m.chain).map fun (user, fixture) => s!"{user} needed {fixture}"
+    s!"{", ".intercalate steps.toList}, and {last} lacks a value for {m.setting}"
 
 /--
 One entry collected during a run and rendered by the reporters: a test's own result, or one of its

@@ -27,6 +27,7 @@ errata_fixtures() {
   errata_fixture_decl slow-setup "Its setup sleeps."
   errata_fixture_decl threaded "It asks for threads." --threads 3
   errata_fixture_decl needs-needed "It takes the setting without a default." --settings needed
+  errata_fixture_decl on-needs-needed "It takes needs-needed." --fixtures needs-needed
 }
 
 # Declares one test per behavior. Every test takes the seed, the marker, and the note;
@@ -38,7 +39,8 @@ errata_tests() {
       stubborn spawns panics garbled records twice flood lingers greets needs-setting errexit \
       fail-goes-on run-id exclusive-a exclusive-b shared-a shared-b after-setup-failure \
       after-prepare-failure-a after-prepare-failure-b before-teardown-failure uses-dependent \
-      after-slow-setup uses-threaded threaded-test fails-with-fixture after-missing-setting; do
+      after-slow-setup uses-threaded threaded-test fails-with-fixture after-missing-setting \
+      after-missing-setting-two-away; do
     settings="Errata.seed,marker,note"
     case "$t" in
       greets) settings="$settings,greeting" ;;
@@ -59,6 +61,7 @@ errata_tests() {
       after-slow-setup) extra=(--fixtures slow-setup) ;;
       uses-threaded) extra=(--fixtures threaded) ;;
       after-missing-setting) extra=(--fixtures needs-needed) ;;
+      after-missing-setting-two-away) extra=(--fixtures on-needs-needed) ;;
       threaded-test) extra=(--threads 3 --fixtures "shared(stamped)") ;;
     esac
     errata_test "$t" --path "on-errata-sh,$t" --file on-errata-sh.sh --tags "$tags" \
