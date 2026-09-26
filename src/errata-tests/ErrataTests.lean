@@ -1154,13 +1154,21 @@ private def writtenAt (file : System.FilePath) : IO (Option IO.FS.SystemTime) :=
   if ← file.pathExists then return some (← file.metadata).modified else return none
 
 /--
-The driver's files are Lake file targets, written again exactly when their inputs change. A listing
-builds no need, and a listing repeated with nothing changed rewrites neither `config.json` nor the
-plan. An edit of `errata.toml` rewrites both and relinks no test executable. An edit of a test module
-relinks its library's test executable and rewrites the plan. Another filter rewrites the plan. A run
-with a filter that a listing already used reuses its plan, builds the need that its test reaches,
-and leaves the need that only a test left out reaches unbuilt. An edit of a need's input rebuilds
-the need's target and rewrites `workspace.json`, and leaves the plan alone.
+The directories that invocations of the driver in the workspace at {name}`dir` left under
+`.lake/errata/runs`.
+-/
+private def runDirectories (dir : System.FilePath) : IO (Array System.FilePath) := do
+  let runs := dir / ".lake" / "errata" / "runs"
+  if ← runs.isDir then return (← runs.readDir).map (·.path) else return #[]
+
+/--
+The driver's builds are incremental: `config.json` is written again when `errata.toml` changes, a
+test executable when its library's modules change, and a need's target when its inputs change, each
+through Lake's traces. A listing builds no need, and a listing repeated with nothing changed builds
+nothing. An edit of `errata.toml` rewrites `config.json` and relinks no test executable. An edit
+of a test module relinks its library's test executable. A run builds the need that its test reaches and
+leaves the need that only a test left out reaches unbuilt. An edit of a need's input rebuilds the
+need's target. Each invocation removes the directory of its own files when it ends.
 -/
 @[test]
 def driverFilesAreIncremental : Test :=
@@ -1168,15 +1176,12 @@ def driverFilesAreIncremental : Test :=
     copyFixture tomlFixture dir
     let lake (args : Array String) : IO IO.Process.Output :=
       IO.Process.output { cmd := "lake", args, cwd := dir }
-    let errata := dir / ".lake" / "errata"
     let build := dir / ".lake" / "build"
-    let config := errata / "config.json"
-    let plan := errata / "plan.json"
-    let workspace := errata / "workspace.json"
+    let config := dir / ".lake" / "errata" / "config.json"
     let exe := build / "bin" / "errata-test-TomlLib"
     let stamp := build / "stamp.txt"
     let marker := build / "marker.txt"
-    let times : IO (Array (Option IO.FS.SystemTime)) := #[config, plan, exe].mapM writtenAt
+    let times : IO (Array (Option IO.FS.SystemTime)) := #[config, exe].mapM writtenAt
     assertExitCode 0 (← lake #["test", "--", "list"])
     result "a listing builds no need" do
       assertTrue (!(← stamp.pathExists)) "the stamp was built"
@@ -1192,28 +1197,20 @@ def driverFilesAreIncremental : Test :=
       assertExitCode 0 (← lake #["test", "--", "list"])
       let after ← times
       assertTrue (after[0]! != before[0]!) "config.json was not rewritten"
-      assertTrue (after[1]! != before[1]!) "the plan was not rewritten"
-      assertBEq before[2]! after[2]!
+      assertBEq before[1]! after[1]!
     result "an edit of a test module" do
       let before ← times
       let lib := dir / "TomlLib.lean"
       IO.FS.writeFile lib <| (← IO.FS.readFile lib) ++
-        "\nnamespace TomlLib\n\n/-- A test added by the check. -/\n@[test] def added : Bool := true\n\
-          \nend TomlLib\n"
+        "\nnamespace TomlLib\n\n/-- A test added by the check. -/\n\
+          @[test] def added : Bool := true\n\nend TomlLib\n"
       let out ← lake #["test", "--", "list"]
       assertExitCode 0 out
       assertContains "TomlLib.added" out.stdout
       let after ← times
       assertBEq before[0]! after[0]!
-      assertTrue (after[1]! != before[1]!) "the plan was not rewritten"
-      assertTrue (after[2]! != before[2]!) "the test executable was not relinked"
-    result "another filter" do
-      let before ← times
-      assertExitCode 0 (← lake #["test", "--", "list", "-E", "name(readsStamp)"])
-      let after ← times
-      assertTrue (after[1]! != before[1]!) "the plan was not rewritten"
-      assertBEq before[2]! after[2]!
-    result "a run with the listing's filter" do
+      assertTrue (after[1]! != before[1]!) "the test executable was not relinked"
+    result "a run of one test" do
       let before ← times
       let out ← lake #["test", "--", "-E", "name(readsStamp)"]
       assertExitCode 0 out
@@ -1222,16 +1219,20 @@ def driverFilesAreIncremental : Test :=
       assertTrue (← stamp.pathExists) "the stamp was not built"
       assertTrue (!(← marker.pathExists))
         "the marker, which only a test left out needs, was built"
+    result "a repeated run" do
+      let stampBefore ← writtenAt stamp
+      assertExitCode 0 (← lake #["test", "--", "-E", "name(readsStamp)"])
+      assertBEq stampBefore (← writtenAt stamp)
     result "an edit of a need's input" do
       let before ← times
       let stampBefore ← writtenAt stamp
-      let workspaceBefore ← writtenAt workspace
       IO.FS.writeFile (dir / "stamp-input.txt") "stamp 2\n"
       assertExitCode 0 (← lake #["test", "--", "-E", "name(readsStamp)"])
       assertBEq before (← times)
       assertTrue ((← writtenAt stamp) != stampBefore) "the stamp was not rebuilt"
-      assertTrue ((← writtenAt workspace) != workspaceBefore) "workspace.json was not rewritten"
       assertContains "stamp 2" (← IO.FS.readFile stamp)
+    result "the invocations' own files" do
+      assertBEq #[] (← runDirectories dir)
 
 /--
 The driver builds the needs that the selected tests reach and no others. A run of one test in the
@@ -1253,11 +1254,14 @@ def driverBuildsReachedNeeds : Test := do
       assertTrue (← (dir / ".lake" / "build" / "stamp.txt").pathExists) "the stamp was not built"
       assertTrue (!(← (dir / ".lake" / "build" / "marker.txt").pathExists))
         "the marker was built"
-      let workspace ← IO.ofExcept <| Lean.Json.parse
-        (← IO.FS.readFile (dir / ".lake" / "errata" / "workspace.json"))
-      let needs := ((workspace.getObjValD "needs").getObj?.toOption.map
-        (·.toArray.map (·.1))).getD #[]
-      assertBEq #["stamp"] needs
+      let records := (← IO.FS.readFile eventsPath).splitOn "\n" |>.filter (!·.isEmpty)
+      assertTrue (((records.headD "").splitOn "\"type\":\"protocol\"").length > 1)
+        s!"the events file begins with {records.headD ""}"
+      let phases := records.filterMap fun l =>
+        if (l.splitOn "\"type\":\"phase\"").length > 1 then
+          if (l.splitOn "\"name\":\"List\"").length > 1 then some "List" else some "Run"
+        else none
+      assertBEq ["List", "Run"] phases
   result "a need whose target fails" do
     let out ← withTomlVariant "broken-need" #["test"]
     assertExitCode 96 out
@@ -1267,6 +1271,75 @@ def driverBuildsReachedNeeds : Test := do
     let out ← withTomlVariant "broken-need" #["test", "--", "-E", "name(readsStamp)"]
     assertExitCode 0 out
     assertContains "1 passed, 0 failed" out.stdout
+
+/-- The processes whose command lines contain {name}`text`, as `pgrep` lists them. -/
+private def processesMatching (text : String) : IO String := do
+  return (← IO.Process.output { cmd := "pgrep", args := #["-fl", text] }).stdout.trimAscii.copy
+
+/--
+A driver that ends while the runner's `plan` subcommand lists the tests leaves no process behind:
+the `plan` subcommand watches the lifeline that the driver holds, and when it closes, it ends the
+listing that runs and exits.
+-/
+@[test]
+def killedDriverEndsItsListing : Test :=
+  IO.FS.withTempDir fun dir => do
+    copyFixture tomlFixture dir
+    IO.FS.writeFile (dir / "errata.toml")
+      (← IO.FS.readFile (tomlFixture / "variants" / "slow-listing.toml"))
+    let marker := "errata-slow-listing"
+    let planMarker := s!"{dir.fileName.getD ""}/.lake/errata/runs"
+    let driver ← IO.Process.spawn {
+      cmd := "lake", args := #["test", "--", "-E", "exe(slow)"], cwd := dir
+      stdin := .piped, stdout := .piped, stderr := .piped }
+    let mut listing := ""
+    for _ in [0 : 2400] do
+      listing ← processesMatching marker
+      if !listing.isEmpty then break
+      IO.sleep 50
+    driver.kill
+    discard driver.wait
+    let mut left := ""
+    for _ in [0 : 200] do
+      left := (← processesMatching marker) ++ (← processesMatching planMarker)
+      if left.isEmpty then break
+      IO.sleep 50
+    unless left.isEmpty do
+      discard <| IO.Process.output { cmd := "pkill", args := #["-9", "-f", marker] }
+      discard <| IO.Process.output { cmd := "pkill", args := #["-9", "-f", planMarker] }
+    assertTrue (!listing.isEmpty) "the listing never started"
+    assertTrue left.isEmpty s!"processes survived the driver:\n{left}"
+
+/--
+Two invocations of the driver in one workspace at once each run with their own selection: a run of
+one test whose need takes ten seconds to build, and a listing of another test that starts while the
+need builds. Each exits as it would alone.
+-/
+@[test]
+def driverInvocationsAtOnce : Test :=
+  IO.FS.withTempDir fun dir => do
+    copyFixture tomlFixture dir
+    IO.FS.writeFile (dir / "errata.toml")
+      (← IO.FS.readFile (tomlFixture / "variants" / "slow-need.toml"))
+    -- Every test executable is built once before the two invocations overlap.
+    assertExitCode 0 (← IO.Process.output
+      { cmd := "lake", args := #["test", "--", "list"], cwd := dir })
+    let run ← IO.asTask (prio := .dedicated) <| IO.Process.output
+      { cmd := "lake", args := #["test", "--", "-E", "name(readsStamp)"], cwd := dir }
+    -- The listing starts once the run has begun building its need.
+    IO.sleep 4000
+    let list ← IO.Process.output
+      { cmd := "lake", args := #["test", "--", "list", "-E", "name(readsMarker)"], cwd := dir }
+    let run ← IO.ofExcept (← IO.wait run)
+    result "the listing" do
+      assertExitCode 0 list
+      assertContains "TomlLib.readsMarker" list.stdout
+      assertNotContains "TomlLib.readsStamp" list.stdout
+    result "the run" do
+      assertExitCode 0 run
+      assertContains "1 passed, 0 failed" run.stdout
+    result "the invocations' own files" do
+      assertBEq #[] (← runDirectories dir)
 
 /--
 The driver builds the needs that the selected tests reach under the selected profile, and only the
@@ -1591,7 +1664,7 @@ def runnerResolvesNeeds : Test := do
   let settings := Lean.Json.mkObj [("a", Lean.Json.mkObj [("needs", "stamp")]), ("b", "given")]
   let config := Lean.Json.mkObj [("protocol", 1),
     ("profiles", Lean.Json.mkObj [("default", Lean.Json.mkObj [("settings", settings)])]),
-    ("needs", Lean.Json.mkObj [("stamp", Lean.Json.mkObj [("target", "pkg/stamp")])])]
+    ("needs", Lean.Json.arr #[Lean.Json.mkObj [("name", "stamp"), ("target", "pkg/stamp")]])]
   let c ← match Runner.Config.ofJson config (Lean.Json.mkObj [("protocol", 1)]) with
     | .ok c => pure c
     | .error e => fail e

@@ -1,0 +1,5 @@
+# A test executable whose listing sleeps for five minutes, so that the driver can be ended while the
+# List phase runs. Its shell's name, `errata-slow-listing`, marks its process.
+[[executable]]
+name = "slow"
+command = ["bash", "-c", "sleep 300; true", "errata-slow-listing"]

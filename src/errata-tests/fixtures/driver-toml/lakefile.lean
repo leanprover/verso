@@ -40,3 +40,14 @@ target broken pkg : System.FilePath := do
   let input ← inputTextFile (pkg.dir / "stamp-input.txt")
   input.mapM fun _ => do
     error "the target fails to build on purpose"
+
+-- Copies `stamp-input.txt` as `stamp` does, after ten seconds, on every build, for a need of
+-- `variants/slow-need.toml`.
+target slowStamp pkg : System.FilePath := do
+  let input ← inputTextFile (pkg.dir / "stamp-input.txt")
+  input.mapM fun src => do
+    IO.sleep 10000
+    let out := pkg.buildDir / "stamp.txt"
+    IO.FS.createDirAll pkg.buildDir
+    IO.FS.writeFile out (← IO.FS.readFile src)
+    return out

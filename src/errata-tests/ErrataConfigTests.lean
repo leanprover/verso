@@ -102,23 +102,26 @@ def problemsOf (text : String) : TestM String := do
 
 /--
 The `[needs]` table binds names to Lake targets, each with the position of its target's string, and
-the elaborated file holds it under `needs`. Settings of profiles and of overrides refer to its
-names, and each reference keeps the name. A reference to a name that the table lacks is a problem at
+the elaborated file holds it under `needs` in the file's order. Settings of profiles and of
+overrides refer to its names, and each reference keeps the name. A reference to a name that the table lacks is a problem at
 the reference, and so is a value of the table that is not a string, at the value.
 -/
 @[test]
 def needsTable : Test := do
-  let text := "[needs]\nexe = \"verso\"\nsite = \"pkg/:site\"\n\n\
+  let text := "[needs]\nexe = \"verso\"\nsite = \"pkg/:site\"\naux = \"x\"\n\n\
     [profile.default.settings]\na = { needs = \"exe\" }\n\n\
     [[profile.default.override]]\nfilter = \"all()\"\nsettings = { b = { needs = \"site\" } }\n"
   match ← ErrataConfig.parse "errata.toml" text with
   | .error problems => fail s!"the file was rejected: {problems}"
   | .ok f =>
     result "the table" do
-      assertBEq #[("exe", "verso", 2, 6), ("site", "pkg/:site", 3, 7)]
+      assertBEq #[("exe", "verso", 2, 6), ("site", "pkg/:site", 3, 7), ("aux", "x", 4, 6)]
         (f.needs.map fun n => (n.name, n.target, n.line, n.col))
-      let needs := f.toJson.getObjValD "needs"
-      assertBEq (some "pkg/:site") ((needs.getObjValD "site").getObjValAs? String "target").toOption
+      let needs := (f.toJson.getObjValAs? (Array Lean.Json) "needs").toOption.getD #[]
+      assertBEq #[some "exe", some "site", some "aux"]
+        (needs.map fun n => (n.getObjValAs? String "name").toOption)
+      assertBEq (some "pkg/:site")
+        (needs[1]?.bind fun n => (n.getObjValAs? String "target").toOption)
     let p ← profileOf f "default"
     result "a profile's reference" do
       assertTrue (p.settings.any fun (k, v) => k == "a" && v matches .needs "exe" ..)

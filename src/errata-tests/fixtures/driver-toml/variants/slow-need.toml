@@ -1,0 +1,9 @@
+# The stamp's need takes ten seconds to build on every run, so that a run and another invocation in
+# the workspace overlap.
+[profile.default.settings]
+"TomlLib.stampFile" = { needs = "stamp" }
+"TomlLib.markerFile" = { needs = "marker" }
+
+[needs]
+stamp = "slowStamp"
+marker = "marker"

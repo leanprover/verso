@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="basic" tests="8" failures="0" errors="0">
+    <testcase name="pass" classname="basic" time="0.019000"></testcase>
+    <testcase name="greets" classname="basic" time="0.022000">
+      <system-out>received setting:Errata.seed=2611609918465760362
+received setting:marker=
+received setting:note=
+received setting:greeting=hi
+received threads:1
+</system-out>
+    </testcase>
+    <testcase name="setup" classname="stamped (fixture)" time="0.023000"></testcase>
+    <testcase name="setup" classname="dependent (fixture)" time="0.023000"></testcase>
+    <testcase name="prepare uses-dependent" classname="dependent (fixture)" time="0.020000"></testcase>
+    <testcase name="uses-dependent" classname="basic" time="0.023000">
+      <system-out>received fixture:dependent=hi and @STAMPS@
+</system-out>
+    </testcase>
+    <testcase name="teardown" classname="dependent (fixture)" time="0.024000">
+      <system-out>teardown received hi and @STAMPS@
+</system-out>
+    </testcase>
+    <testcase name="teardown" classname="stamped (fixture)" time="0.017000"></testcase>
+  </testsuite>
+</testsuites>

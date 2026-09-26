@@ -2571,12 +2571,22 @@ partial def jsonWithoutTimes (j : Json) : Json :=
   | other => other
 
 /--
+The JSON and JUnit reports that the runner wrote for the tests `pass`, `greets`, and
+`uses-dependent` of `basic.sh` with `greeting` given `hi`, `stamp-file` given a scratch file written
+`@STAMPS@` here, the seed 5, and one slot, before the plan existed.
+-/
+def savedReports : System.FilePath × System.FilePath :=
+  (harnessDir / "plan-then-run.report.json", harnessDir / "plan-then-run.report.xml")
+
+/--
 The built runner's `plan` subcommand, over a test executable whose tests and fixtures take settings
-that refer to needs, writes a plan whose selected tests, fixtures, resolved settings, and needs are
-those of a run in one process, each need with the tests that reach it, directly or through a
-fixture. The `run` subcommand over that plan and a `workspace.json` written by hand produces the
-JSON report of the run in one process, times left out, and its events file has the `phase` records
-of the List and Run phases.
+that refer to needs, writes a plan with the selected tests, the fixtures they reach, and the needs
+they reach, each need with the tests that reach it, directly or through a fixture; a setting that
+refers to a need keeps the need's name. The `run` subcommand over that plan and a `workspace.json`
+written by hand gives each test the settings, and writes the JSON and JUnit reports, that the runner
+wrote for the same tests and values before the plan existed, times, run identifiers, and the scratch
+file's path left out. The events file that both subcommands name has the `protocol` record and the
+`phase` records of the List and Run phases, in that order.
 -/
 @[test]
 def planThenRunMatchesOneProcess : Test := do
@@ -2591,27 +2601,26 @@ def planThenRunMatchesOneProcess : Test := do
       needs := #[{ name := "greet", target := "greeting" }, { name := "stamp", target := "stamps" },
         { name := "unused", target := "nothing" }] }
     let needValues := #[("greet", "hi"), ("stamp", stamps.toString)]
-    let (plan, workspace) ← planWithRunner config dir #["--seed", "5"] needValues
+    let eventsFile := dir / "events.jsonl"
+    let common := #["--seed", "5", "-j", "1", "--events", eventsFile.toString]
+    let (plan, workspace) ← planWithRunner config dir common needValues
     let p ← IO.ofExcept (Plan.fromJson? (← readJsonFile plan))
-    -- The run in one process.
-    let events ← IO.mkRef #[]
-    let (combined, code) ← execute config { seed := some 5, jobs? := some 1 }
-      { event := fun j => events.modify (·.push j) } (needValues := needValues)
-    assertBEq ExitCode.ok code
+    let unscratched (text : String) : String := text.replace stamps.toString "@STAMPS@"
+    let saved ← readJsonFile savedReports.1
+    let savedResults := (saved.getObjValAs? (Array Json) "results").toOption.getD #[]
     result "the selected tests" do
       assertBEq #["pass", "greets", "uses-dependent"] (p.tests.map (·.test.name))
     result "the fixtures" do
       assertBEq #["stamped", "dependent"] (p.fixtures.map (·.fixture.name))
     result "the resolved settings" do
-      let outcomes := (← events.get).filter fun e =>
-        strField e "type" == some "outcome" && strField e "kind" == some "test"
       for t in p.tests do
         let resolved := t.resolution.substitute needValues 5 "basic" t.test.name
-        let some o := outcomes.find? (strField · "test" == some t.test.name)
-          | fail s!"no outcome of {t.test.name}"
-        let given := (o.getObjValD "settings").getObj?.toOption.map fun m =>
-          m.toArray.filterMap fun (k, v) => (v.getStr?.toOption.map (k, ·))
-        assertBEq (some (resolved.arguments.qsort (·.1 < ·.1))) given
+        let some r := savedResults.find? fun r =>
+            strField r "test" == some t.test.name && strField r "kind" == some "test"
+          | fail s!"the saved report has no result of {t.test.name}"
+        let given := ((r.getObjValAs? (Array Json) "settings").toOption.getD #[]).filterMap
+          fun s => return (← strField s "name", ← strField s "value")
+        assertBEq given (resolved.arguments.map fun (k, v) => (k, unscratched v))
       let greets := (p.tests.find? (·.test.name == "greets")).map (·.resolution.values)
       assertBEq (some (some (PlannedValue.need "greet")))
         (greets.map fun vs => (vs.find? (·.1 == "greeting")).map (·.2))
@@ -2620,25 +2629,26 @@ def planThenRunMatchesOneProcess : Test := do
         ("stamp", #[("basic", "uses-dependent")])]
         (p.needs.map fun n => (n.need.name, n.tests))
     -- The run of the plan by the built runner.
-    if ← stamps.pathExists then IO.FS.removeFile stamps
     let json := dir / "report.json"
     let junit := dir / "report.xml"
-    let eventsFile := dir / "events.jsonl"
     let out ← IO.Process.output {
       cmd := runnerExe.toString
-      args := #["run", plan.toString, workspace.toString, "--seed", "5", "-j", "1",
-        "--json", json.toString, "--junit", junit.toString, "--events", eventsFile.toString]
+      args := #["run", plan.toString, workspace.toString, "--json", json.toString,
+        "--junit", junit.toString] ++ common
       env := #[("ERRATA_LIFELINE", none)] }
     assertExitCode 0 out
     result "the reports" do
-      let expected := jsonWithoutTimes (← IO.ofExcept (Json.parse (jsonReport combined)))
-      let actual := jsonWithoutTimes (← readJsonFile json)
-      assertBEq expected.compress actual.compress
-      assertBEq (withoutTimes (junitReport combined)) (withoutTimes (← IO.FS.readFile junit))
-    result "the phase records" do
-      let phases := (← readRecords eventsFile).filterMap fun e =>
-        if strField e "type" == some "phase" then strField e "name" else none
-      assertBEq #["List", "Run"] phases
+      let actual ← IO.ofExcept (Json.parse (unscratched (← IO.FS.readFile json)))
+      assertBEq (jsonWithoutTimes saved).compress (jsonWithoutTimes actual).compress
+      assertBEq (withoutTimes (← IO.FS.readFile savedReports.2))
+        (withoutTimes (unscratched (← IO.FS.readFile junit)))
+    result "the events file's beginning" do
+      let kinds := (← readRecords eventsFile).filterMap fun e =>
+        match strField e "type" with
+        | some "protocol" => some "protocol"
+        | some "phase" => strField e "name"
+        | _ => none
+      assertBEq #["protocol", "List", "Run"] kinds
     result "a need without a value" do
       IO.FS.writeFile workspace "{\"protocol\":1,\"needs\":{\"greet\":\"hi\"}}"
       let r ← IO.Process.output {
