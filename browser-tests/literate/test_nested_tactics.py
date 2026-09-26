@@ -99,6 +99,7 @@ class TestNestedTacticStates:
         )
 
     @pytest.mark.hover_media
+    @pytest.mark.pointer_alone
     def test_hover_highlights_own_region_label(self, server: str, page: Page):
         """Hovering a region's plain content highlights that region's label."""
         self._load(server, page)
@@ -115,6 +116,7 @@ class TestNestedTacticStates:
         )
 
     @pytest.mark.hover_media
+    @pytest.mark.pointer_alone
     def test_hover_highlights_most_specific_region(self, server: str, page: Page):
         """Hovering lights up only the innermost tactic region's label, even for a documented
         token: the region's proof state is the tooltip shown there, so the token itself stays
@@ -149,6 +151,7 @@ class TestNestedTacticStates:
         assert regions[0] == self.HIGHLIGHT
         assert all(bg == self.TRANSPARENT for bg in regions[1:]), regions
 
+    @pytest.mark.pointer_alone
     def test_collapsed_step_owns_tooltip_inside_expanded_region(
         self, server: str, page: Page
     ):

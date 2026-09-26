@@ -1,3 +1,4 @@
+import pytest
 from playwright.sync_api import expect, Page
 
 from hovering import hover_for_tooltip
@@ -40,6 +41,7 @@ class TestTooltips:
             f"but only {initialized} were initialized"
         )
 
+    @pytest.mark.pointer_alone
     def test_hover_creates_tooltip(self, server: str, page: Page):
         """Hovering a code token should show a Tippy tooltip."""
         page.goto(f"{server}/LitConfig/Core/")
@@ -62,6 +64,7 @@ class TestTooltips:
         tippy_box = page.locator(".tippy-box")
         expect(tippy_box.first).to_be_visible()
 
+    @pytest.mark.pointer_alone
     def test_tooltip_has_correct_theme(self, server: str, page: Page):
         """Tooltip theme should match the element type."""
         page.goto(f"{server}/LitConfig/Core/")
@@ -80,6 +83,7 @@ class TestTooltips:
         theme = token.get_attribute("data-tippy-theme")
         assert theme == "lean", f"Expected theme 'lean' for .const.token, got '{theme}'"
 
+    @pytest.mark.pointer_alone
     def test_repeat_hover_reuses_instance(self, server: str, page: Page):
         """Hovering the same token twice should reuse the cached Tippy instance."""
         page.goto(f"{server}/LitConfig/Core/")

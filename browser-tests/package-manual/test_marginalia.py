@@ -143,6 +143,7 @@ class TestDesktopMarginalia:
         )
         assert bottom_gap >= 16
 
+    @pytest.mark.pointer_alone
     def test_marker_and_note_share_hover_highlight(
         self, server: str, page: Page, notes_page_path: str
     ):
@@ -172,6 +173,7 @@ class TestDesktopMarginalia:
             == highlighted
         )
 
+    @pytest.mark.pointer_alone
     def test_hoisted_marker_and_note_share_hover_highlight(
         self, server: str, page: Page, notes_page_path: str
     ):

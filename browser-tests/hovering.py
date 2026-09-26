@@ -71,13 +71,16 @@ def hover_for_tooltip(target: Locator, tooltip: Locator, reference: Locator | No
     1. It waits until ``reference`` has a Tippy instance and the page's fonts have loaded.
     2. It hovers ``target`` and checks that ``reference`` received ``mouseenter``. If it received
        none, the pointer moves to the page's corner and the hover repeats.
-    3. It waits until the page mounts a tooltip or ``reference`` receives ``mouseleave``, which
-       the page causes when it moves the reference out from under the pointer; after a
+    3. It waits until the page mounts a tooltip or ``reference`` receives ``mouseleave``; after a
        ``mouseleave``, the hover repeats. Once a tooltip is mounted, it waits until ``tooltip``
        is visible.
 
     Steps 2 and 3 repeat up to ``HOVER_ATTEMPTS`` hovers in all; then an assertion fails that
     names the target and describes the reference. The waits use Playwright's default timeout.
+
+    Tests that call it are marked ``pointer_alone``, so in Firefox no other test sends input to the
+    browser while they run, and a ``mouseleave`` means that the page moved the reference out from
+    under the pointer.
     """
     page = target.page
     if reference is None:

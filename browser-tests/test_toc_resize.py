@@ -1,3 +1,4 @@
+import pytest
 from playwright.sync_api import Page, expect
 
 
@@ -6,6 +7,7 @@ def toc_width(page: Page) -> float:
 
 
 class TestTocResize:
+    @pytest.mark.pointer_alone
     def test_pointer_resize_updates_width_and_persists(self, server: str, page: Page):
         """Dragging the ToC resize handle changes the ToC width and stores it."""
         page.set_viewport_size({"width": 1200, "height": 800})
@@ -144,6 +146,7 @@ class TestTocResize:
             f"Expected the saved 420px width on desktop, got {widened}px"
         )
 
+    @pytest.mark.pointer_alone
     def test_resize_reflows_content_layout_live(self, server: str, page: Page):
         """Resizing the ToC re-evaluates main-width container queries without a reload.
 

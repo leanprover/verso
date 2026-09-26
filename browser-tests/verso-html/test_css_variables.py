@@ -78,6 +78,7 @@ def computed_pseudo(page: Page, selector: str, pseudo: str, prop: str) -> str:
 
 class TestSeverityVariables:
     @pytest.mark.hover_media
+    @pytest.mark.pointer_alone
     @pytest.mark.parametrize(("cls", "v", "theme"), SEVERITIES)
     def test_affected_code(self, server: str, page: Page, cls: str, v: str, theme: str):
         setup(
@@ -143,6 +144,7 @@ class TestSeverityVariables:
         assert computed(page, "#vt-msg", "border-left-color") == "rgb(5, 15, 25)"
 
 
+@pytest.mark.pointer_alone
 class TestNestedSeverityHover:
     @pytest.mark.hover_media
     def test_nearest_severity_hover_colors_win(self, server: str, page: Page):
@@ -297,6 +299,7 @@ class TestTooltipArrows:
                     f"{theme} {p}: outline {outline} != box border {box_border}"
                 )
 
+    @pytest.mark.pointer_alone
     def test_real_tooltip_arrow(self, server: str, page: Page):
         """Hovering a real token produces a tooltip whose arrow fill matches its
         background."""

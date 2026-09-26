@@ -84,6 +84,7 @@ class TestGalleryContents:
         assert result["stateColor"] == "rgb(1, 2, 3)"
         assert result["stateBg"] == "rgb(4, 5, 6)"
 
+    @pytest.mark.pointer_alone
     def test_warning_hover_uses_warning_theme(self, server: str, page: Page):
         page.goto(f"{server}{GALLERY}")
         page.wait_for_load_state("networkidle")
@@ -92,6 +93,7 @@ class TestGalleryContents:
         assert "declaration uses" in box.inner_text()
 
     @pytest.mark.hover_media
+    @pytest.mark.pointer_alone
     def test_warning_hover_highlights_whole_span(self, server: str, page: Page):
         """Hovering warning-carrying code shows the warning hover background across the
         whole span; the token hover highlight is removed so it reads as one region."""
@@ -109,6 +111,7 @@ class TestGalleryContents:
         assert span_bg == "rgb(255, 243, 205)"
         assert token_bg == "rgba(0, 0, 0, 0)"
 
+    @pytest.mark.pointer_alone
     def test_sorry_name_shows_single_merged_hover(self, server: str, page: Page):
         """The warning span around a sorry definition's name shares the name token's
         extent, so one tooltip shows both the warning and the documentation."""
@@ -138,6 +141,7 @@ class TestGalleryContents:
         )
         assert margin != "0px"
 
+    @pytest.mark.pointer_alone
     def test_tooltip_links_not_underlined(self, server: str, page: Page):
         """Constant links inside tooltip content show no underline until hovered."""
         page.goto(f"{server}{GALLERY}")
@@ -202,6 +206,7 @@ class TestGalleryContents:
         assert "succ" in result["outerText"]
 
     @pytest.mark.hover_media
+    @pytest.mark.pointer_alone
     def test_hover_highlight_matches_tooltip(self, server: str, page: Page):
         """Hovering a documented token inside a message region shows the token's tooltip,
         so only the token is highlighted: the region and the enclosing tactic label are
@@ -300,6 +305,7 @@ class TestGalleryContents:
         assert result["span"]
         assert not result["tok"]
 
+    @pytest.mark.pointer_alone
     def test_tooltip_follows_toggle_under_pointer(self, server: str, page: Page):
         """Clicking a proof-state label nested in a warning span switches the tooltip in
         place: expanding shows the warning span's tooltip, collapsing shows the proof
@@ -355,6 +361,7 @@ class TestGalleryContents:
         )
         assert len(keys) == len(set(keys)), keys
 
+    @pytest.mark.pointer_alone
     def test_tactic_hover_uses_tactic_theme(self, server: str, page: Page):
         page.goto(f"{server}{GALLERY}")
         page.wait_for_load_state("networkidle")
