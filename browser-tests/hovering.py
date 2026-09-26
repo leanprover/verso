@@ -9,7 +9,9 @@ HOVER_ATTEMPTS = 5
 # with its time, for the message of a tooltip that never became visible.
 LISTEN_FOR_MOUSEENTER = """el => {
     el.__hoverEntered = false;
+    el.__hoverLeft = false;
     el.addEventListener('mouseenter', () => { el.__hoverEntered = true; }, { once: true });
+    el.addEventListener('mouseleave', () => { el.__hoverLeft = true; }, { once: true });
     if (!el.__hoverTrace) {
         el.__hoverTrace = [];
         const note = what => el.__hoverTrace.push(`${what}@${Math.round(performance.now())}`);
@@ -62,35 +64,50 @@ def hover_for_tooltip(target: Locator, tooltip: Locator, reference: Locator | No
     ``reference`` is the element whose Tippy instance shows the tooltip: ``target`` itself or an
     element that contains it. It defaults to ``target``. The helper proceeds in three steps:
 
-    1. It waits until ``reference`` has a Tippy instance.
+    1. It waits until ``reference`` has a Tippy instance and the page's fonts have loaded.
     2. It hovers ``target`` and checks that ``reference`` received ``mouseenter``. If it received
-       none, the pointer moves to the page's corner and the hover repeats, up to
-       ``HOVER_ATTEMPTS`` hovers in all; then an assertion fails that names the target.
-    3. It waits until ``tooltip`` is visible.
+       none, the pointer moves to the page's corner and the hover repeats.
+    3. It waits until the page mounts a tooltip or ``reference`` receives ``mouseleave``, which
+       the page causes when it moves the reference out from under the pointer; after a
+       ``mouseleave``, the hover repeats. Once a tooltip is mounted, it waits until ``tooltip``
+       is visible.
 
-    The waits of steps 1 and 3 use Playwright's default timeout.
+    Steps 2 and 3 repeat up to ``HOVER_ATTEMPTS`` hovers in all; then an assertion fails that
+    names the target and describes the reference. The waits use Playwright's default timeout.
     """
     page = target.page
     if reference is None:
         reference = target
     reference.wait_for(state="attached")
     page.wait_for_function("el => !!el._tippy", arg=reference.element_handle())
+    page.evaluate("document.fonts.ready.then(() => true)")
     missed = 0
+    moved = 0
     for _ in range(HOVER_ATTEMPTS):
         reference.evaluate(LISTEN_FOR_MOUSEENTER)
         target.hover()
-        if reference.evaluate("el => el.__hoverEntered"):
-            try:
+        if not reference.evaluate("el => el.__hoverEntered"):
+            missed += 1
+            page.mouse.move(0, 0)
+            continue
+        try:
+            page.wait_for_function(
+                "el => !!document.querySelector('.tippy-box') || el.__hoverLeft",
+                arg=reference.element_handle(),
+            )
+            if not reference.evaluate("el => el.__hoverLeft"):
                 tooltip.wait_for(state="visible")
-            except TimeoutError as error:
-                raise AssertionError(
-                    f"{tooltip} never became visible after mouseenter reached {reference} "
-                    f"({missed} hovers without mouseenter before it): "
-                    f"{reference.evaluate(DESCRIBE_HOVER, target.bounding_box())}"
-                ) from error
-            return
-        missed += 1
-        page.mouse.move(0, 0)
+                return
+        except TimeoutError as error:
+            raise AssertionError(
+                f"{tooltip} never became visible after mouseenter reached {reference} "
+                f"({missed} hovers without mouseenter and {moved} with the reference moved "
+                f"away before it): {reference.evaluate(DESCRIBE_HOVER, target.bounding_box())}"
+            ) from error
+        # The page moved the reference out from under the pointer before its tooltip showed.
+        moved += 1
     raise AssertionError(
-        f"The pointer's mouseenter never reached {reference} in {HOVER_ATTEMPTS} hovers of {target}"
+        f"No hover of {target} kept the pointer over {reference} until its tooltip showed in "
+        f"{HOVER_ATTEMPTS} hovers ({missed} without mouseenter, {moved} with the reference moved "
+        f"away): {reference.evaluate(DESCRIBE_HOVER, target.bounding_box())}"
     )
