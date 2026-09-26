@@ -628,6 +628,28 @@ def updateGoldenRewritesFiles : Test := forEach #[leanProduct, interpretedProduc
       assertTrue (r.lines.contains "        Errata.updateGolden = \"true\"") s!"{r.lines}"
 
 /--
+A setting whose type is an `Option` encodes its absence in its own type: its empty default reaches
+the test as `none`, a value that its parser reads reaches it as `some`, and a value that its parser
+rejects ends the test with an error that names the setting.
+-/
+@[test]
+def optionTypedSetting : Test := forEach #[leanProduct, interpretedProduct] fun p => do
+  let test := "ErrataTests.Roles.printsChoice"
+  let output (sets : Array (String × String)) : TestM String := do
+    let r ← p.run #[{ test, sets }]
+    expectOutcome r test (· matches .reported .pass) "a pass"
+    let some res := r.result? test | fail "no result"
+    return res.output.stdout
+  assertContains "choice: open" (← output #[])
+  assertContains "choice: true" (← output #[("ErrataTests.Roles.choice", "true")])
+  result "a value that the parser rejects" do
+    let r ← p.run #[{ test, sets := #[("ErrataTests.Roles.choice", "bogus")] }]
+    match r.outcome? test with
+    | some (.reported (.error m)) =>
+      assertContains "the setting ErrataTests.Roles.choice has the value \"bogus\"" m
+    | o => fail s!"expected an error, got {repr o}"
+
+/--
 The command line, a profile, and an override that give `Errata.updateGolden` a value as a setting
 stop the run before anything runs, with a message that names `--update-golden` and the
 `update-golden` key.
@@ -1705,6 +1727,37 @@ def pytestTrivialPhaseUnderTheRunner : Test := do
     let real ← invoke (prepare "real.jsonl") #[("ERRATA_RUN_ID", none)]
     assertTrue (real.exitCode == 0) s!"the prepare through pytest failed: {real.stderr}"
     assertBEq (← IO.FS.readFile (dir / "fast.jsonl")) (← IO.FS.readFile (dir / "real.jsonl"))
+
+/--
+Verso's pytest harness refuses to list a suite whose `errata_setting` markers have keyword
+arguments or whose fixture declarations name a setting as anything but a string, naming each.
+-/
+@[test]
+def pytestSettingProblems : Test := do
+  pytestProduct.check
+  IO.FS.withTempDir fun dir => do
+    let suite := dir / "suite"
+    IO.FS.createDirAll suite
+    IO.FS.writeFile (suite / "conftest.py") <|
+      "errata_settings_decl = {\"greeting\": {\"description\": \"A greeting.\"}}\n" ++
+      "errata_fixtures_decl = {\"greeter\": {\"description\": \"A greeter.\", " ++
+      "\"settings\": [{\"name\": \"greeting\", \"optional\": True}], " ++
+      "\"setup\": lambda context: \"hi\"}}\n"
+    IO.FS.writeFile (suite / "test_problems.py") <|
+      "import pytest\n\n" ++
+      "@pytest.mark.errata_setting(\"greeting\", optional=True)\n" ++
+      "def test_marked():\n    pass\n\n" ++
+      "@pytest.mark.errata_fixture(\"greeter\")\n" ++
+      "def test_greeter():\n    pass\n"
+    let cmd := pytestProduct.exe.command.pop.push suite.toString
+    let out ← IO.Process.output {
+      cmd := cmd[0]!, args := cmd.extract 1 cmd.size ++ #["errata-list", (dir / "list.jsonl").toString]
+      env := #[("ERRATA_DIR", some (← errataDir).toString), ("ERRATA_LIFELINE", none)] }
+    assertBEq 1 out.exitCode
+    assertContains "test_problems.py::test_marked marks the setting greeting with the keyword \
+      arguments optional; errata_setting takes names alone" out.stderr
+    assertContains "the fixture greeter takes the setting {'name': 'greeting', 'optional': True}; a \
+      fixture's settings are names alone" out.stderr
 
 /-! # Fixtures -/
 

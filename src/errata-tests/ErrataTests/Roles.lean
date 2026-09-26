@@ -94,4 +94,23 @@ def checksGolden (path : goldenPath) : Test := do
   if path.isEmpty then return
   goldenFile path "golden contents\n"
 
+/--
+A choice that may be left open: {lit}`true` or {lit}`false`, or the empty default for no choice. Its
+absence is a value of its own type.
+-/
+@[setting, expose]
+def choice : Setting where
+  type := Option Bool
+  fromString
+    | "" => some none
+    | "true" => some (some true)
+    | "false" => some (some false)
+    | _ => none
+  default? := some ""
+
+/-- Prints the choice that it received. -/
+@[test]
+def printsChoice (c : choice) : Test := do
+  IO.println s!"choice: {match c with | none => "open" | some b => toString b}"
+
 end ErrataTests.Roles

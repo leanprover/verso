@@ -2588,6 +2588,47 @@ which is neither a setting nor a fixture. A fixture's parameters are settings an
   a + b + s ≥ 2
 
 /--
+error: The parameter `a?` of `takesOptionalFixture` has the type
+  Option countFixture.type
+which is neither a setting nor a fixture. A test's parameters are settings and fixtures: `S` for a declaration `S` marked `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`.
+-/
+#test_msgs in
+@[test] def takesOptionalFixture (a? : Option countFixture) : Bool := a?.isSome
+
+/--
+error: The parameter `a?` of `takesOptionalSharedFixture` has the type
+  Option (shared countFixture.type)
+which is neither a setting nor a fixture. A test's parameters are settings and fixtures: `S` for a declaration `S` marked `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`.
+-/
+#test_msgs in
+@[test] def takesOptionalSharedFixture (a? : Option (shared countFixture)) : Bool := a?.isSome
+
+/--
+error: The parameter `a?` of `optionalFixtureFixture` has the type
+  Option countFixture.type
+which is neither a setting nor a fixture. A fixture's parameters are settings and fixtures: `S` for a declaration `S` marked `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`.
+-/
+#test_msgs in
+@[fixture, expose] def optionalFixtureFixture (a? : Option countFixture) : Fixture where
+  type := Nat
+  toString := toString
+  fromString := String.toNat?
+  setup := return a?.getD 0
+
+/--
+error: The parameter `a?` of `optionalSharedFixtureFixture` has the type
+  Option (shared countFixture.type)
+which is neither a setting nor a fixture. A fixture's parameters are settings and fixtures: `S` for a declaration `S` marked `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`.
+-/
+#test_msgs in
+@[fixture, expose] def optionalSharedFixtureFixture (a? : Option (shared countFixture)) :
+    Fixture where
+  type := Nat
+  toString := toString
+  fromString := String.toNat?
+  setup := return a?.getD 0
+
+/--
 error: The field `toString` of `dependentPrinter` depends on its parameters. A fixture's `type`, `toString`, and `fromString` are the same for every value of its parameters.
 -/
 #test_msgs in
