@@ -8,6 +8,11 @@ Author: David Thrane Christiansen
 The records that a test executable writes to its list file or its result file, one JSON object per
 line. Every record has a `type`, and every other field is optional. A reader skips the records of an
 unknown type and the unknown fields of a record.
+
+A fixture or test record names the settings it depends on in its `settings` array. Writers put each
+setting's name there as a string. Readers accept a string, and also an object with a `name`, whose
+other fields they skip, which is how test executables written against earlier versions of the
+harnesses list their settings.
 -/
 module
 
@@ -94,25 +99,6 @@ def Status.ofName? : String → Option Status
   | "expectedFailure" => some .expectedFailure
   | _ => none
 
-/-- A setting that a test depends on, as its inventory record names it. -/
-structure SettingDep where
-  /-- The setting's name. -/
-  name : String
-  /-- Whether the test runs without a value for the setting. -/
-  optional : Bool := false
-deriving Repr, Inhabited, DecidableEq
-
-instance : ToJson SettingDep where
-  toJson d := Json.mkObj [("name", Json.str d.name), ("optional", Json.bool d.optional)]
-
-instance : FromJson SettingDep where
-  fromJson? j := do
-    let name ← j.getObjValAs? String "name"
-    let optional ← match j.getObjVal? "optional" with
-      | .ok v => FromJson.fromJson? v
-      | .error _ => pure false
-    return { name, optional }
-
 /-- A fixture that a test uses, as its inventory record names it. -/
 structure FixtureDep where
   /-- The fixture's name. -/
@@ -138,8 +124,8 @@ structure FixtureInfo where
   name? : Option String := none
   /-- The fixture's description. -/
   description? : Option String := none
-  /-- The settings that the fixture depends on, each mandatory or optional. -/
-  settings? : Option (Array SettingDep) := none
+  /-- The names of the settings that the fixture depends on. -/
+  settings? : Option (Array String) := none
   /-- The names of the fixtures that the fixture depends on, each declared before it. -/
   fixtures? : Option (Array String) := none
   /-- The number of hardware threads that the fixture's phases ask for; one when absent. -/
@@ -164,8 +150,8 @@ structure TestInfo where
   kind? : Option String := none
   /-- The test's tags. -/
   tags? : Option (Array String) := none
-  /-- The settings that the test depends on, each mandatory or optional. -/
-  settings? : Option (Array SettingDep) := none
+  /-- The names of the settings that the test depends on. -/
+  settings? : Option (Array String) := none
   /-- The fixtures that the test uses, each exclusive or shared. -/
   fixtures? : Option (Array FixtureDep) := none
   /-- The number of hardware threads that the test asks for; one when absent. -/
@@ -297,6 +283,27 @@ private def spanField (j : Json) (key : String) : Except String (Option Span) :=
   | .ok v => some <$> decodeSpan v
   | .error _ => pure none
 
+/-- A setting's name in a record's {lit}`settings` array: a string, or an object with a {lit}`name`. -/
+private def decodeSettingName (j : Json) : Except String String :=
+  match j with
+  | .str s => pure s
+  | _ => j.getObjValAs? String "name"
+
+/--
+The settings field of {name}`j`: the names of the settings that a fixture or test record depends
+on, each written as a string or as an object with a {lit}`name` and other fields that the reader
+skips.
+-/
+private def settingsField (j : Json) : Except String (Option (Array String)) :=
+  match j.getObjVal? "settings" with
+  | .ok .null => pure none
+  | .ok v => match v.getArr? with
+    | .ok items => match items.mapM decodeSettingName with
+      | .ok names => pure (some names)
+      | .error e => .error s!"field settings: {e}"
+    | .error e => .error s!"field settings: {e}"
+  | .error _ => pure none
+
 /-- The optional status field of {name}`j`. -/
 private def statusField (j : Json) : Except String (Option Status) := do
   match ← (field j "status" : Except String (Option String)) with
@@ -320,7 +327,7 @@ def Record.decode? (j : Json) : Except String (Option Record) := do
   | "fixture" =>
     return some (.fixture {
       name? := ← field j "name", description? := ← field j "description",
-      settings? := ← field j "settings", fixtures? := ← field j "fixtures",
+      settings? := ← settingsField j, fixtures? := ← field j "fixtures",
       threads? := ← field j "threads"
     })
   | "test" =>
@@ -328,7 +335,7 @@ def Record.decode? (j : Json) : Except String (Option Record) := do
       name? := ← field j "name", path? := ← field j "path", file? := ← field j "file",
       line? := ← field j "line", col? := ← field j "col",
       description? := ← field j "description", kind? := ← field j "kind",
-      tags? := ← field j "tags", settings? := ← field j "settings",
+      tags? := ← field j "tags", settings? := ← settingsField j,
       fixtures? := ← field j "fixtures", threads? := ← field j "threads"
     })
   | "start" => return some (.start (← field j "time_ms"))

@@ -49,7 +49,7 @@ structure InventoryTest where
   /-- The test's tags. -/
   tags : Array String := #[]
   /-- The settings that the test takes, in the order it takes them. -/
-  settings : Array Protocol.SettingDep := #[]
+  settings : Array String := #[]
   /-- The fixtures that the test uses, each exclusive or shared. -/
   fixtures : Array Protocol.FixtureDep := #[]
   /-- The number of hardware threads that the test asks for, when it asks. -/
@@ -63,7 +63,7 @@ structure InventoryFixture where
   /-- The fixture's description. -/
   description? : Option String := none
   /-- The settings that the fixture takes, in the order it takes them. -/
-  settings : Array Protocol.SettingDep := #[]
+  settings : Array String := #[]
   /-- The names of the fixtures that the fixture takes, each declared before it. -/
   fixtures : Array String := #[]
   /-- The number of hardware threads that the fixture's phases ask for, when it asks. -/
@@ -192,10 +192,7 @@ def seedSetting : String := "Errata.seed"
 
 /-- What a test runs with, as the runner resolved it. -/
 structure Resolved where
-  /--
-  The values of the settings it takes that have one, in the order it takes them. Optional settings
-  without values have no entry.
-  -/
+  /-- The values of the settings it takes that have one, in the order it takes them. -/
   settings : Array (String × String) := #[]
   /-- The mandatory settings that nothing gives a value. -/
   missing : Array String := #[]
@@ -219,24 +216,24 @@ it, then the profile, then the setting's declared default, and, for {lit}`Errata
 derived from the run's seed and {name}`name`.
 -/
 def ResolutionContext.resolveSettings (ctx : ResolutionContext) (exe : String)
-    (declared : Array SettingInfo) (name : String) (deps : Array Protocol.SettingDep)
+    (declared : Array SettingInfo) (name : String) (deps : Array String)
     (overrides : Array Override) : Array (String × String) × Array String × Bool := Id.run do
   let mut settings := #[]
   let mut missing := #[]
   let mut derivedSeed := false
   for dep in deps do
     let given? :=
-      ((ctx.sets.findRev? (·.1 == dep.name)).map (·.2))
-      <|> overrides.findSome? (fun o => (o.settings.find? (·.1 == dep.name)).map (·.2))
-      <|> (ctx.profile.settings.find? (·.1 == dep.name)).map (·.2)
-      <|> (declared.find? (·.name == dep.name)).bind (·.default?)
+      ((ctx.sets.findRev? (·.1 == dep)).map (·.2))
+      <|> overrides.findSome? (fun o => (o.settings.find? (·.1 == dep)).map (·.2))
+      <|> (ctx.profile.settings.find? (·.1 == dep)).map (·.2)
+      <|> (declared.find? (·.name == dep)).bind (·.default?)
     match given? with
-    | some v => settings := settings.push (dep.name, v)
+    | some v => settings := settings.push (dep, v)
     | none =>
-      if dep.name == seedSetting then
-        settings := settings.push (dep.name, toString (testSeed ctx.runSeed exe name))
+      if dep == seedSetting then
+        settings := settings.push (dep, toString (testSeed ctx.runSeed exe name))
         derivedSeed := true
-      else unless dep.optional do missing := missing.push dep.name
+      else missing := missing.push dep
   return (settings, missing, derivedSeed)
 
 /--

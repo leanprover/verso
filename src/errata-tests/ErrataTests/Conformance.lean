@@ -431,7 +431,7 @@ def inventoryProblems (records : Array Json) : Array String := Id.run do
         unless fixtures.contains f do
           problems := problems.push s!"the test {name} uses the fixture {f}, which is not declared before it"
     for d in (r.getObjValAs? (Array Json) "settings").toOption.getD #[] do
-      let some s := strField d "name"
+      let some s := d.getStr?.toOption <|> strField d "name"
         | problems := problems.push s!"the {kind} {name} takes a setting without a name"; continue
       unless settings.contains s do
         problems := problems.push s!"the {kind} {name} takes the setting {s}, which is not declared before it"
@@ -503,7 +503,8 @@ def unknownTestNameFails : Test := forEach products fun p => do
 
 /--
 Tests with mandatory settings that have no value are inconclusive, naming the setting, and the
-runner starts no process for them. The rest of the run goes on.
+runner starts no process for them. The rest of the run goes on. `basic.sh` names that test's setting
+in the object form with `"optional":true`, whose `optional` the runner skips.
 -/
 @[test]
 def settingMissing : Test := forEach products fun p => do
@@ -584,9 +585,11 @@ def settingsArriveInOrder : Test := forEach scriptedProducts fun p => do
   let seed := toString (testSeed 7 p.exe.name "greets")
   -- `basic.sh` echoes every argument, the thread grant included.
   let grant := if p.exe.name == basicProduct.exe.name then "received threads:1\n" else ""
-  assertBEq s!"received setting:Errata.seed={seed}\nreceived setting:greeting=hello\n{grant}"
+  assertBEq (s!"received setting:Errata.seed={seed}\nreceived setting:marker=\n" ++
+      s!"received setting:note=\nreceived setting:greeting=hello\n{grant}")
     res.output.stdout
-  assertBEq #[("Errata.seed", seed), ("greeting", "hello")] res.settings
+  assertBEq #[("Errata.seed", seed), ("marker", ""), ("note", ""), ("greeting", "hello")]
+    res.settings
   result "list -v shows the seed" do
     let r ← p.runTests #["greets"] { command := .list, verbosity := .quiet, seed := some 7 }
     assertTrue (r.lines.contains s!"        Errata.seed = \"{seed}\"") s!"{r.lines}"
@@ -1273,9 +1276,7 @@ def resolutionPrecedence : Test := do
     profile, overrides := #[(← parse "tag(a)", first), (← parse "all()", second)], runSeed := 3 }
   let declared : Array SettingInfo :=
     #[{ name := "w", default? := some "default" }, { name := "z", default? := some "default" }]
-  let deps : Array Protocol.SettingDep :=
-    #[{ name := "x" }, { name := "y" }, { name := "z" }, { name := "w" }, { name := seedSetting },
-      { name := "v", optional := true }, { name := "u" }]
+  let deps : Array String := #["x", "y", "z", "w", seedSetting, "v", "u"]
   let tagged : InventoryTest := { exeIdx := 0, name := "t", tags := #["a"], settings := deps }
   let plain : InventoryTest := { tagged with tags := #[] }
   let seed := toString (testSeed 3 "e" "t")
@@ -1284,7 +1285,7 @@ def resolutionPrecedence : Test := do
     assertBEq
       #[("x", "first"), ("y", "second"), ("z", "profile"), ("w", "default"), (seedSetting, seed)]
       r.settings
-    assertBEq #["u"] r.missing
+    assertBEq #["v", "u"] r.missing
     assertBEq true r.derivedSeed
     assertBEq 5 r.timeoutMs
     assertBEq 8 r.gracePeriodMs
@@ -1411,9 +1412,9 @@ def readRecords (path : System.FilePath) : TestM (Array Json) := do
     | .error e => fail s!"a line that is not JSON: {e}" (some l)
 
 /--
-Errata's shell harness writes names and descriptions with any character as JSON strings, rejects a
-list value with a newline, a setting declared after a test or a fixture, and a fixture declared after
-a test, rejects unknown modes and phases with exit code 2, and reports an undeclared test or fixture
+Errata's shell harness writes names and descriptions with any character as JSON strings and settings
+by their names, rejects a list value with a newline, a setting written `optional(…)`, a setting
+declared after a test or a fixture, and a fixture declared after a test, rejects unknown modes and phases with exit code 2, and reports an undeclared test or fixture
 as an error. Prepares and teardowns without a function do nothing, and setups without one are
 errors.
 -/
@@ -1437,6 +1438,14 @@ def shellHarness : Test := do
       let r ← listScript "errata_test t --tags \"$(printf 'a\\nb')\""
       assertExitCode 2 r
       assertContains "holds a newline" r.stderr
+    result "settings named as strings" do
+      let r ← listScript "errata_test t --settings a,b"
+      assertExitCode 0 r
+      assertContains "\"settings\":[\"a\",\"b\"]" (← IO.FS.readFile out)
+    result "a setting written optional(…)" do
+      let r ← listScript "errata_test t --settings 'a,optional(b)'"
+      assertExitCode 2 r
+      assertContains "--settings names optional(b)" r.stderr
     result "a setting declared after a test" do
       let r ← listScript "errata_test t; errata_setting_decl late \"A setting.\""
       assertExitCode 2 r
@@ -1539,7 +1548,7 @@ def pytestHarness : Test := do
     let marked ← find "test_marked"
     assertBEq (some #["chatty"]) (marked.getObjValAs? (Array String) "tags").toOption
     let greets ← find "test_greets"
-    assertBEq (some "[{\"name\":\"greeting\",\"optional\":false}]")
+    assertBEq (some "[\"greeting\"]")
       ((greets.getObjVal? "settings").toOption.map (·.compress))
     let settings := records.filter (isEvent "setting") |>.filterMap (strField · "name")
     assertBEq #["greeting", "needed", "stamp-file"] settings
@@ -1947,10 +1956,13 @@ def fixtureChains : Test := forEach products fun p => do
     let phase (f name : String) (extra : Array String := #[]) : Array String :=
       #["errata-fixture", out, f, name] ++ extra
     let settings := p.fixtures.failSets.map fun (k, v) => s!"setting:{k}={v}"
+    -- Every phase receives the settings that its fixture takes, as the runner gives them.
+    let stampTo (file : String) : Array String := #[s!"setting:{fx.stampFile}={file}"]
     result "a chain that passes" do
-      let r ← p.invoke (phase fx.stamped "setup" #[s!"setting:{fx.stampFile}={stamps}"] ++ #[";"] ++
-        phase fx.stamped "prepare" ++ #[";", "errata-run", out, fx.exclusive[0]!, ";"] ++
-        phase fx.stamped "teardown")
+      let stamping := stampTo stamps.toString
+      let r ← p.invoke (phase fx.stamped "setup" stamping ++ #[";"] ++
+        phase fx.stamped "prepare" stamping ++ #[";", "errata-run", out, fx.exclusive[0]!, ";"] ++
+        phase fx.stamped "teardown" stamping)
       assertExitCode 0 r
       let lines ← fileLines stamps
       assertBEq #["setup", "prepare start", "prepare end"] (lines.extract 0 3)
@@ -1958,7 +1970,7 @@ def fixtureChains : Test := forEach products fun p => do
       assertTrue (lines.any (·.startsWith "start ")) s!"the test ran: {lines}"
     result "teardowns after a failure" do
       let r ← p.invoke (phase fx.setupFails "setup" settings ++
-        #[";", "errata-run", out, fx.afterSetupFailure, ";"] ++ phase fx.setupFails "teardown")
+        #[";", "errata-run", out, fx.afterSetupFailure, ";"] ++ phase fx.setupFails "teardown" settings)
       -- The Lean harness writes what the phases print to their records.
       let printed := r.stdout ++ (← IO.FS.readFile out)
       assertContains "teardown received no value" printed
@@ -1971,10 +1983,10 @@ def fixtureChains : Test := forEach products fun p => do
         phase fx.teardownFails "teardown" settings)
       assertBEq 1 r.exitCode
     result "a passing teardown after a failed test" do
-      let r ← p.invoke (phase fx.stamped "setup" ++ #[";"] ++ phase fx.stamped "prepare" ++
-        #[";", "errata-run", out, fx.failingUser] ++
+      let r ← p.invoke (phase fx.stamped "setup" (stampTo "") ++ #[";"] ++
+        phase fx.stamped "prepare" (stampTo "") ++ #[";", "errata-run", out, fx.failingUser] ++
         fx.failSets.map (fun (k, v) => s!"setting:{k}={v}") ++ #[";"] ++
-        phase fx.stamped "teardown")
+        phase fx.stamped "teardown" (stampTo ""))
       assertBEq 1 r.exitCode
 
 /--

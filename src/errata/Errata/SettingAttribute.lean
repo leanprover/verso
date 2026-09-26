@@ -61,9 +61,9 @@ The setting that a parameter of a test or a fixture takes, as a use of the setti
 {name}`decl` with its docstring and, when {lit}`@[setting]` could evaluate it, its declared default,
 from {name}`settingExt`; or {lean}`none` when {lit}`@[setting]` has not recorded {name}`decl`.
 -/
-meta def settingUse? (env : Environment) (decl : Name) (optional : Bool) : Option SettingUse :=
+meta def settingUse? (env : Environment) (decl : Name) : Option SettingUse :=
   (settingExt.getState env).find? (·.decl == decl) |>.map fun s =>
-    { decl, optional, description? := s.docstring?, default? := s.default?
+    { decl, description? := s.docstring?, default? := s.default?
       defaultEvaluated := s.defaultEvaluated }
 
 /--

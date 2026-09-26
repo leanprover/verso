@@ -40,11 +40,12 @@ def quiet : Setting where
     | "true" => some true
     | "false" => some false
     | _ => none
+  default? := some "false"
 
 /-- Prints the greeting as often as it is told to, unless told to keep quiet. -/
 @[test (tags := slow, chatty)]
-def greets (word : greeting) (n : repeats) (quiet? : Option quiet) : Test := do
-  unless quiet?.getD false do
+def greets (word : greeting) (n : repeats) (quiet : quiet) : Test := do
+  unless quiet do
     for _ in [0 : n] do
       IO.println word
   -- The setting's value has the setting's type.

@@ -124,12 +124,13 @@ def strict : Setting where
     | "true" => some true
     | "false" => some false
     | _ => none
+  default? := some "false"
 
 /-- Writes its greeting, and fails when `strict` is `true`. -/
 @[test]
-def readsSettings (word : greeting) (strict? : Option strict) : Test := do
+def readsSettings (word : greeting) (strict : strict) : Test := do
   IO.println s!"greeting: {word}"
-  if strict?.getD false then
+  if strict then
     fail "strict was set"
 
 /--

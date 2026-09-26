@@ -130,28 +130,22 @@ _errata_json_list() {
   _errata_json="[$out]"
 }
 
-# Makes a comma-separated list of settings, each a name or `optional(name)`, the JSON array of a
-# record's `settings` field.
+# Makes a comma-separated list of settings' names the JSON array of a record's `settings` field. A
+# setting has a declared default or is mandatory, so an item written `optional(name)` is an error.
 _errata_json_settings() {
-  local items=() item out="" sep="" name optional
+  local items=() item name
   IFS=',' read -r -a items <<< "$1"
   for item in ${items[@]+"${items[@]}"}; do
     case "$item" in
       "optional("*")")
         name=${item#optional(}
         name=${name%)}
-        optional=true
-        ;;
-      *)
-        name=$item
-        optional=false
+        _errata_misuse "--settings names $item; a setting has a declared default or is \
+mandatory, so write $name"
         ;;
     esac
-    _errata_json_string "$name"
-    out+="$sep{\"name\":$_errata_json,\"optional\":$optional}"
-    sep=","
   done
-  _errata_json="[$out]"
+  _errata_json_list "$1"
 }
 
 # Makes a comma-separated list of fixtures, each a name or `shared(name)`, the JSON array of a test
@@ -238,7 +232,7 @@ $_errata_listed; declare settings in errata_settings"
   esac
 }
 
-# Declares a fixture: `errata_fixture_decl NAME DESCRIPTION [--settings a,optional(b)]
+# Declares a fixture: `errata_fixture_decl NAME DESCRIPTION [--settings a,b]
 # [--fixtures c,d] [--threads N]`. Its fixtures are ones declared before it. The script calls it
 # from `errata_fixtures`.
 errata_fixture_decl() {
@@ -290,10 +284,9 @@ declare fixtures in errata_fixtures"
 }
 
 # Declares a test: `errata_test NAME [--path a,b,c] [--file F] [--line N] [--description TEXT]
-# [--tags a,b] [--settings a,optional(b)] [--fixtures c,shared(d)] [--threads N]`. Settings written
-# `optional(b)` are ones the tests run without, and fixtures written `shared(d)` are ones the tests
-# share with other shared users; the others they use alone. The script calls it from
-# `errata_tests`.
+# [--tags a,b] [--settings a,b] [--fixtures c,shared(d)] [--threads N]`. Fixtures written
+# `shared(d)` are ones the tests share with other shared users; the others they use alone. The
+# script calls it from `errata_tests`.
 errata_test() {
   [ $# -ge 1 ] || _errata_misuse "errata_test takes a name"
   local name=$1

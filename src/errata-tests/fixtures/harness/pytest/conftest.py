@@ -13,11 +13,11 @@ import time
 import pytest
 
 # The Errata settings that the suite's tests and fixtures take: a greeting with a default, a
-# setting without one, and a file that the users of `stamped` stamp.
+# setting without one, and a file that the users of `stamped` stamp, none by default.
 errata_settings_decl = {
     "greeting": {"description": "A greeting.", "default": "hello"},
     "needed": {"description": "A setting without a default."},
-    "stamp-file": {"description": "A file that users stamp."},
+    "stamp-file": {"description": "A file that users stamp.", "default": ""},
 }
 
 
@@ -82,7 +82,7 @@ def threaded_setup(context):
 errata_fixtures_decl = {
     "stamped": {
         "description": "Its value is the stamp file.",
-        "settings": [{"name": "stamp-file", "optional": True}],
+        "settings": ["stamp-file"],
         "setup": stamped_setup,
         "prepare": stamped_prepare,
         "teardown": lambda value, context: stamp(value, "teardown"),

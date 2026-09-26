@@ -171,27 +171,23 @@ meta def fixtureOfParameter? (env : Environment) (type : Expr) : Option (Fixture
   return ({ decl := f, exclusive := !isShared }, arg)
 
 /--
-The setting that a parameter's type names: {lit}`S` for a parameter of type {lit}`S` and
-{lit}`Option S`, where {lit}`S` is a declaration that {lit}`@[setting]` marks. The type is read as
-elaborated, where the parameter {lit}`(x : S)` has the type {lit}`Setting.type S`. The use holds the
-setting's docstring and declared default.
+The setting that a parameter's type names: {lit}`S` for a parameter of type {lit}`S`, where
+{lit}`S` is a declaration that {lit}`@[setting]` marks. The type is read as elaborated, where the
+parameter {lit}`(x : S)` has the type {lit}`Setting.type S`. The use holds the setting's docstring
+and declared default.
 -/
 meta def settingOfParameter? (env : Environment) (type : Expr) : Option SettingUse :=
-  let known (e : Expr) (optional : Bool) : Option SettingUse :=
-    match e with
-    | .app (.const ``Errata.Setting.type []) (.const s []) => settingUse? env s optional
-    | _ => none
   match type with
-  | .app (.const ``Option _) inner => known inner true
-  | _ => known type false
+  | .app (.const ``Errata.Setting.type []) (.const s []) => settingUse? env s
+  | _ => none
 
 /-- The number of parameters that a fixture may take, one for each coercion to its value's type. -/
 meta def maxParameters : Nat := 8
 
 /-- What the parameters of a test or of a fixture may be, for messages about the others. -/
 meta def parametersMessage (what : String) : String :=
-  s!"{what} parameters are settings and fixtures: `S` or `Option S` for a declaration `S` marked \
-    `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`."
+  s!"{what} parameters are settings and fixtures: `S` for a declaration `S` marked `@[setting]`, \
+    and `F` or `shared F` for a declaration `F` marked `@[fixture]`."
 
 /--
 Classifies the parameters of {name}`decl`, a test or a fixture (as {name}`what` says), as settings
@@ -223,12 +219,15 @@ meta def classifyParameters (decl : Name) (what : String) (params : Array Expr) 
             fixture once, exclusively or shared."
         out := out.push (.fixture use fixture)
       else
+        if let .app (.const ``Option _) inner := ty then
+          if let some use := settingOfParameter? env inner then
+            throwError m!"The parameter `{localDecl.userName}` of `{userName}` has the type \
+              `Option {use.decl}`. A setting has a declared default or is mandatory, so a {what} \
+              takes it as `{use.decl}`."
         -- Parameters whose types are definitions that stand for settings name the settings
         -- through other names.
         let named? : Option Name := match ty with
-          | .app (.const ``Errata.Setting.type []) (.const c [])
-          | .app (.const ``Option _) (.app (.const ``Errata.Setting.type []) (.const c [])) =>
-            some c
+          | .app (.const ``Errata.Setting.type []) (.const c []) => some c
           | _ => none
         let alias? := named?.bind fun c =>
           match (env.find? c).bind (·.value?) with
@@ -256,8 +255,7 @@ meta def bindParameters (params : Array Expr) (uses : Array Parameter) (settings
     let lam ← mkLambdaFVars #[p] action
     let (combinator, value, name, pairs) := match u with
       | .setting use =>
-        (if use.optional then ``Setting.withOptional else ``Setting.withValue, mkConst use.decl,
-          settingNameOf use.decl, settings)
+        (``Setting.withValue, mkConst use.decl, settingNameOf use.decl, settings)
       | .fixture use fixture => (``Fixture.withValue, fixture, settingNameOf use.decl, fixtures)
     action ← mkAppOptM combinator
       #[some monad, some result, none, none, some value, some (toExpr name), some pairs, some lam]

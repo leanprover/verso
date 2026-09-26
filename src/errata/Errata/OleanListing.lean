@@ -30,8 +30,7 @@ declared default as {lit}`@[setting]` recorded it.
 -/
 def settingRefsOf (uses : Array SettingUse) : Array SettingRef :=
   uses.map fun use => {
-    name := settingNameOf use.decl, optional := use.optional
-    description? := use.description?, default? := use.default? }
+    name := settingNameOf use.decl, description? := use.description?, default? := use.default? }
 
 /--
 A recorded test of the module {name}`module` at {name}`location`, as {lit}`getAllTests%` lists it,

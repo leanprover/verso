@@ -20,15 +20,17 @@ def test_the_fields_start_with_the_profile_and_the_run_uses_it(editor):
     widget.gear.click()
     expect(widget.setting_rows).to_have_count(2)
     expect(widget.setting_field("greeting")).to_have_value("good day")
-    # A setting that the profile leaves out starts blank, and the field says what the test gets.
+    # A setting that the profile leaves out starts blank, and the field shows the declared default,
+    # which the test receives.
     expect(widget.setting_field("strict")).to_have_value("")
-    expect(widget.setting_field("strict")).to_have_attribute("placeholder", "unset")
+    expect(widget.setting_field("strict")).to_have_attribute("placeholder", "false")
     editor.page.keyboard.press("Escape")
     expect(widget.gear).to_have_attribute("title", "Run settings")
     widget.run_button.click()
     widget.wait_for_verdict("Passed")
     expect_exact_text(widget.output, "greeting: good day\n")
-    expect(widget.settings_badge).to_have_text('Settings "greeting=good day"')
+    # The badge names every setting that the test received, the declared default included.
+    expect(widget.settings_badge).to_have_text('Settings "greeting=good day" strict=false')
 
 
 def test_a_changed_value_reaches_the_test(editor):
@@ -46,7 +48,7 @@ def test_a_changed_value_reaches_the_test(editor):
     expect_exact_text(widget.output, 'greeting: -x "quoted" a=b\n')
 
 
-def test_an_optional_setting_reaches_the_test(editor):
+def test_a_value_over_the_default_reaches_the_test(editor):
     editor.show("Passing", "readsSettings")
     widget = Widget(editor.page)
     widget.gear.click()
@@ -70,13 +72,16 @@ def test_a_value_that_the_setting_rejects_ends_the_test_with_an_error(editor):
     )
 
 
-def test_an_emptied_optional_field_leaves_its_setting_unset(editor):
+def test_the_reset_button_restores_the_default_of_a_setting_without_a_profile_value(editor):
     editor.show("Passing", "readsSettings")
     widget = Widget(editor.page)
     widget.gear.click()
     widget.setting_field("strict").fill("true")
     widget.setting_field("strict").fill("")
-    expect(widget.setting_field("strict")).to_have_attribute("placeholder", "unset")
+    # An emptied field sends the empty value.
+    expect(widget.setting_field("strict")).to_have_attribute("placeholder", "empty")
+    editor.page.get_by_role("button", name="Use the profile's value").click()
+    expect(widget.setting_field("strict")).to_have_attribute("placeholder", "false")
     editor.page.keyboard.press("Escape")
     expect(widget.gear).to_have_attribute("title", "Run settings")
     widget.run_button.click()
@@ -119,7 +124,7 @@ def test_the_settings_of_a_run_can_be_used_again(editor):
     editor.page.keyboard.press("Escape")
     widget.run_button.click()
     widget.wait_for_verdict("Passed")
-    expect(widget.settings_badge).to_have_text("Settings greeting=hi")
+    expect(widget.settings_badge).to_have_text("Settings greeting=hi strict=false")
     # Showing another test and coming back restores the result, whose badge fills the settings.
     editor.move_to("Passing", "bothStreams")
     expect(widget.title).to_contain_text("bothStreams")

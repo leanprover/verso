@@ -2294,8 +2294,7 @@ def testsCarryTagsAndSettings : Test := do
   let e ← greetsEntry
   assertBEq #["slow", "chatty"] e.tags
   assertBEq #[greetingName, repeatsName, quietName] (e.settings.map (·.name))
-  assertBEq #[false, false, true] (e.settings.map (·.optional))
-  assertBEq #[some "hello", some "2", none] (e.settings.map (·.default?))
+  assertBEq #[some "hello", some "2", some "false"] (e.settings.map (·.default?))
   assertBEq (some "The word that a test greets with.")
     (e.settings[0]?.bind (·.description?) |>.map (·.trimAscii.copy))
   let some plain := (getAllTests% "verso" ErrataTests.Settings).find? (·.name == "ErrataTests.Settings.plain")
@@ -2305,9 +2304,9 @@ def testsCarryTagsAndSettings : Test := do
 
 /--
 Tests' actions parse the values of the settings they take and apply the tests to them. The last
-value given for a setting counts, optional settings without values are `none`, and missing
-mandatory settings and values that their parsers reject end the tests with errors that name the
-settings.
+value given for a setting counts, and missing settings and values that their parsers reject end the
+tests with errors that name the settings. The runner applies declared defaults, so the actions
+receive a value for every setting.
 -/
 @[test]
 def settingsAreParsed : Test := do
@@ -2317,10 +2316,10 @@ def settingsAreParsed : Test := do
     let some r := rs[0]? | fail "the test has no result"
     return r
   result "values reach the test" do
-    let r ← run #[(greetingName, "hi"), (repeatsName, "1"), (repeatsName, "3")]
+    let r ← run #[(greetingName, "hi"), (repeatsName, "1"), (repeatsName, "3"), (quietName, "false")]
     assertTrue r.status.isSuccess
     assertBEq "hi\nhi\nhi\n" r.output.stdout
-  result "an optional setting" do
+  result "a Boolean setting" do
     let r ← run #[(greetingName, "hi"), (repeatsName, "3"), (quietName, "true")]
     assertTrue r.status.isSuccess
     assertBEq "" r.output.stdout
@@ -2332,7 +2331,7 @@ def settingsAreParsed : Test := do
     match (← run #[(greetingName, "hi"), (repeatsName, "many")]).status with
     | .error m => assertContains s!"the setting {repeatsName} has the value \"many\"" m
     | s => fail s!"expected an error, got {repr s}"
-  result "an optional value that the parser rejects" do
+  result "a later setting's value that the parser rejects" do
     match (← run #[(greetingName, "hi"), (repeatsName, "1"), (quietName, "maybe")]).status with
     | .error m => assertContains s!"the setting {quietName} has the value \"maybe\"" m
     | s => fail s!"expected an error, got {repr s}"
@@ -2359,14 +2358,40 @@ def harnessListsSettings : Test := do
       | _ => none
     match records with
     | [.protocol _, .setting (some g) (some d) (some "hello"), .setting (some r) _ (some "2"),
-        .setting (some q) _ none, .test info, .test _] =>
+        .setting (some q) _ (some "false"), .test info, .test _] =>
       assertBEq #[greetingName, repeatsName, quietName] #[g, r, q]
       assertContains "greets with" d
       assertBEq (some #["slow", "chatty"]) info.tags?
-      assertBEq
-        (some #[{ name := greetingName }, { name := repeatsName }, { name := quietName, optional := true }])
-        info.settings?
+      assertBEq (some #[greetingName, repeatsName, quietName]) info.settings?
+      -- The settings are named as strings.
+      assertContains s!"\"settings\":[\"{greetingName}\",\"{repeatsName}\",\"{quietName}\"]"
+        (lines.getD 4 "")
     | _ => fail s!"unexpected records: {lines}"
+
+/--
+Readers take the settings of fixture and test records as names, each written as a string or as an
+object with a `name`, whose other fields they skip.
+-/
+@[test]
+def settingReferencesAreRead : Test := do
+  let decode (line : String) : TestM Protocol.Record := do
+    match Protocol.Record.parseLine line with
+    | .ok (some (_, r)) => return r
+    | .ok none => fail s!"no record in {line}"
+    | .error e => fail e
+  result "a test" do
+    match ← decode "{\"type\":\"test\",\"name\":\"t\",\"settings\":[\"a\",{\"name\":\"b\",\
+        \"optional\":true},{\"name\":\"c\",\"optional\":false}]}" with
+    | .test info => assertBEq (some #["a", "b", "c"]) info.settings?
+    | r => fail s!"unexpected record {repr r}"
+  result "a fixture" do
+    match ← decode "{\"type\":\"fixture\",\"name\":\"f\",\"settings\":[{\"name\":\"a\"},\"b\"]}" with
+    | .fixture info => assertBEq (some #["a", "b"]) info.settings?
+    | r => fail s!"unexpected record {repr r}"
+  result "a setting without a name" do
+    match Protocol.Record.parseLine "{\"type\":\"test\",\"name\":\"t\",\"settings\":[{\"optional\":true}]}" with
+    | .error e => assertContains "field settings" e
+    | .ok _ => fail "accepted"
 
 /--
 error: `hiddenSetting` is private or not exported, so a test executable cannot reach it. Make it public, for example by declaring it in a `public section`.
@@ -2406,7 +2431,7 @@ error: `@[setting]` requires the type `Errata.Setting`, and `notASetting` has th
 /--
 error: `instanceParameter` has an instance parameter of type
   Inhabited Nat
-A test's parameters are settings and fixtures: `S` or `Option S` for a declaration `S` marked `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`.
+A test's parameters are settings and fixtures: `S` for a declaration `S` marked `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`.
 -/
 #test_msgs in
 @[test] def instanceParameter [Inhabited Nat] : Bool := true
@@ -2436,10 +2461,43 @@ set_option autoImplicit true in
 /--
 error: The parameter `n` of `takesNat` has the type
   Nat
-which is neither a setting nor a fixture. A test's parameters are settings and fixtures: `S` or `Option S` for a declaration `S` marked `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`.
+which is neither a setting nor a fixture. A test's parameters are settings and fixtures: `S` for a declaration `S` marked `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`.
 -/
 #test_msgs in
 @[test] def takesNat (n : Nat) : Bool := n == n
+
+/--
+error: The parameter `n?` of `takesOptionalSetting` has the type `Option Errata.seed`. A setting has a declared default or is mandatory, so a test takes it as `Errata.seed`.
+-/
+#test_msgs in
+@[test] def takesOptionalSetting (n? : Option seed) : Bool := n?.isSome
+
+/--
+error: The parameter `n?` of `optionalSettingFixture` has the type `Option Errata.seed`. A setting has a declared default or is mandatory, so a fixture takes it as `Errata.seed`.
+-/
+#test_msgs in
+@[fixture, expose] def optionalSettingFixture (n? : Option seed) : Fixture where
+  type := Nat
+  toString := toString
+  fromString := String.toNat?
+  setup := return n?.getD 0
+
+-- A setting without a declared default is mandatory.
+#test_msgs in
+/-- A count with no default. -/
+@[setting, expose] def mandatoryCount : Setting where
+  type := Nat
+  fromString s := s.toNat?
+
+-- A fixture takes a mandatory setting as the setting's type. No test uses the fixture, so no run
+-- needs a value for the setting.
+#test_msgs in
+/-- A fixture whose value is its setting's. -/
+@[fixture, expose] def countsTo (n : mandatoryCount) : Fixture where
+  type := Nat
+  toString := toString
+  fromString := String.toNat?
+  setup := return n + 0
 
 /--
 error: `hiddenFixture` is private or not exported, so a test executable cannot reach it. Make it public, for example by declaring it in a `public section`.
@@ -2513,7 +2571,7 @@ error: The field `type` of `dependentType` depends on its parameters. A fixture'
 /--
 error: The parameter `n` of `takesInt` has the type
   Int
-which is neither a setting nor a fixture. A fixture's parameters are settings and fixtures: `S` or `Option S` for a declaration `S` marked `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`.
+which is neither a setting nor a fixture. A fixture's parameters are settings and fixtures: `S` for a declaration `S` marked `@[setting]`, and `F` or `shared F` for a declaration `F` marked `@[fixture]`.
 -/
 #test_msgs in
 @[fixture, expose] def takesInt (n : Int) : Fixture where

@@ -37,8 +37,6 @@ this record alone when the default was evaluated.
 structure SettingUse where
   /-- The declaration of the setting, which {lit}`@[setting]` marks. -/
   decl : Name
-  /-- Whether the parameter is an {name}`Option`, so that the test runs without a value. -/
-  optional : Bool
   /-- The setting's docstring in Markdown. -/
   description? : Option String := none
   /--

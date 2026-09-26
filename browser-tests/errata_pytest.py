@@ -21,15 +21,14 @@ reaches the later invocations, and after an invocation exits non-zero only teard
 
 Suites declare the settings their tests take in a module-level dictionary `errata_settings_decl` in
 a `conftest.py`, which maps each setting's name to a dictionary with its `description` and
-optionally its `default`. Tests take settings through the marker `errata_setting(NAME)`, or
-`errata_setting(NAME, optional=True)` for those they run without, and read the values they receive
-through the `errata_settings` fixture, a dictionary from names to values.
+optionally its `default`; a setting without a default is mandatory. Tests take settings through the
+marker `errata_setting(NAME)` and read the values they receive through the `errata_settings`
+fixture, a dictionary from names to values.
 
 Suites declare Errata fixtures, resources that the runner sets up once per run and shares between
 tests, in a module-level dictionary `errata_fixtures_decl` in a `conftest.py`. It maps each
-fixture's name to a dictionary with its `description`; optionally `settings`, a list whose items
-are a setting's name, which the fixture needs, or a dictionary with the `name` and `optional`;
-optionally `fixtures`, the names of fixtures declared before it that it takes; optionally
+fixture's name to a dictionary with its `description`; optionally `settings`, the names of the
+settings it takes; optionally `fixtures`, the names of fixtures declared before it that it takes; optionally
 `threads`; and the callables `setup(context)`, which returns the value as a string,
 `prepare(value, context)`, and `teardown(value, context)`, whose value is `None` when the setup
 produced none. The context has the attributes `settings` and `fixtures`, dictionaries from names to
@@ -143,8 +142,8 @@ Several invocations may be chained, each separated by a ';' argument. The Errata
 executables; to run the tests, run the Errata driver, which is usually `lake test`."""
 
 ERRATA_SETTING_MARKER = (
-    "errata_setting(name, optional=False): the test takes the Errata setting with this name, which a "
-    "conftest.py declares in errata_settings_decl"
+    "errata_setting(name): the test takes the Errata setting with this name, which a conftest.py "
+    "declares in errata_settings_decl"
 )
 
 ERRATA_FIXTURE_MARKER = (
@@ -201,16 +200,27 @@ def node_path(nodeid):
 
 
 def item_settings(item):
-    """
-    The settings that an item takes, as (name, optional) pairs, in the order its markers name them.
-    """
-    seen = {}
+    """The names of the settings that an item takes, in the order its markers name them."""
+    seen = []
     for marker in item.iter_markers("errata_setting"):
-        optional = bool(marker.kwargs.get("optional", False))
         for name in marker.args:
             if name not in seen:
-                seen[name] = optional
-    return list(seen.items())
+                seen.append(name)
+    return seen
+
+
+def setting_marker_problems(item):
+    """
+    The problems with an item's `errata_setting` markers: a marker with keyword arguments, which the
+    marker takes none of, since a setting has a declared default or is mandatory.
+    """
+    return [
+        f"{item.nodeid} marks the setting {', '.join(marker.args)} with the keyword arguments "
+        f"{', '.join(sorted(marker.kwargs))}; errata_setting takes names alone, since a setting "
+        "has a declared default or is mandatory"
+        for marker in item.iter_markers("errata_setting")
+        if marker.kwargs
+    ]
 
 
 def item_fixtures(item):
@@ -228,14 +238,8 @@ def item_fixtures(item):
 
 
 def fixture_settings(info):
-    """The settings that a fixture's declaration takes, as (name, optional) pairs."""
-    out = []
-    for item in info.get("settings", []):
-        if isinstance(item, str):
-            out.append((item, False))
-        else:
-            out.append((item["name"], bool(item.get("optional", False))))
-    return out
+    """The names of the settings that a fixture's declaration takes."""
+    return list(info.get("settings", []))
 
 
 def declared_fixtures(config):
@@ -366,8 +370,9 @@ class ListPlugin:
                     tags.append(marker.name)
             if tags:
                 record["tags"] = tags
+            self.problems.extend(setting_marker_problems(item))
             settings = item_settings(item)
-            for name, _ in settings:
+            for name in settings:
                 if name not in declared:
                     self.problems.append(
                         f"{item.nodeid} takes the setting {name}, which no conftest.py declares "
@@ -375,7 +380,7 @@ class ListPlugin:
                     )
                 used.add(name)
             if settings:
-                record["settings"] = [{"name": n, "optional": o} for n, o in settings]
+                record["settings"] = settings
             uses = item_fixtures(item)
             for name, _ in uses:
                 if name not in fixtures:
@@ -397,7 +402,13 @@ class ListPlugin:
                 continue
             record = {"type": "fixture", "name": name, "description": info.get("description", "")}
             settings = fixture_settings(info)
-            for setting, _ in settings:
+            for setting in settings:
+                if not isinstance(setting, str):
+                    self.problems.append(
+                        f"the fixture {name} takes the setting {setting!r}; a fixture's settings "
+                        "are names alone, since a setting has a declared default or is mandatory"
+                    )
+                    continue
                 if setting not in declared:
                     self.problems.append(
                         f"the fixture {name} takes the setting {setting}, which no conftest.py "
@@ -405,7 +416,7 @@ class ListPlugin:
                     )
                 used.add(setting)
             if settings:
-                record["settings"] = [{"name": n, "optional": o} for n, o in settings]
+                record["settings"] = [s for s in settings if isinstance(s, str)]
             if info.get("fixtures"):
                 record["fixtures"] = list(info["fixtures"])
             if "threads" in info:

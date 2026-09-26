@@ -360,7 +360,7 @@ def pytest_collection_modifyitems(config, items):
         if has_site and "server" in item.fixturenames:
             item.add_marker(pytest.mark.errata_fixture("server", exclusive=False))
         if "redirect_case" in item.fixturenames:
-            item.add_marker(pytest.mark.errata_setting("Errata.seed", optional=True))
+            item.add_marker(pytest.mark.errata_setting("Errata.seed"))
 
 
 @pytest.fixture(scope="session")

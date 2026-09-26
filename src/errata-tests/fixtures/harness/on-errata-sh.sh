@@ -9,16 +9,16 @@ source "$ERRATA_DIR/harnesses/errata.sh"
 # a greeting with a default, a setting without one, and the file that the users of `stamped` stamp.
 errata_settings() {
   errata_setting_decl Errata.seed "The seed."
-  errata_setting_decl marker "Names the processes that a test starts."
-  errata_setting_decl note "A note."
+  errata_setting_decl marker "Names the processes that a test starts." --default ""
+  errata_setting_decl note "A note." --default ""
   errata_setting_decl greeting "A greeting." --default hello
   errata_setting_decl needed "A setting without a default."
-  errata_setting_decl stamp-file "A file that users stamp."
+  errata_setting_decl stamp-file "A file that users stamp." --default ""
 }
 
 # Declares one fixture per way that a fixture's phases end, as `basic.sh` does.
 errata_fixtures() {
-  errata_fixture_decl stamped "Its value is the stamp file." --settings "optional(stamp-file)"
+  errata_fixture_decl stamped "Its value is the stamp file." --settings stamp-file
   errata_fixture_decl setup-fails "Its setup fails."
   errata_fixture_decl prepare-fails "Its first prepare fails."
   errata_fixture_decl teardown-fails "Its teardown fails."
@@ -28,7 +28,7 @@ errata_fixtures() {
   errata_fixture_decl threaded "It asks for threads." --threads 3
 }
 
-# Declares one test per behavior. Every test takes the seed and optionally the marker and the note;
+# Declares one test per behavior. Every test takes the seed, the marker, and the note;
 # `greets` also takes the greeting, and `needs-setting` the setting that nothing gives a value. The
 # fixtures' users take their fixtures.
 errata_tests() {
@@ -38,7 +38,7 @@ errata_tests() {
       fail-goes-on run-id exclusive-a exclusive-b shared-a shared-b after-setup-failure \
       after-prepare-failure-a after-prepare-failure-b before-teardown-failure uses-dependent \
       after-slow-setup uses-threaded threaded-test fails-with-fixture; do
-    settings="Errata.seed,optional(marker),optional(note)"
+    settings="Errata.seed,marker,note"
     case "$t" in
       greets) settings="$settings,greeting" ;;
       needs-setting) settings="$settings,needed" ;;
@@ -228,6 +228,8 @@ errata_run_test() {
     greets)
       # The test echoes the settings it received, in the order it takes them.
       echo "received setting:Errata.seed=$(errata_setting Errata.seed)"
+      echo "received setting:marker=$(errata_setting marker)"
+      echo "received setting:note=$(errata_setting note)"
       echo "received setting:greeting=$(errata_setting greeting)"
       ;;
     needs-setting)

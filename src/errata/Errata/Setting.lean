@@ -25,8 +25,6 @@ namespace Errata
 structure SettingRef where
   /-- The setting's name: its fully qualified declaration name. -/
   name : String
-  /-- Whether the test takes the setting as an {name}`Option`, and so runs without a value. -/
-  optional : Bool
   /-- The setting's docstring. -/
   description? : Option String := none
   /-- The setting's declared default value. -/
@@ -47,23 +45,6 @@ def Setting.withValue {m : Type → Type} {α : Type} [Monad m] [MonadExceptOf I
     | throwThe IO.Error <| .userError s!"the setting {name} has the value {raw.quote}, which its \
         parser rejects"
   k value
-
-/--
-The value of the optional setting {name}`S`, named {name}`name`, among {name}`settings`:
-{lean}`none` when no value is given, and otherwise the last value given, parsed by the setting's
-parser. Values that the parser rejects end the test or fixture phase with an error that names the
-setting.
--/
-def Setting.withOptional {m : Type → Type} {α : Type} [Monad m] [MonadExceptOf IO.Error m]
-    (S : Setting) (name : String)
-    (settings : Array (String × String)) (k : Option S.type → m α) : m α := do
-  match (settings.findRev? (·.1 == name)).map (·.2) with
-  | none => k none
-  | some raw =>
-    let some value := S.fromString raw
-      | throwThe IO.Error <| .userError s!"the setting {name} has the value {raw.quote}, which its \
-          parser rejects"
-    k (some value)
 
 -- Settings' names are their fully qualified declaration names, here `Errata.seed`. By convention,
 -- settings' declarations begin with a lowercase letter, as definitions' names do.

@@ -34,8 +34,6 @@ meta def runTestWidget : Lean.Widget.Module where
 meta structure DeclaredSetting where
   /-- The setting's name: its fully qualified declaration name. -/
   name : String
-  /-- Whether the test runs without a value for the setting. -/
-  optional : Bool
   /-- The setting's docstring. -/
   description? : Option String := none
   /-- The setting's declared default. -/
@@ -453,8 +451,6 @@ meta def fileState (req : RunRef) : RequestM (RequestTask FileState) := do
 meta structure SettingField where
   /-- The setting's name. -/
   name : String
-  /-- Whether the test runs without a value for the setting. -/
-  optional : Bool
   /-- The setting's docstring. -/
   description? : Option String := none
   /-- The setting's declared default. -/
@@ -553,7 +549,7 @@ gives them and the targets whose results it gives them.
 private meta def fieldsOf (declared : Array DeclaredSetting)
     (values needs : Array (String × String)) : Array SettingField :=
   declared.filter (·.name != seedSetting) |>.map fun s => {
-    name := s.name, optional := s.optional, description? := s.description?, default? := s.default?
+    name := s.name, description? := s.description?, default? := s.default?
     profileValue? := (values.findRev? (·.1 == s.name)).map (·.2)
     needs? := (needs.find? (·.1 == s.name)).map (·.2)
   }
@@ -563,9 +559,9 @@ open Server in
 Server RPC method that gives the fields for a test's settings and the profiles that its runs can
 use. The profiles offered are those whose default filters select the test, or the {lit}`default`
 profile as the fallback when none does. For each profile and each setting that the test takes,
-other than the seed, a field gives the setting's name, description, and declared default, whether
-it is optional, and the value that the test receives from the profile, which is the first matching
-override's or else the profile's own, or the target whose result the profile gives it.
+other than the seed, a field gives the setting's name, description, and declared default, and the
+value that the test receives from the profile, which is the first matching override's or else the
+profile's own, or the target whose result the profile gives it.
 -/
 @[server_rpc_method]
 meta def testSettings (req : RunRef) : RequestM (RequestTask SettingsReply) := do

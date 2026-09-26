@@ -26,6 +26,7 @@ namespace ErrataTests.Roles
 def outcome : Setting where
   type := String
   fromString s := some s
+  default? := some "pass"
 
 /-- A value that a test needs, with no default. -/
 @[setting, expose]
@@ -35,10 +36,10 @@ def required : Setting where
 
 /-- Passes, unless its setting asks it to fail an assertion or to throw. -/
 @[test]
-def endsAsAsked (how? : Option outcome) : Test := do
-  match how? with
-  | some "fail" => assertBEq 3 4
-  | some "error" => throwThe IO.Error (IO.userError "thrown on request")
+def endsAsAsked (how : outcome) : Test := do
+  match how with
+  | "fail" => assertBEq 3 4
+  | "error" => throwThe IO.Error (IO.userError "thrown on request")
   | _ => pure ()
 
 /--
@@ -56,19 +57,23 @@ def printsRunId : Test := do
 def needsSetting (value : required) : Test := do
   IO.println s!"received {value}"
 
-/-- A text that names the processes that a test leaves running, so that a check can find them. -/
+/--
+A text that names the processes that a test leaves running, so that a check can find them; empty by
+default.
+-/
 @[setting, expose]
 def marker : Setting where
   type := String
   fromString s := some s
+  default? := some ""
 
 /--
 With a marker, starts a process whose command line holds the marker and that runs for five minutes,
-and waits for it; without one, passes at once.
+and waits for it; with the empty marker, passes at once.
 -/
 @[test]
-def lingers (marker? : Option marker) : Test := do
-  let some m := marker? | return
+def lingers (m : marker) : Test := do
+  if m.isEmpty then return
   let child ← IO.Process.spawn
     { cmd := "sh", args := #["-c", s!"sleep 300; : errata-conformance-{m}"] }
   discard child.wait

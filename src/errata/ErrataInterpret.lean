@@ -61,8 +61,7 @@ unsafe def settingRefsOf (uses : Array Errata.SettingUse) : MetaM (Array Errata.
   uses.mapM fun use => do
     let default? ← evalExpr (Option String) (mkApp (mkConst ``Option [.zero]) (mkConst ``String))
       (mkApp (mkConst ``Errata.Setting.default?) (mkConst use.decl)) (safety := .unsafe)
-    return { name := Errata.settingNameOf use.decl, optional := use.optional
-             description? := use.description?, default? }
+    return { name := Errata.settingNameOf use.decl, description? := use.description?, default? }
 
 /--
 The test entry for a recorded test of the module {name}`module`, as {lit}`getAllTests%` builds it:

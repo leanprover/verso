@@ -21,10 +21,12 @@ record() {
   printf '%s\n' "$1" >> "$out"
 }
 
-# Every test takes Errata's seed, whose value the runner derives, and optionally a marker for the
-# processes it starts and a note. Two tests take more: `greets` a setting with a default, and
-# `needs-setting` one that nothing gives a value.
-common='{"name":"Errata.seed","optional":false},{"name":"marker","optional":true},{"name":"note","optional":true}'
+# Every test takes Errata's seed, whose value the runner derives, a marker for the processes it
+# starts, and a note, both empty by default. Two tests take more: `greets` a setting with a default,
+# and `needs-setting` one that nothing gives a value. The records name the settings as strings,
+# except those of `needs-setting` and the fixture `dependent`, which name them in the object form
+# with an `optional` field that readers skip.
+common='"Errata.seed","marker","note"'
 
 # Performs one invocation and exits with its status.
 invoke() {
@@ -34,12 +36,12 @@ case "$mode" in
   errata-list)
     record '{"type":"protocol","version":1}'
     record '{"type":"setting","name":"Errata.seed","description":"The seed."}'
-    record '{"type":"setting","name":"marker","description":"Names the processes that a test starts."}'
-    record '{"type":"setting","name":"note","description":"A note."}'
+    record '{"type":"setting","name":"marker","description":"Names the processes that a test starts.","default":""}'
+    record '{"type":"setting","name":"note","description":"A note.","default":""}'
     record '{"type":"setting","name":"greeting","description":"A greeting.","default":"hello"}'
     record '{"type":"setting","name":"needed","description":"A setting without a default."}'
-    record '{"type":"setting","name":"stamp-file","description":"A file that users stamp."}'
-    record '{"type":"fixture","name":"stamped","description":"Its value is the stamp file.","settings":[{"name":"stamp-file","optional":true}]}'
+    record '{"type":"setting","name":"stamp-file","description":"A file that users stamp.","default":""}'
+    record '{"type":"fixture","name":"stamped","description":"Its value is the stamp file.","settings":["stamp-file"]}'
     record '{"type":"fixture","name":"setup-fails","description":"Its setup fails."}'
     record '{"type":"fixture","name":"prepare-fails","description":"Its first prepare fails."}'
     record '{"type":"fixture","name":"teardown-fails","description":"Its teardown fails."}'
@@ -49,8 +51,8 @@ case "$mode" in
     for t in "${tests[@]}"; do
       settings="$common"
       case "$t" in
-        greets) settings="$settings,{\"name\":\"greeting\",\"optional\":false}" ;;
-        needs-setting) settings="$settings,{\"name\":\"needed\",\"optional\":false}" ;;
+        greets) settings="$settings,\"greeting\"" ;;
+        needs-setting) settings="$settings,{\"name\":\"needed\",\"optional\":true}" ;;
       esac
       tags='["shell"]'
       case "$t" in

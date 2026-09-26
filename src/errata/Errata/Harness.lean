@@ -148,10 +148,9 @@ def reachedSettings (entries : Array TestInfo) (fixtures : Array FixtureInfo := 
       out := out.push s
   return out
 
-/-- The dependencies on settings that a test or fixture record lists, or none for an empty list. -/
-private def settingDeps (settings : Array SettingRef) : Option (Array SettingDep) :=
-  if settings.isEmpty then none
-  else some (settings.map fun s => { name := s.name, optional := s.optional })
+/-- The names of the settings that a test or fixture record lists, or none for an empty list. -/
+private def settingDeps (settings : Array SettingRef) : Option (Array String) :=
+  if settings.isEmpty then none else some (settings.map (·.name))
 
 /--
 Writes the inventory: the protocol record; a setting record for each setting that the tests and
@@ -448,7 +447,7 @@ and column, its docstring as its description, its tags, and the settings and fix
 {lit}`errata-run <out> <name> [setting:NAME=VALUE]... [fixture:NAME=VALUE]... [threads:N]` runs
 the test with that name and writes its records to {lit}`out`. It exits with {lit}`0` when the test
 passes and {lit}`1` otherwise. The test receives the settings and the fixtures' values, and parses
-the values of those it takes. If a mandatory setting or a fixture has no value, or a parser rejects
+the values of those it takes. If a setting or a fixture it takes has no value, or a parser rejects
 a value, the test ends with an error. Its context holds the thread grant, {lit}`1` without one.
 When tests run concurrently, the runner also sets {lit}`LEAN_NUM_THREADS` to the grant, which sizes
 the executable's task pool and reaches the processes it starts; when one test runs at a time, the

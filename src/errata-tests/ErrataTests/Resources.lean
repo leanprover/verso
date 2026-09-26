@@ -23,11 +23,15 @@ public section
 
 namespace ErrataTests.Resources
 
-/-- A file that the fixture `stamped` and its users append lines to, one per event. -/
+/--
+A file that the fixture `stamped` and its users append lines to, one per event; empty by default,
+for no file.
+-/
 @[setting, expose]
 def stampFile : Setting where
   type := String
   fromString s := some s
+  default? := some ""
 
 /-- Makes the fixtures `setupFails`, `prepareFails`, and `teardownFails` fail, when it is `true`. -/
 @[setting, expose]
@@ -37,12 +41,14 @@ def failing : Setting where
     | "true" => some true
     | "false" => some false
     | _ => none
+  default? := some "false"
 
 /-- How long the fixture `slowSetup` sleeps in its setup, in milliseconds. -/
 @[setting, expose]
 def sleepMs : Setting where
   type := Nat
   fromString s := s.toNat?
+  default? := some "0"
 
 /-- Appends a line to a file, when a file is given. -/
 def stamp (file : String) (line : String) : IO Unit := do
@@ -56,12 +62,11 @@ A fixture whose value is the stamp file: its setup, each prepare, and its teardo
 the file, and each prepare takes a moment between its two lines.
 -/
 @[fixture, expose]
-def stamped (file? : Option stampFile) : Fixture where
+def stamped (file : stampFile) : Fixture where
   type := String
   toString := id
   fromString := some
   setup := do
-    let file := file?.getD ""
     stamp file "setup"
     return file
   prepare file := do
@@ -89,8 +94,8 @@ def stampedUse (name : String) (file : String) : Test := do
 @[test] def sharedB (file : shared stamped) : Test := stampedUse "sharedB" file
 
 /-- A user of `stamped` that fails when `failing` is `true`. -/
-@[test] def failsWithFixture (_ : stamped) (fail? : Option failing) : Test := do
-  if fail?.getD false then fail "it failed with its fixture"
+@[test] def failsWithFixture (_ : stamped) (failing : failing) : Test := do
+  if failing then fail "it failed with its fixture"
 
 /-- Prints whether the teardown received a value, which it does when the setup produced one. -/
 def reportTeardown (value? : Option String) : FixtureM Unit :=
@@ -98,12 +103,12 @@ def reportTeardown (value? : Option String) : FixtureM Unit :=
 
 /-- A fixture whose setup fails when `failing` is `true`. -/
 @[fixture, expose]
-def setupFails (fail? : Option failing) : Fixture where
+def setupFails (failing : failing) : Fixture where
   type := String
   toString := id
   fromString := some
   setup := do
-    if fail?.getD false then fail "the setup failed on request"
+    if failing then fail "the setup failed on request"
     return "ready"
   teardown := reportTeardown
 
@@ -115,7 +120,7 @@ A fixture whose prepare fails the first time it runs when `failing` is `true`, a
 that. Its value is a directory where it notes that it has failed.
 -/
 @[fixture, expose]
-def prepareFails (fail? : Option failing) : Fixture where
+def prepareFails (failing : failing) : Fixture where
   type := String
   toString := id
   fromString := some
@@ -124,7 +129,7 @@ def prepareFails (fail? : Option failing) : Fixture where
     return dir.toString
   prepare dir := do
     let mark : System.FilePath := dir / "failed-once"
-    if fail?.getD false && !(← mark.pathExists) then
+    if failing && !(← mark.pathExists) then
       IO.FS.writeFile mark ""
       fail "the prepare failed on request"
   teardown dir? := do
@@ -138,13 +143,13 @@ def prepareFails (fail? : Option failing) : Fixture where
 
 /-- A fixture whose teardown fails when `failing` is `true`. -/
 @[fixture, expose]
-def teardownFails (fail? : Option failing) : Fixture where
+def teardownFails (failing : failing) : Fixture where
   type := String
   toString := id
   fromString := some
   setup := return "ready"
   teardown _ := do
-    if fail?.getD false then fail "the teardown failed on request"
+    if failing then fail "the teardown failed on request"
 
 /-- A test that uses `teardownFails`. -/
 @[test] def beforeTeardownFailure (_ : teardownFails) : Test := pure ()
@@ -162,13 +167,13 @@ def dependent (word : ErrataTests.Settings.greeting) (file : stamped) : Fixture 
 
 /-- A fixture whose setup sleeps for `sleepMs` milliseconds, and whose teardown says what it got. -/
 @[fixture, expose]
-def slowSetup (ms? : Option sleepMs) : Fixture where
+def slowSetup (ms : sleepMs) : Fixture where
   type := String
   toString := id
   fromString := some
   setup := do
     IO.println "setting up"
-    IO.sleep (ms?.getD 0).toUInt32
+    IO.sleep ms.toUInt32
     return "slept"
   teardown := reportTeardown
 

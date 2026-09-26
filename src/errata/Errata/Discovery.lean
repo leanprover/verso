@@ -195,15 +195,14 @@ meta def widgetRangeSyntax (decl : Name) (attrStx : Syntax) : AttrM Syntax := do
   | none => return attrStx
 
 /--
-A setting that a test takes, as the widget offers a field for it: its name, whether it is optional,
-its docstring, and its declared default, as {lit}`@[setting]` recorded it or else evaluated here,
-or {lean}`none` in its place when evaluating it fails.
+A setting that a test takes, as the widget offers a field for it: its name, its docstring, and its
+declared default, as {lit}`@[setting]` recorded it or else evaluated here, or {lean}`none` in its
+place when evaluating it fails.
 -/
 meta def declaredSetting (use : SettingUse) : AttrM Errata.Widget.DeclaredSetting := do
   let default? ← if use.defaultEvaluated then pure use.default?
     else pure ((← (evaluatedDefault? use.decl).run').join)
-  return { name := settingNameOf use.decl, optional := use.optional,
-           description? := use.description?, default? }
+  return { name := settingNameOf use.decl, description? := use.description?, default? }
 
 /-- Marks a definition as a test, discovered and run by the Errata test runner. -/
 meta initialize
@@ -321,8 +320,7 @@ meta def settingRefs (uses : Array SettingUse) : TermElabM (Array Term) :=
     let docStx ← match use.description? with
       | some doc => `(some $(quote doc))
       | none => `((none : Option String))
-    `({ name := $(quote (settingNameOf use.decl)), optional := $(quote use.optional),
-        description? := $docStx, default? := Errata.Setting.default? @$(mkCIdent use.decl)
+    `({ name := $(quote (settingNameOf use.decl)), description? := $docStx, default? := Errata.Setting.default? @$(mkCIdent use.decl)
         : Errata.SettingRef })
 
 /--

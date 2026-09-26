@@ -179,7 +179,7 @@ function shellWord(text) {
 }
 
 /**
- * @typedef {{name: string, optional: boolean, description?: string, default?: string,
+ * @typedef {{name: string, description?: string, default?: string,
  *            profileValue?: string, needs?: string}} SettingField a setting that the test takes,
  *   with the value that the profile gives it, or the target whose result the profile gives it
  * @typedef {{name: string, value: string}} SettingValue
@@ -201,31 +201,21 @@ function prefillOf(field) {
     return typeof field.profileValue === "string" ? field.profileValue : "";
 }
 
-/**
- * Whether the text that the reader typed leaves the setting unset: an optional setting that the
- * profile gives no value, emptied.
- * @param field {SettingField}
- * @param text {string}
- */
-function leavesUnset(field, text) {
-    return text === "" && field.optional && typeof field.profileValue !== "string" && !field.needs;
-}
-
 // What a setting's field shows while it is blank: the value that the test then receives.
 /**
  * @param field {SettingField}
  * @param typed {boolean} whether the reader has changed the field
  */
 function placeholderOf(field, typed) {
-    if (typed && !leavesUnset(field, "")) return "empty";
-    if (!typed && field.needs) return "built at run time";
+    if (typed) return "empty";
+    if (field.needs) return "built at run time";
     if (typeof field.default === "string") return field.default;
-    return field.optional ? "unset" : "required";
+    return "required";
 }
 
 /**
  * The values that a run gives the test's settings: the text of each field that the reader has
- * changed, except an emptied field that leaves its setting unset. The profile gives the others.
+ * changed. The profile gives the others.
  * @param fields {SettingField[]}
  * @param values {Record<string, string>} the text of each field that the reader has changed
  * @returns {SettingValue[]}
@@ -233,7 +223,7 @@ function placeholderOf(field, typed) {
 function settingsSent(fields, values) {
     return fields
         .filter(function (f) {
-            return f.name in values && !leavesUnset(f, values[f.name]);
+            return f.name in values;
         })
         .map(function (f) {
             return { name: f.name, value: values[f.name] };
