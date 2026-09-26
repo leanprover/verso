@@ -825,7 +825,7 @@ script run (args) do
   let planned ← (← IO.Process.spawn (runnerProcess
     #["plan", configFile.toString, executablesFile.toString, planFile.toString])).wait
   unless planned == 0 do return ← finish planned
-  -- A listing prints the plan and builds no need.
+  -- Listings print the plan and build no need.
   if checked.command == "list" then
     let child ← IO.Process.spawn {
       cmd := runnerPath.toString

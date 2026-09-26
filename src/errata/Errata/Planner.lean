@@ -757,8 +757,8 @@ executables declare come first when there are any, with their descriptions and d
 the fixtures they declare when there are any, with their descriptions, the threads they ask for, and
 the settings and the fixtures they take; each test is followed by its file and line, its tags, its
 description, the values it receives, and the fixtures it uses; and the mandatory settings that
-nothing gives a value come last, with the tests that need them. A value that a need gives is shown
-as the need's name. A seed derived from the run's seed is shown as its value under
+nothing gives a value come last, with the tests that need them. Values that needs give are shown
+as the needs' names. Seeds derived from the run's seed are shown as their values under
 {name}`seed?`, the seed that the command line gives, and as derived without one.
 -/
 def printHumanList (plan : Plan) (line : String → IO Unit) (color verbose : Bool)
@@ -848,8 +848,8 @@ that the selected tests reach, and each test executable with its selected tests 
 they reach.
 Each test has its name, path, file, line, tags, and description, the values it receives, the
 mandatory settings without a value, whether its seed is derived from the run's, its timeout, grace
-period, and slow mark in milliseconds, and the fixtures it uses, each exclusive or shared. A value
-that a need gives is an object that names the need.
+period, and slow mark in milliseconds, and the fixtures it uses, each exclusive or shared. Values
+that needs give are objects that name the needs.
 Each fixture has its name, description, the settings and the fixtures it takes, and the threads it
 asks for.
 -/

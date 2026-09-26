@@ -1164,11 +1164,11 @@ private def runDirectories (dir : System.FilePath) : IO (Array System.FilePath) 
 /--
 The driver's builds are incremental: `config.json` is written again when `errata.toml` changes, a
 test executable when its library's modules change, and a need's target when its inputs change, each
-through Lake's traces. A listing builds no need, and a listing repeated with nothing changed builds
-nothing. An edit of `errata.toml` rewrites `config.json` and relinks no test executable. An edit of
-a test module relinks its library's test executable. A run builds the need that its test reaches
-and leaves unbuilt the need that only a test left out reaches. A repeated run rebuilds no need, and
-an edit of a need's input rebuilds the need's target. Each invocation removes the directory of its
+through Lake's traces. Listings build no need, and a listing repeated with nothing changed builds
+nothing. Edits of `errata.toml` rewrite `config.json` and relink no test executable. Edits of a
+test module relink its library's test executable. Runs build the needs that their tests reach and
+leave unbuilt the needs that only tests left out reach; repeated runs rebuild no need, and edits of
+a need's input rebuild the need's target. Each invocation removes the directory of its
 own files when it ends.
 -/
 @[test]
@@ -1280,7 +1280,7 @@ private def processesMatching (text : String) : IO String := do
   return (← IO.Process.output { cmd := "pgrep", args := #["-fl", text] }).stdout.trimAscii.copy
 
 /--
-A driver that ends while the runner's `plan` subcommand lists the tests leaves no process behind:
+Drivers that end while the runner's `plan` subcommand lists the tests leave no process behind:
 the `plan` subcommand watches the lifeline that the driver holds, and when it closes, it ends the
 listing that runs and exits.
 -/
