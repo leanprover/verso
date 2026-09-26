@@ -434,7 +434,7 @@ class RemoteLeanServer(LspPeer):
         super()._receive(message)
 
     def close(self):
-        """Ends the connection, and the host closes the documents that the connection left open."""
+        """Ends the connection, and the host closes the documents that the connection still owns."""
         try:
             self.sock.shutdown(socket.SHUT_RDWR)
         except OSError:
@@ -527,9 +527,12 @@ class LeanHost:
     The host of a Lean server that the tests of a run share. It starts the server and initializes
     it, then serves any number of tests at once, each over a TCP connection of its own. It passes
     each test's messages to the server under request ids of its own, and the server's replies to the
-    test that sent the request, with the test's own id. Notifications about a document go to the
-    test that opened it, and other notifications go to every test. When a test's connection ends,
-    the host closes the documents that the test left open. The host answers the harness's own
+    test that sent the request, with the test's own id. Each open document has one owner, the test
+    that opened it last: a test that opens a document that another test holds takes it over, and
+    the host closes it in the server before passing on the new opening. Notifications about a
+    document go to its owner, and other notifications go to every test. The host passes on a test's
+    closing of a document that the test owns and drops any other, and when a test's connection
+    ends, the host closes the documents that the test still owns. The host answers the harness's own
     requests, whose methods begin with `$/harness/`: `hello`, `ensure`, and `restart` reply with the
     server's process id, whether it runs, and its reply to `initialize`, after starting a new server
     for `restart`, and for `ensure` when the last one has exited; `stderr` replies with the end of
@@ -620,7 +623,7 @@ class LeanHost:
     def serve(self, conn):
         """
         Serves the test at the other end of the connection until it closes the connection, then
-        closes the documents that the test left open.
+        closes the documents that the test still owns.
         """
         reader = conn.makefile("rb")
         with self.lock:
@@ -636,10 +639,10 @@ class LeanHost:
             client.disconnect()
             with self.lock:
                 del self.clients[client.number]
-                left_open, client.documents = client.documents, set()
+                left_open = {uri for uri in client.documents if self.owners.get(uri) is client}
+                client.documents = set()
                 for uri in left_open:
-                    if self.owners.get(uri) is client:
-                        del self.owners[uri]
+                    del self.owners[uri]
                 for host_id in [h for h, (c, _) in self.pending.items() if c is client]:
                     del self.pending[host_id]
             for uri in left_open:
@@ -711,14 +714,27 @@ class LeanHost:
             client.send({"jsonrpc": "2.0", "id": request_id, **reply})
             return
         uri = message_uri(message)
+        # The server closes a document that another client holds before this client opens it.
+        takeover = None
         with self.lock:
             if method == "textDocument/didOpen" and uri:
+                previous = self.owners.get(uri)
+                if previous is not None and previous is not client:
+                    previous.documents.discard(uri)
+                    takeover = {"jsonrpc": "2.0", "method": "textDocument/didClose",
+                                "params": {"textDocument": {"uri": uri}}}
                 client.documents.add(uri)
                 self.owners[uri] = client
             elif method == "textDocument/didClose" and uri:
                 client.documents.discard(uri)
-                if self.owners.get(uri) is client:
-                    del self.owners[uri]
+                if self.owners.get(uri) is not client:
+                    return
+                del self.owners[uri]
+        if takeover is not None and self.lean.running:
+            try:
+                self.lean.send(takeover)
+            except LspError:
+                pass
         params = message.get("params")
         if method == "$/cancelRequest" and isinstance(params, dict) and "id" in params:
             message = {**message, "params": {**params, "id": client.host_id(params["id"])}}
