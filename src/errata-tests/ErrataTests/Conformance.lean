@@ -597,6 +597,33 @@ def settingsArriveInOrder : Test := forEach scriptedProducts fun p => do
     let r ← p.runTests #["greets"] { command := .list, verbosity := .quiet }
     assertTrue (r.lines.contains "        Errata.seed: derived from the run's seed") s!"{r.lines}"
 
+/--
+Under `--update-golden`, the runner gives the Lean harness `Errata.updateGolden`, and a golden check
+rewrites its expected file; without it, the check reports the difference and leaves the file as it
+was. The same holds for a profile's `update-golden`.
+-/
+@[test]
+def updateGoldenRewritesFiles : Test := forEach #[leanProduct, interpretedProduct] fun p => do
+  IO.FS.withTempDir fun dir => do
+    let path := dir / "expected.txt"
+    let role : Role := { test := "ErrataTests.Roles.checksGolden",
+                         sets := #[("ErrataTests.Roles.goldenPath", path.toString)] }
+    IO.FS.writeFile path "stale\n"
+    let r ← p.run #[role]
+    expectOutcome r role.test (· matches .reported (.fail _)) "a failure"
+    assertBEq "stale\n" (← IO.FS.readFile path)
+    let r ← p.run #[role] { updateGolden := true }
+    expectOutcome r role.test (· matches .reported .pass) "a pass"
+    assertBEq "golden contents\n" (← IO.FS.readFile path)
+    let some res := r.result? role.test | fail "no result"
+    assertTrue (res.settings.contains ("Errata.updateGolden", "true")) s!"{res.settings}"
+    result "a profile's update-golden" do
+      IO.FS.writeFile path "stale\n"
+      let config : Config := { profiles := #[{ name := "default", updateGolden? := some true }] }
+      let r ← p.run #[role] {} config
+      expectOutcome r role.test (· matches .reported .pass) "a pass"
+      assertBEq "golden contents\n" (← IO.FS.readFile path)
+
 /-! # Checks of the scripted products -/
 
 /--

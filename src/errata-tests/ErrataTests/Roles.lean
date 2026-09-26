@@ -78,4 +78,20 @@ def lingers (m : marker) : Test := do
     { cmd := "sh", args := #["-c", s!"sleep 300; : errata-conformance-{m}"] }
   discard child.wait
 
+/-- A golden file for a test to check its output against; empty by default, for no file. -/
+@[setting, expose]
+def goldenPath : Setting where
+  type := String
+  fromString s := some s
+  default? := some ""
+
+/--
+With a golden file, checks the text {lit}`golden contents` against it, which rewrites the file when
+golden checks update their expected files; with the empty path, passes at once.
+-/
+@[test]
+def checksGolden (path : goldenPath) : Test := do
+  if path.isEmpty then return
+  goldenFile path "golden contents\n"
+
 end ErrataTests.Roles

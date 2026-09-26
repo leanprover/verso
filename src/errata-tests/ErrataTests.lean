@@ -1729,8 +1729,8 @@ def runnerArgRejections : Test := do
     | .ok _ => fail "accepted"
 
 /--
-The Lean harness reads the settings among its arguments, reads its own `updateGolden`, and reaches
-helpers through its own executable.
+The Lean harness reads the settings among its arguments, reads `Errata.updateGolden` itself, and
+reaches helpers through its own executable.
 -/
 @[test]
 def harnessSettings : Test := do
@@ -1739,7 +1739,10 @@ def harnessSettings : Test := do
   assertBEq #[("seed", "5"), ("check-tex", ""), ("note", "a=b")] settings
   let ctx ← Harness.contextOf settings
   assertBEq false ctx.updateGolden
-  assertTrue (← Harness.contextOf #[("updateGolden", "true")]).updateGolden
+  assertBEq ["Errata.updateGolden"] Harness.harnessSettings
+  assertTrue (← Harness.contextOf #[("Errata.updateGolden", "true")]).updateGolden
+  assertBEq false
+    (← Harness.contextOf #[("Errata.updateGolden", "true"), ("Errata.updateGolden", "false")]).updateGolden
   assertBEq (some "errata-helper") (ctx.helperCommand.bind (·[1]?))
   result "through an interpreter" do
     let ctx ← Harness.contextOf #[] (invocation := #["interp", "M", "--"])

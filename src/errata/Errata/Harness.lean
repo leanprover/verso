@@ -74,10 +74,11 @@ def threadsOf (args : List String) : Nat :=
   (grants.getLast?.filter (· > 0)).getD 1
 
 /--
-The setting that the Lean harness reads itself, which no test declares: {lit}`updateGolden`, which
-rewrites golden files when it is {lit}`true`. The runner passes it for {lit}`--update-golden`.
+The settings that the Lean harness reads itself, whether or not a test takes them:
+{name}`Errata.updateGolden`, which rewrites golden files when it is {lit}`true`. The runner passes it
+for {lit}`--update-golden`.
 -/
-def harnessSettings : List String := ["updateGolden"]
+def harnessSettings : List String := [settingNameOf ``Errata.updateGolden]
 
 /--
 The module name that {name}`text` writes, read as Lean writes names, with {lit}`«»` around each
@@ -101,7 +102,8 @@ harness's own setting configures it. Tests reach their helpers through this test
 def contextOf (settings : Array (String × String)) (threads : Nat := 1)
     (invocation : Array String := #[]) : IO TestContext := do
   let lookup (name : String) : Option String := (settings.findRev? (·.1 == name)).map (·.2)
-  let ctx ← mkContext (updateGolden := lookup "updateGolden" == some "true")
+  let golden := lookup (settingNameOf ``Errata.updateGolden) >>= Errata.updateGolden.fromString
+  let ctx ← mkContext (updateGolden := golden.getD false)
   return { ctx with
     helperCommand := some ((← selfCommand invocation).push "errata-helper"), threads }
 
@@ -349,7 +351,6 @@ def invoke (entries : Array TestEntry) (args : List String) (helpers : Array Hel
         return (1, none)
     let settings := settingsOf rest
     let ctx ← contextOf settings (threadsOf rest) invocation
-    let settings := settings.filter (!harnessSettings.contains ·.1)
     return (← runTest entry ctx settings out (fixturesOf rest), none)
   | "errata-fixture" :: outPath :: name :: phaseName :: rest =>
     let some phase := FixturePhase.ofName? phaseName
@@ -460,8 +461,8 @@ settings and the values of the fixtures it takes, and its own value, from the se
 write a {lit}`verdict`. It exits with {lit}`0` when the phase succeeds and {lit}`1`
 otherwise; for an unknown fixture it writes an error verdict and exits with {lit}`1`.
 
-The runner passes {lit}`setting:updateGolden=true` for {lit}`--update-golden`, which the harness
-reads itself, with no declaration, to rewrite golden files. When the environment variable
+The runner passes {lit}`setting:Errata.updateGolden=true` for {lit}`--update-golden`, which the
+harness reads itself to rewrite golden files. When the environment variable
 {lit}`ERRATA_LIFELINE` is {lit}`1`, as the runner sets it, the executable's standard input is its
 lifeline: when the pipe closes, the executable ends its own process group and exits. Otherwise the
 command runs by hand with any standard input, {lit}`/dev/null` included. The test itself reads an

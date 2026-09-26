@@ -425,11 +425,13 @@ def RunContext.reproduce (ctx : RunContext) (exe : ExecutableConfig) (name : Str
 
 /--
 The settings that a test executable receives for a test: the resolved values of the settings the
-test takes, in the order it takes them, and {lit}`updateGolden` when golden checks rewrite their
-expected files.
+test takes, in the order it takes them, and {lit}`Errata.updateGolden` with the value {lit}`true`
+when golden checks rewrite their expected files.
 -/
 def Resolved.arguments (r : Resolved) : Array (String × String) :=
-  r.settings ++ (if r.updateGolden then #[("updateGolden", "true")] else #[])
+  if r.updateGolden then
+    r.settings.filter (·.1 != updateGoldenSetting) |>.push (updateGoldenSetting, "true")
+  else r.settings
 
 /-- The test as the dispatcher plans it, with what it receives. -/
 def RunContext.planned (ctx : RunContext) (exe : ExecutableConfig) (t : InventoryTest)

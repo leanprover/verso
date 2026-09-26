@@ -190,6 +190,12 @@ def testSeed (runSeed : Nat) (exe test : String) : Nat :=
 /-- The name of Errata's seed setting, whose value the runner derives for each test. -/
 def seedSetting : String := "Errata.seed"
 
+/--
+The name of Errata's setting that the Lean harness reads to rewrite golden files, which the runner
+gives the value {lit}`true` under {lit}`--update-golden`.
+-/
+def updateGoldenSetting : String := "Errata.updateGolden"
+
 /-- What a test runs with, as the runner resolved it. -/
 structure Resolved where
   /-- The values of the settings it takes that have one, in the order it takes them. -/

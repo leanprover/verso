@@ -57,3 +57,17 @@ gives one.
 def seed : Setting where
   type := Nat
   fromString s := s.toNat?
+
+/--
+The setting that the Lean harness reads to rewrite golden files: when it is {lit}`true`, golden
+checks write what they found over their expected files. The runner gives it the value {lit}`true`
+under {lit}`--update-golden`.
+-/
+@[setting]
+abbrev updateGolden : Setting where
+  type := Bool
+  fromString
+    | "true" => some true
+    | "false" => some false
+    | _ => none
+  default? := some "false"

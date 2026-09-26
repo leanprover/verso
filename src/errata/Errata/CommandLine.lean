@@ -116,7 +116,7 @@ structure Options where
   command : Command := .run
   /-- The reporting verbosity; for {lit}`list`, anything above silent shows the settings. -/
   verbosity : Verbosity := .silent
-  /-- Passes {lit}`setting:updateGolden=true` to every test. -/
+  /-- Passes {lit}`setting:Errata.updateGolden=true` to every test. -/
   updateGolden : Bool := false
   /-- The run's seed, from which each test's seed is derived. -/
   seed : Option Nat := none
