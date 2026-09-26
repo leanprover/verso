@@ -62,6 +62,25 @@ meta initialize runRegistry : IO.Ref (Std.HashMap Name RunState) ← IO.mkRef {}
 meta initialize testNotes : IO.Ref (Std.HashMap Name TestNote) ← IO.mkRef {}
 
 /--
+Takes the workspace's build lock, and runs {name}`act` with an action that releases it; the lock is
+released when {name}`act` ends, if {name}`act` has not released it earlier. The runs started for the
+tests of one workspace then build one at a time, wherever in the workspace those tests are, since
+each builds in the workspace and writes the driver's configuration files.
+
+The lock is a file under the workspace's {lit}`.lake` directory, and every file worker of the
+workspace opens that same file.
+-/
+private meta def withBuildLock (act : IO Unit → IO α) : IO α := do
+  let dir := (← IO.currentDir) / ".lake"
+  IO.FS.createDirAll dir
+  let handle ← IO.FS.Handle.mk (dir / "errata-widget-build.lock") .write
+  handle.lock
+  let held ← IO.mkRef true
+  let release : IO Unit := do
+    if ← held.modifyGet fun h => (h, false) then handle.unlock
+  try act release finally release
+
+/--
 A request to start running a test: the declaration and the module that defines it, the values the
 run gives the test, and the identifier of the run.
 -/
@@ -278,67 +297,67 @@ private meta def outputKept : Nat := 64000
 
 /--
 Runs the test through the driver and applies the changes that the runner's events make to
-{name}`state`. {lit}`ERRATA_BUILD_LOCK_EVENTS` names the events file, and asks the driver to hold
-the workspace's build lock from its first build to its last and to record in the events file when
-it waits for the lock and when it holds it; the runs in one workspace then build one at a time,
-while the tests of earlier runs go on. The run's kill ends the driver's process group. The driver's
-standard input is a lifeline that this process holds, and {lit}`ERRATA_DRIVER_LIFELINE` asks the
-driver to hand it on to the runner, so the runner and the tests end when this process does. What
-the driver writes, Lake's build log and the runner's report, is kept for the message of a driver
-that fails before the runner ends the run. {name}`own?` is the test's own declaration, as
-{name}`RunOutcome.ofRecord` uses it.
+{name}`state`. The run waits for the workspace's build lock and holds it until the runner begins its
+Run phase, by which time the driver has built the test's module and written its configuration, so
+another run in the workspace builds while this one's test runs. The run's kill ends the driver's
+process group. The driver's standard input is a lifeline that this process holds, and
+{lit}`ERRATA_DRIVER_LIFELINE` asks the driver to hand it on to the runner, so the runner and the
+tests end when this process does. What the driver writes, Lake's build log and the runner's report,
+is kept for the message of a driver that fails before the runner ends the run. {name}`own?` is the
+test's own declaration, as {name}`RunOutcome.ofRecord` uses it.
 -/
 private meta def runThroughDriver (state : RunState) (request : DriverRequest)
     (own? : Option Location) : IO Unit := do
   -- The language server's Lake sets `LAKE` to its own path.
   let lake := (← IO.getEnv "LAKE").getD "lake"
-  -- A run cancelled before its driver started has nothing more to do.
-  unless ← state.apply (.locked (← Protocol.nowMs)) do return
-  IO.FS.withTempFile fun _ eventsPath => do
-    let events ← ProcessControl.Tail.open eventsPath
-    let driver ← IO.Process.spawn {
-      stdin := .piped, stdout := .piped, stderr := .piped, setsid := true
-      env := #[("ERRATA_DRIVER_LIFELINE", some "1"),
-        ("ERRATA_BUILD_LOCK_EVENTS", some eventsPath.toString)]
-      cmd := lake, args := driverArgs { request with eventsPath }
-    }
-    -- A run cancelled while the driver started has nothing to arm, so the driver ends here.
-    unless ← state.apply (.arm driver.kill) do
-      try driver.kill catch _ => pure ()
-      discard driver.wait
-      return
-    let output ← IO.mkRef ""
-    let keep (line : String) : IO Unit := output.modify fun text =>
-      let text := text ++ line
-      if text.length ≤ outputKept then text else text.drop (text.length - outputKept) |>.copy
-    let forward (h : IO.FS.Handle) := ProcessControl.forwardLines h keep
-    let outTask ← IO.asTask (prio := .dedicated) (forward driver.stdout)
-    let errTask ← IO.asTask (prio := .dedicated) (forward driver.stderr)
-    -- The exit code, recorded when the driver is found to have exited.
-    let code ← IO.mkRef none
-    let exited : IO Bool := do
-      if (← code.get).isSome then return true
-      let c? ← driver.tryWait
-      -- The driver's process group id is free for reuse once `tryWait` reports the exit, and the
-      -- rest of the events file then decides the outcome, so a cancel no longer applies.
-      if c?.isSome then discard <| state.apply .exited
-      code.set c?
-      return c?.isSome
-    let cache ← SourceLines.new
-    events.follow exited fun bytes => do
-      let line := ProcessControl.decodeLine bytes
-      for change in ← changesOfLine cache request.test (← Protocol.nowMs) own? line do
-        discard <| state.apply change
-    -- Processes that outlived the driver can hold its output pipes open. They get a grace period,
-    -- and what they wrote before it ends is kept.
-    discard <| ProcessControl.waitAtMost pipeGraceMs [outTask, errTask]
-    -- `Tail.follow` returns only after the driver has exited, so the code is set.
-    let code := (← code.get).getD 0
-    let text ← output.get
-    let fallback :=
-      if (← state.phase) matches .waiting | .building then buildFailure text
-      else runnerFailure code text
-    discard <| state.apply (.finish fallback)
+  withBuildLock fun releaseLock => do
+    -- A run cancelled while it waited for the lock has nothing more to do.
+    unless ← state.apply (.locked (← Protocol.nowMs)) do return
+    IO.FS.withTempFile fun _ eventsPath => do
+      let events ← ProcessControl.Tail.open eventsPath
+      let driver ← IO.Process.spawn {
+        stdin := .piped, stdout := .piped, stderr := .piped, setsid := true
+        env := #[("ERRATA_DRIVER_LIFELINE", some "1")]
+        cmd := lake, args := driverArgs { request with eventsPath }
+      }
+      -- A run cancelled while the driver started has nothing to arm, so the driver ends here.
+      unless ← state.apply (.arm driver.kill) do
+        try driver.kill catch _ => pure ()
+        discard driver.wait
+        return
+      let output ← IO.mkRef ""
+      let keep (line : String) : IO Unit := output.modify fun text =>
+        let text := text ++ line
+        if text.length ≤ outputKept then text else text.drop (text.length - outputKept) |>.copy
+      let forward (h : IO.FS.Handle) := ProcessControl.forwardLines h keep
+      let outTask ← IO.asTask (prio := .dedicated) (forward driver.stdout)
+      let errTask ← IO.asTask (prio := .dedicated) (forward driver.stderr)
+      -- The exit code, recorded when the driver is found to have exited.
+      let code ← IO.mkRef none
+      let exited : IO Bool := do
+        if (← code.get).isSome then return true
+        let c? ← driver.tryWait
+        -- The driver's process group id is free for reuse once `tryWait` reports the exit, and
+        -- the rest of the events file then decides the outcome, so a cancel no longer applies.
+        if c?.isSome then discard <| state.apply .exited
+        code.set c?
+        return c?.isSome
+      let cache ← SourceLines.new
+      events.follow exited fun bytes => do
+        let line := ProcessControl.decodeLine bytes
+        for change in ← changesOfLine cache request.test (← Protocol.nowMs) own? line do
+          discard <| state.apply change
+        if beginsRunPhase line then releaseLock
+      -- Processes that outlived the driver can hold its output pipes open. They get a grace period,
+      -- and what they wrote before it ends is kept.
+      discard <| ProcessControl.waitAtMost pipeGraceMs [outTask, errTask]
+      -- `Tail.follow` returns only after the driver has exited, so the code is set.
+      let code := (← code.get).getD 0
+      let text ← output.get
+      let fallback :=
+        if (← state.phase) matches .building then buildFailure text
+        else runnerFailure code text
+      discard <| state.apply (.finish fallback)
 
 /--
 A mapping from LSP document URIs to the saved LSP version and hash for the document.
