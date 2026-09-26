@@ -9,6 +9,7 @@ import pytest
 from playwright.sync_api import Page
 
 from hover_media import require_hover_media
+from hovering import hover_for_tooltip
 
 
 GALLERY = "/LitConfig/Gallery/"
@@ -86,9 +87,8 @@ class TestGalleryContents:
     def test_warning_hover_uses_warning_theme(self, server: str, page: Page):
         page.goto(f"{server}{GALLERY}")
         page.wait_for_load_state("networkidle")
-        page.locator(".hl.lean .has-info.warning").first.hover()
         box = page.locator(".tippy-box[data-theme~='warning']").first
-        box.wait_for(state="visible")
+        hover_for_tooltip(page.locator(".hl.lean .has-info.warning").first, box)
         assert "declaration uses" in box.inner_text()
 
     @pytest.mark.hover_media
@@ -114,9 +114,8 @@ class TestGalleryContents:
         extent, so one tooltip shows both the warning and the documentation."""
         page.goto(f"{server}{GALLERY}")
         page.wait_for_load_state("networkidle")
-        page.locator(".hl.lean .has-info.warning > .token").first.hover()
         box = page.locator(".tippy-box").first
-        box.wait_for(state="visible")
+        hover_for_tooltip(page.locator(".hl.lean .has-info.warning > .token").first, box)
         page.wait_for_timeout(400)
         boxes = page.locator(".tippy-box")
         assert boxes.count() == 1
@@ -144,11 +143,13 @@ class TestGalleryContents:
         page.goto(f"{server}{GALLERY}")
         page.wait_for_load_state("networkidle")
         # The deprecated use site's tooltip message links to both constants.
-        page.locator(
-            ".hl.lean .has-info.warning > a > .token", has_text="oldGallerySort"
-        ).first.hover()
         box = page.locator(".tippy-box").first
-        box.wait_for(state="visible")
+        hover_for_tooltip(
+            page.locator(
+                ".hl.lean .has-info.warning > a > .token", has_text="oldGallerySort"
+            ).first,
+            box,
+        )
         assert box.locator("a").count() > 0
         deco = page.evaluate(
             "() => getComputedStyle(document.querySelector('.tippy-box a')).textDecorationLine"
@@ -210,9 +211,8 @@ class TestGalleryContents:
         token = page.locator(
             ".hl.lean .has-info.warning .token", has_text="flag_proof"
         ).first
-        token.hover()
         box = page.locator(".tippy-box").first
-        box.wait_for(state="visible")
+        hover_for_tooltip(token, box)
         assert "Runs a tactic sequence" in box.inner_text()
         # The highlight assertions read CSS that is guarded by @media (hover: hover).
         require_hover_media(page)
@@ -312,8 +312,7 @@ class TestGalleryContents:
         # whichever token the browser's font metrics put there, and a documented token
         # would rightly claim the tooltip for itself once the region is expanded.
         target = label.locator(".inter-text").first
-        target.hover()
-        page.locator(".tippy-box[data-theme~='tactic']").first.wait_for(state="visible")
+        hover_for_tooltip(target, page.locator(".tippy-box[data-theme~='tactic']").first)
         target.click()
         page.locator(".tippy-box[data-theme~='warning']").first.wait_for(
             state="visible"
@@ -355,6 +354,5 @@ class TestGalleryContents:
     def test_tactic_hover_uses_tactic_theme(self, server: str, page: Page):
         page.goto(f"{server}{GALLERY}")
         page.wait_for_load_state("networkidle")
-        page.locator(".hl.lean .tactic > label").first.hover()
         box = page.locator(".tippy-box[data-theme~='tactic']").first
-        box.wait_for(state="visible")
+        hover_for_tooltip(page.locator(".hl.lean .tactic > label").first, box)

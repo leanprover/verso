@@ -2,6 +2,7 @@ import pytest
 from playwright.sync_api import Page
 
 from hover_media import require_hover_media
+from hovering import hover_for_tooltip
 
 
 # `rw [h1, h2, h3]` in `LitConfig.lean` highlights as nested tactic regions: the whole-invocation
@@ -165,9 +166,8 @@ class TestNestedTacticStates:
         assert tok.evaluate("el => !!el._tippy"), (
             "expansion should attach a tippy to the token"
         )
-        tok.hover()
         box = page.locator(".tippy-box[data-theme~='tactic']").first
-        box.wait_for(state="visible")
+        hover_for_tooltip(tok, box)
         # The step's own intermediate goal, not the whole `rw`'s final state.
         assert "All goals completed" not in box.inner_text()
         assert "Nat" in box.inner_text()

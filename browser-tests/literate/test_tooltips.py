@@ -1,5 +1,7 @@
 from playwright.sync_api import expect, Page
 
+from hovering import hover_for_tooltip
+
 
 # The CSS selector used by the tooltip initialization code
 TIPPY_SELECTOR = (
@@ -47,7 +49,7 @@ class TestTooltips:
         expect(token).to_be_visible()
 
         # Hover the token
-        token.hover()
+        hover_for_tooltip(token, page.locator(".tippy-box").first)
 
         # Wait for the Tippy instance to be created (it uses showOnCreate)
         page.wait_for_function(
@@ -68,7 +70,7 @@ class TestTooltips:
         token = page.locator(".hl.lean .const.token").first
         expect(token).to_be_visible()
 
-        token.hover()
+        hover_for_tooltip(token, page.locator(".tippy-box").first)
         page.wait_for_function(
             "el => !!el._tippy",
             arg=token.element_handle(),
@@ -87,7 +89,7 @@ class TestTooltips:
         expect(token).to_be_visible()
 
         # First hover
-        token.hover()
+        hover_for_tooltip(token, page.locator(".tippy-box").first)
         page.wait_for_function(
             "el => !!el._tippy",
             arg=token.element_handle(),

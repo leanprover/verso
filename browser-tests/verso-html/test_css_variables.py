@@ -12,6 +12,7 @@ import pytest
 from playwright.sync_api import Page
 
 from hover_media import require_hover_media
+from hovering import hover_for_tooltip
 
 # (CSS class, variable infix, tippy theme token) for each severity
 SEVERITIES = [
@@ -302,9 +303,8 @@ class TestTooltipArrows:
         page.goto(f"{server}/LitConfig/Core/")
         page.wait_for_load_state("networkidle")
         token = page.locator(".hl.lean .const.token").first
-        token.hover()
         box = page.locator(".tippy-box").first
-        box.wait_for(state="visible")
+        hover_for_tooltip(token, box)
         page.wait_for_function(
             "() => document.querySelector('.tippy-box')?.getAttribute('data-placement')"
         )
