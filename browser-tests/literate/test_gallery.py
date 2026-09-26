@@ -312,7 +312,11 @@ class TestGalleryContents:
         # whichever token the browser's font metrics put there, and a documented token
         # would rightly claim the tooltip for itself once the region is expanded.
         target = label.locator(".inter-text").first
-        hover_for_tooltip(target, page.locator(".tippy-box[data-theme~='tactic']").first)
+        hover_for_tooltip(
+            target,
+            page.locator(".tippy-box[data-theme~='tactic']").first,
+            reference=label.locator("xpath=.."),
+        )
         target.click()
         page.locator(".tippy-box[data-theme~='warning']").first.wait_for(
             state="visible"
@@ -355,4 +359,5 @@ class TestGalleryContents:
         page.goto(f"{server}{GALLERY}")
         page.wait_for_load_state("networkidle")
         box = page.locator(".tippy-box[data-theme~='tactic']").first
-        hover_for_tooltip(page.locator(".hl.lean .tactic > label").first, box)
+        label = page.locator(".hl.lean .tactic > label").first
+        hover_for_tooltip(label, box, reference=label.locator("xpath=.."))
