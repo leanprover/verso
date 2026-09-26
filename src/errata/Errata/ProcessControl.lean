@@ -287,8 +287,8 @@ partial def forwardLines (handle : IO.FS.Handle) (onLine : String → IO Unit) :
 
 /--
 Waits until every task has finished, or until {name}`ms` milliseconds have passed. Returns whether
-every task has finished. The wait checks the tasks every {name}`pollMs` milliseconds against a
-deadline, so it leaves no task of its own behind.
+every task has finished. The wait checks the tasks every {name}`pollMs` milliseconds until the
+deadline.
 -/
 def waitAtMost (ms : Nat) (tasks : List (Task (Except IO.Error Unit))) : IO Bool := do
   let deadline := (← IO.monoMsNow) + ms

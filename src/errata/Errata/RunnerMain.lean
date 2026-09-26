@@ -383,7 +383,7 @@ structure Schedule where
   /-- The selected tests, each with what it receives, in queue order. -/
   tests : Array (InventoryTest × Resolved)
   /--
-  The fixtures that the tests need, each with its executable's position and what its phases
+  The fixtures that the tests reach, each with its executable's position and what its phases
   receive, each after the fixtures it takes.
   -/
   fixtures : Array (Nat × InventoryFixture × Resolved)
@@ -394,7 +394,7 @@ structure Schedule where
 
 /--
 The schedule of a run with {name}`pool` slots, the {name}`selected` tests, and the {name}`fixtures`
-that they need, directly or through other fixtures, each after the fixtures it takes.
+that they reach, directly or through other fixtures, each after the fixtures it takes.
 -/
 def Schedule.of (pool : Nat) (selected : Array (InventoryTest × Resolved))
     (fixtures : Array (Nat × InventoryFixture × Resolved)) : Schedule := Id.run do
@@ -412,7 +412,7 @@ def Schedule.of (pool : Nat) (selected : Array (InventoryTest × Resolved))
   return { pool, tests := selected, fixtures, testSpecs, fixtureSpecs := specs }
 
 /--
-Warnings about settings that a test receives with one value and a fixture it needs, directly or
+Warnings about settings that a test receives with one value and a fixture it reaches, directly or
 through other fixtures, with another, as an override that selects the test can make happen.
 -/
 def Schedule.settingConflicts (schedule : Schedule) : Array String := Id.run do
@@ -467,9 +467,9 @@ def Schedule.testArgs (schedule : Schedule) (out : String) (t : Nat)
   runArgs out test.name r.arguments (schedule.namedValues values) (schedule.testThreads t)
 
 /--
-The command that reproduces a job by hand: the setups of the fixtures it needs, each after those it
-takes, then the prepares and the test for a test, or the job itself for a fixture's phase, then the
-teardowns, in the reverse order of the setups. The chain supplies the fixtures' values.
+The command that reproduces a job by hand: the setups of the fixtures it reaches, each after those
+it takes, then the prepares and the test for a test, or the job itself for a fixture's phase, then
+the teardowns, in the reverse order of the setups. The chain supplies the fixtures' values.
 -/
 def RunContext.reproduceJob (ctx : RunContext) (schedule : Schedule) (job : Scheduler.Job) :
     String :=
@@ -571,7 +571,7 @@ def Schedule.teardownOrder (schedule : Schedule) (fs : Array Nat) : Array Nat :=
 /--
 The keys of the tests and fixtures' phases of a schedule in the order of the JUnit report. The tests
 stand in the schedule's order, each after the prepares of its fixtures, in the order it names them.
-Fixtures' setups stand before the first test that needs the fixture, directly or through other
+Fixtures' setups stand before the first test that reaches the fixture, directly or through other
 fixtures, each after the setups of the fixtures it takes. Their teardowns stand after the last such
 test, each before the teardowns of the fixtures it takes. A schedule in the inventory's order gives
 the inventory's order.
@@ -706,7 +706,7 @@ def noTestsMessage : String :=
 The Run phase of the plan: its selected tests and the phases of the fixtures they use run as the
 scheduler directs, in the scheduling order as far as the fixtures' claims and the slots of the pool
 allow. What each receives is the plan's, with each need's value from {name}`needValues` and each
-derived seed drawn from {name}`runSeed`. The scheduling order is the inventory's, or under the
+derived seed computed from {name}`runSeed`. The scheduling order is the inventory's, or under the
 profile's {lit}`order = "shuffle"` the order that {name}`Scheduler.groupedOrder` draws from the
 run's seed, in which tests that take the same fixtures stand together. The pool has the slots that
 {lit}`--jobs` or else the profile's {lit}`jobs` gives, or else one per CPU available to the runner.

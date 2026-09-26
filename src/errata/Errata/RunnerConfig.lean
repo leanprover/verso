@@ -186,7 +186,7 @@ structure Config where
   empty.
   -/
   profiles : Array Profile := #[]
-  /-- The needs that settings refer to, by name. -/
+  /-- The needs of the {lit}`[needs]` table, in the file's order. -/
   needs : Array Need := #[]
   /-- The default filter of every profile that gives none of its own. -/
   defaultFilter? : Option FilterText := none

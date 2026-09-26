@@ -259,6 +259,7 @@ private structure ModuleInfo where
     hasTests := hasEntries `Errata.test
   }
 
+/-- What the `.olean` file `oleanFile` records about its module. -/
 private def moduleInfo (oleanFile : System.FilePath) : IO ModuleInfo := do
   let (data, region) ← Lean.readModuleData oleanFile
   let info ← readModuleInfo data
@@ -389,15 +390,15 @@ private def libraryModulesJson (libs : Array Lake.LeanLib) : Lean.Json :=
     ("globs", Lean.toJson (lib.config.globs.map (·.toString)))]
 
 /--
-What the workspace contributes to the plan, `.lake/errata/executables.json`, as JSON: the libraries'
-test executables and the executables `added` that `errata.toml` adds, the directory of Errata's
-sources, the driver's warnings, the command that the runner's arguments follow, the package's
-directory, `cwd`, where tests run and which report paths in `errata.toml` are relative to, and the
-modules of the package's libraries, `libraries`. `known` names every test executable that the
-package can have, and `ruledOut` those among them that the command line's filters ruled out before
-building. Of those, `testLibraries` are the libraries known to have tests, and `addedOut` the
-executables that `errata.toml` adds. The selection is partial when some executable is ruled out or
-when `someTests` says that the executables run only some of their tests.
+What the workspace contributes to the plan, `executables.json`, as JSON: the libraries' test
+executables and the executables `added` that `errata.toml` adds, the directory of Errata's sources,
+the driver's warnings, the command that the runner's arguments follow, the package's directory,
+`cwd`, where tests run and which report paths in `errata.toml` are relative to, and the modules of
+the package's libraries, `libraries`. `known` names every test executable that the package can
+have, and `ruledOut` those among them that the command line's filters ruled out before building. Of
+those, `testLibraries` are the libraries known to have tests, and `addedOut` the executables that
+`errata.toml` adds. The selection is partial when some executable is ruled out or when `someTests`
+says that the executables run only some of their tests.
 -/
 private def executablesJson
     (executables : Array LibraryExecutable) (added : Array AddedExecutable)
@@ -689,7 +690,7 @@ script run (args) do
         skippedTestLibs := skippedTestLibs.push name
         break
   -- Build every module in the selected libraries; their compiled `.olean` headers are authoritative
-  -- on which modules carry tests.
+  -- on which modules record tests.
   let built ← try
       let r ← runBuild do
         let mut oleanJobs := #[]

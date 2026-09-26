@@ -220,8 +220,7 @@ deriving Repr, Inhabited, DecidableEq
 
 /--
 A setting's value as the plan records it: a string, a reference to a need, whose value the driver
-supplies once it has built the need's target, or the seed derived from the run's seed, which the run
-draws.
+supplies once it has built the need's target, or the seed derived from the run's seed.
 -/
 inductive PlannedValue where
   /-- A string. -/
@@ -239,7 +238,8 @@ def SettingValue.planned : SettingValue → PlannedValue
 
 /--
 What a test or a fixture's phases receive, as the plan records it: each value is a string, a
-reference to a need, or the derived seed, and the other limits are resolved.
+reference to a need, or the derived seed, and the timeout, the grace period, the slow mark, and
+golden updating are resolved.
 -/
 structure PlannedResolution where
   /-- The values of the settings it takes that have one, in the order it takes them. -/

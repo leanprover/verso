@@ -2571,9 +2571,9 @@ partial def jsonWithoutTimes (j : Json) : Json :=
   | other => other
 
 /--
-The JSON and JUnit reports that the runner wrote for the tests `pass`, `greets`, and
-`uses-dependent` of `basic.sh` with `greeting` given `hi`, `stamp-file` given a scratch file written
-`@STAMPS@` here, the seed 5, and one slot, before the plan existed.
+The JSON and JUnit reports of a run in one process of the tests `pass`, `greets`, and
+`uses-dependent` of `basic.sh`, with `greeting` given `hi`, `stamp-file` given a scratch file
+written `@STAMPS@` here, the seed 5, and one slot.
 -/
 def savedReports : System.FilePath × System.FilePath :=
   (harnessDir / "plan-then-run.report.json", harnessDir / "plan-then-run.report.xml")
@@ -2581,12 +2581,13 @@ def savedReports : System.FilePath × System.FilePath :=
 /--
 The built runner's `plan` subcommand, over a test executable whose tests and fixtures take settings
 that refer to needs, writes a plan with the selected tests, the fixtures they reach, and the needs
-they reach, each need with the tests that reach it, directly or through a fixture; a setting that
-refers to a need keeps the need's name. The `run` subcommand over that plan and a `workspace.json`
-written by hand gives each test the settings, and writes the JSON and JUnit reports, that the runner
-wrote for the same tests and values before the plan existed, times, run identifiers, and the scratch
-file's path left out. The events file that both subcommands name has the `protocol` record and the
-`phase` records of the List and Run phases, in that order.
+they reach, each need with the tests that reach it, directly or through a fixture; settings that
+refer to needs keep the needs' names. The `run` subcommand over that plan and a `workspace.json`
+written by hand gives each test the settings, and writes the JSON and JUnit reports, of the saved
+reports of a run in one process with the same tests and values, times, run identifiers, and the
+scratch file's path left out. The events file that both subcommands name has the `protocol` record
+and the `phase` records of the List and Run phases, in that order. A `workspace.json` without a
+value for a need of the plan is a setup error.
 -/
 @[test]
 def planThenRunMatchesOneProcess : Test := do

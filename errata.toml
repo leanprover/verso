@@ -3,8 +3,9 @@
 # for continuous integration. Settings of Lean tests are named by their fully qualified declaration
 # names; the settings of `VersoTests.Settings` are given in a table of their namespace.
 
-# The Lake targets that settings refer to by name. Lake builds a target before a run when a
-# selected test or a fixture it uses takes a setting that refers to it.
+# The needs: names that settings refer to, each bound to a Lake target. Before a run, Lake builds
+# the targets of the needs that the selected tests reach, through their settings or those of the
+# fixtures they use.
 [needs]
 verso = "verso"
 verso-serve = "verso-serve"
@@ -20,10 +21,10 @@ packageManualSite = "packageManualSite"
 default-filter = 'all() \ tag(browser)'
 order = "shuffle"
 
-# The browser suites' settings are bound here too: a run builds a site or an executable only when a
-# selected test or a fixture it uses takes the setting. Lake builds the sites of the user's guide and
-# the package documentation example; the literate suites' site fixtures build theirs in their test
-# projects, with the root's executables that these settings bind.
+# The browser suites' settings are bound here too. A run builds a site or an executable only when a
+# selected test or a fixture it uses takes a setting that refers to its need. Lake builds the sites
+# of the user's guide and the package documentation example; the literate suites' site fixtures
+# build theirs in their test projects, with the root's executables that these settings refer to.
 [profile.default.settings]
 versoServeExe = { needs = "verso-serve" }
 usersGuideSite = { needs = "usersGuideSite" }

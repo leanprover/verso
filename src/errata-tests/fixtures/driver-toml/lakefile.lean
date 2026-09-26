@@ -1,8 +1,8 @@
 import Lake
 open Lake DSL
 
--- A package with a configuration file for Verso's Errata driver, whose setting needs a target of
--- this lakefile.
+-- A package with a configuration file for Verso's Errata driver, whose needs are targets of this
+-- lakefile.
 package tomlapp where
   testDriver := "verso/Errata.run"
   -- Verso's clones of the git dependencies serve this workspace too, so that the modules built from
@@ -14,7 +14,7 @@ require verso from "../../../.."
 -- Tests that read the files that the `stamp` and `marker` targets build.
 lean_lib TomlLib
 
--- Copies `stamp-input.txt` into the build directory. The test's setting needs it.
+-- Copies `stamp-input.txt` into the build directory, as the need `stamp` of `errata.toml`.
 target stamp pkg : System.FilePath := do
   let input ← inputTextFile (pkg.dir / "stamp-input.txt")
   input.mapM fun src => do
@@ -24,8 +24,8 @@ target stamp pkg : System.FilePath := do
       IO.FS.writeFile out (← IO.FS.readFile src)
     return out
 
--- Writes a marker file into the build directory, so that a test can tell whether it was built. The
--- test that reads it needs it.
+-- Writes a marker file into the build directory, which shows whether the target was built, as the
+-- need `marker` of `errata.toml`.
 target marker pkg : System.FilePath := do
   let input ← inputTextFile (pkg.dir / "stamp-input.txt")
   input.mapM fun _ => do

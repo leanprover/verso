@@ -1165,10 +1165,11 @@ private def runDirectories (dir : System.FilePath) : IO (Array System.FilePath) 
 The driver's builds are incremental: `config.json` is written again when `errata.toml` changes, a
 test executable when its library's modules change, and a need's target when its inputs change, each
 through Lake's traces. A listing builds no need, and a listing repeated with nothing changed builds
-nothing. An edit of `errata.toml` rewrites `config.json` and relinks no test executable. An edit
-of a test module relinks its library's test executable. A run builds the need that its test reaches and
-leaves the need that only a test left out reaches unbuilt. An edit of a need's input rebuilds the
-need's target. Each invocation removes the directory of its own files when it ends.
+nothing. An edit of `errata.toml` rewrites `config.json` and relinks no test executable. An edit of
+a test module relinks its library's test executable. A run builds the need that its test reaches
+and leaves unbuilt the need that only a test left out reaches. A repeated run rebuilds no need, and
+an edit of a need's input rebuilds the need's target. Each invocation removes the directory of its
+own files when it ends.
 -/
 @[test]
 def driverFilesAreIncremental : Test :=
@@ -1236,8 +1237,10 @@ def driverFilesAreIncremental : Test :=
 
 /--
 The driver builds the needs that the selected tests reach and no others. A run of one test in the
-editor widget's shape builds that test's need alone. A need whose target fails to build is a setup
-error that names the tests that reach it, and a run whose tests reach other needs alone succeeds.
+editor widget's shape builds that test's need alone, and its events file begins with the
+{lit}`protocol` record and has the {lit}`phase` records of the List and Run phases. Needs whose
+targets fail to build are setup errors that name the tests that reach them, and a run whose tests
+reach only other needs succeeds.
 -/
 @[test]
 def driverBuildsReachedNeeds : Test := do
@@ -1655,9 +1658,8 @@ def runnerHelpNamesInvocation : Test := do
       assertContains s!"\n  {spec.forms} " out.all
 
 /--
-The runner reads a setting that refers to a need as the need's name, the plan keeps the name, and
-the run gives the setting the value that `workspace.json` gives the need. Without such a value, the
-setting is missing.
+The runner reads settings that refer to needs as the needs' names, the plan keeps the names, and
+the run gives each such setting its need's value. Settings whose needs have no value are missing.
 -/
 @[test]
 def runnerResolvesNeeds : Test := do

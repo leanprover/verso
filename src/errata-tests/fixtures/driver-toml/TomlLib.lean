@@ -14,7 +14,7 @@ def stampFile : Setting where
   type := System.FilePath
   fromString s := some s
 
-/-- The target's result reaches the test as the value of the setting that needs it. -/
+/-- The `stamp` need's value reaches the test as the value of the setting that refers to it. -/
 @[test]
 def readsStamp (stamp : stampFile) : Test := do
   assertTrue (← stamp.pathExists) s!"{stamp} does not exist"
@@ -26,7 +26,7 @@ def markerFile : Setting where
   type := System.FilePath
   fromString s := some s
 
-/-- The `marker` target's result reaches the test as the value of the setting that needs it. -/
+/-- The `marker` need's value reaches the test as the value of the setting that refers to it. -/
 @[test]
 def readsMarker (marker : markerFile) : Test := do
   assertTrue (← marker.pathExists) s!"{marker} does not exist"

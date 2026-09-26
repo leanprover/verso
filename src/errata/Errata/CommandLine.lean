@@ -91,14 +91,15 @@ def invalidFilter : UInt32 := 94
 
 /--
 The configuration of the run is wrong: {lit}`errata.toml`, the profile, a setting's value, or a
-target that a setting needs (nextest's {lit}`SETUP_ERROR`).
+need's target, which the workspace lacks or which could not be built (nextest's
+{lit}`SETUP_ERROR`).
 -/
 def setupError : UInt32 := 96
 
 /-- A test did not pass, or an issue with the run is an error (nextest's {lit}`TEST_RUN_FAILED`). -/
 def testRunFailed : UInt32 := 100
 
-/-- A test executable or a needed target could not be built (nextest's {lit}`BUILD_FAILED`). -/
+/-- A test executable or the runner could not be built (nextest's {lit}`BUILD_FAILED`). -/
 def buildFailed : UInt32 := 101
 
 /-- A test executable could not list its tests (nextest's {lit}`TEST_LIST_CREATION_FAILED`). -/

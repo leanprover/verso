@@ -202,8 +202,8 @@ private def listFailure (exe : ExecutableConfig) (why stdout stderr : String) : 
     command: {" ".intercalate (exe.command.toList.map shellQuote)} errata-list <out>{streams}"
 
 /--
-Asks one test executable for its inventory. The result is its settings and its tests, or the message
-that says why it could not list them.
+Asks one test executable for its inventory. The result is its settings, its fixtures, and its tests,
+or the message that says why it could not list them.
 -/
 def listExecutable (ctx : ListContext) (idx : Nat) (exe : ExecutableConfig) :
     IO (Except String Listing) := do
@@ -398,10 +398,10 @@ deriving Repr, Inhabited
 
 /--
 The plan: what the List phase found and what the Run phase runs. It has the configuration, the
-selected profile, the run's seed when the command line gives one, the declarations of each test
-executable, the selected tests and the fixtures they reach with what each receives, the needs that
-they reach, the issues that the List phase found, and the number of listed tests that the filters
-left out.
+selected profile, the command line's seed when it gives one, the run's seed, whether the events file
+has begun, the declarations of each test executable, the selected tests and the fixtures they reach
+with what each receives, the needs that they reach, the issues that the List phase found, and the
+number of listed tests that the filters left out.
 -/
 structure Plan where
   /-- The configuration, with the test executables that were listed. -/
@@ -531,8 +531,8 @@ instance : FromJson PlannedResolution where
 
 /--
 The plan as JSON. Each need has its name, its target with the target's position in the
-configuration file, and the tests that reach it, so that the driver builds the need and names those
-tests when the build fails.
+configuration file, and the tests that reach it, which the driver names when the target's build
+fails.
 -/
 def Plan.toJson (plan : Plan) : Json :=
   Json.mkObj <| [
@@ -596,8 +596,8 @@ def Plan.load (path : System.FilePath) : IO Plan := do
 /--
 The needs that the selected tests reach, in the order of the configuration's {lit}`[needs]` table,
 each with the tests that reach it. A test reaches the needs that its own values refer to and those
-that the values of the fixtures it uses refer to, directly or through other fixtures. The result is
-an error that names a reference to a need that the configuration lacks.
+that the values of the fixtures it uses refer to, directly or through other fixtures. If a value
+refers to a need that the configuration lacks, then the result is an error that names it.
 -/
 def reachedNeeds (config : Config) (tests : Array PlannedTest) (fixtures : Array PlannedFixture) :
     Except String (Array PlannedNeed) := do
@@ -632,7 +632,8 @@ to settings that no executable declares are errors, and those that the profile g
 the filters are evaluated, with a warning for each atom and each filter that selects nothing. The
 configuration's filters draw these warnings only when the run has every test executable of the
 package. Then the selected tests and the fixtures they reach are resolved, with each need as the
-name that the settings refer to and each derived seed as such.
+name that the settings refer to and each derived seed as such, and the needs they reach are
+gathered.
 
 Each issue goes to {name}`report` as it is found, and {name}`onList` runs as the List phase begins.
 The result is the plan, whose issues are those reported, or the exit code of the problem that ended
@@ -897,8 +898,8 @@ def inventoryJson (plan : Plan) (runSeed : Nat) : Json := Id.run do
 
 /--
 Prints the plan's selected tests in the format that {name}`opts` names, with {name}`line`. The run's
-seed, {name}`runSeed`, gives derived seeds their values when the command line gives the seed, and
-the JSON formats their values always.
+seed, {name}`runSeed`, gives derived seeds their values in the JSON formats, and in the human format
+when the command line gives the seed.
 -/
 def printPlan (plan : Plan) (opts : Options) (line : String → IO Unit) (color : Bool)
     (runSeed : Nat) : IO Unit :=
@@ -957,9 +958,8 @@ before it builds any test executable. {name}`request` is a JSON object with the 
 profile and the filters, and writes to the file {name}`out` a JSON object with the command, the
 profile, the executables that the filters can select by their names alone, whether the phases are
 named as they begin, and the modules that {lit}`--interpreted` names. When the command line asks for
-the usage
-text, the subcommand prints it and writes {lit}`{"help": true}`. The result is the exit code:
-{name}`ExitCode.ok`, or the code of the problem, which the subcommand reports.
+the usage text, the subcommand prints it and writes {lit}`{"help": true}`. The result is the exit
+code: {name}`ExitCode.ok`, or the code of the problem, which the subcommand reports.
 -/
 def checkMain (request out : String) (args : List String) : IO UInt32 := do
   let req ← IO.ofExcept (Json.parse request)
@@ -1034,8 +1034,8 @@ and the List phase's {lit}`phase` record. When an issue ends the planning, no pl
 issues found are printed on standard error, and the result is the exit code of the issue:
 {name}`ExitCode.invalidFilter`, {name}`ExitCode.setupError`, or {name}`ExitCode.listFailed`.
 Otherwise the plan holds the issues, which the run reports. When {lit}`ERRATA_LIFELINE` is
-{lit}`1`, the subcommand watches its standard input and ends its listings when it closes. Once it
-has begun, the subcommand flushes its output and ends the process itself.
+{lit}`1`, the subcommand watches its standard input and ends its listings when it closes. After the
+planning, the subcommand flushes its output and ends the process itself.
 -/
 def planMain (configPath executablesPath out : String) (args : List String) : IO UInt32 := do
   let config ←

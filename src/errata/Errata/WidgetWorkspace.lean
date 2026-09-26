@@ -155,7 +155,7 @@ def LibraryModules.holds (lib : LibraryModules) (mod : Lean.Name) : Bool :=
   lib.globs.any (globTakes · mod) ||
     lib.roots.any fun root => root.isPrefixOf mod && lib.globs.any (globTakes · root)
 
-/-- The libraries that {lit}`workspace.json` records under {lit}`libraries`. -/
+/-- The libraries that {lit}`executables.json` records under {lit}`libraries`. -/
 def LibraryModules.ofWorkspaceJson (j : Json) : Array LibraryModules :=
   ((j.getObjValAs? (Array Json) "libraries").toOption.getD #[]).filterMap fun lib => do
     let name ← (lib.getObjValAs? String "name").toOption
@@ -187,10 +187,9 @@ deriving Repr, Inhabited, BEq
 /--
 The values that the profile gives the test {name}`record`: for each setting that the profile or one
 of its overrides gives a string, the first override that matches the test and gives it a value, or
-else the profile's value. Settings whose values come from needs are left out, since the driver
-builds a need's target when the test runs. {name}`dflt` is whether the default filter selects the
-test, which {lit}`default()` stands for in the overrides' filters. Overrides whose filters cannot be
-read give nothing.
+else the profile's value. Settings whose values refer to needs are left out. {name}`dflt` is whether
+the default filter selects the test, which {lit}`default()` stands for in the overrides' filters.
+Overrides whose filters cannot be read give nothing.
 -/
 def profileValues (profile : Runner.Profile) (record : Filter.Record) (dflt : Bool) :
     Array (String × String) := Id.run do

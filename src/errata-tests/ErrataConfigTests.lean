@@ -64,8 +64,8 @@ def validationReportsPositions : Test := do
 
 /--
 Settings' names may be written as nested tables as well as quoted dotted keys, and a file may begin
-with a byte-order mark and give durations with spaces around them. A setting that refers to a need
-names the need and the position of its name.
+with a byte-order mark and give durations with spaces around them. Settings that refer to needs have
+the needs' names, and the configuration has the `[needs]` table with the positions of its targets.
 -/
 @[test]
 def readsTomlForms : Test := do
@@ -103,8 +103,9 @@ def problemsOf (text : String) : TestM String := do
 /--
 The `[needs]` table binds names to Lake targets, each with the position of its target's string, and
 the elaborated file holds it under `needs` in the file's order. Settings of profiles and of
-overrides refer to its names, and each reference keeps the name. A reference to a name that the table lacks is a problem at
-the reference, and so is a value of the table that is not a string, at the value.
+overrides refer to its names, and each reference keeps the name. References to names that the table
+lacks are problems at the references, and values of the table that are not strings are problems at
+the values.
 -/
 @[test]
 def needsTable : Test := do
