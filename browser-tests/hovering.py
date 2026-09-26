@@ -4,10 +4,26 @@ from playwright.sync_api import Locator, TimeoutError
 # tooltip's reference.
 HOVER_ATTEMPTS = 5
 
-# Installs a one-shot `mouseenter` listener on an element that sets a flag on the element.
+# Installs a one-shot `mouseenter` listener on an element that sets a flag on the element, and
+# records the pointer events that reach the element and the triggers of its Tippy instance, each
+# with its time, for the message of a tooltip that never became visible.
 LISTEN_FOR_MOUSEENTER = """el => {
     el.__hoverEntered = false;
     el.addEventListener('mouseenter', () => { el.__hoverEntered = true; }, { once: true });
+    if (!el.__hoverTrace) {
+        el.__hoverTrace = [];
+        const note = what => el.__hoverTrace.push(`${what}@${Math.round(performance.now())}`);
+        for (const type of ['mouseenter', 'mouseleave', 'mouseover', 'mouseout']) {
+            el.addEventListener(type, () => note(type));
+        }
+        if (el._tippy && el._tippy.setProps) {
+            el._tippy.setProps({
+                onTrigger: (_, event) => note(`trigger:${event.type}`),
+                onUntrigger: (_, event) => note(`untrigger:${event.type}`),
+            });
+        }
+    }
+    el.__hoverTrace.push(`hover@${Math.round(performance.now())}`);
 }"""
 
 # Describes the state of a tooltip's reference and of the element under the center of the hovered
@@ -31,6 +47,10 @@ DESCRIBE_HOVER = """(el, box) => {
         pointAt: [Math.round(x), Math.round(y)],
         underPointer: chain,
         tippyBoxes: document.querySelectorAll('.tippy-box').length,
+        visibility: document.visibilityState,
+        focused: document.hasFocus(),
+        now: Math.round(performance.now()),
+        trace: el.__hoverTrace || [],
     });
 }"""
 
