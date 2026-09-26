@@ -16,9 +16,9 @@ fields start from.
 Each browser test writes a scratch module of its own,
 `WidgetFixtures/Scratch_KEY.lean`, and deletes it afterwards. The
 tests open copies of the fixture modules in lanes,
-`WidgetFixtures/LaneN/`, one lane per test at a time, so tests that
-run at once share one Lean server without sharing documents. The
-suite removes the lanes when it ends.
+`WidgetFixtures/LaneN/`. Each lane serves one test at a time, so
+tests that run at once share one Lean server and each has documents
+of its own. The suite removes the lanes when it ends.
 
 ## Running the Browser Tests
 
