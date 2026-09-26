@@ -88,7 +88,7 @@ def test_the_reset_button_restores_the_default_of_a_setting_without_a_profile_va
     widget.wait_for_verdict("Passed")
 
 
-def test_a_setting_without_a_default_is_required_and_its_absence_is_reported(editor):
+def test_a_setting_without_a_default_holds_back_the_run_until_it_has_a_value(editor):
     editor.show("Passing", "greetsAudience")
     widget = Widget(editor.page)
     widget.gear.click()
@@ -96,13 +96,13 @@ def test_a_setting_without_a_default_is_required_and_its_absence_is_reported(edi
     expect(widget.setting_field("audience")).to_have_value("")
     expect(widget.setting_field("audience")).to_have_attribute("placeholder", "required")
     editor.page.keyboard.press("Escape")
-    # The client starts the run, and the runner reports the missing value without running the test.
-    widget.run_button.click()
-    widget.wait_for_verdict("INCONCLUSIVE")
-    expect(widget.messages.first).to_contain_text("audience has no value")
+    # Run stays disabled while the field is empty, and its title names the setting.
+    expect(widget.run_button).to_be_disabled()
+    expect(widget.run_button).to_have_attribute("title", "The setting audience needs a value")
     widget.gear.click()
     widget.setting_field("audience").fill("world")
     editor.page.keyboard.press("Escape")
+    expect(widget.run_button).to_be_enabled()
     widget.run_button.click()
     widget.wait_for_verdict("Passed")
     expect_exact_text(widget.output, "hello, world\n")

@@ -214,6 +214,25 @@ function placeholderOf(field, typed) {
 }
 
 /**
+ * The names of the settings that need a value before a run: those without a default or a target
+ * to build whose fields are empty.
+ * @param fields {SettingField[]}
+ * @param values {Record<string, string>} the text of each field that the reader has changed
+ * @returns {string[]}
+ */
+function settingsLackingValues(fields, values) {
+    return fields
+        .filter(function (f) {
+            if (f.needs || typeof f.default === "string") return false;
+            const text = f.name in values ? values[f.name] : prefillOf(f);
+            return text === "";
+        })
+        .map(function (f) {
+            return f.name;
+        });
+}
+
+/**
  * The values that a run gives the test's settings: the text of each field that the reader has
  * changed. The profile and the declared defaults give the others.
  * @param fields {SettingField[]}
@@ -1400,6 +1419,12 @@ function TestRun(props) {
     const seedHint = "The seed must be a natural number";
     // The values that the next run gives the test's settings, beyond the profile's.
     const sent = settingsSent(settingFields, settingValues);
+    // The settings that need a value typed before Run is enabled.
+    const lacking = settingsLackingValues(settingFields, settingValues);
+    const lackingHint =
+        (lacking.length === 1 ? "The setting " : "The settings ") +
+        lacking.join(", ") +
+        (lacking.length === 1 ? " needs a value" : " need values");
     // What the settings hold, named in the gear's tooltip so a run's settings show while the popup
     // is closed.
     const settingsSummary = (seedSet ? ["seed " + seedText] : [])
@@ -1604,7 +1629,7 @@ function TestRun(props) {
                   {
                       key: "run",
                       onClick: run,
-                      disabled: !clean || !seedValid,
+                      disabled: !clean || !seedValid || lacking.length > 0,
                       title:
                           clean === null
                               ? "Checking whether the file is saved"
@@ -1612,7 +1637,9 @@ function TestRun(props) {
                                 ? "Save the file to run the test"
                                 : !seedValid
                                   ? seedHint
-                                  : undefined,
+                                  : lacking.length
+                                    ? lackingHint
+                                    : undefined,
                   },
                   st.tag === "idle" ? "Run" : "Run again",
               ),
