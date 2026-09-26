@@ -1,6 +1,7 @@
 """Running a test from the widget, and what the widget shows of the run and its output."""
 
 import re
+import time
 
 import pytest
 from playwright.sync_api import expect
@@ -140,11 +141,26 @@ def test_the_test_docstring_is_shown_with_the_result(editor):
 
 
 def test_a_process_the_test_leaves_running_lets_the_run_end(editor):
+    """
+    The helper that the test starts holds the runner's output pipes open for 37 seconds after the
+    test has ended. The runner ends a test's lingering processes after its pipe grace, so the time
+    from the test's output to the verdict is about a second, and a run that waited for the helper
+    takes at least 37. That interval starts once the output is visible, since the time from the
+    click also includes the widget's Discovery, which runs under the workspace's build lock that
+    other tests' runs share.
+    """
     editor.show("Passing", "lingeringProcess")
     widget = Widget(editor.page)
     widget.run_button.click()
-    # The helper holds the runner's output pipes open for over half a minute after the test has ended.
-    widget.verdict("Passed").wait_for(timeout=20_000)
+    expect(widget.output).to_contain_text("started a helper", timeout=RUN_TIMEOUT)
+    output_seen = time.monotonic()
+    widget.wait_for_verdict("Passed")
+    interval = time.monotonic() - output_seen
+    assert interval < 10, (
+        f"the verdict came {interval:.1f} s after the test's output; the runner ends a test's "
+        "lingering processes after the pipe grace, which gives about a second, and a run that "
+        "waits for the helper takes at least 37 s"
+    )
     expect_exact_text(widget.output, "started a helper\n")
     # The helper is ended with the run.
     wait_until(lambda: not matching("^sleep 37$"), timeout_ms=10_000)
