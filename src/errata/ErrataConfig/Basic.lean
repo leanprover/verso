@@ -182,6 +182,8 @@ deriving Inhabited
 
 /-- What the configuration file says, validated. -/
 structure File where
+  /-- The path of the configuration file, as the command line gives it. -/
+  path : String
   /-- The filter that selects the tests to run when neither a profile nor the command line does. -/
   defaultFilter? : Option FilterString := none
   /-- The test executables that the file adds. -/

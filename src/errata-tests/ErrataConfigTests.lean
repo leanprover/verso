@@ -24,7 +24,7 @@ def variantsDir : System.FilePath := "src/errata-tests/fixtures/driver-toml/vari
 
 /-- Reads and validates the variant {name}`name`. -/
 def parseVariant (name : String) : IO (Except (Array String) ErrataConfig.File) := do
-  ErrataConfig.parse (← IO.FS.readFile (variantsDir / s!"{name}.toml"))
+  ErrataConfig.parse "errata.toml" (← IO.FS.readFile (variantsDir / s!"{name}.toml"))
 
 /-- The profile named {name}`name` of a validated file. -/
 def profileOf (f : ErrataConfig.File) (name : String) : TestM ErrataConfig.Profile := do
@@ -96,7 +96,7 @@ def readsTomlForms : Test := do
 
 /-- The problems that validating {name}`text` reports, joined by newlines. -/
 def problemsOf (text : String) : TestM String := do
-  match ← ErrataConfig.parse text with
+  match ← ErrataConfig.parse "errata.toml" text with
   | .ok _ => fail "the file was accepted"
   | .error problems => return "\n".intercalate problems.toList
 
@@ -157,6 +157,37 @@ def configBinaryReportsUnreadableFile : Test := do
       { cmd := exe.toString, args := #[dir.toString, (dir / "config.json").toString] }
     assertBEq 1 out.exitCode
     assertContains s!"errata-config: cannot read {dir}:" out.stderr
+
+/--
+The built `errata-config` names the configuration file by the path its command line gives: in a
+syntax error, in an unknown key's problem, and in the position of each filter of the elaborated
+file.
+-/
+@[test]
+def configBinaryNamesItsFile : Test := do
+  let exe : System.FilePath := ".lake/build/bin/errata-config"
+  unless ← exe.pathExists do fail s!"errata-config is not built at {exe}"
+  IO.FS.withTempDir fun dir => do
+    let file := dir / "other.toml"
+    let out := dir / "config.json"
+    let elaborate (text : String) : IO IO.Process.Output := do
+      IO.FS.writeFile file text
+      IO.Process.output { cmd := exe.toString, args := #[file.toString, out.toString] }
+    result "a syntax error" do
+      let r ← elaborate "[profile.default\n"
+      assertBEq 1 r.exitCode
+      assertContains s!"{file}:1:" r.stderr
+      assertNotContains "errata.toml" r.stderr
+    result "an unknown key" do
+      let r ← elaborate "[profile.default]\nflavor = \"x\"\n"
+      assertBEq 1 r.exitCode
+      assertContains s!"{file}:2:9: unknown key 'flavor' in the profile 'default'" r.stderr
+    result "a filter's position" do
+      let r ← elaborate "default-filter = \"all()\"\n"
+      assertBEq 0 r.exitCode
+      let json ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile out))
+      assertBEq (some file.toString)
+        ((json.getObjValD "default-filter").getObjValAs? String "file").toOption
 
 /-- Compound durations such as `2m30s` reach the elaborated file as their totals in milliseconds. -/
 @[test]
@@ -248,7 +279,7 @@ strings, or are empty, are problems at their positions.
 def reportPathsAreProfileKeys : Test := do
   let text := "[profile.default]\njunit = \"r.xml\"\n\n[profile.ci]\nmarkdown = \"s.md\"\n\
     json = \"out/r.json\"\n"
-  match ← ErrataConfig.parse text with
+  match ← ErrataConfig.parse "errata.toml" text with
   | .error problems => fail s!"the file was rejected: {problems}"
   | .ok f =>
     let ci ← profileOf f "ci"
@@ -270,7 +301,7 @@ def reportPathsAreProfileKeys : Test := do
       "errata.toml:2:11: 'markdown' must be a path, and it is the empty string")]
   for (text, message) in cases do
     result message do
-      match ← ErrataConfig.parse text with
+      match ← ErrataConfig.parse "errata.toml" text with
       | .ok _ => fail "the file was accepted"
       | .error problems => assertBEq #[message] problems
 
@@ -283,7 +314,7 @@ values are problems at their positions, and so is the key in an override, since 
 def orderIsAProfileKey : Test := do
   let text := "[profile.default]\norder = \"shuffle\"\n\n[profile.ci]\njobs = 2\n\n\
     [profile.plain]\norder = \"default\"\n"
-  match ← ErrataConfig.parse text with
+  match ← ErrataConfig.parse "errata.toml" text with
   | .error problems => fail s!"the file was rejected: {problems}"
   | .ok f =>
     assertBEq (some .shuffle) (← profileOf f "default").order?
@@ -294,7 +325,7 @@ def orderIsAProfileKey : Test := do
     | .ok c =>
       assertBEq (some (some .shuffle)) ((c.profile? "ci").map (·.order?))
       assertBEq (some (some .default)) ((c.profile? "plain").map (·.order?))
-  match ← ErrataConfig.parse "[profile.default]\njobs = 2\n" with
+  match ← ErrataConfig.parse "errata.toml" "[profile.default]\njobs = 2\n" with
   | .error problems => fail s!"the file was rejected: {problems}"
   | .ok f => assertBEq none (← profileOf f "default").order?
   let cases : List (String × String) := [
@@ -308,7 +339,7 @@ def orderIsAProfileKey : Test := do
         override")]
   for (text, message) in cases do
     result message do
-      match ← ErrataConfig.parse text with
+      match ← ErrataConfig.parse "errata.toml" text with
       | .ok _ => fail "the file was accepted"
       | .error problems => assertBEq #[message] problems
 

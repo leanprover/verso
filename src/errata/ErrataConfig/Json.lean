@@ -31,9 +31,9 @@ def optField [ToJson α] (key : String) : Option α → List (String × Json)
   | some v => [(key, Lean.toJson v)]
   | none => []
 
-/-- A filter's text and position. -/
-def FilterString.toJson (f : FilterString) : Json :=
-  Json.mkObj <| [("text", Json.str f.text), ("file", Json.str "errata.toml"),
+/-- A filter's text and position in the configuration file at {name}`path`. -/
+def FilterString.toJson (path : String) (f : FilterString) : Json :=
+  Json.mkObj <| [("text", Json.str f.text), ("file", Json.str path),
     ("line", Lean.toJson f.line), ("col", Lean.toJson f.col)] ++
     optField "positions" f.positions?
 
@@ -46,25 +46,25 @@ def settingsToJson (s : Array (String × SettingValue)) : Json :=
       (k, Json.mkObj
         [("needs", Json.str tgt), ("line", Lean.toJson line), ("col", Lean.toJson col)])
 
-/-- An override as an object. -/
-def Override.toJson (o : Override) : Json :=
+/-- An override of the configuration file at {name}`path` as an object. -/
+def Override.toJson (path : String) (o : Override) : Json :=
   Json.mkObj <|
-    [("filter", o.filter.toJson)] ++ optField "timeout-ms" o.timeoutMs? ++
+    [("filter", o.filter.toJson path)] ++ optField "timeout-ms" o.timeoutMs? ++
     optField "fixture-timeout-ms" o.fixtureTimeoutMs? ++
     optField "grace-period-ms" o.gracePeriodMs? ++
     optField "slow-after-ms" o.slowAfterMs? ++ optField "update-golden" o.updateGolden? ++
     [("settings", settingsToJson o.settings)]
 
-/-- A profile as an object. -/
-def Profile.toJson (p : Profile) : Json :=
+/-- A profile of the configuration file at {lit}`path` as an object. -/
+def Profile.toJson (path : String) (p : Profile) : Json :=
   Json.mkObj <|
     optField "timeout-ms" p.timeoutMs? ++ optField "fixture-timeout-ms" p.fixtureTimeoutMs? ++
     optField "grace-period-ms" p.gracePeriodMs? ++ optField "slow-after-ms" p.slowAfterMs? ++
     optField "jobs" p.jobs? ++ optField "order" p.order? ++
     optField "update-golden" p.updateGolden? ++
     [("settings", settingsToJson p.settings),
-      ("override", Json.arr (p.overrides.map (·.toJson)))] ++
-    (match p.defaultFilter? with | some f => [("default-filter", f.toJson)] | none => []) ++
+      ("override", Json.arr (p.overrides.map (·.toJson path)))] ++
+    (match p.defaultFilter? with | some f => [("default-filter", f.toJson path)] | none => []) ++
     optField "junit" p.junit? ++ optField "json" p.json? ++ optField "markdown" p.markdown?
 
 /-- An added test executable as an object, with its position in the file. -/
@@ -76,10 +76,10 @@ def Executable.toJson (e : Executable) : Json :=
 def File.toJson (f : File) : Json :=
   Json.mkObj <| [
     ("protocol", Lean.toJson formatVersion),
-    ("profiles", Json.mkObj (f.profiles.toList.map fun p => (p.name, p.toJson))),
+    ("profiles", Json.mkObj (f.profiles.toList.map fun p => (p.name, p.toJson f.path))),
     ("executables", Json.arr (f.executables.map (·.toJson)))
   ] ++ (match f.defaultFilter? with
-    | some filter => [("default-filter", filter.toJson)]
+    | some filter => [("default-filter", filter.toJson f.path)]
     | none => [])
 
 end ErrataConfig

@@ -341,10 +341,10 @@ def inherit (profiles : Array Profile) : CheckM (Array Profile) := do
     out := out.push merged
   return out
 
-/-- Validates the whole of the configuration file's table. -/
-def readFile (t : Lake.Toml.Table) : CheckM File := do
-  checkKeys "errata.toml" ["default-filter", "executable", "profile"] t
-  let mut file : File := {}
+/-- Validates the whole of the table of the configuration file at {name}`path`. -/
+def readFile (path : String) (t : Lake.Toml.Table) : CheckM File := do
+  checkKeys path ["default-filter", "executable", "profile"] t
+  let mut file : File := { path }
   if let some x := t.find? `«default-filter» then
     file := { file with defaultFilter? := ← readFilter "default-filter" x }
   if let some x := t.find? `executable then
@@ -373,31 +373,32 @@ def readFile (t : Lake.Toml.Table) : CheckM File := do
   if file.profiles.isEmpty then file := { file with profiles := #[{ name := "default" }] }
   return file
 
-/-- A problem as {lit}`errata.toml:LINE:COL: message`. -/
-def Problem.render (fileMap : Lean.FileMap) (p : Problem) : String :=
+/-- A problem in the file at {name}`path` as {lit}`PATH:LINE:COL: message`. -/
+def Problem.render (path : String) (fileMap : Lean.FileMap) (p : Problem) : String :=
   match p.ref.getPos? with
   | some pos =>
     let q := fileMap.toPosition pos
-    s!"errata.toml:{q.line}:{q.column}: {p.msg}"
-  | none => s!"errata.toml: {p.msg}"
+    s!"{path}:{q.line}:{q.column}: {p.msg}"
+  | none => s!"{path}: {p.msg}"
 
 /--
-Reads and validates the text of a configuration file. The result is what the file says, or every
-problem found, each at its position and in the order of the file.
+Reads and validates the text of the configuration file at {name}`path`. The result is what the file
+says, or every problem found, each at its position and in the order of the file. Problems and
+filters' positions name the file by {name}`path`.
 -/
-def parse (text : String) : IO (Except (Array String) File) := do
+def parse (path : String) (text : String) : IO (Except (Array String) File) := do
   -- TOML's grammar has no byte-order mark, and some editors write one.
   let text := (text.dropPrefix? "﻿").map (·.copy) |>.getD text
-  let ictx := Lean.Parser.mkInputContext text "errata.toml"
+  let ictx := Lean.Parser.mkInputContext text path
   let table ← match ← (Lake.Toml.loadToml ictx).toBaseIO with
     | .ok t => pure t
     | .error log => return .error (← log.toList.toArray.mapM fun m => m.toString)
-  let (file, problems) := ((readFile table).run ictx.fileMap).run #[]
+  let (file, problems) := ((readFile path table).run ictx.fileMap).run #[]
   if problems.isEmpty then return .ok file
   -- Problems at the same position stay in the order they were found.
   let position (p : Problem) := (p.ref.getPos?.map (·.byteIdx)).getD 0
   let sorted := problems.zipIdx.qsort fun (a, i) (b, j) =>
     position a < position b || (position a == position b && i < j)
-  return .error (sorted.map (·.1.render ictx.fileMap))
+  return .error (sorted.map (·.1.render path ictx.fileMap))
 
 end ErrataConfig

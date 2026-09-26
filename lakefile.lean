@@ -515,6 +515,8 @@ script run (args) do
   let tomlPath := ws.root.dir / "errata.toml"
   let errataOut := ws.root.dir / defaultLakeDir / "errata"
   let configFile := errataOut / "config.json"
+  let configOut ←
+    if configFile.isAbsolute then pure configFile else (· / configFile) <$> IO.currentDir
   let configProblems ← IO.mkRef ""
   let elaborated ←
     try
@@ -523,8 +525,11 @@ script run (args) do
           addPureTrace (← if ← tomlPath.pathExists then IO.FS.readFile tomlPath else pure "")
             "errata.toml"
           buildFileUnlessUpToDate' (text := true) configFile do
+            -- The file is named relative to the package's directory, so that its problems and its
+            -- filters' positions name it as the driver's own messages do.
             let out ← IO.Process.output
-              { cmd := exePath.toString, args := #[tomlPath.toString, configFile.toString] }
+              { cmd := exePath.toString, args := #["errata.toml", configOut.toString],
+                cwd := ws.root.dir }
             unless out.exitCode == 0 do
               configProblems.set (out.stdout ++ out.stderr)
               error "errata-config reported problems"
