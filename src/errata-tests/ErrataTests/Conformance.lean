@@ -1276,7 +1276,8 @@ def ruledOutExecutablesAreKnown : Test := do
 The `list` command selects as a run does and runs nothing. Its human format names each executable
 with a colon and its tests below it, indented by four spaces; the one-line format has a line per
 test with the executable, the name, the file, and the tags; the JSON format holds the inventory with
-what each test receives.
+what each test receives. The verbose human format names the settings and the fixtures that each
+fixture takes.
 -/
 @[test]
 def listFormats : Test := do
@@ -1309,6 +1310,11 @@ def listFormats : Test := do
   result "json-pretty" do
     let r ← listed .jsonPretty
     assertTrue (r.lines.any (·.contains '\n')) "the JSON is indented over several lines"
+  result "human, verbose, with a fixture that takes a setting and a fixture" do
+    let r ← runWith #[basic ["uses-dependent"]] { command := .list, verbosity := .verbose }
+    let some i := r.lines.findIdx? (· == "  dependent") | fail s!"no fixture dependent: {r.lines}"
+    assertBEq #["      settings: greeting", "      fixtures: stamped"]
+      (r.lines.extract (i + 1) (i + 3))
   result "human with settings, when the executables declare none" do
     let bare : ExecutableConfig := {
       name := "bare"

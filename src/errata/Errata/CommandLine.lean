@@ -287,11 +287,12 @@ def optionSpecs : Array OptionSpec := #[
   { long := "test-threads", short? := "-j", aliases := ["jobs"], value? := "N", commands := [.run]
     group := "Running", help := "How many tests may run at once (the CPUs available)." },
   { long := "no-tests", value? := "ACTION", commands := [.run], group := "Running"
-    help := "What a run that selects no test does: fail, warn, or pass (fail)." },
+    help := "What a run that selects no test does: fail, warn (which fails under --wfail), or \
+      pass (fail)." },
   { long := "update-golden", commands := [.run], group := "Running"
     help := "Rewrite the expected files of golden checks." },
   { long := "wfail", commands := [.run], group := "Running"
-    help := "Fail the run if warnings are logged." },
+    help := "Fail the run if warnings are logged, so that --no-tests warn exits as fail does." },
   { long := "verbose", short? := "-v", group := "Reporting"
     help := "Also report passes, truncating each test's results; with list, show the settings \
       and what each test receives." },
@@ -570,6 +571,8 @@ def usage (invocation : String) : String := Id.run do
     let lines := wrapWords (100 - lead.length) ((s.help ++ only).splitOn " ")
     out := out ++ s!"  {s.forms.pushn ' ' (width + 2 - s.forms.length)}\
       {("\n" ++ lead).intercalate lines}\n"
+  out := out ++ "\nThe PATHs of --junit, --json, --markdown, and --events are relative to the \
+    directory that\nlake test runs in, and the profile's report paths to the package's directory.\n"
   return out
 where
   /-- Words joined into lines of at most {name}`width` characters, a longer word on its own line. -/

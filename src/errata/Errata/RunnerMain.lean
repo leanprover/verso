@@ -944,7 +944,8 @@ private def byExecutable (selected : Array (InventoryTest × Resolved)) :
 Prints the selected tests in nextest's human format: each test executable's name and a colon, then
 its selected tests, indented by four spaces. With {name}`verbose`, the settings that the test
 executables declare come first when there are any, with their descriptions and defaults, and then
-the fixtures they declare when there are any, with their descriptions and the threads they ask for;
+the fixtures they declare when there are any, with their descriptions, the threads they ask for, and
+the settings and the fixtures they take;
 each test is followed by its file and line, its tags, its description, the values it receives, and
 the fixtures it uses; and the mandatory settings that nothing gives a value come last, with the
 tests that need them. Seeds derived from a run seed that the command line leaves to chance are
@@ -972,6 +973,8 @@ def printHumanList (ctx : RunContext) (color verbose : Bool) (listings : Array L
         let threads := match f.threads? with | some n => s!" (threads {n})" | none => ""
         line s!"  {f.name}{threads}"
         if let some d := f.description? then line (indented "      " d)
+        unless f.settings.isEmpty do line s!"      settings: {", ".intercalate f.settings.toList}"
+        unless f.fixtures.isEmpty do line s!"      fixtures: {", ".intercalate f.fixtures.toList}"
   let mut missing : Array (String × String) := #[]
   for (idx, tests) in byExecutable selected do
     line s!"{Style.exe.paint color ctx.config.executables[idx]!.name}:"
@@ -1240,7 +1243,8 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
     let exeName (t : InventoryTest) : String := config.executables[t.exeIdx]!.name
     let resolution : ResolutionContext := {
       sets := opts.sets, profile, overrides, timeoutMs? := opts.timeoutMs?
-      fixtureTimeoutMs? := opts.fixtureTimeoutMs?, gracePeriodMs? := opts.gracePeriodMs?, updateGolden := opts.updateGolden, runSeed
+      fixtureTimeoutMs? := opts.fixtureTimeoutMs?, gracePeriodMs? := opts.gracePeriodMs?
+      updateGolden := opts.updateGolden, runSeed
       default? := selection.default?
     }
     -- A value for `Errata.updateGolden` given as a setting stops the run.

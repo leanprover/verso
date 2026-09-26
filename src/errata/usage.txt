@@ -42,10 +42,11 @@ Configuration:
 
 Running:
   -j, --test-threads, --jobs N  How many tests may run at once (the CPUs available). Run only.
-  --no-tests ACTION             What a run that selects no test does: fail, warn, or pass (fail).
-                                Run only.
+  --no-tests ACTION             What a run that selects no test does: fail, warn (which fails under
+                                --wfail), or pass (fail). Run only.
   --update-golden               Rewrite the expected files of golden checks. Run only.
-  --wfail                       Fail the run if warnings are logged. Run only.
+  --wfail                       Fail the run if warnings are logged, so that --no-tests warn exits
+                                as fail does. Run only.
 
 Reporting:
   -v, --verbose                 Also report passes, truncating each test's results; with list, show
@@ -65,3 +66,6 @@ Reporting:
                                 the profile's markdown. Run only.
   --events PATH                 Append the run's events to PATH as JSON lines. Run only.
   -h, --help                    Print this text.
+
+The PATHs of --junit, --json, --markdown, and --events are relative to the directory that
+lake test runs in, and the profile's report paths to the package's directory.

@@ -1303,7 +1303,8 @@ def driverHelpWithBrokenConfiguration : Test :=
 The runner reads the whole command line before anything is built: an unknown option, an option of
 the other command, and a malformed value end the run with the exit code of a usage error, and an
 unknown profile with the exit code of a setup error. If the first argument is neither `run` nor
-`list`, then it begins the options and filters of a run.
+`list`, then it begins the options and filters of a run. A run that selects no test under
+`--no-tests warn` and `--wfail` exits with 4, since `--wfail` makes the warning a failure.
 -/
 @[test]
 def driverChecksCommandLine : Test := do
@@ -1323,6 +1324,10 @@ def driverChecksCommandLine : Test := do
     let out ← withTomlVariant "nested" #["test", "--", "--no-tests", "warn", "no such test"]
     assertExitCode 0 out
     assertContains "warning: no tests to run" out.stderr
+  result "no tests under --no-tests warn and --wfail" do
+    let out ← withTomlVariant "nested"
+      #["test", "--", "--no-tests", "warn", "--wfail", "no such test"]
+    assertExitCode 4 out
 
 /--
 The compile-time commands register their verdicts as tests, so a module that imports only
