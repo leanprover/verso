@@ -549,9 +549,10 @@ def usage (invocation : String) : String := Id.run do
     default filter selects them. Without name filters, or without filter expressions, that\n\
     condition holds for every test. In a filter expression, default() stands for the default\n\
     filter.\n\n\
-    A run's summary counts the results by outcome and the listed tests left out, then the test\n\
-    libraries and executables that the filters ruled out before building. Ruled-out libraries\n\
-    count only when a module of theirs that an earlier build left on disk records a test.\n"
+    A run's summary counts tests: the tests run, each once by its outcome, and the fixture phases\n\
+    that failed when there are any; then the listed tests left out, and the test libraries and\n\
+    executables that the filters ruled out before building. Ruled-out libraries count only when\n\
+    a module of theirs that an earlier build left on disk records a test.\n"
   let mut group := ""
   for s in optionSpecs do
     if s.group != group then
