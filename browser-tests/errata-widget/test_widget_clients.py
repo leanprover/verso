@@ -2,6 +2,7 @@
 
 import json
 import re
+import time
 
 import pytest
 
@@ -96,6 +97,36 @@ def test_two_clients_of_one_host_see_only_their_own_documents_and_runs(
         session.stop()
         relay.close()
         page.close()
+
+
+def test_a_document_stays_open_for_the_client_that_opened_it_last(lean_host, test_modules):
+    """
+    When a second client opens a document that a first client holds, the first client's closing of
+    the document and the end of the first client's connection leave it open for the second, whose
+    next request the server answers.
+    """
+    test_modules.write_scratch(CLIENT_SCRATCH.replace("{client}", "only"))
+    sessions = [RemoteLeanSession(lean_host) for _ in range(4)]
+    first, second, third, fourth = (Editor(None, None, s, test_modules) for s in sessions)
+    try:
+        # The first client closes the document after the second has opened it.
+        first.open("Scratch")
+        assert first.widget_props("Scratch", "scratch", timeout=60)["decl"]
+        second.open("Scratch")
+        first.lean.notify(
+            "textDocument/didClose", {"textDocument": {"uri": first.path("Scratch").as_uri()}}
+        )
+        assert second.widget_props("Scratch", "scratch", timeout=60)["decl"]
+        # The third client's connection ends after the fourth has opened the document.
+        third.open("Scratch")
+        assert third.widget_props("Scratch", "scratch", timeout=60)["decl"]
+        fourth.open("Scratch")
+        sessions[2].stop()
+        time.sleep(1)
+        assert fourth.widget_props("Scratch", "scratch", timeout=60)["decl"]
+    finally:
+        for session in sessions:
+            session.stop()
 
 
 def test_each_test_has_a_scratch_module_of_its_own_until_it_ends(request, test_modules):
