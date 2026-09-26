@@ -1277,12 +1277,15 @@ def skippedCounts : Test := do
   let exe := basic ["pass", "greets", "verdict-fail"]
   result "tests" do
     let r ← runWith #[exe] { nameFilters := #["pass"] }
-    let expected := "1 passed, 0 failed, 0 errors, 0 inconclusive, 2 tests skipped"
+    let expected := "1 test run: 1 passed, 0 failed, 0 errors, 0 inconclusive. 2 tests skipped."
     assertTrue ((summary r).endsWith expected)
       (summary r)
   result "none()" do
     let r ← runWith #[exe] { filters := #["none()"], noTests := .pass }
-    assertTrue ((summary r).endsWith ", 3 tests skipped") (summary r)
+    assertTrue ((summary r).endsWith ". 3 tests skipped.") (summary r)
+  result "one test" do
+    let r ← runWith #[exe] { nameFilters := #["pass", "greets"] }
+    assertTrue ((summary r).endsWith ". 1 test skipped.") (summary r)
   result "test libraries and executables" do
     let config : Config := {
       knownExecutables := #["basic", "Alpha", "Beta", "Empty", "gamma"]
@@ -1290,11 +1293,11 @@ def skippedCounts : Test := do
       skippedExecutables := #["gamma"], partialSelection := true }
     let r ← runWith #[basic ["pass"]] {} config
     assertTrue
-      ((summary r).endsWith ", 0 tests skipped, 2 test libraries skipped, 1 executable skipped")
+      ((summary r).endsWith ". 0 tests skipped, 2 test libraries skipped, 1 executable skipped.")
       (summary r)
     let libsOnly := { config with skippedExecutables := #[], skippedTestLibraries := #["Alpha"] }
     let r ← runWith #[basic ["pass"]] {} libsOnly
-    assertTrue ((summary r).endsWith ", 0 tests skipped, 1 test library skipped") (summary r)
+    assertTrue ((summary r).endsWith ". 0 tests skipped, 1 test library skipped.") (summary r)
 
 /--
 An `exe(…)` is judged against every test executable of the package, those that the filters ruled
@@ -2831,7 +2834,7 @@ def runsUnderTheDefaultFileLimit : Test := do
         plan.toString, workspace.toString, "-j", "4"]
       env := #[("ERRATA_LIFELINE", none)] }
     assertExitCode 0 r
-    assertContains "300 passed, 0 failed" r.stdout
+    assertContains "300 tests run: 300 passed, 0 failed" r.stdout
 
 /--
 Runs whose standard output is a pipe print their report's lines alone, even when their environment

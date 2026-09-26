@@ -55,6 +55,37 @@ def Tally.of (results : Array Result) : Tally := results.foldl Tally.add {}
 /-- The number of results that did not pass. -/
 def Tally.notPassed (t : Tally) : Nat := t.failed + t.errors + t.inconclusive
 
+/-- The number of results counted. -/
+def Tally.total (t : Tally) : Nat := t.passed + t.notPassed
+
+/--
+The seriousness of an outcome, for choosing the one that a test counts by: a pass is 0, a failure
+1, an error verdict 2, and an inconclusive outcome 3.
+-/
+private def Outcome.seriousness : Outcome → Nat
+  | .reported .pass => 0
+  | .reported (.fail _) => 1
+  | .reported (.error _) => 2
+  | .inconclusive _ => 3
+
+/--
+The result that a test counts by, from its results with its own first: its own result when that did
+not pass, and otherwise the most serious of its named results, the first of equally serious ones.
+-/
+def countedResult? (results : Array Result) : Option Result := do
+  let own ← results[0]?
+  if !own.outcome.isPass then return own
+  return results.foldl (init := own) fun best r =>
+    if r.outcome.seriousness > best.outcome.seriousness then r else best
+
+/--
+Counts one more test by its results, its own first, as {name}`countedResult?` chooses among them.
+-/
+def Tally.addTest (t : Tally) (results : Array Result) : Tally :=
+  match countedResult? results with
+  | some r => t.add r
+  | none => t
+
 /-! # Terminal styles -/
 
 /--
@@ -154,10 +185,12 @@ structure HumanReporter where
   verbosity : Verbosity
   /-- Whether the lines are colored for a terminal. -/
   color : Bool := false
-  /-- The counts of the results reported so far. -/
+  /-- The counts of the results reported so far, named results and fixtures' phases included. -/
   tally : Tally := {}
-  /-- The number of tests whose own results were reported so far. -/
-  testsRun : Nat := 0
+  /-- The counts of the tests reported so far, each test counted once by {name}`countedResult?`. -/
+  tests : Tally := {}
+  /-- The number of fixtures' phases reported so far that had a result that did not pass. -/
+  fixturePhasesFailed : Nat := 0
   /-- The executable of the test whose own line was printed last. -/
   lastExe? : Option String := none
   /-- The path of the test whose own line was printed last. -/
@@ -241,38 +274,47 @@ private def resultLines (h : HumanReporter) (r : Result) (name : String) : Array
 
 /--
 The summary line of the human-readable report, in nextest's shape: {lit}`Summary`, the run's
-duration in brackets, the number of tests whose own results were reported, {lit}`N tests run`, and
-the counts of results by outcome. When {name}`skipped?` gives them, the line ends with the number
-of listed tests that the filters left out, {lit}`N tests skipped`, and, when they are not zero, the
-number of libraries with tests that the filters ruled out before building,
-{lit}`M test libraries skipped`, and of the configuration's executables that they ruled out,
-{lit}`K executables skipped`. Ruled-out libraries count only when a module of theirs that an
-earlier build left on disk records a test.
+duration in brackets, and two sentences.
+
+The first sentence counts tests: the tests run, {lit}`N tests run`, and after a colon the tests by
+outcome, passed, failed, errors, and inconclusive, which add up to the tests run. Each test counts
+once. A test whose own outcome did not pass counts by that outcome, the one its status line shows.
+A test whose own outcome passed counts by the most serious outcome among its named results, where
+an inconclusive outcome is more serious than an error verdict and an error more serious than a
+failure; it counts as passed when every named result passed. When fixtures' phases had results that
+did not pass, the sentence ends with their number, {lit}`N fixture phases failed`.
+
+When {name}`skipped?` gives them, the second sentence counts what the run left out: the listed tests
+that the filters left out, {lit}`N tests skipped`, and, when they are not zero, the libraries with
+tests that the filters ruled out before building, {lit}`M test libraries skipped`, and the
+configuration's executables that they ruled out, {lit}`K executables skipped`. Ruled-out libraries
+count only when a module of theirs that an earlier build left on disk records a test.
 -/
 def HumanReporter.summary (h : HumanReporter) (elapsedMs : Nat)
     (skipped? : Option (Nat × Nat × Nat) := none) : String :=
-  let t := h.tally
+  let t := h.tests
   let c := h.color
-  let count (n : Nat) (word : String) (s : Style) :=
-    s!"{Style.count.paint c (toString n)} {s.paint c word}"
+  let count (n : Nat) (one many : String) (s : Style) :=
+    s!"{Style.count.paint c (toString n)} {s.paint c (if n == 1 then one else many)}"
   let style : Style :=
-    if t.notPassed > 0 then .fail else if t.passed == 0 then .slow else .pass
-  let run := s!"{Style.count.paint c (toString h.testsRun)} \
-    {if h.testsRun == 1 then "test run" else "tests run"}"
-  let counts := [run, count t.passed "passed" .pass, count t.failed "failed" .fail,
-    count t.errors "errors" .fail, count t.inconclusive "inconclusive" .fail] ++
-    (match skipped? with
-      | some (tests, libs, exes) =>
-        [count tests (if tests == 1 then "test skipped" else "tests skipped") .slow] ++
-          (if libs == 0 then []
-            else [count libs
-              (if libs == 1 then "test library skipped" else "test libraries skipped") .slow]) ++
-          (if exes == 0 then []
-            else [count exes (if exes == 1 then "executable skipped" else "executables skipped")
-              .slow])
-      | none => [])
-  s!"{style.paint c (padLeft statusWidth "Summary")} {bracketedDuration elapsedMs} \
-    {", ".intercalate counts}"
+    if t.notPassed > 0 || h.fixturePhasesFailed > 0 then .fail
+    else if t.passed == 0 then .slow else .pass
+  let byOutcome := [count t.passed "passed" "passed" .pass,
+    count t.failed "failed" "failed" .fail, count t.errors "errors" "errors" .fail,
+    count t.inconclusive "inconclusive" "inconclusive" .fail] ++
+    (if h.fixturePhasesFailed == 0 then []
+      else [count h.fixturePhasesFailed "fixture phase failed" "fixture phases failed" .fail])
+  let ran := s!"{Style.count.paint c (toString t.total)} \
+    {if t.total == 1 then "test run" else "tests run"}: {", ".intercalate byOutcome}."
+  let left := match skipped? with
+    | some (tests, libs, exes) =>
+      let clauses := [count tests "test skipped" "tests skipped" .slow] ++
+        (if libs == 0 then []
+          else [count libs "test library skipped" "test libraries skipped" .slow]) ++
+        (if exes == 0 then [] else [count exes "executable skipped" "executables skipped" .slow])
+      s!" {", ".intercalate clauses}."
+    | none => ""
+  s!"{style.paint c (padLeft statusWidth "Summary")} {bracketedDuration elapsedMs} {ran}{left}"
 
 /--
 The line after the summary that names the run's seed, {lit}`Seed: N`, with which {lit}`--seed N`
@@ -299,10 +341,13 @@ summarizing the rest. {name}`Verbosity.verbose` shows all results, and
 -/
 def HumanReporter.test (h : HumanReporter) (results : Array Result) :
     HumanReporter × Array String := Id.run do
-  let ranTest := results[0]?.any (·.kind == .test)
-  let h := { h with
-    tally := results.foldl Tally.add h.tally
-    testsRun := if ranTest then h.testsRun + 1 else h.testsRun }
+  let h := match results[0]?.map (·.kind) with
+    | some .test => { h with tests := h.tests.addTest results }
+    | some .fixture =>
+      if results.all (·.outcome.isPass) then h
+      else { h with fixturePhasesFailed := h.fixturePhasesFailed + 1 }
+    | none => h
+  let h := { h with tally := results.foldl Tally.add h.tally }
   if results.isEmpty then return (h, #[])
   let v := h.verbosity
   -- Which results are printed: failures always, and passes when the verbosity shows them, up to the

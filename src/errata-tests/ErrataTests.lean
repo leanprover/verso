@@ -197,7 +197,7 @@ characters, the duration in seconds in brackets, the executable, and the name co
 column nests: tests whose paths share leading components with the previous test of the same
 executable are indented two spaces per shared component and show the rest of their paths, and tests
 that share nothing, or follow another executable, show their full names. The summary line has the
-same shape, with the counts of the results.
+same shape, with the counts of the tests.
 -/
 @[test]
 def reportLinesNameExecutableAndTest : Test := do
@@ -210,12 +210,13 @@ def reportLinesNameExecutableAndTest : Test := do
   assertBEq ["        PASS [   0.012s] Lib A.B.one", "        PASS [   0.003s] Lib     two",
     "        PASS [   0.005s] Lib   C.three", "        PASS [  12.345s] Lib four",
     "        PASS [   0.000s] Other four.five",
-    "     Summary [  12.365s] 5 tests run, 5 passed, 0 failed, 0 errors, 0 inconclusive", ""]
+    "     Summary [  12.365s] 5 tests run: 5 passed, 0 failed, 0 errors, 0 inconclusive.", ""]
     (out.stdout.splitOn "\n")
 
 /--
-The summary line's count of tests run covers tests' own results, while fixture phases and named
-results count among the outcomes. A count of one reads `1 test run`.
+The summary line counts tests, each once, and its counts by outcome add up to the tests run. Named
+results and fixture phases that passed leave the counts as they are, and a count of one reads
+`1 test run`.
 -/
 @[test]
 def summaryCountsTestsRun : Test := do
@@ -224,8 +225,37 @@ def summaryCountsTestsRun : Test := do
       outcome := .reported .pass }
   let own : Result := { exe := "Lib", test := "t", path := #["t"], outcome := .reported .pass }
   let named : Result := { own with resultPath := #["part"] }
-  let out ← captureOutput do discard <| humanReport .silent #[setup, own, named]
-  assertContains "1 test run, 3 passed, 0 failed, 0 errors, 0 inconclusive" out.stdout
+  let out ← captureOutput do discard <| humanReport .silent #[setup, own, named, named]
+  assertContains "1 test run: 1 passed, 0 failed, 0 errors, 0 inconclusive.\n" out.stdout
+
+/--
+Tests whose own outcomes did not pass count by those outcomes, and tests whose own outcomes passed
+count by the most serious outcomes among their named results. Fixture phases that did not pass are
+counted after the tests.
+-/
+@[test]
+def summaryCountsTestsByOutcome : Test := do
+  let own (test : String) (outcome : Outcome) : Result :=
+    { exe := "Lib", test, path := #[test], outcome }
+  let named (r : Result) (name : String) (outcome : Outcome) : Result :=
+    { r with resultPath := #[name], outcome }
+  let fail : Outcome := .reported (.fail { message := "boom" })
+  let error : Outcome := .reported (.error "oops")
+  let timeout : Outcome := .inconclusive (.timedOut 1000 false)
+  let passes := own "passes" (.reported .pass)
+  let namedFails := own "namedFails" (.reported .pass)
+  let namedWorst := own "namedWorst" (.reported .pass)
+  let ownFails := own "ownFails" fail
+  let teardown : Result :=
+    { exe := "Lib", test := "fx", path := #["fx", "teardown"], kind := .fixture, outcome := fail }
+  let out ← captureOutput do
+    discard <| humanReport .silent #[passes, named passes "a" (.reported .pass),
+      namedFails, named namedFails "a" fail,
+      namedWorst, named namedWorst "a" fail, named namedWorst "b" timeout,
+        named namedWorst "c" error,
+      ownFails, named ownFails "a" error, teardown]
+  assertContains "4 tests run: 1 passed, 2 failed, 0 errors, 1 inconclusive, \
+    1 fixture phase failed.\n" out.stdout
 
 /-- An inconclusive test is reported with its reason, its output, and the command that reproduces it. -/
 @[test]
@@ -1401,7 +1431,7 @@ def driverSelectsProfilesAndExecutables : Test :=
       assertExitCode 0 out
       assertContains "1 passed, 0 failed" out.stdout
       -- `TomlLib` has never been built in this copy, so it is not known to have tests.
-      assertContains "0 inconclusive, 0 tests skipped\n" out.stdout
+      assertContains "0 inconclusive. 0 tests skipped.\n" out.stdout
       assertTrue (!(← stamp.pathExists)) "the default profile needs no target, and the stamp was built"
       let j ← config
       assertBEq #["extra"] (exeNames j)
@@ -1431,8 +1461,8 @@ def driverSelectsProfilesAndExecutables : Test :=
       let out ← lake #["test", "--", "-P", "stamped", "--wfail", "-E", "!exe(extra)"]
       assertExitCode 0 out
       assertBEq #["TomlLib"] (exeNames (← config))
-      assertContains "2 passed, 0 failed, 0 errors, 0 inconclusive, 0 tests skipped, \
-        1 executable skipped\n" out.stdout
+      assertContains "2 tests run: 2 passed, 0 failed, 0 errors, 0 inconclusive. 0 tests skipped, \
+        1 executable skipped.\n" out.stdout
     result "a filter that rules out every executable" do
       let out ← lake #["test", "--", "-E", "exe(Nothing)"]
       assertExitCode 4 out
@@ -1441,7 +1471,7 @@ def driverSelectsProfilesAndExecutables : Test :=
     result "a ruled-out library that an earlier build left with tests" do
       let out ← lake #["test", "--", "-E", "exe(extra)"]
       assertExitCode 0 out
-      assertContains "0 tests skipped, 1 test library skipped\n" out.stdout
+      assertContains "0 inconclusive. 0 tests skipped, 1 test library skipped.\n" out.stdout
 
 /--
 The copy of the runner's usage text that the driver prints for `--help` is the runner's, with a
@@ -1605,7 +1635,8 @@ def testKeepsOwnOutputAndTime : Test := do
 
 /--
 The human-readable report shows a test's own failure, with the test's output, above the named
-result that made it fail, and counts both.
+result that made it fail. Both count among the results that did not pass, and the summary counts
+the test once.
 -/
 @[test]
 def reportShowsTestOutputAboveFailedNamedResult : Test := do
@@ -1621,7 +1652,7 @@ def reportShowsTestOutputAboveFailedNamedResult : Test := do
   let next := (after.splitOn "\n").headD ""
   assertTrue (next.startsWith "        FAIL [" && next.endsWith "]   check")
     "the named result's line follows the test's output"
-  assertContains "0 passed, 2 failed, 0 errors, 0 inconclusive" out.stdout
+  assertContains "1 test run: 0 passed, 1 failed, 0 errors, 0 inconclusive.\n" out.stdout
   assertBEq 2 (← failures.get)
 
 /--
