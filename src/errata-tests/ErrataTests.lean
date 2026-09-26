@@ -1296,7 +1296,9 @@ private def processesMatching (text : String) : IO String := do
 /--
 Drivers that end while the runner's `plan` subcommand lists the tests leave no process behind:
 the `plan` subcommand watches the lifeline that the driver holds, and when it closes, it ends the
-listing that runs and exits.
+listing that runs and exits. The killed driver's run directory remains until a later invocation
+finds it older than a day and removes it, and that invocation leaves recent run directories in
+place.
 -/
 @[test]
 def killedDriverEndsItsListing : Test :=
@@ -1326,6 +1328,19 @@ def killedDriverEndsItsListing : Test :=
       discard <| IO.Process.output { cmd := "pkill", args := #["-9", "-f", planMarker] }
     assertTrue (!listing.isEmpty) "the listing never started"
     assertTrue left.isEmpty s!"processes survived the driver:\n{left}"
+    -- The killed driver's directory stays until a later invocation finds it older than a day, and
+    -- a recent directory, such as one of an invocation that runs at once, stays.
+    let killedRuns ← runDirectories dir
+    assertBEq 1 killedRuns.size
+    let recent := dir / ".lake" / "errata" / "runs" / "recent"
+    IO.FS.createDirAll recent
+    for d in killedRuns do
+      assertExitCode 0 (← IO.Process.output
+        { cmd := "touch", args := #["-t", "202001010000", d.toString] })
+    IO.FS.writeFile (dir / "errata.toml") (← IO.FS.readFile (tomlFixture / "errata.toml"))
+    assertExitCode 0 (← IO.Process.output
+      { cmd := "lake", args := #["test", "--", "list"], cwd := dir })
+    assertBEq #[recent] (← runDirectories dir)
 
 /--
 Two invocations of the driver in one workspace at once each run with their own selection: a run of
