@@ -297,8 +297,8 @@ private def mainSource (pkg : String) (mods : Array Lean.Name) : String :=
 
 /-!
 The configuration file, `errata.toml`, which `errata-config` validates and elaborates into
-`.lake/errata/config.json`. The driver reads from that file the targets that the selected profile
-needs and the test executables that the file adds.
+`.lake/errata/config.json`. The driver reads from that file the needs' targets and the test
+executables that the file adds.
 -/
 
 /-- An object's fields, or none when the value is not an object. -/
@@ -311,20 +311,22 @@ private def jsonFields (j : Lean.Json) : Array (String × Lean.Json) :=
 private def jsonNat (j : Lean.Json) (key : String) : Nat :=
   (j.getObjValAs? Nat key).toOption.getD 0
 
-/--
-The distinct targets that the settings of a profile in `config.json` and of its overrides need, each
-with the line and column of its name in `errata.toml`.
--/
-private def neededTargets (profile : Lean.Json) : Array (String × Nat × Nat) := Id.run do
-  let overrides := match profile.getObjValD "override" with
-    | .arr os => os
-    | _ => #[]
-  let mut out := #[]
-  for scope in #[profile] ++ overrides do
-    for (_, v) in jsonFields (scope.getObjValD "settings") do
-      if let .ok tgt := v.getObjValAs? String "needs" then
-        unless out.any (·.1 == tgt) do out := out.push (tgt, jsonNat v "line", jsonNat v "col")
-  return out
+/-- A need, as `config.json` and the plan record it. -/
+private structure DriverNeed where
+  /-- The need's name. -/
+  name : String
+  /-- The Lake target, in the workspace's target syntax. -/
+  spec : String
+  /-- The line of the target in `errata.toml`. -/
+  line : Nat
+  /-- The column of the target in `errata.toml`. -/
+  col : Nat
+
+/-- The needs of the `[needs]` table of `config.json`. -/
+private def needsTable (config : Lean.Json) : Array DriverNeed :=
+  (jsonFields (config.getObjValD "needs")).filterMap fun (name, n) => do
+    let spec ← (n.getObjValAs? String "target").toOption
+    return { name, spec, line := jsonNat n "line", col := jsonNat n "col" }
 
 /-- A test executable that `errata.toml` adds, as `config.json` records it. -/
 private structure AddedExecutable where
@@ -344,7 +346,7 @@ private def addedExecutables (config : Lean.Json) : Array AddedExecutable :=
              line := jsonNat e "line", col := jsonNat e "col" }
   | _ => #[]
 
-/-- A library's test executable, as `workspace.json` records it. -/
+/-- A library's test executable, as `executables.json` records it. -/
 private structure LibraryExecutable where
   name : String
   command : Array String
@@ -384,18 +386,17 @@ private def libraryModulesJson (libs : Array Lake.LeanLib) : Lean.Json :=
     ("globs", Lean.toJson (lib.config.globs.map (·.toString)))]
 
 /--
-What the workspace contributes to the run, `.lake/errata/workspace.json`, as JSON: the path of each
-needed target's result, the libraries' test executables and the executables `added` that
-`errata.toml` adds, the directory of Errata's sources, the driver's warnings, the command that the
-runner's arguments follow, the package's directory, `cwd`, where tests run and which report paths in
-`errata.toml` are relative to, and the modules of the package's libraries, `libraries`. `known`
-names every test executable that the package can have, and `ruledOut` those among them that the
-command line's filters ruled out before building. Of those, `testLibraries` are the libraries known
-to have tests, and `addedOut` the executables that `errata.toml` adds. The selection is partial when
-some executable is ruled out or when `someTests` says that the executables run only some of their
-tests.
+What the workspace contributes to the plan, `.lake/errata/executables.json`, as JSON: the libraries'
+test executables and the executables `added` that `errata.toml` adds, the directory of Errata's
+sources, the driver's warnings, the command that the runner's arguments follow, the package's
+directory, `cwd`, where tests run and which report paths in `errata.toml` are relative to, and the
+modules of the package's libraries, `libraries`. `known` names every test executable that the
+package can have, and `ruledOut` those among them that the command line's filters ruled out before
+building. Of those, `testLibraries` are the libraries known to have tests, and `addedOut` the
+executables that `errata.toml` adds. The selection is partial when some executable is ruled out or
+when `someTests` says that the executables run only some of their tests.
 -/
-private def workspaceJson (needs : Array (String × String))
+private def executablesJson
     (executables : Array LibraryExecutable) (added : Array AddedExecutable)
     (cwd : System.FilePath) (errataDir : String) (warnings : Array String) (invocation : String)
     (known ruledOut testLibraries addedOut : Array String) (someTests : Bool)
@@ -408,7 +409,6 @@ private def workspaceJson (needs : Array (String × String))
         | none => cwd.toString))]
   Lean.Json.mkObj <| [
     ("protocol", Lean.toJson (1 : Nat)),
-    ("needs", Lean.Json.mkObj (needs.toList.map fun (tgt, path) => (tgt, Lean.Json.str path))),
     ("executables", Lean.Json.arr <| (executables.map fun e =>
       Lean.Json.mkObj <| [("name", Lean.Json.str e.name),
         ("command", Lean.Json.arr (e.command.map Lean.Json.str)),
@@ -459,34 +459,55 @@ The driver's exit codes for the problems it finds itself, the same as the runner
 (`Errata.Runner.ExitCode`), which this file cannot import.
 -/
 
-/-- `errata.toml` or a target that a setting needs is wrong. -/
+/-- `errata.toml` or a need's target is wrong, or a need's target could not be built. -/
 private def setupErrorCode : UInt32 := 96
 
-/-- A test executable, the runner, or a needed target could not be built. -/
+/-- A test executable or the runner could not be built. -/
 private def buildFailedCode : UInt32 := 101
 
 /--
-What the runner's planning mode says about the command line: whether it printed the usage text, the
-profile, the test executables that the filters do not rule out, whether the targets of the
-profile's settings are needed, whether the phases are named as they begin, and the modules whose
-tests run through the interpreted product.
+What the runner's `check` subcommand says about the command line: whether it printed the usage
+text, the command, the profile, the test executables that the filters do not rule out, whether the
+phases are named as they begin, the modules whose tests run through the interpreted product, and
+the options that the plan depends on.
 -/
-private structure Plan where
+private structure CheckedCommandLine where
   help : Bool
+  command : String
   profile : String
   executables : Array String
-  needs : Bool
   phases : Bool
   interpreted : Array Lean.Name
+  planArguments : String
 
-/-- The plan that the runner wrote as JSON. -/
-private def Plan.ofJson (j : Lean.Json) : Plan where
+/-- What the runner's `check` subcommand wrote as JSON. -/
+private def CheckedCommandLine.ofJson (j : Lean.Json) : CheckedCommandLine where
   help := (j.getObjValAs? Bool "help").toOption.getD false
+  command := (j.getObjValAs? String "command").toOption.getD "run"
   profile := (j.getObjValAs? String "profile").toOption.getD "default"
   executables := (j.getObjValAs? (Array String) "executables").toOption.getD #[]
-  needs := (j.getObjValAs? Bool "needs").toOption.getD true
   phases := (j.getObjValAs? Bool "phases").toOption.getD false
   interpreted := (j.getObjValAs? (Array String) "interpreted").toOption.getD #[] |>.map moduleNameOf
+  planArguments := (j.getObjValAs? String "plan-arguments").toOption.getD ""
+
+/-- A need that the plan names, with the tests that reach it, each written as `exe: test`. -/
+private structure PlannedNeed where
+  need : DriverNeed
+  tests : Array String
+
+/-- The needs that the plan names. -/
+private def plannedNeeds (plan : Lean.Json) : Array PlannedNeed :=
+  match plan.getObjValD "needs" with
+  | .arr ns => ns.filterMap fun n => do
+    let name ← (n.getObjValAs? String "name").toOption
+    let spec ← (n.getObjValAs? String "target").toOption
+    let tests := match n.getObjValD "tests" with
+      | .arr ts => ts.filterMap fun t => do
+        return s!"{← (t.getObjValAs? String "exe").toOption}: \
+          {← (t.getObjValAs? String "test").toOption}"
+      | _ => #[]
+    return { need := { name, spec, line := jsonNat n "line", col := jsonNat n "col" }, tests }
+  | _ => #[]
 
 -- The script's name is the one `driverInvocation` looks up.
 @[test_driver]
@@ -548,10 +569,33 @@ script run (args) do
       IO.eprintln s!"error: {configFile} is not JSON: {e}"
       return setupErrorCode
   let added := addedExecutables config
-  -- The runner reads the command line, so it is built first. Its planning mode checks the command
-  -- line, the profile, and the filters, and names the test executables that the filters can select
-  -- by the executables' names alone; only the libraries among them are built. The candidates are
-  -- the root package's libraries and the executables that `errata.toml` adds.
+  -- Each need's target is resolved before any test library is built, so that a target that the
+  -- workspace lacks ends Discovery at once. Only the needs that the plan names are built.
+  let mut needSpecs : Array (String × BuildSpec) := #[]
+  let mut targetProblems : Array String := #[]
+  for n in needsTable config do
+    let tgt := n.spec
+    match ← (parseTargetSpec ws tgt).toBaseIO with
+    | .error e =>
+      targetProblems := targetProblems.push
+        s!"errata.toml:{n.line}:{n.col}: the target '{tgt}' of the need '{n.name}' cannot be \
+          built: {e}"
+    | .ok specs =>
+      match specs[0]?, specs.size with
+      | some spec, 1 => needSpecs := needSpecs.push (n.name, spec)
+      | _, k =>
+        let msg := s!"errata.toml:{n.line}:{n.col}: the target '{tgt}' of the need '{n.name}' \
+          names {k} build results, and a need names exactly one"
+        targetProblems := targetProblems.push msg
+  unless targetProblems.isEmpty do
+    for p in targetProblems do IO.eprintln p
+    IO.eprintln s!"error: {tomlPath} has {targetProblems.size} \
+      {if targetProblems.size == 1 then "problem" else "problems"}"
+    return setupErrorCode
+  -- The runner reads the command line, so it is built first. Its `check` subcommand checks the
+  -- command line, the profile, and the filters, and names the test executables that the filters can
+  -- select by the executables' names alone; only the libraries among them are built. The candidates
+  -- are the root package's libraries and the executables that `errata.toml` adds.
   let some runnerExe := self.findLeanExe? `«errata-runner»
     | IO.eprintln "error: the package that defines the Errata driver has no errata-runner"
       return 1
@@ -562,66 +606,41 @@ script run (args) do
       return buildFailedCode
   let libName (lib : Lake.LeanLib) : String := lib.name.toString (escape := false)
   let candidates := ws.root.leanLibs.map libName ++ added.map (·.name)
-  let planFile := errataOut / "plan.json"
+  let checkFile := errataOut / "command-line.json"
   let request := Lean.Json.mkObj [("config", Lean.Json.str configFile.toString),
     ("invocation", Lean.Json.str withArgs), ("executables", Lean.toJson candidates)]
-  let planned ← (← IO.Process.spawn {
+  let checkedCode ← (← IO.Process.spawn {
     cmd := runnerPath.toString
-    args := #["errata-plan", request.compress, planFile.toString] ++ args.toArray
+    args := #["check", request.compress, checkFile.toString] ++ args.toArray
     env := #[("LEAN_ABORT_ON_PANIC", none)]
   }).wait
-  unless planned == 0 do return planned
-  let plan ← match Lean.Json.parse (← IO.FS.readFile planFile) with
-    | .ok j => pure (Plan.ofJson j)
+  unless checkedCode == 0 do return checkedCode
+  let checked ← match Lean.Json.parse (← IO.FS.readFile checkFile) with
+    | .ok j => pure (CheckedCommandLine.ofJson j)
     | .error e =>
-      IO.eprintln s!"error: {planFile} is not JSON: {e}"
+      IO.eprintln s!"error: {checkFile} is not JSON: {e}"
       return 1
-  if plan.help then return 0
-  -- The targets that the selected profile's settings need are resolved before any test library is
-  -- built, so that an unknown target ends Discovery at once. Listings that show no settings need
-  -- no targets.
-  let wanted :=
-    if plan.needs then neededTargets ((config.getObjValD "profiles").getObjValD plan.profile)
-    else #[]
-  let mut needed : Array (String × BuildSpec) := #[]
-  let mut targetProblems : Array String := #[]
-  for (tgt, line, col) in wanted do
-    match ← (parseTargetSpec ws tgt).toBaseIO with
-    | .error e =>
-      targetProblems := targetProblems.push
-        s!"errata.toml:{line}:{col}: the target '{tgt}' cannot be built: {e}"
-    | .ok specs =>
-      match specs[0]?, specs.size with
-      | some spec, 1 => needed := needed.push (tgt, spec)
-      | _, n =>
-        let msg := s!"errata.toml:{line}:{col}: the target '{tgt}' names {n} build results, and a \
-          setting needs exactly one"
-        targetProblems := targetProblems.push msg
-  unless targetProblems.isEmpty do
-    for p in targetProblems do IO.eprintln p
-    IO.eprintln s!"error: {tomlPath} has {targetProblems.size} \
-      {if targetProblems.size == 1 then "problem" else "problems"}"
-    return setupErrorCode
-  if plan.phases then
+  if checked.help then return 0
+  if checked.phases then
     IO.println "== Discovery"
     (← IO.getStdout).flush
   -- Under `--interpreted`, the libraries that hold the named modules are the selection, and no
   -- executable that `errata.toml` adds is. Each named module belongs to a library of the root
   -- package that the filters leave in.
-  let interpreted := plan.interpreted
+  let interpreted := checked.interpreted
   for m in interpreted do
     let some mod := ws.findModule? m
       | IO.eprintln s!"error: no library in the workspace holds the module '{m}'"
         return setupErrorCode
-    unless mod.pkg.baseName == ws.root.baseName && plan.executables.contains (libName mod.lib) do
+    unless mod.pkg.baseName == ws.root.baseName && checked.executables.contains (libName mod.lib) do
       IO.eprintln s!"error: no selected library holds the module '{m}' that --interpreted names"
       return setupErrorCode
   let libs :=
-    if interpreted.isEmpty then ws.root.leanLibs.filter (plan.executables.contains <| libName ·)
+    if interpreted.isEmpty then ws.root.leanLibs.filter (checked.executables.contains <| libName ·)
     else ws.root.leanLibs.filter fun lib =>
       interpreted.any fun m => (ws.findModule? m).any (·.lib.name == lib.name)
   let addedExes :=
-    if interpreted.isEmpty then added.filter (plan.executables.contains ·.name) else #[]
+    if interpreted.isEmpty then added.filter (checked.executables.contains ·.name) else #[]
   let selected := libs.map libName ++ addedExes.map (·.name)
   let ruledOut := candidates.filter (!selected.contains ·)
   -- Libraries that the filters ruled out are test libraries when a module of theirs that an earlier
@@ -718,14 +737,19 @@ script run (args) do
     | some lib => IO.FS.realPath lib.srcDir
     | none => IO.FS.realPath self.dir
   let rootDir ← IO.FS.realPath ws.root.dir
+  let executablesFile := errataOut / "executables.json"
+  let planFile := errataOut / "plan.json"
   let workspaceFile := errataOut / "workspace.json"
   let some interpreterExe := self.findLeanExe? `«errata-interpret»
     | IO.eprintln "error: the package that defines the Errata driver has no errata-interpret"
       return 1
-  -- Build the test executables and every target that a setting of the selected profile needs, then
-  -- `workspace.json`. Lake writes it again when `config.json`, the discovery results, the
-  -- executables, or a needed target change: each needed target's trace flows into the continuation
-  -- that writes the file.
+  -- Build the test executables, then the plan, which the runner's `plan` subcommand writes after
+  -- the List phase. The plan is a file target whose trace mixes `config.json`, the executables'
+  -- traces (and under `--interpreted` the named modules'), `executables.json`, and the options that
+  -- the plan depends on, so Lake writes it again exactly when one of them changes. The listings of
+  -- the executables that `errata.toml` adds depend on files that Lake does not track, so a plan
+  -- that lists one of them is made again on every run.
+  let planFailure ← IO.mkRef (none : Option (UInt32 × String))
   try
     runBuild do
       -- Each library's test executable, or under `--interpreted` the interpreted product with the
@@ -741,27 +765,95 @@ script run (args) do
             return out
         else do
           let interpreterJob ← interpreterExe.exe.fetch
-          interpreterJob.mapM fun path => do
+          let oleanJobs ← interpreted.filterMapM fun m => do
+            match ws.findModule? m with
+            | some mod => return some (← mod.olean.fetch)
+            | none => return none
+          let modulesJob := interpreterJob.zipWith (fun path _ => path) (Job.mixArray oleanJobs)
+          modulesJob.mapM fun path => do
             let path ← IO.FS.realPath path
             return testLibs.map fun (lib, mods) =>
               interpretedExecutable ws path (libName lib) mods interpreted
-      let needJobs ← needed.mapM fun (_, spec) => spec.query .text
-      (Job.collectArray needJobs).bindM fun needValues => do
       libExesJob.mapM fun executables => do
-        let needs := needed.zipWith (fun (tgt, _) value => (tgt, value)) needValues
         -- Tests run from the root package's directory, where `lake test` runs.
-        let content := (workspaceJson needs executables addedExes rootDir errataDir.toString
+        let content := (executablesJson executables addedExes rootDir errataDir.toString
           driverWarnings withArgs candidates ruledOut skippedTestLibs
           (added.map (·.name) |>.filter ruledOut.contains) (!interpreted.isEmpty)
           (libraryModulesJson ws.root.leanLibs)).pretty ++ "\n"
+        IO.FS.createDirAll errataOut
+        let current ← if ← executablesFile.pathExists then IO.FS.readFile executablesFile
+          else pure ""
+        unless current == content do IO.FS.writeFile executablesFile content
         addPureTrace (← IO.FS.readFile configFile) "config.json"
+        addPureTrace content "executables.json"
+        addPureTrace checked.planArguments "the options that the plan depends on"
+        unless addedExes.isEmpty do
+          addPureTrace (toString (← IO.monoNanosNow)) "the listings of [[executable]] entries"
+        buildFileUnlessUpToDate' (text := true) planFile do
+          let out ← IO.Process.output {
+            cmd := runnerPath.toString
+            args := #["plan", configFile.toString, executablesFile.toString, planFile.toString] ++
+              args.toArray
+            env := #[("LEAN_ABORT_ON_PANIC", none)] }
+          unless out.exitCode == 0 do
+            planFailure.set (some (out.exitCode, out.stdout ++ out.stderr))
+            error "the runner's plan subcommand reported problems"
+  catch e =>
+    match ← planFailure.get with
+    | some (code, problems) =>
+      IO.eprint problems
+      return code
+    | none =>
+      IO.eprintln s!"error: the test executables could not be built: {e}"
+      return buildFailedCode
+  -- A listing prints the plan and builds no need.
+  if checked.command == "list" then
+    let child ← IO.Process.spawn {
+      cmd := runnerPath.toString
+      args := #["list", planFile.toString] ++ args.toArray
+      env := #[("LEAN_ABORT_ON_PANIC", none)] }
+    return ← child.wait
+  let plan ← match Lean.Json.parse (← IO.FS.readFile planFile) with
+    | .ok j => pure j
+    | .error e =>
+      IO.eprintln s!"error: {planFile} is not JSON: {e}"
+      return 1
+  -- Build the needs that the plan names, then `workspace.json`, which gives each need's value. Its
+  -- trace mixes the plan and the needs' traces, so Lake writes it again when the plan or a need's
+  -- target changes.
+  let needs := plannedNeeds plan
+  let needJobs ← IO.mkRef (#[] : Array (String × Job String))
+  try
+    runBuild do
+      let mut jobs : Array (PlannedNeed × Job String) := #[]
+      for n in needs do
+        if let some (_, spec) := needSpecs.find? (·.1 == n.need.name) then
+          let job ← spec.query .text
+          jobs := jobs.push (n, job)
+          needJobs.modify (·.push (n.need.name, job))
+      (Job.collectArray (jobs.map (·.2))).mapM fun values => do
+        let content := (Lean.Json.mkObj [("protocol", Lean.toJson (1 : Nat)),
+          ("needs", Lean.Json.mkObj ((jobs.zip values).toList.map fun ((n, _), v) =>
+            (n.need.name, Lean.Json.str v)))]).pretty ++ "\n"
+        addPureTrace (← IO.FS.readFile planFile) "plan.json"
         addPureTrace content "workspace.json"
         buildFileUnlessUpToDate' (text := true) workspaceFile do
-          IO.FS.createDirAll errataOut
           IO.FS.writeFile workspaceFile content
   catch e =>
-    IO.eprintln s!"error: the test executables could not be built: {e}"
-    return buildFailedCode
+    -- A need failed when its job failed, or when its target could not even start a job.
+    let started ← needJobs.get
+    let failed ← needs.filterM fun n => do
+      match started.find? (·.1 == n.need.name) with
+      | some (_, job) => return (← job.wait?).isNone
+      | none => return true
+    if failed.isEmpty then
+      IO.eprintln s!"error: {workspaceFile} could not be written: {e}"
+      return buildFailedCode
+    for n in failed do
+      IO.eprintln s!"errata.toml:{n.need.line}:{n.need.col}: the target '{n.need.spec}' of the \
+        need '{n.need.name}' could not be built, and these tests reach it:\n  \
+        {"\n  ".intercalate n.tests.toList}"
+    return setupErrorCode
   -- The runner's standard input is a lifeline that the driver holds, and `ERRATA_LIFELINE` asks the
   -- runner to end its tests when that pipe closes. A driver started with
   -- `ERRATA_DRIVER_LIFELINE=1`, as the editor widget starts it, hands its own standard input on as
@@ -774,7 +866,7 @@ script run (args) do
   let handsOnLifeline := (← IO.getEnv "ERRATA_DRIVER_LIFELINE") == some "1"
   let child ← IO.Process.spawn {
     cmd := runnerPath.toString
-    args := #[configFile.toString, workspaceFile.toString] ++ args.toArray
+    args := #["run", planFile.toString, workspaceFile.toString] ++ args.toArray
     stdin := if handsOnLifeline then .inherit else .piped
     setsid := true
     env := #[("LEAN_ABORT_ON_PANIC", none), ("ERRATA_LIFELINE", some "1"),
