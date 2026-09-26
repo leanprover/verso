@@ -210,8 +210,22 @@ def reportLinesNameExecutableAndTest : Test := do
   assertBEq ["        PASS [   0.012s] Lib A.B.one", "        PASS [   0.003s] Lib     two",
     "        PASS [   0.005s] Lib   C.three", "        PASS [  12.345s] Lib four",
     "        PASS [   0.000s] Other four.five",
-    "     Summary [  12.365s] 5 passed, 0 failed, 0 errors, 0 inconclusive", ""]
+    "     Summary [  12.365s] 5 tests run, 5 passed, 0 failed, 0 errors, 0 inconclusive", ""]
     (out.stdout.splitOn "\n")
+
+/--
+The summary line counts the tests run apart from the results: fixture phases and named results
+count as results alone, and one test is written in the singular.
+-/
+@[test]
+def summaryCountsTestsRun : Test := do
+  let setup : Result :=
+    { exe := "Lib", test := "fx", path := #["fx", "setup"], kind := .fixture
+      outcome := .reported .pass }
+  let own : Result := { exe := "Lib", test := "t", path := #["t"], outcome := .reported .pass }
+  let named : Result := { own with resultPath := #["part"] }
+  let out ← captureOutput do discard <| humanReport .silent #[setup, own, named]
+  assertContains "1 test run, 3 passed, 0 failed, 0 errors, 0 inconclusive" out.stdout
 
 /-- An inconclusive test is reported with its reason, its output, and the command that reproduces it. -/
 @[test]
