@@ -1318,6 +1318,54 @@ def listFormats : Test := do
     assertBEq #["bare:", "    only"] r.lines
 
 /--
+The JSON format of `list` over this library's test executable has the fixtures that the selected
+tests reach, each with the settings and the fixtures it takes and the threads it asks for, and each
+test names the fixtures it uses with their claims, as the `uses` lines of the human format do.
+-/
+@[test]
+def listJsonHasFixtures : Test := do
+  leanProduct.check
+  let listed (format : MessageFormat) : IO Run :=
+    runWith #[leanProduct.exe] { command := .list, messageFormat := format, verbosity := .verbose }
+  let human ← listed .human
+  let json ← listed .json
+  let some text := json.lines[0]? | fail "no output"
+  let j ← IO.ofExcept (Json.parse text)
+  let some exe := (j.getObjValAs? (Array Json) "executables").toOption.bind (·[0]?)
+    | fail "no executable"
+  let tests ← IO.ofExcept (exe.getObjValAs? (Array Json) "tests")
+  let fixtures ← IO.ofExcept (exe.getObjValAs? (Array Json) "fixtures")
+  let names := fixtures.filterMap (strField · "name")
+  let uses := human.lines.filterMap fun l => (l.trimAscii.copy.dropPrefix? "uses ").map (·.copy)
+  assertTrue (!uses.isEmpty) "the human format names no fixture"
+  result "each test's fixtures" do
+    let fromJson := tests.flatMap fun t =>
+      ((t.getObjValAs? (Array Json) "fixtures").toOption.getD #[]).filterMap fun f => do
+        let name ← strField f "name"
+        let exclusive ← (f.getObjValAs? Bool "exclusive").toOption
+        return if exclusive then name else s!"{name} (shared)"
+    assertBEq uses fromJson
+  result "the fixtures reached" do
+    for u in uses do
+      let name := (u.dropSuffix? " (shared)").map (·.copy) |>.getD u
+      assertTrue (names.contains name) s!"{name} is not among the fixtures: {names}"
+    for f in fixtures do
+      for d in (f.getObjValAs? (Array String) "fixtures").toOption.getD #[] do
+        assertTrue (names.contains d) s!"{d}, which a fixture takes, is not among the fixtures"
+  let fixture (name : String) : TestM Json := do
+    let some f := fixtures.find? (strField · "name" == some name) | fail s!"no fixture {name}"
+    return f
+  let fx := leanProduct.fixtures
+  result "a fixture's settings" do
+    assertBEq (some #[fx.stampFile])
+      ((← fixture fx.stamped).getObjValAs? (Array String) "settings").toOption
+  result "a fixture's fixtures" do
+    assertBEq (some #[fx.stamped])
+      ((← fixture fx.dependent).getObjValAs? (Array String) "fixtures").toOption
+  result "a fixture's threads" do
+    assertBEq (some 3) ((← fixture fx.threaded).getObjValAs? Nat "threads").toOption
+
+/--
 The source of a filter of {name}`length` characters in a one-line string of {name}`path` whose
 opening delimiter is at {name}`line` and {name}`col`.
 -/

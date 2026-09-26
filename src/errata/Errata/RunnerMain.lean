@@ -1024,13 +1024,30 @@ def printOnelineList (ctx : RunContext) (selected : Array (InventoryTest × Reso
     ctx.dispatcher.sinks.line ("  ".intercalate (cols ++ [r[3]!]) |>.trimAsciiEnd.copy)
 
 /--
+The fixtures of {name}`listing` that {name}`tests` use, directly or through the fixtures they take,
+in the listing's order.
+-/
+def reachedFixtures (listing : Listing) (tests : Array InventoryTest) :
+    Array InventoryFixture := Id.run do
+  let mut reached : Std.HashSet String := {}
+  for t in tests do
+    for f in t.fixtures do reached := reached.insert f.name
+  -- Each fixture is listed after the fixtures it takes, so one pass from the end reaches them all.
+  for f in listing.fixtures.reverse do
+    if reached.contains f.name then
+      for d in f.fixtures do reached := reached.insert d
+  return listing.fixtures.filter (reached.contains ·.name)
+
+/--
 The selected tests as JSON: the profile, the run's seed, the number of listed tests selected and
 left out, under {lit}`not-built` the names of the libraries and executables that the filters ruled
 out before building, the settings that the test executables declare, and each test executable with
-its selected tests.
+its selected tests and the fixtures they reach.
 Each test has its name, path, file, line, tags, and description, the values it receives, the
-mandatory settings without a value, whether its seed is derived from the run's, and its timeout,
-grace period, and slow mark in milliseconds.
+mandatory settings without a value, whether its seed is derived from the run's, its timeout, grace
+period, and slow mark in milliseconds, and the fixtures it uses, each exclusive or shared.
+Each fixture has its name, description, the settings and the fixtures it takes, and the threads it
+asks for.
 -/
 def inventoryJson (ctx : RunContext) (profile : String) (listings : Array Listing)
     (selected : Array (InventoryTest × Resolved)) (skipped : Nat) : Json := Id.run do
@@ -1050,12 +1067,23 @@ def inventoryJson (ctx : RunContext) (profile : String) (listings : Array Listin
     [("settings", Json.mkObj (r.arguments.toList.map fun (k, v) => (k, Json.str v))),
       ("missing", ToJson.toJson r.missing), ("derived-seed", Json.bool r.derivedSeed),
       ("timeout-ms", ToJson.toJson r.timeoutMs), ("grace-period-ms", ToJson.toJson r.gracePeriodMs),
-      ("slow-after-ms", ToJson.toJson r.slowAfterMs)]
+      ("slow-after-ms", ToJson.toJson r.slowAfterMs),
+      ("fixtures", Json.arr (t.fixtures.map fun f =>
+        Json.mkObj [("name", Json.str f.name), ("exclusive", Json.bool f.exclusive)]))]
+  let fixtureJson (f : InventoryFixture) : Json := Json.mkObj <|
+    [("name", Json.str f.name)] ++ opt "description" f.description? ++
+    [("settings", ToJson.toJson f.settings), ("fixtures", ToJson.toJson f.fixtures)] ++
+    opt "threads" f.threads?
   let groups := byExecutable selected
   let executables := ctx.config.executables.mapIdx fun i e =>
-    let tests := (groups.find? (·.1 == i)).map (·.2) |>.getD #[]
+    let tests : Array (InventoryTest × Resolved) :=
+      (groups.find? (·.1 == i)).map (·.2) |>.getD #[]
+    let fixtures := match listings[i]? with
+      | some l => reachedFixtures l (tests.map Prod.fst)
+      | none => #[]
     Json.mkObj [("name", Json.str e.name), ("command", ToJson.toJson e.command),
-      ("tests", Json.arr (tests.map fun (t, r) => testJson t r))]
+      ("tests", Json.arr (tests.map fun (t, r) => testJson t r)),
+      ("fixtures", Json.arr (fixtures.map fixtureJson))]
   return Json.mkObj [("profile", Json.str profile), ("seed", ToJson.toJson ctx.runSeed),
     ("selected", ToJson.toJson selected.size), ("skipped", ToJson.toJson skipped),
     ("not-built", ToJson.toJson ctx.config.ruledOut),
