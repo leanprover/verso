@@ -11,7 +11,7 @@ package tomlapp where
 
 require verso from "../../../.."
 
--- A test that reads the file that the `stamp` target builds.
+-- Tests that read the files that the `stamp` and `marker` targets build.
 lean_lib TomlLib
 
 -- Copies `stamp-input.txt` into the build directory. The test's setting needs it.
@@ -23,3 +23,20 @@ target stamp pkg : System.FilePath := do
       IO.FS.createDirAll pkg.buildDir
       IO.FS.writeFile out (← IO.FS.readFile src)
     return out
+
+-- Writes a marker file into the build directory, so that a test can tell whether it was built. The
+-- test that reads it needs it.
+target marker pkg : System.FilePath := do
+  let input ← inputTextFile (pkg.dir / "stamp-input.txt")
+  input.mapM fun _ => do
+    let out := pkg.buildDir / "marker.txt"
+    buildFileUnlessUpToDate' (text := true) out do
+      IO.FS.createDirAll pkg.buildDir
+      IO.FS.writeFile out "marker\n"
+    return out
+
+-- A target whose build fails, for a need of `variants/broken-need.toml`.
+target broken pkg : System.FilePath := do
+  let input ← inputTextFile (pkg.dir / "stamp-input.txt")
+  input.mapM fun _ => do
+    error "the target fails to build on purpose"

@@ -2,9 +2,11 @@
 # own, which prints the directory of Errata's sources that the runner gives it.
 [profile.stamped.settings]
 "TomlLib.stampFile" = { needs = "stamp" }
+"TomlLib.markerFile" = { needs = "marker" }
 
 [needs]
 stamp = "stamp"
+marker = "marker"
 
 [[executable]]
 name = "extra"

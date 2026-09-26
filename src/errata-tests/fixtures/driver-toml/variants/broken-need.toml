@@ -1,7 +1,8 @@
+# The marker's need names a target whose build fails, so a run of a test that reaches it fails.
 [profile.default.settings]
 "TomlLib.stampFile" = { needs = "stamp" }
 "TomlLib.markerFile" = { needs = "marker" }
 
 [needs]
 stamp = "stamp"
-marker = "marker"
+marker = "broken"

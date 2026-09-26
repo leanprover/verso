@@ -1149,65 +1149,131 @@ def driverValidatesToml : Test := do
         s!"the message appears other than once:\n{out.stderr}"
       assertNotContains "errataExe" out.stdout
 
+/-- The time that the file was last written, or none when it is absent. -/
+private def writtenAt (file : System.FilePath) : IO (Option IO.FS.SystemTime) := do
+  if ← file.pathExists then return some (← file.metadata).modified else return none
+
 /--
-Settings bound to targets with `{ needs = … }` receive the targets' results. Editing a target's
-input rebuilds the workspace's configuration, and leaves the elaborated `errata.toml` and the test
-library alone. A run with nothing changed rewrites neither file, editing `errata.toml` rewrites the
-elaborated file, and selecting a profile with other targets rewrites the workspace's configuration.
+The driver's files are Lake file targets, written again exactly when their inputs change. A listing
+builds no need, and a listing repeated with nothing changed rewrites neither `config.json` nor the
+plan. An edit of `errata.toml` rewrites both and relinks no test executable. An edit of a test module
+relinks its library's test executable and rewrites the plan. Another filter rewrites the plan. A run
+with a filter that a listing already used reuses its plan, builds the need that its test reaches,
+and leaves the need that only a test left out reaches unbuilt. An edit of a need's input rebuilds
+the need's target and rewrites `workspace.json`, and leaves the plan alone.
 -/
 @[test]
-def driverBuildsNeededTargets : Test :=
+def driverFilesAreIncremental : Test :=
   IO.FS.withTempDir fun dir => do
     copyFixture tomlFixture dir
     let lake (args : Array String) : IO IO.Process.Output :=
       IO.Process.output { cmd := "lake", args, cwd := dir }
-    let config := dir / ".lake" / "errata" / "config.json"
-    let workspace := dir / ".lake" / "errata" / "workspace.json"
-    let olean := dir / ".lake" / "build" / "lib" / "lean" / "TomlLib.olean"
-    let out ← lake #["test"]
-    assertExitCode 0 out
-    assertContains "1 passed, 0 failed, 0 errors, 0 inconclusive" out.stdout
-    assertContains "stamp.txt" (← IO.FS.readFile workspace)
-    let configBefore := (← config.metadata).modified
-    let workspaceBefore := (← workspace.metadata).modified
-    let oleanBefore := (← olean.metadata).modified
-    IO.FS.writeFile (dir / "stamp-input.txt") "stamp 2\n"
-    let again ← lake #["test"]
-    assertExitCode 0 again
-    result "the workspace's configuration is rebuilt" do
-      assertTrue ((← workspace.metadata).modified != workspaceBefore)
-        "workspace.json was not rewritten"
-    result "the elaborated errata.toml is not" do
-      assertTrue ((← config.metadata).modified == configBefore) "config.json was rewritten"
-    result "the test library is not" do
-      assertTrue ((← olean.metadata).modified == oleanBefore) "TomlLib.olean was rebuilt"
-    result "a run with nothing changed" do
-      let configBefore := (← config.metadata).modified
-      let workspaceBefore := (← workspace.metadata).modified
-      assertExitCode 0 (← lake #["test"])
-      assertTrue ((← config.metadata).modified == configBefore) "config.json was rewritten"
-      assertTrue ((← workspace.metadata).modified == workspaceBefore)
-        "workspace.json was rewritten"
-    result "an edit of errata.toml, then another profile" do
-      let stamp ← IO.FS.realPath (dir / ".lake" / "build" / "stamp.txt")
+    let errata := dir / ".lake" / "errata"
+    let build := dir / ".lake" / "build"
+    let config := errata / "config.json"
+    let plan := errata / "plan.json"
+    let workspace := errata / "workspace.json"
+    let exe := build / "bin" / "errata-test-TomlLib"
+    let stamp := build / "stamp.txt"
+    let marker := build / "marker.txt"
+    let times : IO (Array (Option IO.FS.SystemTime)) := #[config, plan, exe].mapM writtenAt
+    assertExitCode 0 (← lake #["test", "--", "list"])
+    result "a listing builds no need" do
+      assertTrue (!(← stamp.pathExists)) "the stamp was built"
+      assertTrue (!(← marker.pathExists)) "the marker was built"
+    result "a repeated listing" do
+      let before ← times
+      assertExitCode 0 (← lake #["test", "--", "list"])
+      assertBEq before (← times)
+    result "an edit of errata.toml" do
+      let before ← times
       let toml := dir / "errata.toml"
-      IO.FS.writeFile toml <| (← IO.FS.readFile toml) ++
-        s!"\n[profile.plain.settings]\n\"TomlLib.stampFile\" = {stamp.toString.quote}\n"
-      let configBefore := (← config.metadata).modified
-      assertExitCode 0 (← lake #["test"])
-      assertTrue ((← config.metadata).modified != configBefore) "config.json was not rewritten"
-      let workspaceBefore := (← workspace.metadata).modified
-      assertExitCode 0 (← lake #["test", "--", "-P", "plain"])
-      assertTrue ((← workspace.metadata).modified != workspaceBefore)
-        "workspace.json was not rewritten"
-      assertNotContains "\"stamp\"" (← IO.FS.readFile workspace)
+      IO.FS.writeFile toml <| (← IO.FS.readFile toml) ++ "\n[profile.other]\ntimeout = \"1m\"\n"
+      assertExitCode 0 (← lake #["test", "--", "list"])
+      let after ← times
+      assertTrue (after[0]! != before[0]!) "config.json was not rewritten"
+      assertTrue (after[1]! != before[1]!) "the plan was not rewritten"
+      assertBEq before[2]! after[2]!
+    result "an edit of a test module" do
+      let before ← times
+      let lib := dir / "TomlLib.lean"
+      IO.FS.writeFile lib <| (← IO.FS.readFile lib) ++
+        "\nnamespace TomlLib\n\n/-- A test added by the check. -/\n@[test] def added : Bool := true\n\
+          \nend TomlLib\n"
+      let out ← lake #["test", "--", "list"]
+      assertExitCode 0 out
+      assertContains "TomlLib.added" out.stdout
+      let after ← times
+      assertBEq before[0]! after[0]!
+      assertTrue (after[1]! != before[1]!) "the plan was not rewritten"
+      assertTrue (after[2]! != before[2]!) "the test executable was not relinked"
+    result "another filter" do
+      let before ← times
+      assertExitCode 0 (← lake #["test", "--", "list", "-E", "name(readsStamp)"])
+      let after ← times
+      assertTrue (after[1]! != before[1]!) "the plan was not rewritten"
+      assertBEq before[2]! after[2]!
+    result "a run with the listing's filter" do
+      let before ← times
+      let out ← lake #["test", "--", "-E", "name(readsStamp)"]
+      assertExitCode 0 out
+      assertContains "1 passed, 0 failed" out.stdout
+      assertBEq before (← times)
+      assertTrue (← stamp.pathExists) "the stamp was not built"
+      assertTrue (!(← marker.pathExists))
+        "the marker, which only a test left out needs, was built"
+    result "an edit of a need's input" do
+      let before ← times
+      let stampBefore ← writtenAt stamp
+      let workspaceBefore ← writtenAt workspace
+      IO.FS.writeFile (dir / "stamp-input.txt") "stamp 2\n"
+      assertExitCode 0 (← lake #["test", "--", "-E", "name(readsStamp)"])
+      assertBEq before (← times)
+      assertTrue ((← writtenAt stamp) != stampBefore) "the stamp was not rebuilt"
+      assertTrue ((← writtenAt workspace) != workspaceBefore) "workspace.json was not rewritten"
+      assertContains "stamp 2" (← IO.FS.readFile stamp)
 
 /--
-The driver builds only the targets that the selected profile's settings need, and only the test
-executables that the command line's filters can select by their names: the libraries' and the ones
-that `errata.toml` adds, which receive the directory of Errata's sources. The runner's
-configuration says when the filters left some executables out, and runs whose filters leave out
-every executable select no test.
+The driver builds the needs that the selected tests reach and no others. A run of one test in the
+editor widget's shape builds that test's need alone. A need whose target fails to build is a setup
+error that names the tests that reach it, and a run whose tests reach other needs alone succeeds.
+-/
+@[test]
+def driverBuildsReachedNeeds : Test := do
+  result "a run of one test in the widget's shape" do
+    IO.FS.withTempDir fun dir => do
+      copyFixture tomlFixture dir
+      let eventsPath := (← IO.FS.realPath dir) / "events.jsonl"
+      let out ← IO.Process.output {
+        cmd := "lake", cwd := dir
+        args := Widget.driverArgs
+          { module := `TomlLib, test := "TomlLib.readsStamp", eventsPath
+            script := "verso/Errata.run" } }
+      assertExitCode 0 out
+      assertTrue (← (dir / ".lake" / "build" / "stamp.txt").pathExists) "the stamp was not built"
+      assertTrue (!(← (dir / ".lake" / "build" / "marker.txt").pathExists))
+        "the marker was built"
+      let workspace ← IO.ofExcept <| Lean.Json.parse
+        (← IO.FS.readFile (dir / ".lake" / "errata" / "workspace.json"))
+      let needs := ((workspace.getObjValD "needs").getObj?.toOption.map
+        (·.toArray.map (·.1))).getD #[]
+      assertBEq #["stamp"] needs
+  result "a need whose target fails" do
+    let out ← withTomlVariant "broken-need" #["test"]
+    assertExitCode 96 out
+    assertContains "the target 'broken' of the need 'marker' could not be built, and these tests \
+      reach it:\n  TomlLib: TomlLib.readsMarker" out.stderr
+  result "a run whose tests reach other needs alone" do
+    let out ← withTomlVariant "broken-need" #["test", "--", "-E", "name(readsStamp)"]
+    assertExitCode 0 out
+    assertContains "1 passed, 0 failed" out.stdout
+
+/--
+The driver builds the needs that the selected tests reach under the selected profile, and only the
+test executables that the command line's filters can select by their names: the libraries' and the
+ones that `errata.toml` adds, which receive the directory of Errata's sources. `executables.json`
+says when the filters left some executables out, and runs whose filters leave out every executable
+select no test. A listing shows a need's value as the need.
 -/
 @[test]
 def driverSelectsProfilesAndExecutables : Test :=
@@ -1219,9 +1285,9 @@ def driverSelectsProfilesAndExecutables : Test :=
       IO.Process.output { cmd := "lake", args, cwd := dir }
     let stamp := dir / ".lake" / "build" / "stamp.txt"
     let config : TestM Lean.Json := do
-      match Lean.Json.parse (← IO.FS.readFile (dir / ".lake" / "errata" / "workspace.json")) with
+      match Lean.Json.parse (← IO.FS.readFile (dir / ".lake" / "errata" / "executables.json")) with
       | .ok j => pure j
-      | .error e => fail s!"workspace.json is not JSON: {e}"
+      | .error e => fail s!"executables.json is not JSON: {e}"
     let exeNames (j : Lean.Json) : Array String :=
       ((j.getObjValAs? (Array Lean.Json) "executables").toOption.getD #[]).filterMap fun e =>
         (e.getObjValAs? String "name").toOption
@@ -1243,7 +1309,7 @@ def driverSelectsProfilesAndExecutables : Test :=
     result "the profile that needs the stamp" do
       let out ← lake #["test", "--", "-P", "stamped"]
       assertExitCode 0 out
-      assertContains "2 passed, 0 failed" out.stdout
+      assertContains "3 passed, 0 failed" out.stdout
       assertTrue (← stamp.pathExists) "the stamp was not built"
       let j ← config
       assertBEq #["TomlLib", "extra"] (exeNames j)
@@ -1253,14 +1319,14 @@ def driverSelectsProfilesAndExecutables : Test :=
         { cmd := "lake", args := #["test", "--", "list", "-v", "-E", "exe(TomlLib)"], cwd := dir
           env := #[("ERRATA_PROFILE", some "stamped")] }
       assertExitCode 0 out
-      assertContains "TomlLib.stampFile = \"" out.stdout
+      assertContains "TomlLib.stampFile: the need stamp, built before the run" out.stdout
       let plain ← lake #["test", "--", "list", "-v", "-E", "exe(TomlLib)"]
       assertContains "TomlLib.stampFile: no value" plain.stdout
     result "a filter that excludes an executable, under --wfail" do
       let out ← lake #["test", "--", "-P", "stamped", "--wfail", "-E", "!exe(extra)"]
       assertExitCode 0 out
       assertBEq #["TomlLib"] (exeNames (← config))
-      assertContains "1 passed, 0 failed, 0 errors, 0 inconclusive, 0 tests skipped, \
+      assertContains "2 passed, 0 failed, 0 errors, 0 inconclusive, 0 tests skipped, \
         1 executable skipped\n" out.stdout
     result "a filter that rules out every executable" do
       let out ← lake #["test", "--", "-E", "exe(Nothing)"]
