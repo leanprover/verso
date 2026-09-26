@@ -20,8 +20,18 @@ packageManualSite = "packageManualSite"
 default-filter = 'all() \ tag(browser)'
 order = "shuffle"
 
+# The browser suites' settings are bound here too: a run builds a site or an executable only when a
+# selected test or a fixture it uses takes the setting. Lake builds the sites of the user's guide and
+# the package documentation example; the literate suites' site fixtures build theirs in their test
+# projects, with the root's executables that these settings bind.
 [profile.default.settings]
 versoServeExe = { needs = "verso-serve" }
+usersGuideSite = { needs = "usersGuideSite" }
+packageManualSite = { needs = "packageManualSite" }
+versoLiterateExe = { needs = "verso-literate" }
+versoLiterateHtmlExe = { needs = "verso-literate-html" }
+versoLiteratePlanExe = { needs = "verso-literate-plan" }
+versoHtmlExe = { needs = "verso-html" }
 
 [profile.default.settings.VersoTests.Settings]
 checkTeX = "false"
@@ -34,19 +44,9 @@ literatePlanExe = { needs = "verso-literate-plan" }
 [profile.default.settings.ErrataTests.Roles]
 required = "given"
 
-# The browser tests alone, each suite with the site it tests. Lake builds the sites of the user's
-# guide and the package documentation example; the literate suites' site fixtures build theirs in
-# their test projects, with the root's executables that these settings bind.
+# The browser tests alone, each suite with the site it tests.
 [profile.browser]
 default-filter = "tag(browser)"
-
-[profile.browser.settings]
-usersGuideSite = { needs = "usersGuideSite" }
-packageManualSite = { needs = "packageManualSite" }
-versoLiterateExe = { needs = "verso-literate" }
-versoLiterateHtmlExe = { needs = "verso-literate-html" }
-versoLiteratePlanExe = { needs = "verso-literate-plan" }
-versoHtmlExe = { needs = "verso-html" }
 
 # Continuous integration runs every test, with the browser tests' sites. Linux headless Firefox
 # disables the CSS guarded by `@media (hover: hover)`, so the tests that need it run on Chromium.
