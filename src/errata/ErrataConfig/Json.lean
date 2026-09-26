@@ -47,11 +47,14 @@ def settingsToJson (s : Array (String × SettingValue)) : Json :=
       (k, Json.mkObj
         [("needs", Json.str name), ("line", Lean.toJson line), ("col", Lean.toJson col)])
 
-/-- The {lit}`[needs]` table as an object: each need's target with the position of its string. -/
+/--
+The {lit}`[needs]` table as an array in the file's order: each need's name and target, with the
+position of the target's string.
+-/
 def needsToJson (needs : Array Need) : Json :=
-  Json.mkObj <| needs.toList.map fun n =>
-    (n.name, Json.mkObj
-      [("target", Json.str n.target), ("line", Lean.toJson n.line), ("col", Lean.toJson n.col)])
+  Json.arr <| needs.map fun n =>
+    Json.mkObj [("name", Json.str n.name), ("target", Json.str n.target),
+      ("line", Lean.toJson n.line), ("col", Lean.toJson n.col)]
 
 /-- An override of the configuration file at {name}`path` as an object. -/
 def Override.toJson (path : String) (o : Override) : Json :=

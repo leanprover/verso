@@ -776,11 +776,6 @@ def newDispatcher (opts : Options) (sinks : Sinks) (color : Bool) (runSeed : Nat
       human, wfail := opts.wfail, startMs := ← Protocol.nowMs, seed? := some runSeed }
     sinks, progress? }
 
-/-- The events file's first record: its version, the run's identifier, and the run's seed. -/
-def protocolRecord (runId : String) (runSeed : Nat) : Json :=
-  Json.mkObj [("type", Json.str "protocol"), ("version", ToJson.toJson Protocol.version),
-    ("run_id", Json.str runId), ("seed", ToJson.toJson runSeed)]
-
 /--
 Plans and then runs or lists the tests of every test executable in the configuration in one process,
 reporting to {name}`sinks` as the run proceeds, and returns the report with the exit code. The
@@ -827,22 +822,20 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
         d.finishRun runSeed runId true code skipped order
 
 /--
-Runs the plan's tests, reporting to {name}`sinks` as the run proceeds, and returns the report with
-the exit code. The run's seed is the plan's when the command line gave it one, and otherwise drawn
-now. The events file begins with the {lit}`protocol` record and the {lit}`phase` record of the List
-phase, stamped as the run reads the plan, and the plan's issues follow; then {name}`runPhase` runs
-the tests with {name}`needValues` as the needs' values. However the run ends, it closes the held
-lifelines and clears the progress display.
+Runs the plan's tests in the run {name}`runId`, reporting to {name}`sinks` as the run proceeds, and
+returns the report with the exit code. The run's seed is the plan's. The events file begins with the
+{lit}`protocol` record unless the {lit}`plan` subcommand began it; the plan's issues follow, and
+then {name}`runPhase` runs the tests with {name}`needValues` as the needs' values. However the run
+ends, it closes the held lifelines and clears the progress display.
 -/
 def executePlan (plan : Plan) (needValues : Array (String × String)) (opts : Options)
     (sinks : Sinks) (registry : Option Registry := none) (color : Bool := false)
-    (progress? : Option Progress.Display := none) : IO (RunReport × UInt32) := do
-  let runSeed ← match plan.seed? <|> opts.seed with
-    | some s => pure s
-    | none => IO.rand 0 (2 ^ 32 - 1)
-  let runId ← newRunId
+    (progress? : Option Progress.Display := none) (runId : String := "") :
+    IO (RunReport × UInt32) := do
+  let runSeed := plan.runSeed
+  let runId ← if runId.isEmpty then newRunId else pure runId
   let d ← newDispatcher opts sinks color runSeed false progress?
-  sinks.event (protocolRecord runId runSeed)
+  unless plan.eventsBegun do sinks.event (protocolRecord runId runSeed)
   let registry ← match registry with
     | some r => pure r
     | none => Registry.new
@@ -851,7 +844,6 @@ def executePlan (plan : Plan) (needValues : Array (String × String)) (opts : Op
     lifelines.closeAll
     if let some p := progress? then p.clear
   flip tryFinally closeRun do
-    d.dispatch (.phase "List" (← Protocol.nowMs) none)
     for issue in plan.issues do d.dispatch (.issue issue)
     let (code, skipped, order) ←
       runPhase d registry lifelines plan needValues opts runSeed runId progress?
@@ -942,9 +934,9 @@ writes the report files and prints the issues as it does.
 -/
 def executePlanAndWrite (plan : Plan) (needValues : Array (String × String)) (opts : Options)
     (registry : Registry) (color : Bool := false)
-    (progress? : Option Progress.Display := none) : IO UInt32 := do
+    (progress? : Option Progress.Display := none) (runId : String := "") : IO UInt32 := do
   let sinks ← processSinks opts progress?
-  let (report, code) ← executePlan plan needValues opts sinks registry color progress?
+  let (report, code) ← executePlan plan needValues opts sinks registry color progress? runId
   reportRun plan.config { opts with profile := plan.profile } registry report code
 
 /--
@@ -1040,6 +1032,7 @@ def runMain (args : List String) : IO UInt32 := do
     let _ ← IO.asTask (prio := .dedicated)
       (exitWhenStdinCloses (← IO.getStdin) registry grace progress?)
   let code ← executePlanAndWrite plan needValues opts registry color progress?
+    (← runIdOfEnvironment)
   registry.finish
   try (← IO.getStdout).flush catch _ => pure ()
   try (← IO.getStderr).flush catch _ => pure ()

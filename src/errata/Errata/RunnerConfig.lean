@@ -328,22 +328,22 @@ def profilesOfJson (j : Json) : Except String (Array Profile) := do
     Profile.fromJson? name p |>.mapError (s!"{name}.{·}")
 
 /--
-Decodes the {lit}`[needs]` table: an object from names to objects that give the target and its
-position.
+Decodes the {lit}`[needs]` table: an array, in the configuration file's order, of objects that give
+each need's name, its target, and the target's position.
 -/
 def needsOfJson (j : Json) : Except String (Array Need) := do
-  let obj ← j.getObj?
-  obj.toArray.mapM fun (name, n) => (do
+  let needs ← j.getArr?
+  needs.mapIdxM fun i n => (do
     return ({
-      name, target := ← n.getObjValAs? String "target"
+      name := ← n.getObjValAs? String "name", target := ← n.getObjValAs? String "target"
       line := (← configField n "line").getD 0, col := (← configField n "col").getD 0 } : Need))
-    |>.mapError (s!"{name}: " ++ ·)
+    |>.mapError (s!"[{i}]: " ++ ·)
 
-/-- The {lit}`[needs]` table as an object. -/
+/-- The {lit}`[needs]` table as an array in the configuration file's order. -/
 def needsToJson (needs : Array Need) : Json :=
-  Json.mkObj <| needs.toList.map fun n =>
-    (n.name, Json.mkObj [("target", Json.str n.target), ("line", ToJson.toJson n.line),
-      ("col", ToJson.toJson n.col)])
+  Json.arr <| needs.map fun n =>
+    Json.mkObj [("name", Json.str n.name), ("target", Json.str n.target),
+      ("line", ToJson.toJson n.line), ("col", ToJson.toJson n.col)]
 
 instance : FromJson ExecutableConfig where
   fromJson? j := do

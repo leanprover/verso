@@ -410,6 +410,13 @@ structure Plan where
   profile : String := "default"
   /-- The run's seed, when the command line gives one. -/
   seed? : Option Nat := none
+  /-- The run's seed: the command line's, or one that the {lit}`plan` subcommand drew. -/
+  runSeed : Nat := 0
+  /--
+  Whether the {lit}`plan` subcommand began the events file: the {lit}`protocol` record and the List
+  phase's {lit}`phase` record.
+  -/
+  eventsBegun : Bool := false
   /--
   The settings and the fixtures that each test executable declares, in the configuration's order.
   -/
@@ -531,6 +538,7 @@ def Plan.toJson (plan : Plan) : Json :=
   Json.mkObj <| [
     ("protocol", ToJson.toJson planVersion), ("profile", Json.str plan.profile)] ++
     Protocol.opt "seed" plan.seed? ++ Protocol.opt "invocation" plan.config.invocation? ++ [
+    ("run-seed", ToJson.toJson plan.runSeed), ("events-begun", Json.bool plan.eventsBegun),
     ("config", plan.config.toJson),
     ("listings", ToJson.toJson plan.listings),
     ("tests", Json.arr (plan.tests.map fun t =>
@@ -572,6 +580,8 @@ def Plan.fromJson? (j : Json) : Except String Plan := do
   let needs : Array Json := (← configField j "needs").getD #[]
   return {
     config, profile := ← j.getObjValAs? String "profile", seed? := ← configField j "seed"
+    runSeed := (← configField j "run-seed").getD 0
+    eventsBegun := (← configField j "events-begun").getD false
     listings := ← (j.getObjValAs? (Array Listing) "listings" |>.mapError (s!"listings: " ++ ·))
     tests := ← tests.mapIdxM fun i t => testOf t |>.mapError (s!"tests[{i}]: " ++ ·)
     fixtures := ← fixtures.mapIdxM fun i f => fixtureOf f |>.mapError (s!"fixtures[{i}]: " ++ ·)
@@ -939,33 +949,15 @@ def useColor (choice : ColorChoice) : IO Bool := do
   return colorOf choice env (← (← IO.getStdout).isTty)
 
 /--
-The options that the plan depends on, as JSON: the profile, the filters and name filters, the
-settings, the seed, the limits, golden updating, and the modules whose tests run through the
-interpreted product. The driver mixes it into the plan's trace.
--/
-def Options.planArguments (opts : Options) : Json :=
-  Json.mkObj [
-    ("profile", Json.str opts.profile), ("filters", ToJson.toJson opts.filters),
-    ("names", ToJson.toJson opts.nameFilters), ("exact", Json.bool opts.exact),
-    ("skips", ToJson.toJson opts.skips),
-    ("ignore-default-filter", Json.bool opts.ignoreDefaultFilter),
-    ("sets", Json.arr (opts.sets.map fun (k, v) => Json.arr #[Json.str k, Json.str v])),
-    ("seed", ToJson.toJson opts.seed), ("timeout-ms", ToJson.toJson opts.timeoutMs?),
-    ("fixture-timeout-ms", ToJson.toJson opts.fixtureTimeoutMs?),
-    ("grace-period-ms", ToJson.toJson opts.gracePeriodMs?),
-    ("update-golden", Json.bool opts.updateGolden),
-    ("interpreted", ToJson.toJson opts.interpreted)]
-
-/--
 The {lit}`check` subcommand, {lit}`errata-runner check REQUEST OUT ARGS...`, which the driver runs
 before it builds any test executable. {name}`request` is a JSON object with the path of
 {lit}`config.json` under {lit}`config`, the command that the arguments follow under
 {lit}`invocation`, and the names of the test executables that the package can have under
 {lit}`executables`. The subcommand reads the command line {name}`args` as a run would, checks the
 profile and the filters, and writes to the file {name}`out` a JSON object with the command, the
-profile, the executables that the filters do not rule out by their names alone, whether the phases
-are named as they begin, the modules that {lit}`--interpreted` names, and the options that the plan
-depends on, as {name}`Options.planArguments` gives them. When the command line asks for the usage
+profile, the executables that the filters can select by their names alone, whether the phases are
+named as they begin, and the modules that {lit}`--interpreted` names. When the command line asks for
+the usage
 text, the subcommand prints it and writes {lit}`{"help": true}`. The result is the exit code:
 {name}`ExitCode.ok`, or the code of the problem, which the subcommand reports.
 -/
@@ -1002,18 +994,48 @@ def checkMain (request out : String) (args : List String) : IO UInt32 := do
       ("profile", Json.str profile.name),
       ("executables", ToJson.toJson (candidates.filter selection.mayContain)),
       ("phases", Json.bool (opts.command == .run && opts.verbosity.showsPasses)),
-      ("interpreted", ToJson.toJson opts.interpreted),
-      ("plan-arguments", Json.str opts.planArguments.compress)]
+      ("interpreted", ToJson.toJson opts.interpreted)]
     return ExitCode.ok
+
+/-- The events file's first record: its version, the run's identifier, and the run's seed. -/
+def protocolRecord (runId : String) (runSeed : Nat) : Json :=
+  Json.mkObj [("type", Json.str "protocol"), ("version", ToJson.toJson Protocol.version),
+    ("run_id", Json.str runId), ("seed", ToJson.toJson runSeed)]
+
+/--
+The run's identifier: {lit}`ERRATA_RUN_ID` when the driver gives it, so that the {lit}`plan` and
+{lit}`run` subcommands of one run share it, and otherwise a new one.
+-/
+def runIdOfEnvironment : IO String := do
+  match ← IO.getEnv "ERRATA_RUN_ID" with
+  | some id => if id.isEmpty then newRunId else pure id
+  | none => newRunId
+
+/--
+Ends the planning once the process's lifeline, its standard input, closes: the listings that run are
+terminated and, after {name}`graceMs` milliseconds, killed, and the process exits with {lit}`1`.
+-/
+def cancelWhenStdinCloses (parentIn : IO.FS.Stream) (registry : Registry) (graceMs : Nat) :
+    IO Unit := do
+  repeat
+    if (← parentIn.getLine).isEmpty then break
+  try IO.eprintln "errata-runner: standard input closed, so the plan ends" catch _ => pure ()
+  registry.cancel graceMs
+  IO.Process.forceExit 1
 
 /--
 The {lit}`plan` subcommand, {lit}`errata-runner plan CONFIG EXECUTABLES OUT ARGS...`: it reads the
 configuration from {lit}`config.json` at {name}`configPath` and {lit}`executables.json` at
 {name}`executablesPath`, reads the command line {name}`args`, makes the plan, and writes it to the
-file {name}`out`. Each issue is printed on standard error as it is found. When one ends the
-planning, no plan is written, and the result is its exit code: {name}`ExitCode.invalidFilter`,
-{name}`ExitCode.setupError`, or {name}`ExitCode.listFailed`. Otherwise the plan holds the issues,
-which the run reports.
+file {name}`out`. The run's identifier is {name}`runIdOfEnvironment`'s, and the run's seed is the
+command line's or one drawn here. As the List phase begins, it prints {lit}`== List` under
+{lit}`-v`, and it begins the events file that {lit}`--events` names with the {lit}`protocol` record
+and the List phase's {lit}`phase` record. When an issue ends the planning, no plan is written, the
+issues found are printed on standard error, and the result is the exit code of the issue:
+{name}`ExitCode.invalidFilter`, {name}`ExitCode.setupError`, or {name}`ExitCode.listFailed`.
+Otherwise the plan holds the issues, which the run reports. When {lit}`ERRATA_LIFELINE` is
+{lit}`1`, the subcommand watches its standard input and ends its listings when it closes. Once it
+has begun, the subcommand flushes its output and ends the process itself.
 -/
 def planMain (configPath executablesPath out : String) (args : List String) : IO UInt32 := do
   let config ←
@@ -1029,13 +1051,42 @@ def planMain (configPath executablesPath out : String) (args : List String) : IO
     IO.print (usage invocation)
     return ExitCode.ok
   let registry ← Registry.new
-  let report (issue : RunReport.Issue) : IO Unit := IO.eprintln s!"{issue.level}: {issue.message}"
-  match ← makePlan config opts registry (← newRunId) report with
-  | .error code => return code
-  | .ok plan =>
-    if let some parent := (out : System.FilePath).parent then IO.FS.createDirAll parent
-    IO.FS.writeFile out (plan.toJson.compress ++ "\n")
-    return ExitCode.ok
+  if (← IO.getEnv lifelineVariable) == some "1" then
+    let _ ← IO.asTask (prio := .dedicated) (cancelWhenStdinCloses (← IO.getStdin) registry
+      (opts.gracePeriodMs?.getD defaultGracePeriodMs))
+  let runId ← runIdOfEnvironment
+  let runSeed ← match opts.seed with
+    | some s => pure s
+    | none => IO.rand 0 (2 ^ 32 - 1)
+  let events? ← opts.eventsPath.mapM fun p => do
+    if let some parent := (p : System.FilePath).parent then IO.FS.createDirAll parent
+    IO.FS.Handle.mk p .append
+  let stdout ← IO.getStdout
+  let onList : IO Unit := do
+    if let some h := events? then
+      h.putStr ((protocolRecord runId runSeed).compress ++ "\n")
+      h.putStr ((Json.mkObj [("type", Json.str "phase"), ("name", Json.str "List"),
+        ("time_ms", ToJson.toJson (← Protocol.nowMs))]).compress ++ "\n")
+      h.flush
+    if opts.command == .run && opts.verbosity.showsPasses then
+      stdout.putStrLn (phaseLine "List" none)
+      stdout.flush
+  let issues ← IO.mkRef (#[] : Array RunReport.Issue)
+  let report (issue : RunReport.Issue) : IO Unit := issues.modify (·.push issue)
+  let code ← match ← makePlan config opts registry runId report onList with
+    | .error code =>
+      for issue in ← issues.get do IO.eprintln s!"{issue.level}: {issue.message}"
+      pure code
+    | .ok plan =>
+      if let some parent := (out : System.FilePath).parent then IO.FS.createDirAll parent
+      let plan := { plan with runSeed, eventsBegun := events?.isSome }
+      IO.FS.writeFile out (plan.toJson.compress ++ "\n")
+      pure ExitCode.ok
+  try stdout.flush catch _ => pure ()
+  try (← IO.getStderr).flush catch _ => pure ()
+  -- The thread that watches standard input runs until the pipe closes, and a Lean program that
+  -- returns from `main` waits for its threads, so the subcommand ends the process itself.
+  IO.Process.forceExit code.toUInt8
 
 /--
 The {lit}`list` subcommand, {lit}`errata-runner list PLAN ARGS...`: it prints the selected tests of
@@ -1055,9 +1106,7 @@ def listMain (planPath : String) (args : List String) : IO UInt32 := do
   if opts.help then
     IO.print (usage invocation)
     return ExitCode.ok
-  let runSeed ← match plan.seed? with
-    | some s => pure s
-    | none => IO.rand 0 (2 ^ 32 - 1)
+  let runSeed := plan.runSeed
   let stdout ← IO.getStdout
   printPlan plan { opts with seed := plan.seed? } (fun l => do stdout.putStrLn l; stdout.flush)
     (← useColor opts.color) runSeed
