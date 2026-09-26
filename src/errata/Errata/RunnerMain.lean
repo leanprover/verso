@@ -429,9 +429,10 @@ test takes, in the order it takes them, and {lit}`Errata.updateGolden` with the 
 when golden checks rewrite their expected files.
 -/
 def Resolved.arguments (r : Resolved) : Array (String × String) :=
-  if r.updateGolden then
-    r.settings.filter (·.1 != updateGoldenSetting) |>.push (updateGoldenSetting, "true")
-  else r.settings
+  if !r.updateGolden then r.settings
+  else if r.settings.any (·.1 == updateGoldenSetting) then
+    r.settings.map fun (k, v) => if k == updateGoldenSetting then (k, "true") else (k, v)
+  else r.settings.push (updateGoldenSetting, "true")
 
 /-- The test as the dispatcher plans it, with what it receives. -/
 def RunContext.planned (ctx : RunContext) (exe : ExecutableConfig) (t : InventoryTest)
@@ -986,7 +987,8 @@ def printHumanList (ctx : RunContext) (color verbose : Bool) (listings : Array L
       let tags := if t.tags.isEmpty then "" else s!"  [{", ".intercalate t.tags.toList}]"
       line s!"    {name}{loc}{tags}"
       if let some d := t.description? then line (indented "        " d)
-      for (k, v) in r.settings do
+      -- The settings are those that the run sends, so the listing and the run agree.
+      for (k, v) in r.arguments do
         -- Seeds derived from a random run seed differ in every run, so their values say nothing.
         if k == seedSetting && r.derivedSeed && ctx.opts.seed.isNone then
           line s!"        {k}: derived from the run's seed"
@@ -1045,7 +1047,7 @@ def inventoryJson (ctx : RunContext) (profile : String) (listings : Array Listin
   let testJson (t : InventoryTest) (r : Resolved) : Json := Json.mkObj <|
     [("name", Json.str t.name), ("path", ToJson.toJson t.path)] ++ opt "file" t.file? ++
     opt "line" t.line? ++ [("tags", ToJson.toJson t.tags)] ++ opt "description" t.description? ++
-    [("settings", Json.mkObj (r.settings.toList.map fun (k, v) => (k, Json.str v))),
+    [("settings", Json.mkObj (r.arguments.toList.map fun (k, v) => (k, Json.str v))),
       ("missing", ToJson.toJson r.missing), ("derived-seed", Json.bool r.derivedSeed),
       ("timeout-ms", ToJson.toJson r.timeoutMs), ("grace-period-ms", ToJson.toJson r.gracePeriodMs),
       ("slow-after-ms", ToJson.toJson r.slowAfterMs)]
@@ -1213,6 +1215,10 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
       gracePeriodMs? := opts.gracePeriodMs?, updateGolden := opts.updateGolden, runSeed
       default? := selection.default?
     }
+    -- A value for `Errata.updateGolden` given as a setting stops the run.
+    let golden := resolution.updateGoldenValues
+    for m in golden do d.dispatch (.issue { isError := true, message := m })
+    unless golden.isEmpty do return ← finish ExitCode.setupError
     -- Values that the command line gives to settings that nothing declares stop the run. Those that
     -- the configuration gives are warnings, since profiles serve the executables of every library
     -- and runs may select some of them. A run that selects only some of them reports none of these.

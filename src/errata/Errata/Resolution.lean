@@ -296,6 +296,24 @@ structure Undeclared where
 deriving Repr, Inhabited, DecidableEq
 
 /--
+The places where the command line, the profile, or its overrides give {lit}`Errata.updateGolden` a
+value, each as an error message. The run sets that setting through {lit}`--update-golden` and the
+{lit}`update-golden` key alone, so that every test receives the same value.
+-/
+def ResolutionContext.updateGoldenValues (ctx : ResolutionContext) : Array String := Id.run do
+  let message (place : String) : String :=
+    s!"{place} gives the setting {updateGoldenSetting} a value; set it with --update-golden or \
+      with the update-golden key of a profile or an override"
+  let mut out := #[]
+  if ctx.sets.any (·.1 == updateGoldenSetting) then out := out.push (message "--set")
+  if ctx.profile.settings.any (·.1 == updateGoldenSetting) then
+    out := out.push (message s!"the profile {ctx.profile.name}")
+  for (f, o) in ctx.overrides do
+    if o.settings.any (·.1 == updateGoldenSetting) then
+      out := out.push (message s!"the override at {f.at 0}")
+  return out
+
+/--
 The names that the command line, the profile, and its overrides give values to without any test
 executable declaring them, each with where it was given.
 -/

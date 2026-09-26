@@ -623,6 +623,49 @@ def updateGoldenRewritesFiles : Test := forEach #[leanProduct, interpretedProduc
       let r ← p.run #[role] {} config
       expectOutcome r role.test (· matches .reported .pass) "a pass"
       assertBEq "golden contents\n" (← IO.FS.readFile path)
+    result "list -v shows what the run sends" do
+      let r ← p.run #[role] { command := .list, verbosity := .quiet, updateGolden := true }
+      assertTrue (r.lines.contains "        Errata.updateGolden = \"true\"") s!"{r.lines}"
+
+/--
+The command line, a profile, and an override that give `Errata.updateGolden` a value as a setting
+stop the run before anything runs, with a message that names `--update-golden` and the
+`update-golden` key.
+-/
+@[test]
+def updateGoldenIsNotASetSetting : Test := do
+  let p := leanProduct
+  let role : Role := { test := "ErrataTests.Roles.checksGolden" }
+  let check (r : Run) (place : String) : TestM Unit := do
+    assertTrue r.report.results.isEmpty "no test ran"
+    let some issue := r.report.issues.find? (·.isError) | fail "no error"
+    assertContains s!"{place} gives the setting Errata.updateGolden a value" issue.message
+    assertContains "--update-golden" issue.message
+    assertContains "update-golden key" issue.message
+  result "--set" do
+    check (← p.run #[role] { sets := #[("Errata.updateGolden", "true")] }) "--set"
+  result "a profile" do
+    let config : Config :=
+      { profiles := #[{ name := "default", settings := #[("Errata.updateGolden", "true")] }] }
+    check (← p.run #[role] {} config) "the profile default"
+  result "an override" do
+    let overrides : Array Override :=
+      #[{ filter := { text := "all()" }, settings := #[("Errata.updateGolden", "true")] }]
+    check (← p.run #[role] {} { profiles := #[{ name := "default", overrides }] })
+      "the override at configuration:0"
+
+/--
+The arguments that a test receives under golden updating keep the order of the settings it takes:
+`Errata.updateGolden` stands where the test takes it, and at the end when the test takes it nowhere.
+-/
+@[test]
+def updateGoldenKeepsItsPlace : Test := do
+  let taken : Resolved :=
+    { settings := #[("a", "1"), (updateGoldenSetting, "false"), ("b", "2")], updateGolden := true }
+  assertBEq #[("a", "1"), (updateGoldenSetting, "true"), ("b", "2")] taken.arguments
+  let untaken : Resolved := { settings := #[("a", "1")], updateGolden := true }
+  assertBEq #[("a", "1"), (updateGoldenSetting, "true")] untaken.arguments
+  assertBEq #[("a", "1")] ({ untaken with updateGolden := false } : Resolved).arguments
 
 /-! # Checks of the scripted products -/
 
