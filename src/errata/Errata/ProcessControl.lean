@@ -287,13 +287,17 @@ partial def forwardLines (handle : IO.FS.Handle) (onLine : String → IO Unit) :
 
 /--
 Waits until every task has finished, or until {name}`ms` milliseconds have passed. Returns whether
-every task has finished.
+every task has finished. The wait checks the tasks every {name}`pollMs` milliseconds against a
+deadline, so it leaves no task of its own behind.
 -/
 def waitAtMost (ms : Nat) (tasks : List (Task (Except IO.Error Unit))) : IO Bool := do
-  let allDone ← IO.mapTasks (fun _ => pure ()) tasks
-  let timeout ← IO.asTask (prio := .dedicated) (IO.sleep ms.toUInt32)
-  discard <| IO.waitAny [allDone, timeout]
-  IO.hasFinished allDone
+  let deadline := (← IO.monoMsNow) + ms
+  let finished : IO Bool := tasks.allM fun t => (IO.hasFinished t : BaseIO Bool)
+  repeat
+    if ← finished then return true
+    if (← IO.monoMsNow) ≥ deadline then break
+    IO.sleep pollMs
+  finished
 
 /-- The number of CPUs in a list such as {lit}`0-3,8,10-11`, or {lean}`none` if it is malformed. -/
 def countCpuList (s : String) : Option Nat := do
