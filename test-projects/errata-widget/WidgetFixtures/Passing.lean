@@ -133,6 +133,17 @@ def readsSettings (word : greeting) (strict : strict) : Test := do
   if strict then
     fail "strict was set"
 
+/-- Whom `greetsAudience` greets. It has no default, so a run needs a value for it. -/
+@[setting, expose]
+def audience : Setting where
+  type := String
+  fromString s := some s
+
+/-- Greets its audience, which a run must name. -/
+@[test]
+def greetsAudience (who : audience) : Test :=
+  IO.println s!"hello, {who}"
+
 /--
 Tagged `manual`, which every profile's default filter leaves out, so a run of it sets the default
 filter aside.

@@ -88,6 +88,26 @@ def test_the_reset_button_restores_the_default_of_a_setting_without_a_profile_va
     widget.wait_for_verdict("Passed")
 
 
+def test_a_setting_without_a_default_is_required_and_its_absence_is_reported(editor):
+    editor.show("Passing", "greetsAudience")
+    widget = Widget(editor.page)
+    widget.gear.click()
+    expect(widget.setting_rows).to_have_count(1)
+    expect(widget.setting_field("audience")).to_have_value("")
+    expect(widget.setting_field("audience")).to_have_attribute("placeholder", "required")
+    editor.page.keyboard.press("Escape")
+    # The client starts the run, and the runner reports the missing value without running the test.
+    widget.run_button.click()
+    widget.wait_for_verdict("INCONCLUSIVE")
+    expect(widget.messages.first).to_contain_text("audience has no value")
+    widget.gear.click()
+    widget.setting_field("audience").fill("world")
+    editor.page.keyboard.press("Escape")
+    widget.run_button.click()
+    widget.wait_for_verdict("Passed")
+    expect_exact_text(widget.output, "hello, world\n")
+
+
 def test_an_emptied_field_with_a_profile_value_sends_the_empty_value(editor):
     editor.show("Passing", "readsSettings")
     widget = Widget(editor.page)
