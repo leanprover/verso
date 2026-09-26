@@ -83,8 +83,6 @@ structure Override where
   filter : FilterText
   /-- How long a test may run, in milliseconds. -/
   timeoutMs? : Option Nat := none
-  /-- How long a fixture's phase may run, in milliseconds. -/
-  fixtureTimeoutMs? : Option Nat := none
   /-- How long a terminated test has before it is killed, in milliseconds. -/
   gracePeriodMs? : Option Nat := none
   /-- How long a test runs before the report marks it slow, in milliseconds. -/
@@ -248,7 +246,6 @@ def Override.fromJson? (resolve : NeedsResolver) (j : Json) : Except String Over
   return {
     filter := ← j.getObjValAs? FilterText "filter" |>.mapError (s!"filter: " ++ ·)
     timeoutMs? := ← configField j "timeout-ms"
-    fixtureTimeoutMs? := ← configField j "fixture-timeout-ms"
     gracePeriodMs? := ← configField j "grace-period-ms"
     slowAfterMs? := ← configField j "slow-after-ms"
     updateGolden? := ← configField j "update-golden"
@@ -257,8 +254,7 @@ def Override.fromJson? (resolve : NeedsResolver) (j : Json) : Except String Over
 
 instance : ToJson Override where
   toJson o := Json.mkObj <|
-    [("filter", ToJson.toJson o.filter)] ++
-    Protocol.opt "timeout-ms" o.timeoutMs? ++ Protocol.opt "fixture-timeout-ms" o.fixtureTimeoutMs? ++
+    [("filter", ToJson.toJson o.filter)] ++ Protocol.opt "timeout-ms" o.timeoutMs? ++
     Protocol.opt "grace-period-ms" o.gracePeriodMs? ++ Protocol.opt "slow-after-ms" o.slowAfterMs? ++
     Protocol.opt "update-golden" o.updateGolden? ++
     (if o.settings.isEmpty then [] else [("settings", settingsToJson o.settings)])

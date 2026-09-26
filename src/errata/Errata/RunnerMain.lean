@@ -1240,7 +1240,7 @@ def execute (config : Config) (opts : Options) (sinks : Sinks)
     let exeName (t : InventoryTest) : String := config.executables[t.exeIdx]!.name
     let resolution : ResolutionContext := {
       sets := opts.sets, profile, overrides, timeoutMs? := opts.timeoutMs?
-      gracePeriodMs? := opts.gracePeriodMs?, updateGolden := opts.updateGolden, runSeed
+      fixtureTimeoutMs? := opts.fixtureTimeoutMs?, gracePeriodMs? := opts.gracePeriodMs?, updateGolden := opts.updateGolden, runSeed
       default? := selection.default?
     }
     -- A value for `Errata.updateGolden` given as a setting stops the run.

@@ -50,7 +50,6 @@ def settingsToJson (s : Array (String × SettingValue)) : Json :=
 def Override.toJson (path : String) (o : Override) : Json :=
   Json.mkObj <|
     [("filter", o.filter.toJson path)] ++ optField "timeout-ms" o.timeoutMs? ++
-    optField "fixture-timeout-ms" o.fixtureTimeoutMs? ++
     optField "grace-period-ms" o.gracePeriodMs? ++
     optField "slow-after-ms" o.slowAfterMs? ++ optField "update-golden" o.updateGolden? ++
     [("settings", settingsToJson o.settings)]

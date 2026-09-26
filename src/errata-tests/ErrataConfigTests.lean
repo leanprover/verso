@@ -344,6 +344,22 @@ def orderIsAProfileKey : Test := do
       | .error problems => assertBEq #[message] problems
 
 /--
+A profile bounds its fixtures' phases with `fixture-timeout`. The key in an override is a problem at
+its position, since a fixture's phases serve several tests.
+-/
+@[test]
+def fixtureTimeoutIsAProfileKey : Test := do
+  match ← ErrataConfig.parse "errata.toml" "[profile.default]\nfixture-timeout = \"2m\"\n" with
+  | .error problems => fail s!"the file was rejected: {problems}"
+  | .ok f => assertBEq (some 120000) (← profileOf f "default").fixtureTimeoutMs?
+  let text := "[[profile.default.override]]\nfilter = \"all()\"\nfixture-timeout = \"1m\"\n"
+  match ← ErrataConfig.parse "errata.toml" text with
+  | .ok _ => fail "the file was accepted"
+  | .error problems =>
+    assertBEq #["errata.toml:3:18: a fixture's phases serve several tests, so 'fixture-timeout' \
+      belongs to a profile and never to an override"] problems
+
+/--
 The runner writes the report files at the paths that the profile names, relative to the package's
 directory, and a path on the command line takes the place of the profile's.
 -/

@@ -2054,6 +2054,34 @@ def killedSetupTearsDown : Test := forEach products fun p => do
   assertContains "teardown received no value" teardown.output.all
 
 /--
+`--fixture-timeout` bounds a fixture's phases in place of the profile's `fixture-timeout`: at one
+second it stops the sleeping setup, and its user is inconclusive without running. `--timeout` bounds
+tests alone, so under it the setup runs to the profile's timeout.
+-/
+@[test]
+def fixtureTimeoutOption : Test := do
+  let fx := basicProduct.fixtures
+  let config : Config := { profiles := #[{
+    name := "default", fixtureTimeoutMs? := some 2000, gracePeriodMs? := some 300 }] }
+  -- The time after which the setup was stopped.
+  let setupTimeout (r : Run) : TestM Nat := do
+    match ← expectPhase r fx.slowSetup #[fx.slowSetup, "setup"]
+        (· matches .inconclusive (.timedOut ..)) "a timeout" with
+    | { outcome := .inconclusive (.timedOut ms _), .. } => return ms
+    | _ => fail "the setup did not time out"
+  result "--fixture-timeout" do
+    let r ← basicProduct.runTests #[fx.afterSlowSetup] { fixtureTimeoutMs? := some 1000 } config
+    let ms ← setupTimeout r
+    assertTrue (1000 ≤ ms && ms < 2000) s!"the setup was stopped after {ms}ms"
+    match r.outcome? fx.afterSlowSetup with
+    | some (.inconclusive (.fixtureFailed f .setup)) => assertBEq fx.slowSetup f
+    | o => fail s!"expected fixtureFailed in the setup, got {repr o}"
+  result "--timeout" do
+    let r ← basicProduct.runTests #[fx.afterSlowSetup] { timeoutMs? := some 500 } config
+    let ms ← setupTimeout r
+    assertTrue (2000 ≤ ms) s!"the setup was stopped after {ms}ms"
+
+/--
 The fixture `dependent`, which takes a setting and another fixture, receives both: its value joins
 the greeting and the other fixture's value, which its user prints.
 -/

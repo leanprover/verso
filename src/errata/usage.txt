@@ -34,8 +34,10 @@ Configuration:
   -P, --profile NAME            The profile of errata.toml to use (ERRATA_PROFILE, or default).
   --set NAME=VALUE              Give a setting a value. Repeatable.
   --seed N                      The run's seed, from which each test's seed is derived.
-  --timeout DURATION            How long a test may run before it is stopped, such as 90s or 2m30s
-                                (10m).
+  --timeout DURATION            How long a test, or the listing of a test executable, may run before
+                                it is stopped, such as 90s or 2m30s (10m).
+  --fixture-timeout DURATION    How long a fixture's setup, prepare, or teardown may run before it
+                                is stopped (the profile's fixture-timeout, or 10m).
   --grace-period DURATION       How long a stopped test has before it is killed (10s).
 
 Running:

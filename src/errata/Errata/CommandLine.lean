@@ -142,6 +142,11 @@ structure Options where
   -/
   timeoutMs? : Option Nat := none
   /--
+  How long a fixture's setup, prepare, or teardown may run before it is terminated, in milliseconds.
+  It takes precedence over the profile's {lit}`fixture-timeout`.
+  -/
+  fixtureTimeoutMs? : Option Nat := none
+  /--
   How long a terminated test has before it is killed, in milliseconds. It takes precedence over the
   configuration's value.
   -/
@@ -272,7 +277,11 @@ def optionSpecs : Array OptionSpec := #[
   { long := "seed", value? := "N", group := "Configuration"
     help := "The run's seed, from which each test's seed is derived." },
   { long := "timeout", value? := "DURATION", group := "Configuration"
-    help := "How long a test may run before it is stopped, such as 90s or 2m30s (10m)." },
+    help := "How long a test, or the listing of a test executable, may run before it is \
+      stopped, such as 90s or 2m30s (10m)." },
+  { long := "fixture-timeout", value? := "DURATION", group := "Configuration"
+    help := "How long a fixture's setup, prepare, or teardown may run before it is stopped \
+      (the profile's fixture-timeout, or 10m)." },
   { long := "grace-period", value? := "DURATION", group := "Configuration"
     help := "How long a stopped test has before it is killed (10s)." },
   { long := "test-threads", short? := "-j", aliases := ["jobs"], value? := "N", commands := [.run]
@@ -445,6 +454,10 @@ def applyOption (opts : Options) (g : GivenOption) : Except String Options := do
     let ms ← parseDuration value
     if ms == 0 then throw s!"{g.written} must be longer than zero"
     return { opts with timeoutMs? := some ms }
+  | "fixture-timeout" =>
+    let ms ← parseDuration value
+    if ms == 0 then throw s!"{g.written} must be longer than zero"
+    return { opts with fixtureTimeoutMs? := some ms }
   | "grace-period" => return { opts with gracePeriodMs? := some (← parseDuration value) }
   | "test-threads" =>
     let some n := value.toNat? | throw s!"{g.written} expects a whole number, and it is '{value}'"

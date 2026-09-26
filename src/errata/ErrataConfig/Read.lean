@@ -144,8 +144,7 @@ def readSettings (v : Lake.Toml.Value) : CheckM (Array (String × SettingValue))
 
 /-- The keys of an override. -/
 def overrideKeys : List String :=
-  ["filter", "timeout", "fixture-timeout", "grace-period", "slow-after", "update-golden",
-    "settings"]
+  ["filter", "timeout", "grace-period", "slow-after", "update-golden", "settings"]
 
 /-- An override of the profile {name}`profile`. -/
 def readOverride (profile : String) (v : Lake.Toml.Value) : CheckM (Option Override) := do
@@ -153,9 +152,13 @@ def readOverride (profile : String) (v : Lake.Toml.Value) : CheckM (Option Overr
     | problem v.ref s!"each override of the profile '{profile}' must be a table, and it is \
         {kindOf v}"
       return none
-  checkKeys s!"an override of the profile '{profile}'" (overrideKeys ++ ["order"]) t
+  checkKeys s!"an override of the profile '{profile}'"
+    (overrideKeys ++ ["order", "fixture-timeout"]) t
   if let some x := t.find? `order then
     problem x.ref s!"'order' is one per run, so it belongs to a profile and never to an override"
+  if let some x := t.find? `«fixture-timeout» then
+    problem x.ref s!"a fixture's phases serve several tests, so 'fixture-timeout' belongs to a \
+      profile and never to an override"
   let some filterValue := t.find? `filter
     | problem ref s!"an override of the profile '{profile}' needs a 'filter'"
       return none
@@ -163,8 +166,6 @@ def readOverride (profile : String) (v : Lake.Toml.Value) : CheckM (Option Overr
   let mut o : Override := { filter }
   if let some x := t.find? `timeout then
     o := { o with timeoutMs? := ← readDuration "timeout" x true }
-  if let some x := t.find? `«fixture-timeout» then
-    o := { o with fixtureTimeoutMs? := ← readDuration "fixture-timeout" x true }
   if let some x := t.find? `«grace-period» then
     o := { o with gracePeriodMs? := ← readDuration "grace-period" x }
   if let some x := t.find? `«slow-after» then

@@ -173,6 +173,8 @@ structure ResolutionContext where
   default? : Option SourcedFilter := none
   /-- The command line's timeout, in milliseconds. -/
   timeoutMs? : Option Nat := none
+  /-- The command line's timeout of fixtures' phases, in milliseconds. -/
+  fixtureTimeoutMs? : Option Nat := none
   /-- The command line's grace period, in milliseconds. -/
   gracePeriodMs? : Option Nat := none
   /-- Whether the command line asks golden checks to rewrite their expected files. -/
@@ -245,14 +247,15 @@ def ResolutionContext.resolveSettings (ctx : ResolutionContext) (exe : String)
 /--
 Resolves what a fixture's phases receive: each setting the fixture takes from the command line,
 then the profile, then the setting's declared default, and, for {lit}`Errata.seed`, the seed derived
-from the run's seed and the fixture's name. The timeout is the profile's {lit}`fixture-timeout`, and
-the grace period comes from the command line, then the profile.
+from the run's seed and the fixture's name. The timeout comes from the command line's
+{lit}`--fixture-timeout`, then the profile's {lit}`fixture-timeout`, and the grace period from the
+command line, then the profile.
 -/
 def ResolutionContext.resolveFixture (ctx : ResolutionContext) (exe : String)
     (declared : Array SettingInfo) (f : InventoryFixture) : Resolved :=
   let (settings, missing, derivedSeed) := ctx.resolveSettings exe declared f.name f.settings #[]
   { settings, missing, derivedSeed
-    timeoutMs := ctx.profile.fixtureTimeoutMs?.getD defaultTimeoutMs
+    timeoutMs := ctx.fixtureTimeoutMs? <|> ctx.profile.fixtureTimeoutMs? |>.getD defaultTimeoutMs
     gracePeriodMs := ctx.gracePeriodMs? <|> ctx.profile.gracePeriodMs? |>.getD defaultGracePeriodMs
     slowAfterMs := ctx.profile.slowAfterMs?.getD defaultSlowAfterMs }
 

@@ -97,8 +97,6 @@ structure Override where
   filter : FilterString
   /-- How long a test may run, in milliseconds. -/
   timeoutMs? : Option Nat := none
-  /-- How long a fixture's phase may run, in milliseconds. -/
-  fixtureTimeoutMs? : Option Nat := none
   /-- How long a terminated test has before it is killed, in milliseconds. -/
   gracePeriodMs? : Option Nat := none
   /-- How long a test runs before the report marks it slow, in milliseconds. -/
