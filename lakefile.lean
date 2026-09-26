@@ -538,6 +538,30 @@ private def plannedNeeds (plan : Lean.Json) : Array PlannedNeed :=
     return { need := { name, spec, line := jsonNat n "line", col := jsonNat n "col" }, tests }
   | _ => #[]
 
+/--
+Takes the workspace's build lock for a run that the editor widget starts, and returns the action
+that releases it. The widget names the run's events file in `ERRATA_BUILD_LOCK_EVENTS`; without it,
+the driver takes no lock and the action does nothing. The lock is the file
+`.lake/errata-widget-build.lock` of the workspace, so the widget's runs in one workspace build one
+at a time. The driver writes a `build_lock` record to the events file with the state `waiting`
+when another run holds the lock, and with the state `held` once it has the lock.
+-/
+private def takeWidgetBuildLock (ws : Workspace) : IO (IO Unit) := do
+  let some events ← IO.getEnv "ERRATA_BUILD_LOCK_EVENTS" | return pure ()
+  let dir := ws.root.dir / defaultLakeDir
+  IO.FS.createDirAll dir
+  let handle ← IO.FS.Handle.mk (dir / "errata-widget-build.lock") .write
+  let record (state : String) : IO Unit := do
+    let out ← IO.FS.Handle.mk events .append
+    out.putStrLn (Lean.Json.mkObj [("type", "build_lock"), ("state", state)]).compress
+    out.flush
+  unless ← handle.tryLock do
+    record "waiting"
+    handle.lock
+  record "held"
+  let held ← IO.mkRef true
+  return do if ← held.modifyGet (·, false) then handle.unlock
+
 -- The script's name is the one `driverInvocation` looks up.
 @[test_driver]
 script run (args) do
@@ -556,6 +580,9 @@ script run (args) do
       | none => self.dir
     IO.print ((← IO.FS.readFile (dir / "usage.txt")).replace "INVOCATION" withArgs)
     return 0
+  -- A run that the editor widget starts holds the workspace's build lock from its first build to
+  -- its last. The lock is released when the driver exits, if it has not been released earlier.
+  let releaseBuildLock ← takeWidgetBuildLock ws
   -- The configuration file is elaborated before the tests are built, so that a mistake in it ends
   -- Discovery at once. Lake writes `config.json` again only when `errata.toml` or `errata-config`
   -- changes. A failed build is silent, so the problems that `errata-config` reports are relayed.
@@ -824,6 +851,8 @@ script run (args) do
       (libraryModulesJson ws.root.leanLibs)).pretty ++ "\n"
     IO.FS.writeFile executablesFile content
     writeFileAtomically (errataOut / "executables.json") content
+    -- A workspace whose `errata.toml` binds no need has nothing left to build.
+    if needSpecs.isEmpty then releaseBuildLock
     -- The runner's standard input is a lifeline that the driver holds, and `ERRATA_LIFELINE` asks
     -- the runner to end its listings or its tests when that pipe closes. A driver started with
     -- `ERRATA_DRIVER_LIFELINE=1`, as the editor widget starts it, hands its own standard input on
@@ -885,6 +914,7 @@ script run (args) do
           the need '{n.need.name}' could not be built, and these tests reach it:\n  \
           {"\n  ".intercalate n.tests.toList}"
       return setupErrorCode
+    releaseBuildLock
     let built := (← needJobs.get).map (·.1)
     IO.FS.writeFile workspaceFile <| (Lean.Json.mkObj [("protocol", Lean.toJson (1 : Nat)),
       ("needs", Lean.Json.mkObj ((built.zip values).toList.map fun (n, v) =>
