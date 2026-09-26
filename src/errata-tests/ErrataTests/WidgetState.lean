@@ -22,7 +22,7 @@ namespace ErrataTests.WidgetState
 
 /-- One change of each kind. The kill that {lit}`arm` records is {lean}`(pure () : IO Unit)`. -/
 def changes : Array (String × Change) := #[
-  ("locked", .locked 1), ("waitsForLock", .waitsForLock), ("listed", .listed 5), ("execStart", .execStart 7),
+  ("locked", .locked 1), ("listed", .listed 5), ("execStart", .execStart 7),
   ("output", .output { stream := .stdout, text := "x" }), ("result", .result { id := 1 }),
   ("step", .step { fixture := "f", status := "pass" }),
   ("issue", .issue { level := "warning", message := "w" }),
@@ -43,8 +43,7 @@ What is wrong with the transition from {name}`d` by the change named {name}`name
    the run holds.
  * A run ends once and keeps its outcome.
  * Only a live run whose driver is still running is armed.
- * Only the lock ends the waiting, only a wait for the lock returns a building run to waiting, and
-   only the List phase ends the building.
+ * Only the lock ends the waiting, and only the List phase ends the building.
  * An outcome arrives once.
 -/
 def problem (d : RunData) (name : String) (c : Change) : Option String :=
@@ -64,8 +63,6 @@ def problem (d : RunData) (name : String) (c : Change) : Option String :=
     some s!"{name} applied after the driver exited"
   else if !(c matches .locked _) && d.phase matches .waiting && d'.phase matches .building then
     some s!"{name} ended the waiting"
-  else if !(c matches .waitsForLock) && d.phase matches .building && d'.phase matches .waiting then
-    some s!"{name} began a wait for the lock"
   else if !(c matches .listed _) && d.phase matches .building && d'.phase matches .running then
     some s!"{name} ended the building"
   else if (c matches .listed _) && after.isSome && !(d.phase matches .building) then
@@ -292,27 +289,6 @@ def recordsOfOtherKinds : Test := do
   assertBEq #[({ level := "warning", message := "careful" } : Issue)] d.issues
   assertBEq #["db"] (d.steps.map (·.fixture))
   assertTrue (d.phase == .done .noTest) s!"the run is {d.phase.name}"
-
-/--
-The driver's {lit}`build_lock` records return a building run to waiting while another run holds the
-lock, and to building once the driver holds it, and the build's time counts from then.
--/
-@[test]
-def buildLockRecords : Test := do
-  let s ← RunState.new "r" "" 0 0
-  discard <| s.apply (.locked 100)
-  let cache ← SourceLines.new
-  let apply (now : Nat) (j : Json) : TestM Unit := do
-    for c in ← changesOfRecord cache "t" now none j do discard <| s.apply c
-  let str := Json.str
-  apply 120 (Json.mkObj [("type", str "build_lock"), ("state", str "waiting")])
-  assertBEq "waiting" (← s.phase).name
-  apply 400 (Json.mkObj [("type", str "build_lock"), ("state", str "held")])
-  assertBEq "building" (← s.phase).name
-  apply 450 (Json.mkObj [("type", str "build_lock"), ("state", str "held")])
-  apply 900 (Json.mkObj [("type", str "phase"), ("name", str "List"), ("time_ms", Lean.toJson 700)])
-  assertBEq "running" (← s.phase).name
-  assertBEq 300 (← s.data.get).buildMs
 
 /--
 The workspace's libraries hold modules as Lake decides it, and the last library that holds a module

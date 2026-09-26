@@ -862,8 +862,7 @@ script run (args) do
     -- value. Lake builds each need's target again only when its inputs change.
     let needs := plannedNeeds plan
     let needJobs ← IO.mkRef (#[] : Array (String × Job String))
-    -- A plan that names no need has nothing to build.
-    let values? ← if needs.isEmpty then pure (some #[]) else try
+    let values? ← try
       let values ← runBuild do
         let mut jobs : Array (Job String) := #[]
         for n in needs do
