@@ -316,8 +316,10 @@ def librariesHoldModules : Test := do
 def profileOf (name : String) (defaultFilter? : Option String := none)
     (settings : Array (String × String) := #[])
     (overrides : Array (String × Array (String × String)) := #[]) : Runner.Profile :=
-  { name, defaultFilter? := defaultFilter?.map ({ text := · }), settings
-    overrides := overrides.map fun (f, s) => { filter := { text := f }, settings := s } }
+  { name, defaultFilter? := defaultFilter?.map ({ text := · })
+    settings := settings.map fun (k, v) => (k, .text v)
+    overrides := overrides.map fun (f, s) =>
+      { filter := { text := f }, settings := s.map fun (k, v) => (k, .text v) } }
 
 /--
 The widget offers the profiles whose default filters select the test, with the values that the test

@@ -108,9 +108,9 @@ end ExitCode
 
 /-- The runner's options, from its command line. -/
 structure Options where
-  /-- The path of the configuration file that {lit}`errata-config` writes. -/
-  configPath : String := ""
-  /-- The path of the workspace's configuration file that the driver writes. -/
+  /-- The path of the plan that the {lit}`plan` subcommand writes. -/
+  planPath : String := ""
+  /-- The path of {lit}`workspace.json`, which gives the values of the plan's needs. -/
   workspacePath : String := ""
   /-- What to do. -/
   command : Command := .run
@@ -181,14 +181,6 @@ structure Options where
   /-- Whether the usage text was asked for. -/
   help : Bool := false
 deriving Repr, Inhabited
-
-/--
-Whether the command resolves what each test receives, which needs the targets that the profile's
-settings name: a run does, and so does a listing that shows the settings.
--/
-def Options.resolvesSettings (opts : Options) : Bool :=
-  opts.command == .run || opts.verbosity != .silent ||
-    opts.messageFormat == .json || opts.messageFormat == .jsonPretty
 
 /-- The form of a duration, as the messages about malformed durations state it. -/
 def durationForm : String :=
@@ -525,16 +517,17 @@ def parseCommandLine (args : List String) (profileEnv : Option String := none) :
   return opts
 
 /--
-Reads the runner's whole command line: the configuration file that {lit}`errata-config` writes, the
-workspace's configuration file that the driver writes, and then what {name}`parseCommandLine` reads.
+Reads the command line of the runner's {lit}`run` subcommand: the plan that the {lit}`plan`
+subcommand writes, the {lit}`workspace.json` that the driver writes, and then what
+{name}`parseCommandLine` reads.
 -/
 def parseOptions (args : List String) (profileEnv : Option String := none) :
     Except String Options :=
   match args with
-  | config :: workspace :: rest => do
+  | plan :: workspace :: rest => do
     let opts ← parseCommandLine rest profileEnv
-    return { opts with configPath := config, workspacePath := workspace }
-  | _ => .error "expected the configuration file and the workspace's configuration file"
+    return { opts with planPath := plan, workspacePath := workspace }
+  | _ => .error "expected the plan and the workspace's file of the needs' values"
 
 /-- How the usage text writes an option: its names, then its value. -/
 def OptionSpec.forms (s : OptionSpec) : String :=

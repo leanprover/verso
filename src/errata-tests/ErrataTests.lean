@@ -1128,17 +1128,18 @@ private def withTomlVariant (name : String) (args : Array String) : IO IO.Proces
     IO.Process.output { cmd := "lake", args, cwd := dir }
 
 /--
-The driver relays the problems that `errata-config` finds in `errata.toml` and reports targets that
-Lake cannot build, each at its position in the file, before it builds any test executable, with the
-exit code of a setup error. The runner reports errors in filters at the positions of the filters'
-characters, also before any test executable is built, with the same exit code.
-`ErrataConfigTests` checks the rest of the file's validation in process.
+The driver relays the problems that `errata-config` finds in `errata.toml` and reports needs whose
+targets the workspace lacks, each at its position in the file, before it builds any test
+executable, with the exit code of a setup error. The runner reports errors in filters at the
+positions of the filters' characters, also before any test executable is built, with the same exit
+code. `ErrataConfigTests` checks the rest of the file's validation in process.
 -/
 @[test]
 def driverValidatesToml : Test := do
   let cases : List (String × String × UInt32) := [
     ("bad-duration", "errata.toml:2:10: 'timeout' must be a duration", 96),
-    ("unknown-target", "errata.toml:2:32: the target 'nonexistent' cannot be built:", 96),
+    ("unknown-target",
+      "errata.toml:5:8: the target 'nonexistent' of the need 'stamp' cannot be built:", 96),
     ("filter-basic", "errata.toml:2:53: expected ')' to end the matcher", 96)]
   for (variant, message, code) in cases do
     result variant do
@@ -1503,10 +1504,11 @@ records, and lists every option.
 def runnerHelpNamesInvocation : Test := do
   IO.FS.withTempDir fun dir => do
     let invocation := "lake test --"
-    let (config, workspace) ← ({ invocation? := some invocation } : Runner.Config).write dir
+    let (config, executables) ← ({ invocation? := some invocation } : Runner.Config).write dir
     let code ← IO.mkRef (1 : UInt32)
     let out ← captureOutput do
-      code.set (← Runner.main [config.toString, workspace.toString, "list", "-h"])
+      code.set (← Runner.main
+        ["plan", config.toString, executables.toString, (dir / "plan.json").toString, "list", "-h"])
     assertBEq 0 (← code.get)
     assertContains s!"\n  {invocation} [run|list] [OPTIONS] [NAME-FILTER]... [-- NAME-FILTER...]\n"
       out.all
@@ -1514,41 +1516,45 @@ def runnerHelpNamesInvocation : Test := do
       assertContains s!"\n  {spec.forms} " out.all
 
 /--
-Settings that need a Lake target receive the path that the workspace's configuration gives for the
-target. When it gives none, the setting is left out, and if the profile is the run's, then the
-missing target is an error that names it.
+The runner reads a setting that refers to a need as the need's name, the plan keeps the name, and
+the run gives the setting the value that `workspace.json` gives the need. Without such a value, the
+setting is missing.
 -/
 @[test]
-def runnerResolvesNeededTargets : Test := do
-  let needing := Lean.Json.mkObj [("needs", "stamp"), ("line", 2), ("col", 20)]
-  let settings := Lean.Json.mkObj [("a", needing), ("b", "given")]
+def runnerResolvesNeeds : Test := do
+  let settings := Lean.Json.mkObj [("a", Lean.Json.mkObj [("needs", "stamp")]), ("b", "given")]
   let config := Lean.Json.mkObj [("protocol", 1),
-    ("profiles", Lean.Json.mkObj [("default", Lean.Json.mkObj [("settings", settings)])])]
-  let workspace (needs : List (String × Lean.Json)) :=
-    Lean.Json.mkObj [("protocol", 1), ("needs", Lean.Json.mkObj needs)]
-  let settingsOf (c : Runner.Config) := (c.profile? "default").map (·.settings)
-  result "a target with a result" do
-    match Runner.Config.ofJson config (workspace [("stamp", "/out/stamp.txt")]) (some "default") with
-    | .ok c => assertBEq (some #[("a", "/out/stamp.txt"), ("b", "given")]) (settingsOf c)
+    ("profiles", Lean.Json.mkObj [("default", Lean.Json.mkObj [("settings", settings)])]),
+    ("needs", Lean.Json.mkObj [("stamp", Lean.Json.mkObj [("target", "pkg/stamp")])])]
+  let c ← match Runner.Config.ofJson config (Lean.Json.mkObj [("protocol", 1)]) with
+    | .ok c => pure c
     | .error e => fail e
-  result "a target without a result, in another profile's run" do
-    match Runner.Config.ofJson config (workspace []) (some "other") with
-    | .ok c => assertBEq (some #[("b", "given")]) (settingsOf c)
-    | .error e => fail e
-  result "a target without a result, in the profile's run" do
-    match Runner.Config.ofJson config (workspace []) (some "default") with
-    | .ok _ => fail "the configuration was accepted"
-    | .error e => assertContains "profiles.default.settings.a: the target 'stamp'" e
+  let some profile := c.profile? "default" | fail "no default profile"
+  let declared : Array Runner.SettingInfo := #[{ name := "a" }, { name := "b" }]
+  let test : Runner.InventoryTest := { exeIdx := 0, name := "t", settings := #["a", "b"] }
+  let ctx : Runner.ResolutionContext := { profile }
+  result "the configuration" do
+    assertBEq #[("a", .need "stamp"), ("b", .text "given")] profile.settings
+    assertBEq #["pkg/stamp"] (c.needs.map (·.target))
+  result "the plan keeps the need's name" do
+    assertBEq #[("a", .need "stamp"), ("b", .text "given")] (ctx.planTest "e" declared test).values
+  result "a need with a value" do
+    let r := { ctx with needValues := #[("stamp", "/out/stamp.txt")] }.resolve "e" declared test
+    assertBEq #[("a", "/out/stamp.txt"), ("b", "given")] r.settings
+  result "a need without a value" do
+    let r := ctx.resolve "e" declared test
+    assertBEq #[("b", "given")] r.settings
+    assertBEq #["a"] r.missing
 
 /--
-The runner's command line begins with the two configuration files, the `-v` forms select the
-verbosity, options parse, and `--set` and `--filter` repeat.
+The `run` subcommand's command line begins with the plan and `workspace.json`, the `-v` forms select
+the verbosity, options parse, and `--set` and `--filter` repeat.
 -/
 @[test]
 def runnerArgParsing : Test := do
-  let parse (args : List String) := Runner.parseOptions ("config.json" :: "workspace.json" :: args)
+  let parse (args : List String) := Runner.parseOptions ("plan.json" :: "workspace.json" :: args)
   result "configuration" do
-    assertBEq (some "config.json") ((parse []).toOption.map (·.configPath))
+    assertBEq (some "plan.json") ((parse []).toOption.map (·.planPath))
     assertBEq (some "workspace.json") ((parse []).toOption.map (·.workspacePath))
   result "default verbosity" do
     assertBEq (some Verbosity.silent) ((parse []).toOption.map (·.verbosity))
@@ -1729,9 +1735,9 @@ def runnerArgRejections : Test := do
       match Runner.parseOptions ("config.json" :: "workspace.json" :: args) with
       | .error m => assertContains message m
       | .ok _ => fail s!"{args} was accepted"
-  result "no configuration files" do
+  result "no plan" do
     match Runner.parseOptions [] with
-    | .error m => assertContains "expected the configuration file" m
+    | .error m => assertContains "expected the plan" m
     | .ok _ => fail "accepted"
 
 /--

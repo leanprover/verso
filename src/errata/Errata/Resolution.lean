@@ -181,6 +181,8 @@ structure ResolutionContext where
   updateGolden : Bool := false
   /-- The run's seed. -/
   runSeed : Nat := 0
+  /-- The value of each need, by the need's name, once the driver has built the need's target. -/
+  needValues : Array (String × String) := #[]
 
 /--
 The seed that a test receives: the run's seed mixed with the executable's and the test's names, so
@@ -217,67 +219,130 @@ structure Resolved where
 deriving Repr, Inhabited, DecidableEq
 
 /--
-The values of the settings {name}`deps` that the test or fixture {name}`name` of the executable
-{name}`exe` takes, with the mandatory ones that nothing gives a value, and whether the seed is the
-derived one. Each value comes from the command line, then the first of {name}`overrides` that gives
-it, then the profile, then the setting's declared default, and, for {lit}`Errata.seed`, the seed
-derived from the run's seed and {name}`name`.
+A setting's value as the plan records it: a string, a reference to a need, whose value the driver
+supplies once it has built the need's target, or the seed derived from the run's seed, which the run
+draws.
 -/
-def ResolutionContext.resolveSettings (ctx : ResolutionContext) (exe : String)
-    (declared : Array SettingInfo) (name : String) (deps : Array String)
-    (overrides : Array Override) : Array (String × String) × Array String × Bool := Id.run do
-  let mut settings := #[]
-  let mut missing := #[]
-  let mut derivedSeed := false
-  for dep in deps do
-    let given? :=
-      ((ctx.sets.findRev? (·.1 == dep)).map (·.2))
-      <|> overrides.findSome? (fun o => (o.settings.find? (·.1 == dep)).map (·.2))
-      <|> (ctx.profile.settings.find? (·.1 == dep)).map (·.2)
-      <|> (declared.find? (·.name == dep)).bind (·.default?)
-    match given? with
-    | some v => settings := settings.push (dep, v)
-    | none =>
-      if dep == seedSetting then
-        settings := settings.push (dep, toString (testSeed ctx.runSeed exe name))
-        derivedSeed := true
-      else missing := missing.push dep
-  return (settings, missing, derivedSeed)
+inductive PlannedValue where
+  /-- A string. -/
+  | text (value : String)
+  /-- The value of the need named {name}`name`. -/
+  | need (name : String)
+  /-- The seed derived from the run's seed and the name of the test or fixture. -/
+  | derivedSeed
+deriving Repr, Inhabited, DecidableEq
+
+/-- The planned value of a value from the configuration. -/
+def SettingValue.planned : SettingValue → PlannedValue
+  | .text v => .text v
+  | .need n => .need n
 
 /--
-Resolves what a fixture's phases receive: each setting the fixture takes from the command line,
-then the profile, then the setting's declared default, and, for {lit}`Errata.seed`, the seed derived
-from the run's seed and the fixture's name. The timeout comes from the command line's
-{lit}`--fixture-timeout`, then the profile's {lit}`fixture-timeout`, and the grace period from the
-command line, then the profile.
+What a test or a fixture's phases receive, as the plan records it: each value is a string, a
+reference to a need, or the derived seed, and the other limits are resolved.
 -/
-def ResolutionContext.resolveFixture (ctx : ResolutionContext) (exe : String)
-    (declared : Array SettingInfo) (f : InventoryFixture) : Resolved :=
-  let (settings, missing, derivedSeed) := ctx.resolveSettings exe declared f.name f.settings #[]
-  { settings, missing, derivedSeed
+structure PlannedResolution where
+  /-- The values of the settings it takes that have one, in the order it takes them. -/
+  values : Array (String × PlannedValue) := #[]
+  /-- The mandatory settings that nothing gives a value. -/
+  missing : Array String := #[]
+  /-- How long it may run, in milliseconds. -/
+  timeoutMs : Nat := defaultTimeoutMs
+  /-- How long it has after it is terminated, in milliseconds. -/
+  gracePeriodMs : Nat := defaultGracePeriodMs
+  /-- How long it runs before the report marks it slow, in milliseconds. -/
+  slowAfterMs : Nat := defaultSlowAfterMs
+  /-- Whether its golden checks rewrite their expected files. -/
+  updateGolden : Bool := false
+deriving Repr, Inhabited, DecidableEq
+
+/-- Whether its seed is the one derived from the run's seed. -/
+def PlannedResolution.derivedSeed (r : PlannedResolution) : Bool :=
+  r.values.any (·.2 == .derivedSeed)
+
+/-- The names of the needs that its values refer to, in the order it takes the settings. -/
+def PlannedResolution.needs (r : PlannedResolution) : Array String :=
+  r.values.filterMap fun (_, v) => match v with
+    | .need n => some n
+    | _ => none
+
+/--
+What the test or fixture {name}`name` of the executable {name}`exe` receives in a run whose seed is
+{name}`runSeed`, where {name}`needValues` gives each need's value by the need's name. Settings
+whose needs have no value there are missing.
+-/
+def PlannedResolution.substitute (r : PlannedResolution) (needValues : Array (String × String))
+    (runSeed : Nat) (exe name : String) : Resolved := Id.run do
+  let mut settings := #[]
+  let mut missing := r.missing
+  for (k, v) in r.values do
+    match v with
+    | .text s => settings := settings.push (k, s)
+    | .need n =>
+      match needValues.find? (·.1 == n) with
+      | some (_, value) => settings := settings.push (k, value)
+      | none => missing := missing.push k
+    | .derivedSeed => settings := settings.push (k, toString (testSeed runSeed exe name))
+  return {
+    settings, missing, timeoutMs := r.timeoutMs, gracePeriodMs := r.gracePeriodMs
+    slowAfterMs := r.slowAfterMs, updateGolden := r.updateGolden, derivedSeed := r.derivedSeed }
+
+/--
+The values of the settings {name}`deps` that a test or a fixture takes, with the mandatory ones that
+nothing gives a value. Each value comes from the command line, then the first of {name}`overrides`
+that gives it, then the profile, then the setting's declared default, and, for {lit}`Errata.seed`,
+the seed derived from the run's seed.
+-/
+def ResolutionContext.resolveSettings (ctx : ResolutionContext) (declared : Array SettingInfo)
+    (deps : Array String) (overrides : Array Override) :
+    Array (String × PlannedValue) × Array String := Id.run do
+  let mut values := #[]
+  let mut missing := #[]
+  for dep in deps do
+    let given? : Option PlannedValue :=
+      ((ctx.sets.findRev? (·.1 == dep)).map (.text ·.2))
+      <|> overrides.findSome? (fun o => (o.settings.find? (·.1 == dep)).map (·.2.planned))
+      <|> (ctx.profile.settings.find? (·.1 == dep)).map (·.2.planned)
+      <|> ((declared.find? (·.name == dep)).bind (·.default?)).map .text
+    match given? with
+    | some v => values := values.push (dep, v)
+    | none =>
+      if dep == seedSetting then values := values.push (dep, .derivedSeed)
+      else missing := missing.push dep
+  return (values, missing)
+
+/--
+Plans what a fixture's phases receive: each setting the fixture takes from the command line, then
+the profile, then the setting's declared default, and, for {lit}`Errata.seed`, the derived seed. The
+timeout comes from the command line's {lit}`--fixture-timeout`, then the profile's
+{lit}`fixture-timeout`, and the grace period from the command line, then the profile.
+-/
+def ResolutionContext.planFixture (ctx : ResolutionContext) (declared : Array SettingInfo)
+    (f : InventoryFixture) : PlannedResolution :=
+  let (values, missing) := ctx.resolveSettings declared f.settings #[]
+  { values, missing
     timeoutMs := ctx.fixtureTimeoutMs? <|> ctx.profile.fixtureTimeoutMs? |>.getD defaultTimeoutMs
     gracePeriodMs := ctx.gracePeriodMs? <|> ctx.profile.gracePeriodMs? |>.getD defaultGracePeriodMs
     slowAfterMs := ctx.profile.slowAfterMs?.getD defaultSlowAfterMs }
 
 /--
-Resolves what a test receives. Each setting the test takes comes from the command line, then the
-first override that matches the test and gives it, then the profile, then the setting's declared
-default, and, for {lit}`Errata.seed`, the seed derived from the run's seed. The timeout and the
+Plans what a test of the executable {name}`exe` receives. Each setting the test takes comes from the
+command line, then the first override that matches the test and gives it, then the profile, then
+the setting's declared default, and, for {lit}`Errata.seed`, the derived seed. The timeout and the
 grace period come from the command line, the first matching override, the profile, and the defaults,
 in that order; the slow mark and golden updating come from the first matching override, the
 profile, and the defaults, with {lit}`--update-golden` over all of them.
 -/
-def ResolutionContext.resolve (ctx : ResolutionContext) (exe : String)
-    (declared : Array SettingInfo) (t : InventoryTest) : Resolved := Id.run do
+def ResolutionContext.planTest (ctx : ResolutionContext) (exe : String)
+    (declared : Array SettingInfo) (t : InventoryTest) : PlannedResolution := Id.run do
   let record := t.record exe
   let dflt := (ctx.default?.map (·.expr.eval record)).getD true
   let matching := ctx.overrides.filterMap fun (f, o) =>
     if f.expr.eval record dflt then some o else none
   let fromOverrides {α} (field : Override → Option α) : Option α := matching.findSome? field
-  let (settings, missing, derivedSeed) :=
-    ctx.resolveSettings exe declared t.name t.settings matching
+  let (values, missing) := ctx.resolveSettings declared t.settings matching
   return {
-    settings, missing, derivedSeed
+    values, missing
     timeoutMs := ctx.timeoutMs? <|> fromOverrides (·.timeoutMs?) <|> ctx.profile.timeoutMs?
       |>.getD defaultTimeoutMs
     gracePeriodMs := ctx.gracePeriodMs? <|> fromOverrides (·.gracePeriodMs?) <|>
@@ -287,6 +352,22 @@ def ResolutionContext.resolve (ctx : ResolutionContext) (exe : String)
     updateGolden := ctx.updateGolden ||
       (fromOverrides (·.updateGolden?) <|> ctx.profile.updateGolden? |>.getD false)
   }
+
+/--
+Resolves what a fixture's phases receive, as {name}`ResolutionContext.planFixture` plans it, with
+the needs' values and the run's seed of the context.
+-/
+def ResolutionContext.resolveFixture (ctx : ResolutionContext) (exe : String)
+    (declared : Array SettingInfo) (f : InventoryFixture) : Resolved :=
+  (ctx.planFixture declared f).substitute ctx.needValues ctx.runSeed exe f.name
+
+/--
+Resolves what a test receives, as {name}`ResolutionContext.planTest` plans it, with the needs'
+values and the run's seed of the context.
+-/
+def ResolutionContext.resolve (ctx : ResolutionContext) (exe : String)
+    (declared : Array SettingInfo) (t : InventoryTest) : Resolved :=
+  (ctx.planTest exe declared t).substitute ctx.needValues ctx.runSeed exe t.name
 
 /-- A value given to a setting that no test executable declares. -/
 structure Undeclared where

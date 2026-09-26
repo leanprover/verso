@@ -186,10 +186,11 @@ deriving Repr, Inhabited, BEq
 
 /--
 The values that the profile gives the test {name}`record`: for each setting that the profile or one
-of its overrides gives a value, the first override that matches the test and gives it one, or else
-the profile's value. {name}`dflt` is whether the default filter selects the test, which
-{lit}`default()` stands for in the overrides' filters. Overrides whose filters cannot be read give
-nothing.
+of its overrides gives a string, the first override that matches the test and gives it a value, or
+else the profile's value. Settings whose values come from needs are left out, since the driver
+builds a need's target when the test runs. {name}`dflt` is whether the default filter selects the
+test, which {lit}`default()` stands for in the overrides' filters. Overrides whose filters cannot be
+read give nothing.
 -/
 def profileValues (profile : Runner.Profile) (record : Filter.Record) (dflt : Bool) :
     Array (String × String) := Id.run do
@@ -201,8 +202,10 @@ def profileValues (profile : Runner.Profile) (record : Filter.Record) (dflt : Bo
   for (k, _) in profile.settings ++ matching.flatMap (·.settings) do
     unless names.contains k do names := names.push k
   return names.filterMap fun k =>
-    ((matching.findSome? fun o => o.settings.find? (·.1 == k)) <|>
-      profile.settings.find? (·.1 == k)).map (k, ·.2)
+    match (matching.findSome? fun o => o.settings.find? (·.1 == k)) <|>
+        profile.settings.find? (·.1 == k) with
+    | some (_, .text v) => some (k, v)
+    | _ => none
 
 /--
 The profiles of {name}`config` that a run of the test {name}`record` can use: those whose default

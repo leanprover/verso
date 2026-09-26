@@ -58,6 +58,31 @@ The directory of Errata's sources, which the runner passes to test executables a
 -/
 def errataDir : IO System.FilePath := IO.FS.realPath "src/errata"
 
+/-- The runner built for this workspace. -/
+def runnerExe : System.FilePath := ".lake/build/bin/errata-runner"
+
+/--
+Writes the configuration into {name}`dir`, makes its plan with the built runner's `plan` subcommand
+and the command line {name}`args`, and writes a `workspace.json` that gives the needs the values
+{name}`needs`. The result is the paths of the plan and of `workspace.json`, which the `run`
+subcommand takes.
+-/
+def planWithRunner (config : Config) (dir : System.FilePath) (args : Array String)
+    (needs : Array (String × String) := #[]) : IO (System.FilePath × System.FilePath) := do
+  let (configFile, executables) ← config.write dir
+  let plan := dir / "plan.json"
+  let out ← IO.Process.output {
+    cmd := runnerExe.toString
+    args := #["plan", configFile.toString, executables.toString, plan.toString] ++ args
+    env := #[("ERRATA_LIFELINE", none)] }
+  unless out.exitCode == 0 do
+    throw <| .userError
+      s!"the plan subcommand exited with {out.exitCode}:\n{out.stdout}{out.stderr}"
+  let workspace := dir / "workspace.json"
+  IO.FS.writeFile workspace (Json.mkObj [("protocol", Json.num 1),
+    ("needs", Json.mkObj (needs.toList.map fun (k, v) => (k, Json.str v)))]).compress
+  return (plan, workspace)
+
 /--
 Runs the given test executables with the runner, collecting what it reports. {name}`config` gives
 the rest of the configuration; the directory of Errata's sources is this workspace's unless it names
@@ -2238,7 +2263,6 @@ is ended, the fixture's teardown still runs, and the runner exits non-zero with 
 -/
 @[test]
 def cancelledRunTearsDown : Test := do
-  let runnerExe : System.FilePath := ".lake/build/bin/errata-runner"
   unless ← runnerExe.pathExists do fail s!"the runner is not built at {runnerExe}"
   let script ← IO.FS.realPath (harnessDir / "basic.sh")
   IO.FS.withTempDir fun dir => do
@@ -2248,11 +2272,11 @@ def cancelledRunTearsDown : Test := do
       name := "basic", command := #["bash", script.toString]
       env := #[("BASIC_TESTS", "slow-user")] }
     let config : Config := { executables := #[exe], errataDir? := some (← errataDir).toString }
-    let (config, workspace) ← config.write dir
+    let args := #["--grace-period", "500ms", "--set", s!"stamp-file={stamps}"]
+    let (plan, workspace) ← planWithRunner config dir args
     let child ← IO.Process.spawn {
       cmd := runnerExe.toString
-      args := #[config.toString, workspace.toString, "--json", json.toString,
-        "--grace-period", "500ms", "--set", s!"stamp-file={stamps}"]
+      args := #["run", plan.toString, workspace.toString, "--json", json.toString] ++ args
       stdin := .piped, stdout := .piped, stderr := .piped
       env := #[("ERRATA_LIFELINE", some "1")]
     }
@@ -2434,9 +2458,6 @@ def testDurationIncludesNamedResults : Test := do
 
 /-! # Processes -/
 
-/-- The runner built for this workspace. -/
-def runnerExe : System.FilePath := ".lake/build/bin/errata-runner"
-
 /-- Whether any process's command line contains {name}`text`. -/
 def processesWith (text : String) : IO String := do
   return (← IO.Process.output { cmd := "pgrep", args := #["-f", text] }).stdout.trimAscii.copy
@@ -2455,11 +2476,11 @@ def runnerLifeline : Test := do
     let json := dir / "report.json"
     let exe : ExecutableConfig :=
       { name := "basic", command := #["bash", script.toString], env := #[("BASIC_TESTS", "lingers pass")] }
-    let (config, workspace) ← ({ executables := #[exe] } : Config).write dir
+    let args := #["--grace-period", "500ms", "--set", s!"marker={marker}"]
+    let (plan, workspace) ← planWithRunner { executables := #[exe] } dir args
     let child ← IO.Process.spawn {
       cmd := runnerExe.toString
-      args := #[config.toString, workspace.toString, "--json", json.toString,
-        "--grace-period", "500ms", "--set", s!"marker={marker}"]
+      args := #["run", plan.toString, workspace.toString, "--json", json.toString] ++ args
       stdin := .piped, stdout := .piped, stderr := .piped
       env := #[("ERRATA_LIFELINE", some "1")]
     }
@@ -2503,12 +2524,13 @@ def killingTheDriversGroupEndsTheRun : Test := do
   interpretedProduct.check
   let marker := toString (← IO.rand 0 (2 ^ 30))
   IO.FS.withTempDir fun dir => do
-    let (config, workspace) ← ({ executables := #[interpretedProduct.exe] } : Config).write dir
+    let args := #["--filter", "name(=ErrataTests.Roles.lingers)",
+      "--set", s!"ErrataTests.Roles.marker={marker}"]
+    let (plan, workspace) ← planWithRunner { executables := #[interpretedProduct.exe] } dir args
     let driver ← IO.Process.spawn {
       cmd := "bash"
-      args := #["-c", "\"$@\"; exit $?", "driver", runnerExe.toString, config.toString,
-        workspace.toString, "--filter", "name(=ErrataTests.Roles.lingers)",
-        "--set", s!"ErrataTests.Roles.marker={marker}"]
+      args := #["-c", "\"$@\"; exit $?", "driver", runnerExe.toString, "run", plan.toString,
+        workspace.toString] ++ args
       stdin := .piped, stdout := .piped, stderr := .piped, setsid := true
       env := #[("ERRATA_LIFELINE", some "1")]
     }
@@ -2534,6 +2556,96 @@ def killingTheDriversGroupEndsTheRun : Test := do
     let err := (← IO.wait errTask).toOption.getD ""
     assertTrue started s!"the test started its process; the runner wrote:\n{err}"
     assertTrue left.isEmpty s!"processes survived: {left}"
+
+/--
+The JSON with every key whose value depends on the clock or the run's identifier left out: the
+durations, the times, and the run's identifier.
+-/
+partial def jsonWithoutTimes (j : Json) : Json :=
+  match j with
+  | .obj kvs =>
+    Json.mkObj <| kvs.toArray.toList.filterMap fun (k, v) =>
+      if k == "run_id" || k.endsWith "Ms" || k.endsWith "_ms" || k == "time" then none
+      else some (k, jsonWithoutTimes v)
+  | .arr xs => .arr (xs.map jsonWithoutTimes)
+  | other => other
+
+/--
+The built runner's `plan` subcommand, over a test executable whose tests and fixtures take settings
+that refer to needs, writes a plan whose selected tests, fixtures, resolved settings, and needs are
+those of a run in one process, each need with the tests that reach it, directly or through a
+fixture. The `run` subcommand over that plan and a `workspace.json` written by hand produces the
+JSON report of the run in one process, times left out, and its events file has the `phase` records
+of the List and Run phases.
+-/
+@[test]
+def planThenRunMatchesOneProcess : Test := do
+  unless ← runnerExe.pathExists do fail s!"the runner is not built at {runnerExe}"
+  IO.FS.withTempDir fun dir => do
+    let stamps := dir / "stamps"
+    let profile : Profile := {
+      name := "default", settings := #[("greeting", .need "greet"), ("stamp-file", .need "stamp")] }
+    let config : Config := {
+      executables := #[basic ["pass", "greets", "uses-dependent"]]
+      errataDir? := some (← errataDir).toString, profiles := #[profile]
+      needs := #[{ name := "greet", target := "greeting" }, { name := "stamp", target := "stamps" },
+        { name := "unused", target := "nothing" }] }
+    let needValues := #[("greet", "hi"), ("stamp", stamps.toString)]
+    let (plan, workspace) ← planWithRunner config dir #["--seed", "5"] needValues
+    let p ← IO.ofExcept (Plan.fromJson? (← readJsonFile plan))
+    -- The run in one process.
+    let events ← IO.mkRef #[]
+    let (combined, code) ← execute config { seed := some 5, jobs? := some 1 }
+      { event := fun j => events.modify (·.push j) } (needValues := needValues)
+    assertBEq ExitCode.ok code
+    result "the selected tests" do
+      assertBEq #["pass", "greets", "uses-dependent"] (p.tests.map (·.test.name))
+    result "the fixtures" do
+      assertBEq #["stamped", "dependent"] (p.fixtures.map (·.fixture.name))
+    result "the resolved settings" do
+      let outcomes := (← events.get).filter fun e =>
+        strField e "type" == some "outcome" && strField e "kind" == some "test"
+      for t in p.tests do
+        let resolved := t.resolution.substitute needValues 5 "basic" t.test.name
+        let some o := outcomes.find? (strField · "test" == some t.test.name)
+          | fail s!"no outcome of {t.test.name}"
+        let given := (o.getObjValD "settings").getObj?.toOption.map fun m =>
+          m.toArray.filterMap fun (k, v) => (v.getStr?.toOption.map (k, ·))
+        assertBEq (some (resolved.arguments.qsort (·.1 < ·.1))) given
+      let greets := (p.tests.find? (·.test.name == "greets")).map (·.resolution.values)
+      assertBEq (some (some (PlannedValue.need "greet")))
+        (greets.map fun vs => (vs.find? (·.1 == "greeting")).map (·.2))
+    result "the needs" do
+      assertBEq #[("greet", #[("basic", "greets"), ("basic", "uses-dependent")]),
+        ("stamp", #[("basic", "uses-dependent")])]
+        (p.needs.map fun n => (n.need.name, n.tests))
+    -- The run of the plan by the built runner.
+    if ← stamps.pathExists then IO.FS.removeFile stamps
+    let json := dir / "report.json"
+    let junit := dir / "report.xml"
+    let eventsFile := dir / "events.jsonl"
+    let out ← IO.Process.output {
+      cmd := runnerExe.toString
+      args := #["run", plan.toString, workspace.toString, "--seed", "5", "-j", "1",
+        "--json", json.toString, "--junit", junit.toString, "--events", eventsFile.toString]
+      env := #[("ERRATA_LIFELINE", none)] }
+    assertExitCode 0 out
+    result "the reports" do
+      let expected := jsonWithoutTimes (← IO.ofExcept (Json.parse (jsonReport combined)))
+      let actual := jsonWithoutTimes (← readJsonFile json)
+      assertBEq expected.compress actual.compress
+      assertBEq (withoutTimes (junitReport combined)) (withoutTimes (← IO.FS.readFile junit))
+    result "the phase records" do
+      let phases := (← readRecords eventsFile).filterMap fun e =>
+        if strField e "type" == some "phase" then strField e "name" else none
+      assertBEq #["List", "Run"] phases
+    result "a need without a value" do
+      IO.FS.writeFile workspace "{\"protocol\":1,\"needs\":{\"greet\":\"hi\"}}"
+      let r ← IO.Process.output {
+        cmd := runnerExe.toString, args := #["run", plan.toString, workspace.toString]
+        env := #[("ERRATA_LIFELINE", none)] }
+      assertExitCode 96 r
+      assertContains "gives no value for the need stamp" r.stderr
 
 /--
 Through the interpreted product, a test runs its helpers through the interpreter with the same
@@ -2682,11 +2794,11 @@ def runsUnderTheDefaultFileLimit : Test := do
   IO.FS.withTempDir fun dir => do
     let config : Config :=
       { executables := #[← manyTests 300], errataDir? := some (← errataDir).toString }
-    let (config, workspace) ← config.write dir
+    let (plan, workspace) ← planWithRunner config dir #[]
     let r ← IO.Process.output {
       cmd := "bash"
-      args := #["-c", "ulimit -n 256 && exec \"$@\"", "runner", runnerExe.toString,
-        config.toString, workspace.toString, "-j", "4"]
+      args := #["-c", "ulimit -n 256 && exec \"$@\"", "runner", runnerExe.toString, "run",
+        plan.toString, workspace.toString, "-j", "4"]
       env := #[("ERRATA_LIFELINE", none)] }
     assertExitCode 0 r
     assertContains "300 passed, 0 failed" r.stdout
@@ -2706,9 +2818,10 @@ def pipedRunHasNoProgressDisplay : Test := do
         name := "basic", command := #["bash", basic.toString]
         env := #[("BASIC_TESTS", "pass fail greets needs-setting")] }]
       errataDir? := some (← errataDir).toString }
-    let (config, workspace) ← config.write dir
+    let (plan, workspace) ← planWithRunner config dir #[]
     let r ← IO.Process.output {
-      cmd := runnerExe.toString, args := #[config.toString, workspace.toString, "-v", "-j", "4"]
+      cmd := runnerExe.toString
+      args := #["run", plan.toString, workspace.toString, "-v", "-j", "4"]
       env := #[("ERRATA_LIFELINE", none), ("TERM", some "xterm-256color"),
         ("COLUMNS", some "100")] }
     assertContains "Summary" r.stdout

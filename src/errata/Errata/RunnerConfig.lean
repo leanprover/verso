@@ -5,11 +5,11 @@ Author: David Thrane Christiansen
 -/
 
 /-
-The runner's configuration, which it reads from two files besides its command line.
-`.lake/errata/config.json`, which `errata-config` writes, holds the profiles of `errata.toml` with
-their inheritance applied, and names the Lake target of each setting that needs one.
-`.lake/errata/workspace.json`, which the driver writes, holds the path of each needed target's
-result, the test executables to run, and what the runner needs to know about the workspace.
+The runner's configuration, which the `plan` subcommand reads from two files besides its command
+line. `.lake/errata/config.json`, which `errata-config` writes, holds the profiles of `errata.toml`
+with their inheritance applied and the `[needs]` table, and each setting that refers to a need holds
+the need's name. `.lake/errata/executables.json`, which the driver writes, holds the test
+executables to run and what the runner needs to know about the workspace.
 -/
 module
 
@@ -75,6 +75,45 @@ structure FilterText where
 deriving Repr, Inhabited, DecidableEq
 
 /--
+The value of a setting in the configuration: a string, or a reference to a need, whose value the
+driver supplies once it has built the need's target.
+-/
+inductive SettingValue where
+  /-- A string that the configuration gives. -/
+  | text (value : String)
+  /-- A reference to the need named {name}`name`. -/
+  | need (name : String)
+deriving Repr, Inhabited, DecidableEq
+
+instance : Coe String SettingValue := ⟨.text⟩
+
+instance : ToJson SettingValue where
+  toJson
+    | .text v => Json.str v
+    | .need n => Json.mkObj [("needs", Json.str n)]
+
+instance : FromJson SettingValue where
+  fromJson? j :=
+    match j.getStr? with
+    | .ok s => .ok (.text s)
+    | .error _ => (.need ·) <$> j.getObjValAs? String "needs"
+
+/--
+A need of the configuration: a name that {lit}`[needs]` binds to a Lake target, with the position of
+the target in the configuration file.
+-/
+structure Need where
+  /-- The need's name, which settings refer to. -/
+  name : String
+  /-- The Lake target, in the workspace's target syntax. -/
+  target : String
+  /-- The line of the target in the configuration file, counted from one. -/
+  line : Nat := 0
+  /-- The column of the target in the configuration file, counted from zero. -/
+  col : Nat := 0
+deriving Repr, Inhabited, DecidableEq
+
+/--
 A per-test override in a profile: a filter over the inventory and the values that apply to the
 tests it matches. For each value, the first override that matches a test and gives it wins.
 -/
@@ -90,7 +129,7 @@ structure Override where
   /-- Whether golden checks rewrite their expected files. -/
   updateGolden? : Option Bool := none
   /-- Values of settings, by name. -/
-  settings : Array (String × String) := #[]
+  settings : Array (String × SettingValue) := #[]
 deriving Repr, Inhabited, DecidableEq
 
 /-- A profile, with the values of the profiles it inherits from already merged in. -/
@@ -112,7 +151,7 @@ structure Profile where
   /-- Whether golden checks rewrite their expected files. -/
   updateGolden? : Option Bool := none
   /-- Values of settings, by name. -/
-  settings : Array (String × String) := #[]
+  settings : Array (String × SettingValue) := #[]
   /-- The per-test overrides, in order, those of the profile's ancestors first. -/
   overrides : Array Override := #[]
   /-- The filter that the tests to run are drawn from, unless the command line ignores it. -/
@@ -147,6 +186,8 @@ structure Config where
   empty.
   -/
   profiles : Array Profile := #[]
+  /-- The needs that settings refer to, by name. -/
+  needs : Array Need := #[]
   /-- The default filter of every profile that gives none of its own. -/
   defaultFilter? : Option FilterText := none
   /--
@@ -211,45 +252,33 @@ instance : ToJson FilterText where
     | .argument _ => []
 
 /--
-Gives the path of a needed target's result by the target's name: the path, {lean}`none` to leave the
-setting out, or an error that names the target.
--/
-abbrev NeedsResolver := String → Except String (Option String)
-
-/--
 Decodes the values of settings: an object whose values are strings, or objects whose {lit}`needs`
-names the Lake target whose result is the value. {name}`resolve` gives each such target's result.
+names the need that gives the value.
 -/
-def settingsOfJson (resolve : NeedsResolver) (j : Json) :
-    Except String (Array (String × String)) := do
+def settingsOfJson (j : Json) : Except String (Array (String × SettingValue)) := do
   let obj ← j.getObj?
-  let values ← obj.toArray.mapM fun (k, v) => (do
-    match v.getStr? with
-    | .ok s => return (k, some s)
-    | .error _ =>
-      let target ← v.getObjValAs? String "needs"
-      return (k, ← resolve target)) |>.mapError (s!"{k}: " ++ ·)
-  return values.filterMap fun (k, v?) => v?.map (k, ·)
+  obj.toArray.mapM fun (k, v) =>
+    (do return (k, ← FromJson.fromJson? v)) |>.mapError (s!"{k}: " ++ ·)
 
 /-- The optional settings field of an object, with the key in any error. -/
-def settingsField (resolve : NeedsResolver) (j : Json) : Except String (Array (String × String)) :=
+def settingsField (j : Json) : Except String (Array (String × SettingValue)) :=
   match j.getObjVal? "settings" with
   | .ok .null | .error _ => pure #[]
-  | .ok v => settingsOfJson resolve v |>.mapError (s!"settings.{·}")
+  | .ok v => settingsOfJson v |>.mapError (s!"settings.{·}")
 
 /-- The values of settings as an object. -/
-def settingsToJson (s : Array (String × String)) : Json :=
-  Json.mkObj (s.toList.map fun (k, v) => (k, Json.str v))
+def settingsToJson (s : Array (String × SettingValue)) : Json :=
+  Json.mkObj (s.toList.map fun (k, v) => (k, ToJson.toJson v))
 
 /-- Decodes an override. Errors name the key within the override. -/
-def Override.fromJson? (resolve : NeedsResolver) (j : Json) : Except String Override := do
+def Override.fromJson? (j : Json) : Except String Override := do
   return {
     filter := ← j.getObjValAs? FilterText "filter" |>.mapError (s!"filter: " ++ ·)
     timeoutMs? := ← configField j "timeout-ms"
     gracePeriodMs? := ← configField j "grace-period-ms"
     slowAfterMs? := ← configField j "slow-after-ms"
     updateGolden? := ← configField j "update-golden"
-    settings := ← settingsField resolve j
+    settings := ← settingsField j
   }
 
 instance : ToJson Override where
@@ -260,11 +289,10 @@ instance : ToJson Override where
     (if o.settings.isEmpty then [] else [("settings", settingsToJson o.settings)])
 
 /-- Decodes a profile with the given name. Errors name the key within the profile. -/
-def Profile.fromJson? (name : String) (resolve : NeedsResolver) (j : Json) :
-    Except String Profile := do
+def Profile.fromJson? (name : String) (j : Json) : Except String Profile := do
   let overrides : Array Json := (← configField j "override").getD #[]
   let overrides ← overrides.mapIdxM fun i o =>
-    Override.fromJson? resolve o |>.mapError (s!"override[{i}].{·}")
+    Override.fromJson? o |>.mapError (s!"override[{i}].{·}")
   return {
     name
     timeoutMs? := ← configField j "timeout-ms"
@@ -274,7 +302,7 @@ def Profile.fromJson? (name : String) (resolve : NeedsResolver) (j : Json) :
     jobs? := ← configField j "jobs"
     order? := ← configField j "order"
     updateGolden? := ← configField j "update-golden"
-    settings := ← settingsField resolve j
+    settings := ← settingsField j
     overrides
     defaultFilter? := ← configField j "default-filter"
     junitPath? := ← configField j "junit"
@@ -293,15 +321,29 @@ instance : ToJson Profile where
     Protocol.opt "default-filter" p.defaultFilter? ++ Protocol.opt "junit" p.junitPath? ++
     Protocol.opt "json" p.jsonPath? ++ Protocol.opt "markdown" p.markdownPath?
 
-/--
-Decodes the profiles: an object from names to profiles. {name}`resolve` gives the result of each
-target that a profile's settings need. Errors name the profile and the key.
--/
-def profilesOfJson (resolve : String → NeedsResolver) (j : Json) :
-    Except String (Array Profile) := do
+/-- Decodes the profiles: an object from names to profiles. Errors name the profile and the key. -/
+def profilesOfJson (j : Json) : Except String (Array Profile) := do
   let obj ← j.getObj?
   obj.toArray.mapM fun (name, p) =>
-    Profile.fromJson? name (resolve name) p |>.mapError (s!"{name}.{·}")
+    Profile.fromJson? name p |>.mapError (s!"{name}.{·}")
+
+/--
+Decodes the {lit}`[needs]` table: an object from names to objects that give the target and its
+position.
+-/
+def needsOfJson (j : Json) : Except String (Array Need) := do
+  let obj ← j.getObj?
+  obj.toArray.mapM fun (name, n) => (do
+    return ({
+      name, target := ← n.getObjValAs? String "target"
+      line := (← configField n "line").getD 0, col := (← configField n "col").getD 0 } : Need))
+    |>.mapError (s!"{name}: " ++ ·)
+
+/-- The {lit}`[needs]` table as an object. -/
+def needsToJson (needs : Array Need) : Json :=
+  Json.mkObj <| needs.toList.map fun n =>
+    (n.name, Json.mkObj [("target", Json.str n.target), ("line", ToJson.toJson n.line),
+      ("col", ToJson.toJson n.col)])
 
 instance : FromJson ExecutableConfig where
   fromJson? j := do
@@ -326,34 +368,24 @@ instance : ToJson ExecutableConfig where
       else [("env", Json.mkObj (e.env.toList.map fun (k, v) => (k, Json.str v)))])
 
 /--
-Decodes the configuration from the contents of {lit}`config.json` and of {lit}`workspace.json`. A
-setting that needs a Lake target receives the path that {lit}`workspace.json` gives for that target.
-When {lit}`workspace.json` gives it none, the setting is left out, and if the profile is
-{name}`required?`, then the missing target is an error that names it.
+Decodes the configuration from the contents of {lit}`config.json`, which gives the profiles, the
+needs, and the default filter, and of {lit}`executables.json`, {name}`workspace`, which gives the
+test executables and what the runner knows about the workspace.
 -/
-def Config.ofJson (config workspace : Json) (required? : Option String) : Except String Config := do
-  let needs : Array (String × String) ← match workspace.getObjVal? "needs" with
-    | .ok .null | .error _ => pure #[]
-    | .ok n => (do
-        let obj ← n.getObj?
-        obj.toArray.mapM fun ((k : String), (v : Json)) => do return (k, ← v.getStr?))
-      |>.mapError (s!"needs: " ++ ·)
-  let resolve (profile target : String) : Except String (Option String) :=
-    match needs.find? (·.1 == target) with
-    | some (_, path) => .ok (some path)
-    | none =>
-      if required? == some profile then
-        .error s!"the target '{target}' has no result in the workspace's configuration"
-      else .ok none
+def Config.ofJson (config workspace : Json) : Except String Config := do
   let executables : Array Json := (← configField workspace "executables").getD #[]
   let executables ← executables.mapIdxM fun i e =>
     (FromJson.fromJson? e : Except String ExecutableConfig).mapError (s!"executables[{i}]: " ++ ·)
   let profiles ← match config.getObjVal? "profiles" with
     | .ok .null | .error _ => pure #[]
-    | .ok p => profilesOfJson resolve p |>.mapError (s!"profiles." ++ ·)
+    | .ok p => profilesOfJson p |>.mapError (s!"profiles." ++ ·)
+  let needs ← match config.getObjVal? "needs" with
+    | .ok .null | .error _ => pure #[]
+    | .ok n => needsOfJson n |>.mapError (s!"needs." ++ ·)
   return {
     protocol := ← config.getObjValAs? Nat "protocol" |>.mapError (s!"protocol: " ++ ·)
     executables
+    needs
     errataDir? := ← configField workspace "errataDir"
     warnings := (← configField workspace "warnings").getD #[]
     invocation? := ← configField workspace "invocation"
@@ -371,16 +403,19 @@ def Config.ofJson (config workspace : Json) (required? : Option String) : Except
 def Config.executableNames (c : Config) : Array String :=
   if c.knownExecutables.isEmpty then c.executables.map (·.name) else c.knownExecutables
 
-/-- The contents of {lit}`config.json` that describe the configuration's profiles and filter. -/
+/--
+The contents of {lit}`config.json` that describe the configuration's profiles, needs, and filter.
+-/
 def Config.configJson (c : Config) : Json :=
   Json.mkObj <|
     [("protocol", ToJson.toJson c.protocol)] ++
     (if c.profiles.isEmpty then []
       else [("profiles", Json.mkObj (c.profiles.toList.map fun p => (p.name, ToJson.toJson p)))]) ++
+    (if c.needs.isEmpty then [] else [("needs", needsToJson c.needs)]) ++
     Protocol.opt "default-filter" c.defaultFilter?
 
-/-- The contents of {lit}`workspace.json` that describe the configuration's workspace. -/
-def Config.workspaceJson (c : Config) : Json :=
+/-- The contents of {lit}`executables.json` that describe the configuration's workspace. -/
+def Config.executablesJson (c : Config) : Json :=
   Json.mkObj <|
     [("protocol", ToJson.toJson c.protocol), ("executables", ToJson.toJson c.executables)] ++
     (match c.errataDir? with | some d => [("errataDir", Json.str d)] | none => []) ++
@@ -396,14 +431,28 @@ def Config.workspaceJson (c : Config) : Json :=
     (if c.skippedExecutables.isEmpty then []
       else [("skippedExecutables", ToJson.toJson c.skippedExecutables)])
 
-/-- Writes {lit}`config.json` and {lit}`workspace.json` for the configuration into {name}`dir`. -/
+/--
+The configuration as JSON: what {lit}`config.json` holds under {lit}`config`, and what
+{lit}`executables.json` holds under {lit}`executables`.
+-/
+def Config.toJson (c : Config) : Json :=
+  Json.mkObj [("config", c.configJson), ("executables", c.executablesJson)]
+
+/-- Decodes what {name}`Config.toJson` gives. -/
+def Config.fromJson? (j : Json) : Except String Config :=
+  Config.ofJson (j.getObjValD "config") (j.getObjValD "executables")
+
+/--
+Writes {lit}`config.json` and {lit}`executables.json` for the configuration into {name}`dir`, and
+returns their paths.
+-/
 def Config.write (c : Config) (dir : System.FilePath) :
     IO (System.FilePath × System.FilePath) := do
   let config := dir / "config.json"
-  let workspace := dir / "workspace.json"
+  let executables := dir / "executables.json"
   IO.FS.writeFile config c.configJson.compress
-  IO.FS.writeFile workspace c.workspaceJson.compress
-  return (config, workspace)
+  IO.FS.writeFile executables c.executablesJson.compress
+  return (config, executables)
 
 /-- Reads a file of JSON, with its path in any error. -/
 def readJsonFile (path : System.FilePath) : IO Json := do
@@ -411,16 +460,14 @@ def readJsonFile (path : System.FilePath) : IO Json := do
   IO.ofExcept (Json.parse text |>.mapError (s!"{path}: not JSON: " ++ ·))
 
 /--
-Reads the configuration from {lit}`config.json` and {lit}`workspace.json`, checking that its version
-is the one this runner reads. When {name}`required?` names a profile, each target that the profile's
-settings need must have a result in {lit}`workspace.json`.
+Reads the configuration from {lit}`config.json` and {lit}`executables.json`, checking that its
+version is the one this runner reads.
 -/
-def Config.load (configPath workspacePath : System.FilePath) (required? : Option String := none) :
-    IO Config := do
+def Config.load (configPath executablesPath : System.FilePath) : IO Config := do
   let config ← readJsonFile configPath
-  let workspace ← readJsonFile workspacePath
-  let cfg ← IO.ofExcept (Config.ofJson config workspace required? |>.mapError fun e =>
-    s!"{configPath} and {workspacePath}: {e}")
+  let workspace ← readJsonFile executablesPath
+  let cfg ← IO.ofExcept (Config.ofJson config workspace |>.mapError fun e =>
+    s!"{configPath} and {executablesPath}: {e}")
   unless cfg.protocol == configVersion do
     throw <| .userError s!"{configPath}: the configuration's version is {cfg.protocol}, and this \
       runner reads version {configVersion}"

@@ -474,12 +474,12 @@ def groupedOrderIsSeeded : Test := do
 /-- Tests that receive a setting with another value than their fixtures did draw a warning. -/
 @[test]
 def settingConflictsWarn : Test := do
-  let plan : Runner.Plan := {
+  let schedule : Runner.Schedule := {
     pool := 1
     tests := #[({ exeIdx := 0, name := "t" }, { settings := #[("g", "override")] })]
     fixtures := #[(0, { name := "F" }, { settings := #[("g", "profile")] })]
     testSpecs := #[{ fixtures := #[(0, true)] }], fixtureSpecs := #[{}] }
   assertBEq #["the test t receives the setting g as \"override\", and its fixture F received it as \
-    \"profile\""] plan.settingConflicts
+    \"profile\""] schedule.settingConflicts
 
 end ErrataTests.Scheduling

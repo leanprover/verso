@@ -458,8 +458,8 @@ meta structure SettingField where
   /-- The value that the profile gives the setting, which fills the field at first. -/
   profileValue? : Option String := none
   /--
-  The Lake target whose result the profile gives the setting, as {lit}`{ needs = … }` names it;
-  the driver builds it when the test runs.
+  The need whose value the profile gives the setting, as {lit}`{ needs = … }` names it; the driver
+  builds the need's target when the test runs.
   -/
   needs? : Option String := none
 deriving Lean.FromJson, Lean.ToJson
@@ -506,14 +506,14 @@ modules of the root package's libraries, or {lean}`none` when it has written non
 private meta def lastConfiguration : IO (Option (Runner.Config × Array LibraryModules)) := do
   let dir ← configurationDir
   try
-    let config ← Runner.Config.load (dir / "config.json") (dir / "workspace.json")
-    let workspace ← Runner.readJsonFile (dir / "workspace.json")
+    let config ← Runner.Config.load (dir / "config.json") (dir / "executables.json")
+    let workspace ← Runner.readJsonFile (dir / "executables.json")
     return some (config, LibraryModules.ofWorkspaceJson workspace)
   catch _ => return none
 
 /--
-The settings to which the profile named {name}`profile` gives the result of a Lake target, with the
-target, from the configuration that the driver last elaborated, or none when it has written none.
+The settings to which the profile named {name}`profile` gives the value of a need, with the need's
+name, from the configuration that the driver last elaborated, or none when it has written none.
 -/
 private meta def profileNeeds (profile : String) : IO (Array (String × String)) := do
   try
@@ -544,7 +544,7 @@ private meta def profileChoicesOf (declName : Name) : IO (Array ProfileChoice) :
 
 /--
 The fields for the settings {name}`declared`, other than the seed, with the values that a profile
-gives them and the targets whose results it gives them.
+gives them and the needs whose values it gives them.
 -/
 private meta def fieldsOf (declared : Array DeclaredSetting)
     (values needs : Array (String × String)) : Array SettingField :=
@@ -561,7 +561,7 @@ use. The profiles offered are those whose default filters select the test, or th
 profile as the fallback when none does. For each profile and each setting that the test takes,
 other than the seed, a field gives the setting's name, description, and declared default, and the
 value that the test receives from the profile, which is the first matching override's or else the
-profile's own, or the target whose result the profile gives it.
+profile's own, or the need whose value the profile gives it.
 -/
 @[server_rpc_method]
 meta def testSettings (req : RunRef) : RequestM (RequestTask SettingsReply) := do

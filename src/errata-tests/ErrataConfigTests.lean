@@ -86,13 +86,13 @@ def readsTomlForms : Test := do
     match ← parseVariant "nested" with
     | .error problems => fail s!"the file was rejected: {problems}"
     | .ok f =>
-      let workspace := Lean.Json.mkObj [("protocol", 1),
-        ("needs", Lean.Json.mkObj [("stamp", "/out/stamp.txt")])]
-      match Runner.Config.ofJson f.toJson workspace (some "default") with
+      match Runner.Config.ofJson f.toJson (Lean.Json.mkObj [("protocol", 1)]) with
       | .error e => fail e
       | .ok c =>
-        assertBEq (some #[("TomlLib.stampFile", "/out/stamp.txt")])
+        assertBEq (some #[("TomlLib.stampFile", .need "stamp")])
           ((c.profile? "default").map (·.settings))
+        assertBEq #[("stamp", "stamp", 5, 8)]
+          (c.needs.map fun n => (n.name, n.target, n.line, n.col))
 
 /-- The problems that validating {name}`text` reports, joined by newlines. -/
 def problemsOf (text : String) : TestM String := do
@@ -328,7 +328,7 @@ def reportPathsAreProfileKeys : Test := do
     assertBEq (some "s.md") ci.markdown?
     assertBEq (some "out/r.json") ci.json?
     assertBEq none (← profileOf f "default").markdown?
-    match Runner.Config.ofJson f.toJson (Lean.Json.mkObj [("protocol", 1)]) none with
+    match Runner.Config.ofJson f.toJson (Lean.Json.mkObj [("protocol", 1)]) with
     | .error e => fail e
     | .ok c =>
       let p? := c.profile? "ci"
@@ -361,7 +361,7 @@ def orderIsAProfileKey : Test := do
     assertBEq (some .shuffle) (← profileOf f "default").order?
     assertBEq (some .shuffle) (← profileOf f "ci").order?
     assertBEq (some .default) (← profileOf f "plain").order?
-    match Runner.Config.ofJson f.toJson (Lean.Json.mkObj [("protocol", 1)]) none with
+    match Runner.Config.ofJson f.toJson (Lean.Json.mkObj [("protocol", 1)]) with
     | .error e => fail e
     | .ok c =>
       assertBEq (some (some .shuffle)) ((c.profile? "ci").map (·.order?))
