@@ -52,8 +52,9 @@ def test_a_server_that_dies_fails_the_pending_requests_and_is_started_once_again
 ):
     """
     When the Lean server dies, a request that it has yet to answer and later requests from the page
-    end in an error within seconds. Tests that then ask the host for a server at once all receive
-    the one new server, which answers the next request, and no Python process crashes on the way.
+    end in an error within seconds. Clients that then ask the host for a running server at once all
+    receive the one new server, which answers the next request, and no Python process crashes on
+    the way.
     """
     reports = python_crash_reports()
     editor.write_scratch(SLOW_TO_ELABORATE)
@@ -117,7 +118,7 @@ def test_a_server_that_dies_fails_the_pending_requests_and_is_started_once_again
     while not answered():
         assert time.monotonic() - start < 10, "the page's request was not answered in 10 s"
         time.sleep(0.1)
-    # Three tests ask the host for a running server at once.
+    # Three clients ask the host for a running server at once.
     others = [RemoteLeanSession(lean_host) for _ in range(2)]
     try:
         pids = []

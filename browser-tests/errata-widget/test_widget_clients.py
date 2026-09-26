@@ -1,4 +1,4 @@
-"""The tests that share the Lean server at once, and the test modules that keep them apart."""
+"""Clients that share the Lean server at once, and the test modules that keep tests apart."""
 
 import json
 import re
@@ -101,9 +101,9 @@ def test_two_clients_of_one_host_see_only_their_own_documents_and_runs(
 
 def test_a_document_stays_open_for_the_client_that_opened_it_last(lean_host, test_modules):
     """
-    When a second client opens a document that a first client holds, the first client's closing of
-    the document and the end of the first client's connection leave it open for the second, whose
-    next request the server answers.
+    If a second client opens a document that a first client holds, the document stays open for the
+    second client after the first closes it or the first's connection ends, and the server answers
+    the second client's next request.
     """
     test_modules.write_scratch(CLIENT_SCRATCH.replace("{client}", "only"))
     sessions = [RemoteLeanSession(lean_host) for _ in range(4)]
@@ -131,8 +131,8 @@ def test_a_document_stays_open_for_the_client_that_opened_it_last(lean_host, tes
 
 def test_each_test_has_a_scratch_module_of_its_own_until_it_ends(request, test_modules):
     """
-    A test's scratch module is named for the test, two tests' scratch modules and lanes differ, and a
-    test's scratch module is gone once the test ends.
+    Each test's scratch module is named for the test, tests that run at once have scratch modules
+    and lanes of their own, and each test's scratch module is gone once the test ends.
     """
     assert test_modules.scratch == "Scratch_" + scratch_key(request.node.nodeid)
     first = TestModules(scratch_key(request.node.nodeid + "[first]"))

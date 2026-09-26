@@ -39,7 +39,7 @@ INFOVIEW = REPO / "node_modules" / "@leanprover" / "infoview" / "dist"
 MODULES = FIXTURE / "WidgetFixtures"
 # The workspace's fixture modules, which each test opens as copies in its lane.
 FIXTURE_MODULES = ("BuildError", "Failing", "Passing", "TwinA", "TwinB")
-# The lock files through which tests hold their lanes, one per lane.
+# The directory of the lock files through which tests hold their lanes, one file per lane.
 LANE_LOCKS = FIXTURE / ".lake" / "widget-lanes"
 
 
@@ -274,8 +274,8 @@ class LeanServer(LspPeer):
     document, which starts the builds and runs of the widget. All of them run in a process group of
     their own, and stopping the server stops the group. When `lake env` exits, because the server
     has died, the group's remaining processes are killed, which ends the server's output. When the
-    server's output ends, `on_exit` runs. The server runs without `LEAN_NUM_THREADS`, since it
-    serves every test at once and its load is the tests' own.
+    server's output ends, `on_exit` runs. The server's environment is the harness's own with
+    `LEAN_NUM_THREADS` removed.
     """
 
     def __init__(self, on_message, on_exit=None):
@@ -445,8 +445,8 @@ class RemoteLeanServer(LspPeer):
 
 class RemoteLeanSession:
     """
-    The session of a test whose Lean server a `LeanHost` hosts at `address`. Restarting it restarts
-    the host's server, and stopping it ends the test's connection.
+    A connection to the Lean server that a `LeanHost` hosts at `address`. Restarting the session
+    restarts the host's server, and stopping it ends the connection.
     """
 
     def __init__(self, address):
@@ -468,7 +468,7 @@ class RemoteLeanSession:
             self.initialize_result = self.lean.control("ensure")["initialize"]
 
     def stop(self):
-        """Ends the test's connection to the host."""
+        """Ends the connection to the host."""
         self.lean.close()
 
     def _on_message(self, message):
@@ -491,7 +491,7 @@ def message_uri(message):
 
 
 class HostClient:
-    """A test that a `LeanHost` serves: its connection, its number, and the documents it has open."""
+    """A client of a `LeanHost`: its connection, its number, and the documents it has open."""
 
     def __init__(self, number, conn):
         """A client over the connection, with no open documents."""
@@ -502,7 +502,7 @@ class HostClient:
         self.send_lock = threading.Lock()
 
     def send(self, message):
-        """Sends a message to the test while its connection lasts."""
+        """Sends a message to the client while its connection lasts."""
         data = frame(message)
         with self.send_lock:
             if not self.connected:
@@ -513,7 +513,7 @@ class HostClient:
                 pass
 
     def disconnect(self):
-        """Ends the sending of messages to the test."""
+        """Ends the sending of messages to the client."""
         with self.send_lock:
             self.connected = False
 
@@ -525,33 +525,34 @@ class HostClient:
 class LeanHost:
     """
     The host of a Lean server that the tests of a run share. It starts the server and initializes
-    it, then serves any number of tests at once, each over a TCP connection of its own. It passes
-    each test's messages to the server under request ids of its own, and the server's replies to the
-    test that sent the request, with the test's own id. Each open document has one owner, the test
-    that opened it last: a test that opens a document that another test holds takes it over, and
-    the host closes it in the server before passing on the new opening. Notifications about a
-    document go to its owner, and other notifications go to every test. The host passes on a test's
-    closing of a document that the test owns and drops any other, and when a test's connection
-    ends, the host closes the documents that the test still owns. The host answers the harness's own
-    requests, whose methods begin with `$/harness/`: `hello`, `ensure`, and `restart` reply with the
-    server's process id, whether it runs, and its reply to `initialize`, after starting a new server
-    for `restart`, and for `ensure` when the last one has exited; `stderr` replies with the end of
-    the server's stderr. When the server exits, each test receives an error reply to each of its
-    requests that the server had yet to answer, and, unless the host stopped the server itself, the
-    notification `$/harness/exited` with the end of the server's stderr. While no server runs, the
-    host answers the tests' requests with an error at once and drops their notifications.
+    it, then serves any number of clients at once, each over a TCP connection of its own. It passes
+    each client's messages to the server under request ids of its own, and the server's replies to
+    the client that sent the request, with the client's own id. Each open document has one owner,
+    the client that opened it last: if a client opens a document that another client holds, it
+    takes the document over, and the host closes the document in the server before passing on the
+    new opening. Notifications about a document go to its owner, and other notifications go to
+    every client. The host passes on the closings of documents by their owners and drops the rest,
+    and when a client's connection ends, the host closes the documents that the client still owns.
+    The host answers the harness's own requests, whose methods begin with `$/harness/`: `hello`,
+    `ensure`, and `restart` reply with the server's process id, whether it runs, and its reply to
+    `initialize`, after starting a new server for `restart`, and for `ensure` when the last one has
+    exited; `stderr` replies with the end of the server's stderr. When the server exits, each client
+    receives an error reply to each of its requests that the server had yet to answer, and, unless
+    the host stopped the server itself, the notification `$/harness/exited` with the end of the
+    server's stderr. While no server runs, the host answers the clients' requests with an error at
+    once and drops their notifications.
     """
 
     def __init__(self):
         """Starts the host's server."""
-        # The connected tests by number, the owners of open documents by URI, and the requests that
-        # the server has yet to answer by the host's id, as pairs of the client and its own id.
+        # The connected clients by number, the owners of open documents by URI, and the requests
+        # that the server has yet to answer by the host's id, as pairs of the client and its own id.
         self.clients = {}
         self.next_client = 0
         self.owners = {}
         self.pending = {}
         self.lock = threading.Lock()
-        # Held while the server starts or stops, so tests that ask at once start one server.
+        # Held while the server starts or stops, so clients that ask at once start one server.
         self.server_lock = threading.RLock()
         self.restarting = False
         self.lean = None
@@ -560,7 +561,7 @@ class LeanHost:
 
     def start_server(self):
         """
-        Starts a server and initializes it. The tests' messages reach the new server once it has
+        Starts a server and initializes it. The clients' messages reach the new server once it has
         been initialized.
         """
         lean = LeanServer(self._from_server, on_exit=self._server_exited)
@@ -599,7 +600,10 @@ class LeanHost:
                 pass
 
     def info(self):
-        """The reply to `hello` and `restart`: the server's process id, state, and `initialize`."""
+        """
+        The reply to `hello`, `ensure`, and `restart`: the server's process id, whether it runs, and
+        its reply to `initialize`.
+        """
         return {
             "pid": self.lean.pid,
             "running": self.lean.running,
@@ -622,8 +626,8 @@ class LeanHost:
 
     def serve(self, conn):
         """
-        Serves the test at the other end of the connection until it closes the connection, then
-        closes the documents that the test still owns.
+        Serves the client at the other end of the connection until it closes the connection, then
+        closes the documents that the client still owns.
         """
         reader = conn.makefile("rb")
         with self.lock:
@@ -655,8 +659,8 @@ class LeanHost:
 
     def _from_server(self, message):
         """
-        Passes a reply from the server to the test whose request it answers, a notification about
-        a document to the test that opened it, and any other notification to every test.
+        Passes a reply from the server to the client whose request it answers, a notification about
+        a document to the document's owner, and any other notification to every client.
         """
         if "method" not in message:
             with self.lock:
@@ -676,15 +680,15 @@ class LeanHost:
             client.send(message)
 
     def _fail(self, client, request_id, text):
-        """Answers a test's request with an error whose message is `text`."""
+        """Answers a client's request with an error whose message is `text`."""
         client.send(
             {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32603, "message": text}}
         )
 
     def _server_exited(self):
         """
-        Fails the tests' unanswered requests once the server has exited, and tells the tests of the
-        exit unless the host stopped the server itself.
+        Fails the clients' unanswered requests once the server has exited, and tells the clients of
+        the exit unless the host stopped the server itself.
         """
         stderr = self.lean.stderr_tail()
         with self.lock:
@@ -700,9 +704,9 @@ class LeanHost:
 
     def _from_client(self, client, message):
         """
-        Answers the harness's own requests, tracks the documents that the test opens and the
+        Answers the harness's own requests, tracks the documents that the client opens and the
         requests that the server has yet to answer, and passes every other message to the server
-        while it runs, with the test's request ids replaced by the host's.
+        while it runs, with the client's request ids replaced by the host's.
         """
         method = message.get("method") or ""
         request_id = message.get("id")
@@ -714,7 +718,7 @@ class LeanHost:
             client.send({"jsonrpc": "2.0", "id": request_id, **reply})
             return
         uri = message_uri(message)
-        # The server closes a document that another client holds before this client opens it.
+        # The host closes a document in the server when this client opens it while another holds it.
         takeover = None
         with self.lock:
             if method == "textDocument/didOpen" and uri:
@@ -762,7 +766,7 @@ class LeanHost:
 def serve(ready):
     """
     Runs a `LeanHost` on a free port of the local interface, writes `{"port": N}` to the file
-    `ready` once the server has been initialized, and serves tests until a terminate signal, which
+    `ready` once the server has been initialized, and serves clients until a terminate signal, which
     stops the server and every process below it. When `ERRATA_LIFELINE` is `1`, its standard input
     is the lifeline of the Errata runner, which holds it until the runner exits, and the end of
     standard input stops the host as the signal does.
@@ -963,8 +967,8 @@ class LspRelay:
     def _apply_rule(self, method, action, deliver=None):
         """
         Finds a rule with the action for a call of `method` and counts the call against it. When
-        `deliver` is given and the rule is unreleased, the rule holds `deliver` for later. The rule is
-        released only under the same lock, so a held message is always passed on by the release.
+        `deliver` is given and the rule is unreleased, the rule holds `deliver` for later. The rule
+        is released only under the same lock, so a held message is always passed on by the release.
         Returns the rule, if any, and whether it holds the message.
         """
         with self.lock:
@@ -1148,9 +1152,8 @@ def scratch_key(nodeid):
 
 def take_lane():
     """
-    Takes the lowest-numbered lane that no other process holds, and returns its number and the lock
-    file through which this process holds it. The lock ends when the file is closed or the process
-    exits.
+    Takes the lowest-numbered free lane, and returns its number and the lock file through which the
+    caller holds it. The lane is free again once the file is closed or the process exits.
     """
     LANE_LOCKS.mkdir(parents=True, exist_ok=True)
     number = 0
@@ -1175,9 +1178,9 @@ def sweep_test_modules():
 
 class TestModules:
     """
-    The test modules of one test in the widget's workspace, which tests name by their names below
-    `WidgetFixtures`. `Scratch` is the test's own scratch module, `WidgetFixtures.Scratch_KEY`, which
-    the test writes as it goes. Each fixture module is a copy in the test's lane,
+    The test modules of one test in the widget's workspace, which the test names by their names
+    below `WidgetFixtures`. `Scratch` is the test's scratch module, `WidgetFixtures.Scratch_KEY`,
+    which the test writes as it goes. Each fixture module is a copy in the test's lane,
     `WidgetFixtures.LaneN`, which the test holds alone while it runs. A lane's copies stay in place
     for the next test that holds the lane, so Lake builds each copy once per run.
     """
@@ -1278,9 +1281,9 @@ class Editor:
 
     def close(self):
         """
-        Ends the test's builds and runs and closes its documents. When the server fails to answer,
-        the host closes the documents as the test's connection ends, and the next test that finds
-        the server gone has the host start a new one.
+        Ends the test's builds and runs and closes its documents. If the host cannot be reached, it
+        closes the documents that the connection still owns once the connection ends, and the next
+        editor that finds the server gone has the host start a new one.
         """
         self.session.route = None
         try:
@@ -1302,8 +1305,8 @@ class Editor:
 
     def call_rpc(self, module, decl, method, params, timeout=120):
         """
-        Calls an RPC method of the server at `decl` in `module`. The harness keeps one RPC session per
-        document, and connects a new one when the server has let the last one lapse.
+        Calls an RPC method of the server at `decl` in `module`. The harness keeps one RPC session
+        per document, and connects a new one when the server has let the last one lapse.
         """
         location = self.location_of(module, decl)
         uri = location["uri"]
@@ -1397,12 +1400,14 @@ class Editor:
         raise ValueError(f"no `def {decl}` in {module}")
 
     def reload_page(self):
-        """Loads the page again, which starts the InfoView afresh, with none of its earlier state."""
+        """Loads the page again, which starts the InfoView afresh, without its earlier state."""
         self.page.reload()
         self.page.wait_for_function("window.harness !== undefined")
 
     def show_at_text(self, module, text):
-        """Opens the module if need be and starts the InfoView with the cursor on the line with `text`."""
+        """
+        Opens the module if need be and starts the InfoView with the cursor on the line with `text`.
+        """
         if module not in self.documents:
             self.open(module)
         lines = self.documents[module]["text"].split("\n")

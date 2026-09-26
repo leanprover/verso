@@ -71,13 +71,12 @@ def lean_server_teardown(address, context):
     sweep_test_modules()
 
 
-# The Lean server that the tests share. Each test opens documents in modules of its own, ends its
-# runs and closes its documents when it ends, and the host closes what a test's connection still
-# owns; the fixture has no prepare. The tests marked `lean_server_alone` use the server alone among
-# its users. Every phase of the fixture and every test that uses it takes one slot of the pool, so
-# as many widget tests run at once as the pool has slots. The host starts the server without
-# `LEAN_NUM_THREADS`: the server serves every test at once, and its load is the tests' own, which
-# the pool counts.
+# The Lean server that the tests share. Each test opens documents in modules of its own and, when it
+# ends, ends its runs and closes its documents; the host closes the documents that a connection
+# still owns when the connection ends. The fixture has a setup and a teardown. The tests marked
+# `lean_server_alone` claim it exclusive, and the others claim it shared. Every phase of the fixture
+# and every test that uses it takes one slot of the pool, so as many widget tests run at once as the
+# pool has slots. The host starts the server with `LEAN_NUM_THREADS` removed from its environment.
 errata_fixtures_decl = {
     "leanServer": {
         "description": "A Lean server in the widget's fixture workspace, which the tests share.",
@@ -166,7 +165,10 @@ def lean_host(request, tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def lean_session(lean_host):
-    """The test's connection to the host of the Lean server, ended when the session ends."""
+    """
+    The pytest session's connection to the host of the Lean server, which the session's tests share
+    and which ends when the session ends.
+    """
     session = RemoteLeanSession(lean_host)
     yield session
     session.stop()
@@ -202,10 +204,10 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     """
-    Marks the widget tests `slow`, since each takes several seconds, and marks the tests that use a
-    Lean server or test modules as using the Errata fixture `leanServer`: alone among its users for
-    the tests marked `lean_server_alone`, and shared with the others otherwise. The fixture's setup
-    and teardown remove test modules, so they never overlap a test that holds some.
+    Marks the widget tests, which take several seconds each, `slow`, and marks the tests that use a
+    Lean server or test modules as claims on the Errata fixture `leanServer`: exclusive for the
+    tests marked `lean_server_alone`, and shared otherwise. The fixture's setup and teardown remove
+    test modules, so they never overlap a test that holds some.
     """
     here = Path(__file__).parent
     for item in items:
@@ -225,7 +227,7 @@ def pytest_runtest_makereport(item, call):
 
 
 def print_diagnostics(page, console, session):
-    """Prints what a reader needs to see why a test failed: the page, the browser, and the server."""
+    """Prints what shows why a test failed: the page's text, the browser console, and the server."""
     try:
         print(
             "--- InfoView text ---\n"
