@@ -347,6 +347,11 @@ def pytest_collection_modifyitems(config, items):
     through pytest's fixtures: the server of the browser it runs in, and the suite's site and HTTP
     server. Tests share these fixtures: each connects to the browser with a context of its own, and
     reads the site through the server. Tests that draw redirects also take the seed.
+
+    Tests marked `pointer_alone` claim the `firefox` fixture exclusively. The pages of one Firefox
+    share one pointer, so input that Playwright sends to one page gives the others `mouseout` and
+    `mouseleave`; under an exclusive claim, the pointer stays where the test put it. Their claim on
+    `chromium` stays shared.
     """
     has_site = config.getoption("--errata-site") is not None
     for item in items:
@@ -354,7 +359,8 @@ def pytest_collection_modifyitems(config, items):
         if "browser" in item.fixturenames:
             callspec = getattr(item, "callspec", None)
             name = callspec.params.get("browser", "chromium") if callspec else "chromium"
-            item.add_marker(pytest.mark.errata_fixture(name, exclusive=False))
+            alone = name == "firefox" and item.get_closest_marker("pointer_alone") is not None
+            item.add_marker(pytest.mark.errata_fixture(name, exclusive=alone))
         if has_site and "site_dir" in item.fixturenames:
             item.add_marker(pytest.mark.errata_fixture("site", exclusive=False))
         if has_site and "server" in item.fixturenames:

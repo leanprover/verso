@@ -15,6 +15,7 @@ markers = [
     "browser: a browser test, which the default profile's filter in errata.toml leaves out",
     "slow: a test that takes several seconds",
     "hover_media: a test that needs CSS guarded by @media (hover: hover), which Linux headless Firefox disables",
+    "pointer_alone: a test whose outcome depends on the pointer staying where it put it, which uses the firefox fixture alone among its users",
     "errata_setting(name): the test takes the Errata setting with this name",
     "errata_fixture(name, exclusive=True): the test uses the Errata fixture with this name",
 ]
