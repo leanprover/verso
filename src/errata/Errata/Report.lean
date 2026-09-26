@@ -648,7 +648,8 @@ def missingSetting? (j : Json) : Except String (Option MissingSetting) := do
   match j.getObjVal? "missingSetting" with
   | .error _ => return none
   | .ok m =>
-    return some { setting := ← m.getObjValAs? String "setting", fixture? := ← optField m "fixture" }
+    return some
+      { setting := ← m.getObjValAs? String "setting", fixture? := ← optField m "fixture" }
 
 instance : FromJson Result where
   fromJson? j := do

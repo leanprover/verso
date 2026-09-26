@@ -161,7 +161,8 @@ case "$mode" in
         ;;
       */setup|*/prepare|*/teardown)
         case "$name" in
-          stamped|setup-fails|prepare-fails|teardown-fails|dependent|slow-setup|threaded|needs-needed)
+          stamped|setup-fails|prepare-fails|teardown-fails|dependent|slow-setup|threaded \
+            |needs-needed)
             # The teardowns print whether they received their fixture's value.
             [ "$phase" = teardown ] && echo "teardown received ${value:-no value}"
             ;;
