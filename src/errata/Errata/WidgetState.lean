@@ -215,7 +215,9 @@ def ResultNode.ofOutcome (o : RunOutcome) : ResultNode where
 
 /-- The phase of a run. -/
 inductive Phase where
-  /-- The run waits for the workspace's build lock, which another run holds. -/
+  /--
+  The run waits for its driver to start, or for the workspace's build lock, which another run holds.
+  -/
   | waiting
   /-- The driver is building what the run needs. -/
   | building
@@ -255,7 +257,10 @@ structure RunData where
   steps : Array Step := #[]
   /-- The run-level issues that the runner reported, such as warnings about the configuration. -/
   issues : Array Issue := #[]
-  /-- When the run took the build lock, in epoch milliseconds; {lean}`0` until then. -/
+  /--
+  When the driver started, or took the build lock after waiting for it, in epoch milliseconds;
+  {lean}`0` until then.
+  -/
   buildStart : Nat := 0
   /-- How long the driver took before the runner began, in milliseconds; {lean}`0` until then. -/
   buildMs : Nat := 0
@@ -275,8 +280,12 @@ structure RunData where
 
 /-- A change to a run. {lit}`RunData.apply` says which changes apply in which phases. -/
 inductive Change where
-  /-- The run took the build lock at the given time, and the driver starts to build. -/
+  /--
+  The driver started, or took the build lock after waiting for it, at the given time, and builds.
+  -/
   | locked (timeMs : Nat)
+  /-- The driver waits for the workspace's build lock, which another run holds. -/
+  | waitsForLock
   /-- The runner began its List phase at the given time. -/
   | listed (timeMs : Nat)
   /-- The test's body started at the given time. -/
@@ -309,7 +318,8 @@ inductive Change where
 The transition that a change makes: the run afterwards and an action to perform once the change is
 in place. A change outside the phases that admit it gives {lean}`none`, and the run stays as it was.
 
- * A run waits for the lock, builds, and runs, in that order.
+ * A run waits for its driver, builds, and runs, in that order; while it builds, it waits again for
+   as long as another run holds the build lock.
  * Output, results, steps, issues, and outcomes arrive only while the run is live.
  * A run ends once, cancelled or done.
  * A cancel's action is the driver's kill. A cancel applies only until the driver has exited, and
@@ -320,6 +330,8 @@ def RunData.apply (d : RunData) : Change → Option (RunData × Option (IO Unit)
   | .locked t =>
     if d.phase matches .waiting then some ({ d with phase := .building, buildStart := t }, none)
     else none
+  | .waitsForLock =>
+    if d.phase matches .building then some ({ d with phase := .waiting }, none) else none
   | .listed t =>
     if d.phase matches .building then
       some ({ d with phase := .running, buildMs := t - d.buildStart }, none)
@@ -363,7 +375,7 @@ structure RunState where
   /-- The run's data, which changes only through {lit}`RunState.apply`. -/
   data : IO.Ref RunData
 
-/-- A new run, waiting for the build lock. -/
+/-- A new run, waiting for its driver to start. -/
 def RunState.new (runId version : String) (startTime : Nat) (sourceHash : UInt64) :
     BaseIO RunState := do
   let data ← IO.mkRef { wakeup := ← IO.Promise.new }
@@ -469,7 +481,9 @@ def Step.ofRecord (j : Json) : Step :=
 
 /--
 The changes that one record of the runner's events file makes to the run of the test named
-{name}`test`. The {lit}`phase` record of the List or the Run phase ends the building. The test's
+{name}`test`. The driver's {lit}`build_lock` record in the state {lit}`waiting` begins a wait for the
+build lock, and in the state {lit}`held` ends it. The {lit}`phase` record of the List or the Run
+phase ends the building. The test's
 {lit}`start`, {lit}`output`, and {lit}`result` records drive the display. The test's
 {lit}`outcome` is the result, and a fixture phase's {lit}`outcome` is a step. An {lit}`issue` is
 kept with the run, and {lit}`end` ends the run. Records about other tests change nothing.
@@ -480,6 +494,11 @@ def changesOfRecord (cache : SourceLines) (test : String) (now : Nat) (own? : Op
     (j : Json) : IO (Array Change) := do
   let about := (fieldOf? j "test" : Option String) == some test
   match (fieldOf? j "type" : Option String) with
+  | some "build_lock" =>
+    match (fieldOf? j "state" : Option String) with
+    | some "waiting" => return #[.waitsForLock]
+    | some "held" => return #[.locked now]
+    | _ => return #[]
   | some "phase" =>
     let time : Nat := (fieldOf? j "time_ms").getD now
     if (fieldOf? j "name" : Option String) matches some "List" | some "Run" then
@@ -515,16 +534,5 @@ def changesOfLine (cache : SourceLines) (test : String) (now : Nat) (own? : Opti
   match Json.parse line with
   | .ok j => changesOfRecord cache test now own? j
   | .error _ => pure #[]
-
-/--
-Whether a line of the runner's events file is the {lit}`phase` record of the Run phase, after which
-the runner has read its configuration and the driver builds nothing more.
--/
-def beginsRunPhase (line : String) : Bool :=
-  match Json.parse line with
-  | .ok j =>
-    (fieldOf? j "type" : Option String) == some "phase" &&
-      (fieldOf? j "name" : Option String) == some "Run"
-  | .error _ => false
 
 end Errata.Widget
