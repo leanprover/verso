@@ -8,7 +8,7 @@ import shutil
 import pytest
 from playwright.sync_api import expect
 
-from harness import FIXTURE
+import harness
 from widget import Widget, expect_exact_text
 
 pytestmark = pytest.mark.errata_widget
@@ -227,7 +227,7 @@ def test_a_run_under_a_profile_passes_it_to_the_driver(editor):
 def test_a_first_run_runs_a_test_that_the_default_filter_leaves_out(editor):
     # With no configuration that the driver elaborated, the workspace is as a fresh checkout has
     # it: the widget offers no profile, and the run sets the default filter aside.
-    shutil.rmtree(FIXTURE / ".lake" / "errata", ignore_errors=True)
+    shutil.rmtree(harness.WORKSPACE / ".lake" / "errata", ignore_errors=True)
     editor.show("Passing", "manualOnly")
     widget = Widget(editor.page)
     widget.gear.click()

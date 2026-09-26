@@ -1,15 +1,18 @@
 """
-Fixtures for the Errata widget tests. The tests share one Lean server, which a host process serves
-to any number of tests at once: under Verso's pytest harness, the host that the Errata fixture
-`leanServer` starts for the run, and otherwise one that the pytest session starts. Each test gets a
-fresh page with the InfoView, test modules of its own, and an editor that connects the page to the
-server.
+Fixtures for the Errata widget tests. The tests use Lean servers that host processes serve to any
+number of tests at once. Under Verso's pytest harness, the Errata fixtures `leanServer1` and
+`leanServer2` each start a host with a server in a clone of the widget's fixture workspace, so
+each server's runs build under a build lock of their own, and each test uses one of the two, chosen
+by a checksum of its node id. Otherwise the pytest session starts one host, which serves every
+test. Each test gets a fresh page with the InfoView, test modules of its own, and an editor that connects
+the page to the server.
 """
 
 import json
 import subprocess
 import sys
 import time
+import zlib
 from pathlib import Path
 
 import pytest
@@ -17,37 +20,45 @@ from playwright.sync_api import Page, expect
 
 import harness
 import services
-from harness import FIXTURE, INFOVIEW, Editor, LspRelay, RemoteLeanSession, TestModules
+from harness import INFOVIEW, Editor, LspRelay, RemoteLeanSession, TestModules
 from harness import scratch_key, sweep_test_modules
 from widget import EXPECT_TIMEOUT
 
 # Playwright's own timeout for an assertion, which each widget test restores as it ends.
 PLAYWRIGHT_EXPECT_TIMEOUT = 5_000
 
+# The Errata fixtures of the Lean servers, by the number of each server's workspace.
+LEAN_SERVERS = {1: "leanServer1", 2: "leanServer2"}
 
-def check_fixture_workspace():
+
+def check_fixture_workspace(number):
     """
-    Checks that the InfoView is installed, removes the manifest of the widget's workspace so that
-    Lake resolves the workspace against Verso's own dependencies, and removes the test modules that
-    earlier tests left behind.
+    Checks that the InfoView is installed, and makes the workspace of the Lean server numbered
+    `number` this process's workspace, up to date with the fixture workspace's sources, without a
+    manifest, so that Lake resolves the workspace against Verso's own dependencies, and without the
+    test modules that earlier tests left behind.
     """
     if not INFOVIEW.is_dir():
         raise RuntimeError("the InfoView is missing; run `npm ci` in the repository root first")
-    manifest = FIXTURE / "lake-manifest.json"
+    workspace = harness.clone_workspace(number)
+    harness.use_workspace(workspace)
+    manifest = workspace / "lake-manifest.json"
     if manifest.exists():
         manifest.unlink()
     sweep_test_modules()
+    return workspace
 
 
-def lean_server_setup(context):
+def lean_server_setup(number, context):
     """
-    The setup of the fixture `leanServer`, which starts this suite's harness as the host of a Lean
-    server and returns the host's address.
+    The setup of the fixture of the Lean server numbered `number`, which starts this suite's harness
+    as the host of a Lean server in the server's workspace and returns the host's address.
     """
-    check_fixture_workspace()
-    ready = services.state_dir(context, "leanServer") / "ready.json"
+    name = LEAN_SERVERS[number]
+    workspace = check_fixture_workspace(number)
+    ready = services.state_dir(context, name) / "ready.json"
     proc = services.start(
-        context, "leanServer", [sys.executable, harness.__file__, "serve", str(ready)],
+        context, name, [sys.executable, harness.__file__, "serve", str(ready), str(workspace)],
         watches_lifeline=True,
     )
 
@@ -58,42 +69,56 @@ def lean_server_setup(context):
         except (OSError, ValueError, KeyError):
             return None
 
-    found = services.wait_until(port, 300, "the Lean server", proc, context, "leanServer")
+    found = services.wait_until(port, 300, "the Lean server", proc, context, name)
     return f"127.0.0.1:{found}"
 
 
-def lean_server_teardown(address, context):
+def lean_server_teardown(number, address, context):
     """
-    The teardown of the fixture `leanServer`: it stops the host, the server, and their runs, and
-    removes the test modules that tests left behind.
+    The teardown of the fixture of the Lean server numbered `number`: it stops the host, the server,
+    and their runs, and removes the test modules that tests left behind.
     """
-    services.stop(context, "leanServer", group_first=False, grace=20.0)
+    services.stop(context, LEAN_SERVERS[number], group_first=False, grace=20.0)
+    harness.use_workspace(harness.clone_path(number))
     sweep_test_modules()
 
 
-# The Lean server that the tests share. Each test opens documents in modules of its own and, when it
-# ends, ends its runs and closes its documents; the host closes the documents that a connection
-# still owns when the connection ends. The fixture has a setup and a teardown. The tests marked
-# `lean_server_alone` claim it exclusive, and the others claim it shared. Every phase of the fixture
-# and every test that uses it takes one slot of the pool, so as many widget tests run at once as the
-# pool has slots. The host starts the server with `LEAN_NUM_THREADS` removed from its environment.
-errata_fixtures_decl = {
-    "leanServer": {
-        "description": "A Lean server in the widget's fixture workspace, which the tests share.",
+def lean_server_fixture(number):
+    """The declaration of the Errata fixture of the Lean server numbered `number`."""
+    return {
+        "description": f"Lean server {number} of the widget tests, in a workspace of its own, "
+        "which the tests that use it share.",
         "threads": 1,
-        "setup": lean_server_setup,
-        "teardown": lean_server_teardown,
-    },
-}
+        "setup": lambda context: lean_server_setup(number, context),
+        "teardown": lambda address, context: lean_server_teardown(number, address, context),
+    }
 
 
-def start_local_host(directory):
+# The two Lean servers, identical but for their workspaces, each a clone of the widget's fixture
+# workspace with a build lock of its own, so the runs of one build while the runs of the other do.
+# Each test opens documents in modules of its own and, when it ends, ends its runs and closes its
+# documents; the host closes the documents that a connection still owns when the connection ends.
+# Each fixture has a setup and a teardown. The tests marked `lean_server_alone` claim their server
+# exclusive, and the others claim it shared. Every phase of a fixture and every test that uses one
+# takes one slot of the pool, so as many widget tests run at once as the pool has slots. The host
+# starts the server with `LEAN_NUM_THREADS` removed from its environment.
+errata_fixtures_decl = {name: lean_server_fixture(n) for n, name in LEAN_SERVERS.items()}
+
+
+def lean_server_of(nodeid):
+    """The number of the Lean server that the test with this node id uses: a checksum of the id."""
+    return 1 + zlib.crc32(nodeid.encode("utf-8")) % len(LEAN_SERVERS)
+
+
+def start_local_host(directory, workspace):
     """
-    Starts this suite's harness as the host of a Lean server for a pytest session without the Errata
-    runner, and returns the host's process and address once the host is ready.
+    Starts this suite's harness as the host of a Lean server in `workspace` for a pytest session
+    without the Errata runner, and returns the host's process and address once the host is ready.
     """
     ready = directory / "ready.json"
-    proc = subprocess.Popen([sys.executable, harness.__file__, "serve", str(ready)])
+    proc = subprocess.Popen(
+        [sys.executable, harness.__file__, "serve", str(ready), str(workspace)]
+    )
     deadline = time.monotonic() + 300
     while not ready.is_file():
         if proc.poll() is not None:
@@ -145,16 +170,19 @@ def browser(request, playwright_instance):
 @pytest.fixture(scope="session")
 def lean_host(request, tmp_path_factory):
     """
-    The address of the host of the tests' Lean server: the host of the Errata fixture `leanServer`
-    under Verso's pytest harness, and otherwise one that this session starts and stops.
+    The address of the host of the tests' Lean server: under Verso's pytest harness, the host of the
+    Errata fixture of a Lean server that the test uses, and otherwise one in the workspace of Lean
+    server 1 that this session starts and stops. The server's workspace becomes this process's.
     """
-    address = errata_fixtures_of(request).get("leanServer")
-    if address:
-        yield address
-        return
+    fixtures = errata_fixtures_of(request)
+    for number, name in LEAN_SERVERS.items():
+        if fixtures.get(name):
+            harness.use_workspace(harness.clone_path(number))
+            yield fixtures[name]
+            return
     try:
-        check_fixture_workspace()
-        proc, address = start_local_host(tmp_path_factory.mktemp("lean-host"))
+        workspace = check_fixture_workspace(1)
+        proc, address = start_local_host(tmp_path_factory.mktemp("lean-host"), workspace)
     except RuntimeError as error:
         pytest.fail(str(error))
     yield address
@@ -175,10 +203,11 @@ def lean_session(lean_host):
 
 
 @pytest.fixture
-def test_modules(request):
+def test_modules(request, lean_host):
     """
-    The test's own modules: its scratch module, named for its node id, and its lane. When the test
-    ends, its scratch module is removed and its lane is free for another test.
+    The test's own modules in the workspace of its Lean server: its scratch module, named for its
+    node id, and its lane. When the test ends, its scratch module is removed and its lane is free
+    for another test.
     """
     modules = TestModules(scratch_key(request.node.nodeid))
     yield modules
@@ -197,7 +226,7 @@ def pytest_configure(config):
     """Registers the marker of the tests that use the Lean server alone."""
     config.addinivalue_line(
         "markers",
-        "lean_server_alone: the test uses the widget's Lean server alone among its users, since it "
+        "lean_server_alone: the test uses its Lean server alone among the server's users, since it "
         "stops the server or changes what every run reads",
     )
 
@@ -205,9 +234,10 @@ def pytest_configure(config):
 def pytest_collection_modifyitems(config, items):
     """
     Marks the widget tests, which take several seconds each, `slow`, and marks the tests that use a
-    Lean server or test modules as claims on the Errata fixture `leanServer`: exclusive for the
-    tests marked `lean_server_alone`, and shared otherwise. The fixture's setup and teardown remove
-    test modules, so they never overlap a test that holds some.
+    Lean server or test modules as claims on the Errata fixture of the Lean server that
+    `lean_server_of` gives them: exclusive for the tests marked `lean_server_alone`, and shared
+    otherwise. A fixture's setup and teardown remove test modules, so they never overlap a test that
+    holds some.
     """
     here = Path(__file__).parent
     for item in items:
@@ -215,7 +245,8 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.slow)
             if {"lean_session", "lean_host", "test_modules"} & set(item.fixturenames):
                 alone = item.get_closest_marker("lean_server_alone") is not None
-                item.add_marker(pytest.mark.errata_fixture("leanServer", exclusive=alone))
+                name = LEAN_SERVERS[lean_server_of(item.nodeid)]
+                item.add_marker(pytest.mark.errata_fixture(name, exclusive=alone))
 
 
 @pytest.hookimpl(wrapper=True)

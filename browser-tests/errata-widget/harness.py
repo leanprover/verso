@@ -5,14 +5,16 @@ connected to it, and an editor that the tests drive in place of VS Code.
 The browser reaches the server through a small HTTP relay. The relay can hold or reject particular
 RPC calls, which lets a test arrange the order in which replies arrive.
 
-One Lean server serves every test. A host process, `python harness.py serve READY`, starts the
-server and serves any number of tests at once over TCP (`LeanHost`), and each test reaches it
-through a `RemoteLeanSession`. Under Verso's pytest harness, where each test runs in a process of
-its own, the suite's Errata fixture `leanServer` starts the host for the run; otherwise the pytest
-session starts it. Each test gets its own page, relay, and test modules (`TestModules`): a scratch
-module named for the test, and copies of the workspace's fixture modules in a lane that the test
-holds alone while it runs. When a test ends, the editor ends the test's builds and runs and closes
-the documents it opened, which ends their file workers, and the test's scratch module is removed.
+A host process, `python harness.py serve READY WORKSPACE`, starts a Lean server in a clone of the
+widget's fixture workspace and serves any number of tests at once over TCP (`LeanHost`), and each
+test reaches it through a `RemoteLeanSession`. Under Verso's pytest harness, where each test runs in
+a process of its own, the suite's Errata fixtures `leanServer1` and `leanServer2` each start a host
+in a clone of their own, and each test uses one of them; otherwise the pytest session starts one
+host, which serves every test. Each test gets its own page, relay, and test modules
+(`TestModules`): a scratch module named for the test, and copies of the workspace's fixture modules
+in a lane that the test holds alone while it runs. When a test ends, the editor ends the test's
+builds and runs and closes the documents it opened, which ends their file workers, and the test's
+scratch module is removed.
 """
 
 import fcntl
@@ -32,15 +34,89 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
+# The widget's fixture workspace in the repository, which each Lean server's workspace is cloned
+# from.
 FIXTURE = REPO / "test-projects" / "errata-widget"
 PAGE = Path(__file__).resolve().parent / "page"
 INFOVIEW = REPO / "node_modules" / "@leanprover" / "infoview" / "dist"
-# The directory of the workspace's test modules, the module `WidgetFixtures` in Lean.
-MODULES = FIXTURE / "WidgetFixtures"
 # The workspace's fixture modules, which each test opens as copies in its lane.
 FIXTURE_MODULES = ("BuildError", "Failing", "Passing", "TwinA", "TwinB")
-# The directory of the lock files through which tests hold their lanes, one file per lane.
-LANE_LOCKS = FIXTURE / ".lake" / "widget-lanes"
+# The workspace of this process's Lean server, which `use_workspace` sets.
+WORKSPACE = FIXTURE
+
+
+def use_workspace(root):
+    """Makes `root` the workspace of this process's Lean server, its test modules, and its lanes."""
+    global WORKSPACE
+    WORKSPACE = Path(root)
+
+
+def modules_dir():
+    """The directory of the workspace's test modules, the module `WidgetFixtures` in Lean."""
+    return WORKSPACE / "WidgetFixtures"
+
+
+def lane_locks_dir():
+    """The directory of the lock files through which tests hold their lanes, one file per lane."""
+    return WORKSPACE / ".lake" / "widget-lanes"
+
+
+def clone_path(number):
+    """
+    The workspace of the Lean server numbered `number`, two directories below the repository as the
+    fixture workspace is, so that the fixture's relative paths to Verso and its packages hold.
+    """
+    return REPO / ".lake" / f"errata-widget-{number}"
+
+
+def source_files(root):
+    """
+    The sources of a widget workspace, as paths relative to `root`: its files other than those of
+    the build directory, the manifest, and the tests' modules.
+    """
+    found = set()
+    for directory, subdirectories, files in os.walk(root):
+        here = Path(directory).relative_to(root)
+        if here == Path("."):
+            subdirectories[:] = [d for d in subdirectories if d != ".lake"]
+            files = [f for f in files if f != "lake-manifest.json"]
+        if here == Path("WidgetFixtures"):
+            subdirectories[:] = [d for d in subdirectories if not d.startswith("Lane")]
+            files = [f for f in files if not f.startswith("Scratch")]
+        found.update(here / f for f in files)
+    return found
+
+
+def clone_workspace(number):
+    """
+    Returns the workspace of the Lean server numbered `number`, made the first time as a clone of
+    the fixture workspace with its build directory, so it starts from the builds that the fixture
+    workspace holds, and afterward brought up to date with the fixture workspace's sources while it
+    keeps its own build directory. On a file system with copy-on-write clones, such as APFS, the
+    first copy shares the fixture's files. The driver's files are left out, since they name the
+    fixture workspace's paths, and the driver writes them again.
+    """
+    dest = clone_path(number)
+    if not dest.is_dir():
+        staged = dest.with_name(f"{dest.name}.{os.getpid()}")
+        shutil.rmtree(staged, ignore_errors=True)
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        if subprocess.run(["cp", "-Rc", str(FIXTURE), str(staged)]).returncode != 0:
+            shutil.rmtree(staged, ignore_errors=True)
+            shutil.copytree(FIXTURE, staged, symlinks=True)
+        for leftover in (".lake/errata", ".lake/widget-lanes"):
+            shutil.rmtree(staged / leftover, ignore_errors=True)
+        staged.rename(dest)
+        return dest
+    sources = source_files(FIXTURE)
+    for relative in sources:
+        source, target = FIXTURE / relative, dest / relative
+        if not target.is_file() or target.read_bytes() != source.read_bytes():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+    for relative in source_files(dest) - sources:
+        (dest / relative).unlink(missing_ok=True)
+    return dest
 
 
 class LspError(Exception):
@@ -286,7 +362,7 @@ class LeanServer(LspPeer):
         env = {k: v for k, v in os.environ.items() if k != "LEAN_NUM_THREADS"}
         self.proc = subprocess.Popen(
             ["lake", "env", "lean", "--server"],
-            cwd=FIXTURE,
+            cwd=WORKSPACE,
             env=env,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -345,7 +421,7 @@ class LeanServer(LspPeer):
         """Initializes the server for the widget's workspace and returns its reply."""
         result = self.request(
             "initialize",
-            {"processId": None, "rootUri": FIXTURE.as_uri(), "capabilities": {}},
+            {"processId": None, "rootUri": WORKSPACE.as_uri(), "capabilities": {}},
         )
         self.notify("initialized", {})
         return result
@@ -763,14 +839,16 @@ class LeanHost:
                 self._fail(client, request_id, str(error))
 
 
-def serve(ready):
+def serve(ready, workspace):
     """
-    Runs a `LeanHost` on a free port of the local interface, writes `{"port": N}` to the file
+    Runs a `LeanHost` for the widget workspace `workspace` on a free port of the local interface,
+    writes `{"port": N}` to the file
     `ready` once the server has been initialized, and serves clients until a terminate signal, which
     stops the server and every process below it. When `ERRATA_LIFELINE` is `1`, its standard input
     is the lifeline of the Errata runner, which holds it until the runner exits, and the end of
     standard input stops the host as the signal does.
     """
+    use_workspace(workspace)
     host = LeanHost()
     listener = socket.create_server(("127.0.0.1", 0))
 
@@ -1155,10 +1233,11 @@ def take_lane():
     Takes the lowest-numbered free lane, and returns its number and the lock file through which the
     caller holds it. The lane is free again once the file is closed or the process exits.
     """
-    LANE_LOCKS.mkdir(parents=True, exist_ok=True)
+    locks = lane_locks_dir()
+    locks.mkdir(parents=True, exist_ok=True)
     number = 0
     while True:
-        handle = open(LANE_LOCKS / f"{number}.lock", "w")
+        handle = open(locks / f"{number}.lock", "w")
         try:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
             return number, handle
@@ -1169,11 +1248,12 @@ def take_lane():
 
 def sweep_test_modules():
     """Removes the scratch modules, the lanes, and the lanes' lock files that tests left behind."""
-    for path in MODULES.glob("Scratch*.lean"):
+    modules = modules_dir()
+    for path in modules.glob("Scratch*.lean"):
         path.unlink(missing_ok=True)
-    for path in MODULES.glob("Lane*"):
+    for path in modules.glob("Lane*"):
         shutil.rmtree(path, ignore_errors=True)
-    shutil.rmtree(LANE_LOCKS, ignore_errors=True)
+    shutil.rmtree(lane_locks_dir(), ignore_errors=True)
 
 
 class TestModules:
@@ -1214,9 +1294,9 @@ class TestModules:
         The file of the module that the test calls `module`. A fixture module's copy is written
         when it is missing or differs from the fixture module.
         """
-        path = MODULES / (self.name(module).replace(".", "/") + ".lean")
+        path = modules_dir() / (self.name(module).replace(".", "/") + ".lean")
         if module in FIXTURE_MODULES:
-            text = (MODULES / f"{module}.lean").read_text(encoding="utf-8")
+            text = (modules_dir() / f"{module}.lean").read_text(encoding="utf-8")
             if not path.is_file() or path.read_text(encoding="utf-8") != text:
                 path.parent.mkdir(exist_ok=True)
                 path.write_text(text, encoding="utf-8")
@@ -1492,7 +1572,7 @@ class Editor:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3 or sys.argv[1] != "serve":
-        print("usage: python harness.py serve READY-FILE", file=sys.stderr)
+    if len(sys.argv) != 4 or sys.argv[1] != "serve":
+        print("usage: python harness.py serve READY-FILE WORKSPACE", file=sys.stderr)
         sys.exit(2)
-    serve(sys.argv[2])
+    serve(sys.argv[2], sys.argv[3])
