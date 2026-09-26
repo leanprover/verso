@@ -74,11 +74,11 @@ def threadsOf (args : List String) : Nat :=
   (grants.getLast?.filter (· > 0)).getD 1
 
 /--
-The settings that the Lean harness reads itself, whether or not a test takes them:
-{name}`Errata.updateGolden`, which rewrites golden files when it is {lit}`true`. The runner passes it
-for {lit}`--update-golden`.
+The name of the setting that the Lean harness reads itself, whether or not a test takes it:
+{name}`Errata.updateGolden`, which rewrites golden files when it is {lit}`true`. The runner passes
+it for {lit}`--update-golden`.
 -/
-def harnessSettings : List String := [settingNameOf ``Errata.updateGolden]
+def updateGoldenName : String := settingNameOf ``Errata.updateGolden
 
 /--
 The module name that {name}`text` writes, read as Lean writes names, with {lit}`«»` around each
@@ -102,7 +102,7 @@ harness's own setting configures it. Tests reach their helpers through this test
 def contextOf (settings : Array (String × String)) (threads : Nat := 1)
     (invocation : Array String := #[]) : IO TestContext := do
   let lookup (name : String) : Option String := (settings.findRev? (·.1 == name)).map (·.2)
-  let golden := lookup (settingNameOf ``Errata.updateGolden) >>= Errata.updateGolden.fromString
+  let golden := lookup updateGoldenName >>= Errata.updateGolden.fromString
   let ctx ← mkContext (updateGolden := golden.getD false)
   return { ctx with
     helperCommand := some ((← selfCommand invocation).push "errata-helper"), threads }

@@ -1733,16 +1733,15 @@ The Lean harness reads the settings among its arguments, reads `Errata.updateGol
 reaches helpers through its own executable.
 -/
 @[test]
-def harnessSettings : Test := do
+def harnessReadsSettings : Test := do
   let settings := Harness.settingsOf
     ["setting:seed=5", "setting:check-tex=", "setting:note=a=b", "fixture:x=y", "threads:2"]
   assertBEq #[("seed", "5"), ("check-tex", ""), ("note", "a=b")] settings
   let ctx ← Harness.contextOf settings
   assertBEq false ctx.updateGolden
-  assertBEq ["Errata.updateGolden"] Harness.harnessSettings
   assertTrue (← Harness.contextOf #[("Errata.updateGolden", "true")]).updateGolden
-  assertBEq false
-    (← Harness.contextOf #[("Errata.updateGolden", "true"), ("Errata.updateGolden", "false")]).updateGolden
+  let twice := #[("Errata.updateGolden", "true"), ("Errata.updateGolden", "false")]
+  assertBEq false (← Harness.contextOf twice).updateGolden
   assertBEq (some "errata-helper") (ctx.helperCommand.bind (·[1]?))
   result "through an interpreter" do
     let ctx ← Harness.contextOf #[] (invocation := #["interp", "M", "--"])
