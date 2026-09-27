@@ -133,23 +133,13 @@ meta def Helper.fromModule
 
   let cmd := "elan"
 
-
-  let args := #["run", "--install", toolchain, "lake", "env", "which", "subverso-helper"]
-
-    let res ← IO.Process.output {
-      cmd, args, cwd := projectDir
-      -- Unset Lake's environment variables
-      env := lakeVars.map (·, none)
-    }
-    if res.exitCode != 0 then
-      let args := #["run", "--install", toolchain, "lake", "build", "subverso-helper"]
-
-      let res ← IO.Process.output {
-        cmd, args, cwd := projectDir
-        -- Unset Lake's environment variables
-        env := lakeVars.map (·, none)
-      }
-      if res.exitCode != 0 then reportFail projectDir cmd args res
+  let args := #["run", "--install", toolchain, "lake", "build", "subverso-helper"]
+  let res ← IO.Process.output {
+    cmd, args, cwd := projectDir
+    -- Unset Lake's environment variables
+    env := lakeVars.map (·, none)
+  }
+  if res.exitCode != 0 then reportFail projectDir cmd args res
 
   let args := #["run", "--install", toolchain, "lake", "env", "subverso-helper", mod]
   let hl ← do
