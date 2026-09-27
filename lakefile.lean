@@ -8,7 +8,6 @@ require illuminate from git "https://github.com/leanprover/illuminate"@"main"
 require Cli from git "https://github.com/leanprover/lean4-cli"@"main"
 
 package verso where
-  leanOptions := #[⟨`experimental.module, true⟩]
 
 @[default_target]
 lean_lib VersoUtil where
