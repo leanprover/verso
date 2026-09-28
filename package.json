@@ -1,5 +1,11 @@
 {
+    "scripts": {
+        "typecheck:widget": "tsc --noEmit -p src/errata/Errata/widget/jsconfig.json"
+    },
     "devDependencies": {
+        "@leanprover/infoview": "0.13.0",
+        "@types/react": "18.3.31",
+        "@types/react-dom": "18.3.7",
         "prettier": "3.7.4",
         "typescript": "5.8.3"
     }

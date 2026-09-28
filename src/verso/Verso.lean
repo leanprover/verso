@@ -33,5 +33,6 @@ public import Verso.Output.Html.CssVars
 public import Verso.Output.Html.ElasticLunr
 public import Verso.Output.Html.KaTeX
 public import Verso.Output.TeX
+public import Verso.SmartSuggestions
 public import Verso.SyntaxUtils
 public import Verso.WithoutAsync

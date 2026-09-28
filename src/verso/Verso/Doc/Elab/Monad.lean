@@ -79,6 +79,22 @@ public meta def _root_.Lean.Doc.Syntax.code.inline_to_string : InlineToString
     some str.getString
   | _, _ => none
 
+@[inline_to_string Lean.Doc.Syntax.link]
+public meta def _root_.Lean.Doc.Syntax.link.inline_to_string : InlineToString
+  | env, `(inline| link[ $args* ] $_:link_target) =>
+    some <| String.intercalate " " (Array.map (inlineToString env) args).toList
+  | _, _ => none
+
+@[inline_to_string Lean.Doc.Syntax.image]
+public meta def _root_.Lean.Doc.Syntax.image.inline_to_string : InlineToString
+  | _, `(inline| image( $_:str ) $_:link_target) => some ""
+  | _, _ => none
+
+@[inline_to_string Lean.Doc.Syntax.footnote]
+public meta def _root_.Lean.Doc.Syntax.footnote.inline_to_string : InlineToString
+  | _, `(inline| footnote( $_:str )) => some ""
+  | _, _ => none
+
 @[inline_to_string Lean.Doc.Syntax.role]
 public meta def _root_.Lean.Doc.Syntax.role.inline_to_string : InlineToString
   | env, `(inline| role{ $_ $_* }[ $body* ]) =>
@@ -100,7 +116,7 @@ public meta def app_to_string : InlineToString := fun (env : Environment) => fun
   | _ => none
 
 public def inlinesToString (env : Environment) (inlines : Array Syntax)  : String :=
-  String.intercalate " " (inlines.map (inlineToString env)).toList
+  String.intercalate " " (inlines.map (inlineToString env) |>.filter (!·.isEmpty)).toList
 
 public def inlineSyntaxToString (env : Environment) (inlines : Syntax) : String :=
     if let `<low| ~(.node _ _ args)> := inlines then

@@ -18,6 +18,7 @@ public import Std.Data.HashSet
 
 public import VersoManual.Basic
 public import VersoManual.HighlightedCode
+public import VersoManual.Html.Hoist
 public import VersoManual.Index
 public import VersoManual.Markdown
 public meta import VersoManual.Markdown
@@ -55,6 +56,7 @@ open Verso.Doc.Elab.PartElabM
 open Verso.Code
 open Verso.ArgParse
 open Verso.Code.Highlighted.WebAssets
+open Verso.Genre.Manual.Html
 open Lean.Doc.Syntax
 
 open SubVerso.Highlighting
@@ -89,7 +91,7 @@ meta def ValDesc.documentableName : ValDesc m (Ident × Name) where
             m!"Set option 'verso.docstring.allowDeprecated' to '{true}' to allow documentation for deprecated names."
       else
         -- Defer to default Lean deprecation warnings and settings if it's not a hard error
-        Lean.Linter.checkDeprecated x
+        Lean.Linter.checkDeprecated x false
       pure (n, x)
     | other => throwError "Expected identifier, got {other}"
 
@@ -788,6 +790,21 @@ def docSuggestionMapper : DomainMapper := {
 }.setFont { family := .code }
 
 open Verso.Genre.Manual.Markdown in
+open Verso.Output Html in
+/--
+Renders a documentation box with a permalink, a label, a signature, and body text. The box is a
+barrier for margin content, which is placed before it.
+-/
+def namedocsBox (id : InternalId) (xref : TraverseState) (label sig text : Html) : Html :=
+  Hoist.barrier "margin" true {{
+    <div class="namedocs" {{xref.htmlId id}}>
+      {{permalink id xref false}}
+      <span class="label">{{label}}</span>
+      <pre class="signature hl lean block">{{sig}}</pre>
+      <div class="text">{{text}}</div>
+    </div>
+  }}
+
 @[block_extension Block.docstring]
 def docstring.descr : BlockDescr := withHighlighting {
   init st := st
@@ -856,24 +873,12 @@ def docstring.descr : BlockDescr := withHighlighting {
         | do reportError "Failed to deserialize docstring data while generating HTML"; pure .empty
       let sig : Html ← signature.toHtml
 
-      let xref ← state
-      let idAttr := xref.htmlId id
-
       let label := customLabel.getD declType.label
 
       if label == "" then
         reportError s!"Missing label for '{name}': supply one with 'label := \"LABEL\"'"
 
-      return {{
-        <div class="namedocs" {{idAttr}}>
-          {{permalink id xref false}}
-          <span class="label">{{label}}</span>
-          <pre class="signature hl lean block">{{sig}}</pre>
-          <div class="text">
-            {{← contents.mapM goB}}
-          </div>
-        </div>
-      }}
+      return namedocsBox id (← state) label sig (← contents.mapM goB)
 
   localContentItem := fun _id info _contents => open Verso.Output.Html in do
     let  (name, _declType, _signature, _customLabel, _altNames) ←
@@ -1623,19 +1628,9 @@ def optionDocs.descr : BlockDescr := withHighlighting {
         | do reportError "Failed to deserialize docstring data while generating HTML for an option"; pure .empty
       let x : Html := Html.text true <| Name.toString name
 
-      let xref ← HtmlT.state
-      let idAttr := xref.htmlId id
-
-      return {{
-        <div class="namedocs" {{idAttr}}>
-          {{permalink id xref false}}
-          <span class="label">"option"</span>
-          <pre class="signature hl lean block">{{x}}</pre>
-          <div class="text">
-            <p>"Default value: " <code class="hl lean inline">{{← defaultValue.toHtml (g := Manual)}}</code></p>
-            {{← contents.mapM goB}}
-          </div>
-        </div>
+      return namedocsBox id (← HtmlT.state) "option" x {{
+        <p>"Default value: " <code class="hl lean inline">{{← defaultValue.toHtml (g := Manual)}}</code></p>
+        {{← contents.mapM goB}}
       }}
   localContentItem := fun _id info _contents => open Verso.Output.Html in do
     let (name, _defaultValue) ← FromJson.fromJson? (α := Name × Highlighted) info
@@ -1794,19 +1789,7 @@ def tactic.descr : BlockDescr := withHighlighting {
         | do reportError "Failed to deserialize tactic data while generating HTML for a tactic"; pure .empty
       let x : Highlighted := .token ⟨.keyword tactic.internalName none tactic.docString, show.getD tactic.userName⟩
 
-      let xref ← HtmlT.state
-      let idAttr := xref.htmlId id
-
-      return {{
-        <div class="namedocs" {{idAttr}}>
-          {{permalink id xref false}}
-          <span class="label">"tactic"</span>
-          <pre class="signature hl lean block">{{← x.toHtml (g := Manual)}}</pre>
-          <div class="text">
-            {{← contents.mapM goB}}
-          </div>
-        </div>
-      }}
+      return namedocsBox id (← HtmlT.state) "tactic" (← x.toHtml (g := Manual)) (← contents.mapM goB)
   localContentItem := fun _id info _contents => open Verso.Output.Html in do
     let (tactic, «show») ← FromJson.fromJson? (α := TacticDoc × Option String) info
     let str := show.getD tactic.userName
@@ -1946,19 +1929,7 @@ def conv.descr : BlockDescr := withHighlighting {
         | do reportError "Failed to deserialize conv tactic data"; pure .empty
       let x : Highlighted := .token ⟨.keyword (some name) none docs?, «show»⟩
 
-      let xref ← HtmlT.state
-      let idAttr := xref.htmlId id
-
-      return {{
-        <div class="namedocs" {{idAttr}}>
-          {{permalink id xref false}}
-          <span class="label">"conv tactic"</span>
-          <pre class="signature hl lean block">{{← x.toHtml (g := Manual)}}</pre>
-          <div class="text">
-            {{← contents.mapM goB}}
-          </div>
-        </div>
-      }}
+      return namedocsBox id (← HtmlT.state) "conv tactic" (← x.toHtml (g := Manual)) (← contents.mapM goB)
   localContentItem := fun _id info _contents => open Verso.Output.Html in do
     let (_name, «show», _docs?) ← FromJson.fromJson? (α := Name × String × Option String) info
     pure #[(«show», {{<code class="tactic-name">{{«show»}}</code>}})]

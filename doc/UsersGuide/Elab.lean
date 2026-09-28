@@ -67,6 +67,11 @@ Each genre provides a `main` function that will carry out the remainder of the s
 Usually, this `main` function can be applied to the part that represents the whole document; however, genres that don't have a strict linear order (such as the {ref "website"}[website genre]) will provide their own means of configuring the document's layout.
 The `main` function typically also takes configuration parameters both in the code and on the command line, such as which output formats to generate or customizations to the generated output.
 
+Tip: for projects with large dependencies such as Mathlib, compiling the document to a native executable can take a long time.
+It is often faster to run the `main` function through the Lean interpreter instead.
+To do so, invoke `lake lean Main.lean --run Main.lean` in your shell, where `Main.lean` is the file in which the genre's `main` function is called with your document as an argument.
+Future updates to the Verso build process may make this the default.
+
 # Traversal
 %%%
 tag := "traversal"

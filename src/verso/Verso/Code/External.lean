@@ -20,6 +20,7 @@ public meta import Verso.ExpectString
 public meta import Verso.Doc.Suggestion
 public meta import Verso.Hint
 public meta import Verso.Log
+public meta import Verso.SmartSuggestions
 
 import SubVerso.Highlighting
 public meta import SubVerso.Examples.Messages
@@ -75,31 +76,6 @@ end
 Adds a newline to a string if it doesn't already end with one.
 -/
 public meta def withNl (s : String) : String := if s.endsWith "\n" then s else s ++ "\n"
-
-/--
-Default suggestion threshold function: a suggestion is sufficiently close if
- * the input is shorter than 5 and their Levenshtein distance is 1 or less,
- * the input is shorter than 10 and their distance is 2 or less, or
- * the distance is shorter than 3.
--/
-meta def suggestionThreshold (input _candidate : String) := if input.length < 5 then 1 else if input.length < 10 then 2 else 3
-
-/--
-Adds up to {name}`count` suggestions.
-
-{name}`candidates` are the valid inputs and {name}`input` is the provided input. Suggestions are added if
-they are "sufficiently close" to the input, as determined by {name}`threshold`.
--/
-meta def smartSuggestions (candidates : Array String) (input : String) (count : Nat := 10) (threshold := suggestionThreshold) : Array String :=
-  let toks := candidates.filterMap fun t =>
-    let limit := threshold input t
-    EditDistance.levenshtein t input limit <&> (t, ·)
-  let toks := toks.qsort (fun x y => x.2 < y.2 || (x.2 == y.2 && x.1 < y.1))
-  let toks := toks.take count
-  -- TODO test thresholds/sorting
-  toks.map fun (t, _) => t
-
-
 
 /--
 Loads the contents of a module, parsed by anchor. The results are cached.
