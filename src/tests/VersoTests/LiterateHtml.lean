@@ -1279,8 +1279,25 @@ private def testMultiRootNavTree (data : TestData) : Test := withTestDir data fu
   assertContains "<details" navbarSection
     "multi-root nav: navbar should use <details> for top-level entries"
 
+/--
+Library options with the {lit}`weak.` prefix take effect during literate extraction.
+-/
+-- `LibB` sets `weak.linter.unusedVariables = false` and a `weak.` option that isn't
+-- registered. Each library has a definition with an unused variable. The warning appears in the
+-- JSON for `LibA.Core` and does not in the JSON for {lit}`LibB.Utils`.
+
+private def testWeakLeanOptions (data : TestData) : Test := do
+  let warning := "linter.unusedVariables"
+  let libA ← IO.FS.readFile (jsonPath data.jsonDir "LibA.Core")
+  assertContains warning libA
+    "LibA.Core JSON has no unused variable warning, so the test module does not trigger the linter"
+  let libB ← IO.FS.readFile (jsonPath data.jsonDir "LibB.Utils")
+  assertNotContains warning libB
+    "LibB.Utils JSON has an unused variable warning, so `weak.linter.unusedVariables` had no effect"
+
 private def multiRootHtmlTests (data : TestData) : List (String × Test) := [
-  ("multi-root nav tree", testMultiRootNavTree data)
+  ("multi-root nav tree", testMultiRootNavTree data),
+  ("weak lean options", testWeakLeanOptions data)
 ]
 
 /-- The literate HTML generator produces the expected output for the multi-root test project. -/
