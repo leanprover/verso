@@ -1,8 +1,8 @@
 /-!
 # Guarded Messages
 
-{lit}`#guard_msgs` takes the messages that it expects as a doc comment. That comment documents
-nothing, so the declaration in the guarded command keeps its own docstring, and only that.
+{lit}`#guard_msgs` takes the messages that it expects as a doc comment. That comment is not really
+documentation, so the declaration in the guarded command keeps its own docstring, and only that.
 -/
 
 /-- warning: declaration uses `sorry` -/

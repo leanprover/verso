@@ -306,8 +306,9 @@ private def testUnknownExtensionFallback : IO Unit := do
     throw <| IO.userError "HTML missing 'THIS IS THE FALLBACK' marker. The conversion's fallback children were not rendered."
 
 /--
-The doc comment of `#guard_msgs` holds the messages expected from the command that it wraps. It must
-not be attributed to the declaration in that command as a second docstring.
+The doc comment on a `#guard_msgs` command is not documentation. Instead, it is a specification of
+the expected messages from the wrapped command. It must not be attributed to the declaration in that
+command as a second docstring.
 -/
 private def testGuardMsgsDocstring (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
