@@ -468,18 +468,17 @@ script run (args) do
           return 1
       pure chosen
   -- Build every module in the selected libraries; their compiled `.olean` headers are authoritative
-  -- on which modules carry tests.
+  -- as to which modules include tests.
   let (modInfos, libMods) ← runBuild do
-    let mut oleanJobs := #[]
-    let mut infos : Array (Lean.Name × System.FilePath) := #[]
+    let mut oleanJobs : Array (Job (Lean.Name × System.FilePath)) := #[]
     let mut libMods : Array (Lake.LeanLib × Array Lean.Name) := #[]
     for lib in libs do
       let mods ← (← lib.modules.fetch).await
       libMods := libMods.push (lib, mods.map (·.name))
       for m in mods do
-        oleanJobs := oleanJobs.push (← m.olean.fetch)
-        infos := infos.push (m.name, m.oleanFile)
-    pure <| (Job.collectArray oleanJobs).map (sync := true) fun _ => (infos, libMods)
+        -- The job's path locates the `.olean`, which is in Lake's artifact cache when that is enabled
+        oleanJobs := oleanJobs.push <| (← m.olean.fetch).map (sync := true) (m.name, ·)
+    pure <| (Job.collectArray oleanJobs).map (sync := true) fun infos => (infos, libMods)
   -- A test module is one whose `.olean` records a test. Module-system test modules go in the bridge
   -- module (`import all`); non-module ones can only be imported by the non-module main.
   let mut moduleMods : Array Lean.Name := #[]
@@ -489,11 +488,11 @@ script run (args) do
     if info.hasTests then
       if info.isModule then moduleMods := moduleMods.push moduleName
       else nonModuleMods := nonModuleMods.push moduleName
-  -- A module that sits under a library's roots without being reachable from them is never built, so
-  -- any tests it defines are silently left out. A library is checked when it was named on the
-  -- command line, since naming it declares that its tests are expected, or when its built modules
-  -- carry tests. That is a configuration slip rather than a test failure, so it is a warning that
-  -- the runner reports alongside the results, and the run goes ahead.
+  -- A module that is unreachable from its library root without being transitively imported by said
+  -- roots is never built, so any tests it defines are silently left out. A library is checked when
+  -- it was named on the command line, since naming it declares that its tests are expected, or when
+  -- its built modules include tests. That is a configuration slip rather than a test failure, so it
+  -- is a warning that the runner reports alongside the results, and the run goes ahead.
   let testMods := moduleMods ++ nonModuleMods
   let mut unreachable : Array (Lake.LeanLib × Array Lean.Name) := #[]
   for (lib, mods) in libMods do
@@ -529,8 +528,11 @@ script run (args) do
     if let some parent := file.parent then IO.FS.createDirAll parent
     let changed ← if ← file.pathExists then pure ((← IO.FS.readFile file) != src) else pure true
     if changed then IO.FS.writeFile file src
-  -- Build and run the root package's runner.
-  let exePath ← runBuild (ws.root.facet `errataRunner).fetch
+  -- Build and run the root package's runner. The generated modules are not part of one of the
+  -- workspaces's library targets, so Lake does not resolve them as imports. Instead, Lean finds
+  -- them in the build directory, where artifacts from Lake's cache are restored.
+  let exePath ← { ws with lakeEnv.restoreAllArtifacts? := some true }.runBuild
+    (ws.root.facet `errataRunner).fetch
   -- Each of the driver's warnings follows `--driver-warning`, which must match
   -- `Errata.driverWarningFlag`; the runner reports them alongside its own.
   let warningArgs := driverWarnings.flatMap (#["--driver-warning", ·])
@@ -631,24 +633,30 @@ module_facet literate mod : System.FilePath := do
 
   let exeJob ← «verso-literate».fetch
   let modJob ← mod.olean.fetch
+  let setupJob ← mod.setup.fetch
 
   let buildDir := ws.root.buildDir
   let litFile := mod.filePath (buildDir / "literate") "json"
+  -- The setup locates the module's imports, which are in Lake's artifact cache when that is enabled
+  let setupFile := mod.filePath (buildDir / "literate-setup") "json"
 
   let optArgs := leanOptionArgs mod
 
   exeJob.bindM fun exeFile =>
-    modJob.mapM fun _oleanPath => do
-      addLeanTrace
-      addTrace (← computeTrace exeFile)
-      addPureTrace (toString optArgs) "leanOptions"
-      buildFileUnlessUpToDate' (text := true) litFile <|
-        proc {
-          cmd := exeFile.toString
-          args := #[mod.name.toString, litFile.toString] ++ optArgs
-          env := ← getAugmentedEnv
-        }
-      pure litFile
+    modJob.bindM fun _oleanPath =>
+      setupJob.mapM fun setup => do
+        addLeanTrace
+        addTrace (← computeTrace exeFile)
+        addPureTrace (toString optArgs) "leanOptions"
+        buildFileUnlessUpToDate' (text := true) litFile do
+          IO.FS.createDirAll (setupFile.parent.getD buildDir)
+          IO.FS.writeFile setupFile (Lean.toJson setup).compress
+          proc {
+            cmd := exeFile.toString
+            args := #[mod.name.toString, litFile.toString, "--setup", setupFile.toString] ++ optArgs
+            env := ← getAugmentedEnv
+          }
+        pure litFile
 
 library_facet literate lib : Array System.FilePath := do
   let mods ← (← lib.modules.fetch).await
