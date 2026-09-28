@@ -643,6 +643,8 @@ unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (m
     let imports := headerToImports headerStx
     enableInitializersExecution
     let env ← Compat.importModules (extraImports.map ({module := ·}) ++ imports) {}
+    -- Rewrite `weak.` options based on the definitions discovered during imports
+    let leanOptions ← Lean.Language.Lean.reparseOptions leanOptions
     let pctx : Frontend.Context := {inputCtx := ictx}
 
     let opts := leanOptions.mergeBy (fun _ _ v => v) (maxHeartbeats.set {} 10000000)
@@ -699,8 +701,9 @@ structure Config where
   leanOptions : Options := {}
 
 /--
-Parses a `-Dname=value` flag into a Lean option, registering it in `opts`.
-Uses the registered option declaration to determine the expected type.
+Parses a `-Dname=value` flag into a Lean option, registering it in `opts`.  A registered option's
+value is parsed according to its declaration. Other options are stored as strings, to be parsed
+after their declarations have been imported.
 -/
 private def parseDOption (arg : String) (opts : Options) : IO Options := do
   let arg := arg.drop 2  -- drop "-D"
