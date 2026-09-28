@@ -24,12 +24,17 @@ const e = React.createElement;
 const resultCache = new Map();
 const RESULT_CACHE_LIMIT = 32;
 
-// Records a test's outcome as the most recent, dropping the oldest to stay within the limit.
+/**
+ * Records a test's outcome as the most recent, dropping the oldest to stay within the limit.
+ * @param declKey {string}
+ * @param entry {CachedRun}
+ */
 function cacheResult(declKey, entry) {
     resultCache.delete(declKey);
     resultCache.set(declKey, entry);
-    while (resultCache.size > RESULT_CACHE_LIMIT) {
-        resultCache.delete(resultCache.keys().next().value);
+    for (const key of resultCache.keys()) {
+        if (resultCache.size <= RESULT_CACHE_LIMIT) break;
+        resultCache.delete(key);
     }
 }
 
@@ -37,6 +42,7 @@ function cacheResult(declKey, entry) {
 // colours of the theme's test icons, so they carry the verdict on the status glyph while the label
 // beside it keeps the editor's text colour. A failure within an `expectFail` is a failure that the
 // test wanted, so it keeps the failure's glyph in the muted colour of a skipped test.
+/** @type {Record<string, string>} */
 const STATUS_COLORS = {
     passed: "var(--vscode-testing-iconPassed, #2e7d32)",
     failed: "var(--vscode-testing-iconFailed, #c62828)",
@@ -44,6 +50,7 @@ const STATUS_COLORS = {
     expectedFailure: "var(--vscode-testing-iconSkipped, #848484)",
 };
 
+/** @type {Record<string, string>} */
 const STATUS_SYMBOLS = {
     passed: "✓",
     failed: "✗",
@@ -51,6 +58,7 @@ const STATUS_SYMBOLS = {
     expectedFailure: "✗",
 };
 
+/** @type {Record<string, string>} */
 const STATUS_LABELS = {
     passed: "Passed",
     failed: "FAILED",
@@ -68,20 +76,29 @@ const preStyle = {
     fontSize: "0.95em",
 };
 
+/** @param ms {number} */
 function formatDuration(ms) {
     if (ms < 1000) return ms + " ms";
     return (ms / 1000).toFixed(ms < 10000 ? 2 : 1) + " s";
 }
 
+/** @param text {string} */
 function block(text) {
     return e("pre", { style: preStyle }, text);
 }
 
+/**
+ * @param n {number}
+ * @param [w] {number}
+ */
 function pad(n, w) {
     return String(n).padStart(w || 2, "0");
 }
 
-// The message of a rejected RPC call.
+/**
+ * The message of a rejected RPC call.
+ * @param err {any}
+ */
 function errorMessage(err) {
     return (err && err.message) || String(err);
 }
@@ -113,8 +130,11 @@ const warningColor = "var(--vscode-editorWarning-foreground, #bf8803)";
 // follows the editor's font size.
 const dimSize = "0.9em";
 
-// The time since `runStart`, an instant on the client's clock, ticking while mounted; shows zero
-// until the start is known.
+/**
+ * The time since `runStart`, an instant on the client's clock, ticking while mounted; shows zero
+ * until the start is known.
+ * @param props {{runStart: number}}
+ */
 function Elapsed(props) {
     const runStart = props.runStart;
     const [elapsed, setElapsed] = React.useState(0);
@@ -140,11 +160,16 @@ function Elapsed(props) {
 const POPUP_ROOM = 160;
 const POPUP_MARGIN = 8;
 
-// A fixed position against an element, aligned to its right edge and below it, going above it
-// where the view has more room there, with a height that stays within the window.
+/**
+ * A fixed position against an element, aligned to its right edge and below it, going above it
+ * where the view has more room there, with a height that stays within the window.
+ * @param anchor {Element | null}
+ * @returns {React.CSSProperties}
+ */
 function placeUnder(anchor) {
     if (!anchor) return { display: "none" };
     const rect = anchor.getBoundingClientRect();
+    /** @type {React.CSSProperties} */
     const style = {
         position: "fixed",
         right: Math.max(8, window.innerWidth - rect.right),
@@ -163,8 +188,11 @@ function placeUnder(anchor) {
     return style;
 }
 
-// The style of a button that is a codicon alone, dimmed and without the pointer while it is
-// disabled.
+/**
+ * The style of a button that is a codicon alone, dimmed and without the pointer while it is
+ * disabled.
+ * @param disabled {boolean}
+ */
 function iconButtonStyle(disabled) {
     return {
         background: "none",
@@ -180,13 +208,19 @@ function iconButtonStyle(disabled) {
 // The outline of a settings field whose text holds back a run.
 const invalidOutline = "1px solid var(--vscode-inputValidation-errorBorder, #be1100)";
 
-// Whether an option row has neither a name nor a value. A blank row is left out of a run, and is
-// removed when a run starts.
+/**
+ * Whether an option row has neither a name nor a value. A blank row is left out of a run, and is
+ * removed when a run starts.
+ * @param opt {Option}
+ */
 function optionIsBlank(opt) {
     return opt.name.trim() === "" && opt.value === "";
 }
 
-// The problem with an option row that holds back a run, or null.
+/**
+ * The problem with an option row that holds back a run, or null.
+ * @param opt {Option}
+ */
 function optionProblem(opt) {
     if (optionIsBlank(opt)) return null;
     const name = opt.name.trim();
@@ -195,14 +229,20 @@ function optionProblem(opt) {
     return null;
 }
 
-// A word as a POSIX shell reads it: as it is when the shell passes on all of its characters
-// unchanged, and in double quotes otherwise.
+/**
+ * A word as a POSIX shell reads it: as it is when the shell passes on all of its characters
+ * unchanged, and in double quotes otherwise.
+ * @param text {string}
+ */
 function shellWord(text) {
     if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(text)) return text;
     return '"' + text.replace(/["\\$`]/g, "\\$&") + '"';
 }
 
-// Options as they are written on the test driver's command line.
+/**
+ * Options as they are written on the test driver's command line.
+ * @param opts {Option[]}
+ */
 function optionsCommandLine(opts) {
     return opts
         .map(function (opt) {
@@ -216,14 +256,18 @@ function optionsCommandLine(opts) {
 // The value of `focusOptionKey` that gives the focus to the add button.
 const ADD_OPTION = "add";
 
-// A popup anchored to an element, in the style of the InfoView's own menus. It is portalled to the
-// document body, which puts it outside the disclosure summary that holds its anchor, so the
-// controls inside it keep their own keyboard and pointer behaviour. It closes on Escape, on a
-// click outside it, and when the view moves under it. `onClose` is told whether to return focus to
-// the anchor.
+/**
+ * A popup anchored to an element, in the style of the InfoView's own menus. It is portalled to the
+ * document body, which puts it outside the disclosure summary that holds its anchor, so the
+ * controls inside it keep their own keyboard and pointer behaviour. It closes on Escape, on a
+ * click outside it, and when the view moves under it. `onClose` is told whether to return focus to
+ * the anchor.
+ * @param props {{anchor: HTMLElement | null, onClose: (refocus: boolean) => void,
+ *                children?: React.ReactNode}}
+ */
 function Popup(props) {
     const anchor = props.anchor;
-    const ref = React.useRef(null);
+    const ref = React.useRef(/** @type {HTMLDivElement | null} */ (null));
     // Held in a ref, so the listeners are installed once, when the popup opens.
     const onCloseRef = React.useRef(props.onClose);
     React.useEffect(function () {
@@ -237,19 +281,23 @@ function Popup(props) {
 
     React.useEffect(
         function () {
+            /** @param ev {PointerEvent} */
             function onPointerDown(ev) {
-                if (ref.current && ref.current.contains(ev.target)) return;
+                const target = /** @type {Node} */ (ev.target);
+                if (ref.current && ref.current.contains(target)) return;
                 // A click on the anchor is its own toggle, which closes the popup in its turn.
-                if (anchor && anchor.contains(ev.target)) return;
+                if (anchor && anchor.contains(target)) return;
                 onCloseRef.current(false);
             }
+            /** @param ev {KeyboardEvent} */
             function onKeyDown(ev) {
                 if (ev.key !== "Escape") return;
                 ev.stopPropagation();
                 onCloseRef.current(true);
             }
+            /** @param ev {Event} */
             function onScroll(ev) {
-                if (ref.current && ref.current.contains(ev.target)) return;
+                if (ref.current && ref.current.contains(/** @type {Node} */ (ev.target))) return;
                 onCloseRef.current(false);
             }
             function onResize() {
@@ -279,20 +327,31 @@ function Popup(props) {
     );
 }
 
-// A wall-clock time of day, rounded to the nearest second, from a Unix-epoch millisecond timestamp.
+/**
+ * A wall-clock time of day, rounded to the nearest second, from a Unix-epoch millisecond timestamp.
+ * @param ms {number}
+ */
 function formatClock(ms) {
     if (!ms) return "";
     const d = new Date(Math.round(ms / 1000) * 1000);
     return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
 }
 
-// A chunk's offset from the start of execution, in tenths of a second, as `(N.Ns)`.
+/**
+ * A chunk's offset from the start of execution, in tenths of a second, as `(N.Ns)`.
+ * @param c {Chunk}
+ * @param execStartTime {number}
+ */
 function chunkOffset(c, execStartTime) {
     if (!execStartTime || !c.time) return "";
     return "(" + ((c.time - execStartTime) / 1000).toFixed(1) + "s)";
 }
 
-// A chunk's stream and offset as a plain string, for the native hover tooltip.
+/**
+ * A chunk's stream and offset as a plain string, for the native hover tooltip.
+ * @param c {Chunk}
+ * @param execStartTime {number}
+ */
 function chunkLabel(c, execStartTime) {
     const off = chunkOffset(c, execStartTime);
     return off ? c.stream + " " + off : c.stream;
@@ -327,7 +386,14 @@ const ChunkSpan = React.memo(
     },
 );
 
-// One chunk's span, at its position in the output.
+/**
+ * One chunk's span, at its position in the output.
+ * @param chunks {Chunk[]}
+ * @param i {number}
+ * @param execStartTime {number}
+ * @param hovered {boolean}
+ * @param setHovered {(index: number) => void}
+ */
 function chunkSpan(chunks, i, execStartTime, hovered, setHovered) {
     return e(ChunkSpan, {
         key: i,
@@ -339,12 +405,25 @@ function chunkSpan(chunks, i, execStartTime, hovered, setHovered) {
     });
 }
 
-// Renders captured output: stdout and stderr interleaved in order. Hovering a chunk highlights it
-// and reports its stream and time offset.
-//
-// The spans live in `cache` from one render to the next. A reply that adds output leaves the chunks
-// already shown in place, so their spans are kept and only the new chunks get spans. Output that
-// replaced what was shown, such as another run's, starts the spans over.
+/**
+ * @typedef {{spans: React.ReactElement[], last: Chunk | null, execStartTime: number}} SpanCache
+ *   the spans of a run's output chunks, the last chunk they were made for, and the run they belong to
+ */
+
+/**
+ * Renders captured output: stdout and stderr interleaved in order. Hovering a chunk highlights it
+ * and reports its stream and time offset.
+ *
+ * The spans live in `cache` from one render to the next. A reply that adds output leaves the chunks
+ * already shown in place, so their spans are kept and only the new chunks get spans. Output that
+ * replaced what was shown, such as another run's, starts the spans over.
+ *
+ * @param cache {React.MutableRefObject<SpanCache>}
+ * @param chunks {Chunk[]}
+ * @param execStartTime {number}
+ * @param hovered {number}
+ * @param setHovered {(index: number) => void}
+ */
 function outputBlock(cache, chunks, execStartTime, hovered, setHovered) {
     const c = cache.current;
     const grew =
@@ -383,7 +462,7 @@ function useCopy() {
     const ec = React.useContext(EditorContext);
     const [copied, setCopied] = React.useState(false);
     // The timer that ends the confirmation, so another copy restarts it in full.
-    const copiedTimer = React.useRef(null);
+    const copiedTimer = React.useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
 
     React.useEffect(function () {
         return function () {
@@ -414,7 +493,10 @@ function useCopy() {
     return { copied, copy };
 }
 
-// The copy icon (two overlapping sheets), or a check mark once the output has been copied.
+/**
+ * The copy icon (two overlapping sheets), or a check mark once the output has been copied.
+ * @param copied {boolean}
+ */
 function copyIcon(copied) {
     return e(
         "svg",
@@ -531,7 +613,9 @@ const OutputSection = React.memo(
         // -1. A position keeps the highlight and the summary in step at any length of output.
         const [hovered, setHovered] = React.useState(-1);
         // The spans of the chunks, from one render to the next.
-        const spanCache = React.useRef({ spans: [], last: null, execStartTime: 0 });
+        const spanCache = React.useRef(
+            /** @type {SpanCache} */ ({ spans: [], last: null, execStartTime: 0 }),
+        );
         // Whether a chunk of the output on show is under the pointer.
         const showing = hovered >= 0 && hovered < chunks.length;
 
@@ -584,12 +668,16 @@ const OutputSection = React.memo(
     },
 );
 
-// The control that goes to the check a failure came from, as the InfoView's own sections offer a
-// place: an icon at the right of the row that names the thing, with where it leads in its tooltip.
-// An assertion records its own source position, which is where the control goes.
+/**
+ * The control that goes to the check a failure came from, as the InfoView's own sections offer a
+ * place: an icon at the right of the row that names the thing, with where it leads in its tooltip.
+ * An assertion records its own source position, which is where the control goes.
+ * @param source {Source | null | undefined}
+ * @param reveal {(source: Source) => void}
+ */
 function sourceButton(source, reveal) {
     if (!source) return null;
-    const file = decodeURIComponent((source.uri || "").split("/").pop() || "");
+    const file = decodeURIComponent(source.uri.split("/").pop() || "");
     // Lines and columns counted from one, as the editor's status bar counts them.
     const where = file + ":" + (source.startLine + 1) + ":" + (source.startColumn + 1);
     return e("button", {
@@ -608,8 +696,12 @@ function sourceButton(source, reveal) {
     });
 }
 
-// The button floated to the right of a result's own row. A click there is the control's own, so it
-// leaves the disclosure as it was.
+/**
+ * The button floated to the right of a result's own row. A click there is the control's own, so it
+ * leaves the disclosure as it was.
+ * @param source {Source | null | undefined}
+ * @param reveal {(source: Source) => void}
+ */
 function sourceControl(source, reveal) {
     const button = sourceButton(source, reveal);
     if (!button) return null;
@@ -617,7 +709,7 @@ function sourceControl(source, reveal) {
         "span",
         {
             className: "fr",
-            onClick: function (ev) {
+            onClick: /** @param ev {React.MouseEvent} */ function (ev) {
                 ev.preventDefault();
             },
         },
@@ -632,14 +724,22 @@ const treeStyle =
     ".errata-leaf { display: list-item; list-style: disclosure-closed inside }\n" +
     ".errata-leaf::marker { color: transparent }";
 
-// One named result in the tree: its verdict, its name, and how long its own code took. A result
-// that reported something opens to show it, in the order a reader wants it: its failure message and
-// detail, what its own code wrote, then the named results inside it. A result that reported nothing beyond
-// its verdict is a row of its own, with no triangle to open.
+/**
+ * One named result in the tree: its verdict, its name, and how long its own code took. A result
+ * that reported something opens to show it, in the order a reader wants it: its failure message and
+ * detail, what its own code wrote, then the named results inside it. A result that reported nothing
+ * beyond its verdict is a row of its own, with no triangle to open.
+ * @param props {{id: number, results: ResultNode[], kids: number[][], execStartTime: number,
+ *                reveal: (source: Source) => void, isOpen: (id: number) => boolean,
+ *                onOpenChange: (id: number, open: boolean) => void}}
+ * @returns {React.ReactElement}
+ */
 function NamedResult(props) {
     const result = props.results[props.id];
     // This result's own spans, and the chunk of them under the cursor.
-    const spanCache = React.useRef({ spans: [], last: null, execStartTime: 0 });
+    const spanCache = React.useRef(
+        /** @type {SpanCache} */ ({ spans: [], last: null, execStartTime: 0 }),
+    );
     const [hovered, setHovered] = React.useState(-1);
     const inside = props.kids[props.id] || [];
     const reported = !!(result.message || result.detail || result.output.length || inside.length);
@@ -715,17 +815,27 @@ function NamedResult(props) {
  * @typedef {Status | ""} ShownStatus a verdict, or blank while a result is still running
  * @typedef {{uri: string, startLine: number, startColumn: number, endLine: number,
  *            endColumn: number}} Source the span of a failed check
- * @typedef {{stream: string, text: string, time?: number, result?: number}} Chunk
+ * @typedef {{stream: "stdout" | "stderr", text: string, time: number, result: number}} Chunk
  * @typedef {{id: number, parent: number, name: string, status: ShownStatus, durationMs: number,
  *            message: string, detail: string, location: Source | null,
  *            output: Chunk[]}} ResultNode
+ * @typedef {{id: number, parent: number, name: string, status?: Status, durationMs: number,
+ *            message?: string, detail?: string, location?: Source,
+ *            output: Chunk[]}} Report a result as the server reports it
  * @typedef {{status: Status, durationMs: number, message?: string, detail?: string,
- *            location?: Source, results?: ResultNode[], description?: string,
- *            seed?: string, options?: {name: string, value: string}[],
- *            unreadOptions?: string[]}} Outcome
+ *            location?: Source, results: Report[], description?: string, seed?: string,
+ *            options: Option[], unreadOptions: string[]}} Outcome
  * @typedef {{phase: string, chunks: Chunk[], results: ResultNode[], startTime: number,
  *            startedAt: number, buildMs: number, execStartTime: number,
  *            runId: string}} RunFields
+ * @typedef {{name: string, value: string}} Option a test option, written `--name=value`
+ * @typedef {{key: number} & Option} OptionRow an option as it is edited in the run settings
+ * @typedef {{chunks: Chunk[], nextSince: number, results: Report[], nextSinceResults: number,
+ *            startTime: number, elapsedMs: number, buildMs: number, execStartTime: number,
+ *            phase: string, done: boolean, outcome: Outcome | null,
+ *            runId: string}} Reply a reply from `awaitOutput`
+ * @typedef {{clean: boolean, changedSinceRun: boolean}} FileState a reply from `fileState`
+ * @typedef {{cancelled: boolean}} CancelResult a reply from `cancelTest`
  *
  * The run's lifecycle as a single state, so the widget shows exactly one of a spinner, a verdict,
  * an error, or nothing:
@@ -769,6 +879,7 @@ function blankFields() {
 
 /**
  * A run's result, before anything is known of it beyond where it sits.
+ * @param id {number}
  * @returns {ResultNode}
  */
 function blankResult(id) {
@@ -786,17 +897,329 @@ function blankResult(id) {
 }
 
 /**
+ * Something the widget's server sent in a form that the widget cannot read. The widget and its
+ * server are built together, so this is a bug in one of them, and the widget stops at once.
+ */
+class ProtocolError extends Error {}
+
+/**
+ * @param path {string} where in the reply the problem is
+ * @param problem {string}
+ * @returns {never}
+ */
+function mismatch(path, problem) {
+    throw new ProtocolError(path + ": " + problem);
+}
+
+/**
+ * The fields of an object that has each of `required` and no fields outside `required` and
+ * `optional`.
+ * @param value {unknown}
+ * @param path {string}
+ * @param required {string[]}
+ * @param [optional] {string[]}
+ * @returns {Record<string, unknown>}
+ */
+function readFields(value, path, required, optional = []) {
+    const fields = readObject(value, path, required);
+    for (const key of Object.keys(fields)) {
+        if (!required.includes(key) && !optional.includes(key)) {
+            mismatch(path + "." + key, "unexpected field");
+        }
+    }
+    return fields;
+}
+
+/**
+ * The fields of an object that has each of `required`, and perhaps others.
+ * @param value {unknown}
+ * @param path {string}
+ * @param required {string[]}
+ * @returns {Record<string, unknown>}
+ */
+function readObject(value, path, required) {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        return mismatch(path, "expected an object, got " + JSON.stringify(value));
+    }
+    const fields = /** @type {Record<string, unknown>} */ (value);
+    for (const key of required) {
+        if (!(key in fields)) mismatch(path + "." + key, "missing");
+    }
+    return fields;
+}
+
+/**
+ * @param value {unknown}
+ * @param path {string}
+ * @returns {number}
+ */
+function readNat(value, path) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+        return mismatch(path, "expected a natural number, got " + JSON.stringify(value));
+    }
+    return value;
+}
+
+/**
+ * @param value {unknown}
+ * @param path {string}
+ * @returns {string}
+ */
+function readString(value, path) {
+    if (typeof value !== "string") {
+        return mismatch(path, "expected a string, got " + JSON.stringify(value));
+    }
+    return value;
+}
+
+/**
+ * @param value {unknown}
+ * @param path {string}
+ * @returns {boolean}
+ */
+function readBool(value, path) {
+    if (typeof value !== "boolean") {
+        return mismatch(path, "expected a boolean, got " + JSON.stringify(value));
+    }
+    return value;
+}
+
+/**
+ * @template {string} T
+ * @param value {unknown}
+ * @param path {string}
+ * @param values {readonly T[]}
+ * @returns {T}
+ */
+function readOneOf(value, path, values) {
+    const found = values.find(function (v) {
+        return v === value;
+    });
+    if (found === undefined) {
+        return mismatch(
+            path,
+            "expected one of " + values.join(", ") + ", got " + JSON.stringify(value),
+        );
+    }
+    return found;
+}
+
+/**
+ * @template T
+ * @param value {unknown}
+ * @param path {string}
+ * @param read {(item: unknown, path: string) => T}
+ * @returns {T[]}
+ */
+function readArray(value, path, read) {
+    if (!Array.isArray(value)) {
+        return mismatch(path, "expected an array, got " + JSON.stringify(value));
+    }
+    return value.map(function (item, i) {
+        return read(item, path + "[" + i + "]");
+    });
+}
+
+/**
+ * A field that the server leaves out when it has no value.
+ * @template T
+ * @param value {unknown}
+ * @param path {string}
+ * @param read {(value: unknown, path: string) => T}
+ * @returns {T | undefined}
+ */
+function readOptional(value, path, read) {
+    return value === undefined ? undefined : read(value, path);
+}
+
+const STATUSES = /** @type {const} */ (["passed", "failed", "error", "expectedFailure"]);
+const STREAMS = /** @type {const} */ (["stdout", "stderr"]);
+
+/**
+ * @param value {unknown}
+ * @param path {string}
+ * @returns {Chunk}
+ */
+function readChunk(value, path) {
+    const f = readFields(value, path, ["stream", "text", "time", "result"]);
+    return {
+        stream: readOneOf(f.stream, path + ".stream", STREAMS),
+        text: readString(f.text, path + ".text"),
+        time: readNat(f.time, path + ".time"),
+        result: readNat(f.result, path + ".result"),
+    };
+}
+
+/**
+ * @param value {unknown}
+ * @param path {string}
+ * @returns {Source}
+ */
+function readSource(value, path) {
+    const f = readFields(value, path, ["uri", "startLine", "startColumn", "endLine", "endColumn"]);
+    return {
+        uri: readString(f.uri, path + ".uri"),
+        startLine: readNat(f.startLine, path + ".startLine"),
+        startColumn: readNat(f.startColumn, path + ".startColumn"),
+        endLine: readNat(f.endLine, path + ".endLine"),
+        endColumn: readNat(f.endColumn, path + ".endColumn"),
+    };
+}
+
+/**
+ * @param value {unknown}
+ * @param path {string}
+ * @returns {Report}
+ */
+function readReport(value, path) {
+    const f = readFields(
+        value,
+        path,
+        ["id", "parent", "name", "durationMs", "output"],
+        ["status", "message", "detail", "location"],
+    );
+    return {
+        id: readNat(f.id, path + ".id"),
+        parent: readNat(f.parent, path + ".parent"),
+        name: readString(f.name, path + ".name"),
+        status: readOptional(f.status, path + ".status", function (v, p) {
+            return readOneOf(v, p, STATUSES);
+        }),
+        durationMs: readNat(f.durationMs, path + ".durationMs"),
+        message: readOptional(f.message, path + ".message", readString),
+        detail: readOptional(f.detail, path + ".detail", readString),
+        location: readOptional(f.location, path + ".location", readSource),
+        output: readArray(f.output, path + ".output", readChunk),
+    };
+}
+
+/**
+ * @param value {unknown}
+ * @param path {string}
+ * @returns {Option}
+ */
+function readOption(value, path) {
+    const f = readFields(value, path, ["name", "value"]);
+    return {
+        name: readString(f.name, path + ".name"),
+        value: readString(f.value, path + ".value"),
+    };
+}
+
+/**
+ * @param value {unknown}
+ * @param path {string}
+ * @returns {Outcome}
+ */
+function readOutcome(value, path) {
+    const f = readFields(
+        value,
+        path,
+        ["status", "durationMs", "results", "options", "unreadOptions"],
+        ["message", "detail", "location", "description", "seed"],
+    );
+    return {
+        status: readOneOf(f.status, path + ".status", STATUSES),
+        durationMs: readNat(f.durationMs, path + ".durationMs"),
+        message: readOptional(f.message, path + ".message", readString),
+        detail: readOptional(f.detail, path + ".detail", readString),
+        location: readOptional(f.location, path + ".location", readSource),
+        results: readArray(f.results, path + ".results", readReport),
+        description: readOptional(f.description, path + ".description", readString),
+        seed: readOptional(f.seed, path + ".seed", readString),
+        options: readArray(f.options, path + ".options", readOption),
+        unreadOptions: readArray(f.unreadOptions, path + ".unreadOptions", readString),
+    };
+}
+
+/**
+ * @param value {unknown}
+ * @param path {string}
+ * @returns {Reply}
+ */
+function readReply(value, path) {
+    const f = readFields(value, path, [
+        "chunks",
+        "nextSince",
+        "results",
+        "nextSinceResults",
+        "startTime",
+        "elapsedMs",
+        "buildMs",
+        "execStartTime",
+        "phase",
+        "done",
+        "outcome",
+        "runId",
+    ]);
+    return {
+        chunks: readArray(f.chunks, path + ".chunks", readChunk),
+        nextSince: readNat(f.nextSince, path + ".nextSince"),
+        results: readArray(f.results, path + ".results", readReport),
+        nextSinceResults: readNat(f.nextSinceResults, path + ".nextSinceResults"),
+        startTime: readNat(f.startTime, path + ".startTime"),
+        elapsedMs: readNat(f.elapsedMs, path + ".elapsedMs"),
+        buildMs: readNat(f.buildMs, path + ".buildMs"),
+        execStartTime: readNat(f.execStartTime, path + ".execStartTime"),
+        phase: readString(f.phase, path + ".phase"),
+        done: readBool(f.done, path + ".done"),
+        outcome: f.outcome === null ? null : readOutcome(f.outcome, path + ".outcome"),
+        runId: readString(f.runId, path + ".runId"),
+    };
+}
+
+/**
+ * @param value {unknown}
+ * @param path {string}
+ * @returns {FileState}
+ */
+function readFileState(value, path) {
+    const f = readFields(value, path, ["clean", "changedSinceRun"]);
+    return {
+        clean: readBool(f.clean, path + ".clean"),
+        changedSinceRun: readBool(f.changedSinceRun, path + ".changedSinceRun"),
+    };
+}
+
+/**
+ * @param value {unknown}
+ * @param path {string}
+ * @returns {CancelResult}
+ */
+function readCancelResult(value, path) {
+    const f = readFields(value, path, ["cancelled"]);
+    return { cancelled: readBool(f.cancelled, path + ".cancelled") };
+}
+
+/**
+ * The props that Lean gives the widget. The InfoView adds its own props to every panel widget's,
+ * and those belong to the InfoView, so the widget reads past them.
+ * @param value {unknown}
+ * @returns {WidgetProps}
+ */
+function readProps(value) {
+    const f = readObject(value, "props", ["decl", "module", "name", "version"]);
+    return {
+        decl: f.decl,
+        module: f.module,
+        name: readString(f.name, "props.name"),
+        version: readString(f.version, "props.version"),
+    };
+}
+
+/**
  * The chunks of a run, with those of one reply at their positions in the run. A reply holds the run's
  * chunks from a position on, so a chunk that a replayed reply holds again lands where it already is.
  * The array grows in place, since a run's output only grows, so a reply costs as much as the chunks
  * it holds.
  *
  * @param chunks {Chunk[]}
+ * @param reply {Reply}
  * @returns {Chunk[]}
  */
 function placeChunks(chunks, reply) {
-    const added = reply.chunks || [];
-    const start = Math.max(0, (reply.nextSince || 0) - added.length);
+    const added = reply.chunks;
+    const start = Math.max(0, reply.nextSince - added.length);
     for (let i = 0; i < added.length && start + i <= chunks.length; i++) {
         chunks[start + i] = added[i];
     }
@@ -804,11 +1227,17 @@ function placeChunks(chunks, reply) {
 }
 
 /**
+ * @typedef {{chunks: Chunk[] | null, count: number, byResult: Map<number, Chunk[]>}} OutputCache
+ *   the chunks grouped so far, how many of them, and their groups by result
+ */
+
+/**
  * The output of each result, by identifier: the chunks whose `result` field names it, in order. The
  * groups live in `cache` from one render to the next and take in only the chunks that arrived since,
  * so a run's output is grouped once as it grows. Chunks that replaced the ones grouped, such as those
  * of another run, start the groups over.
  *
+ * @param cache {React.MutableRefObject<OutputCache>}
  * @param chunks {Chunk[]}
  * @returns {Map<number, Chunk[]>}
  */
@@ -821,7 +1250,7 @@ function outputsByResult(cache, chunks) {
     }
     for (; c.count < chunks.length; c.count++) {
         const chunk = chunks[c.count];
-        const id = chunk.result || 0;
+        const id = chunk.result;
         let group = c.byResult.get(id);
         if (!group) {
             group = [];
@@ -838,19 +1267,21 @@ function outputsByResult(cache, chunks) {
  * report updates a result with what it already holds.
  *
  * @param results {ResultNode[]}
+ * @param reply {Reply}
  * @returns {ResultNode[]}
  */
 function mergeResults(results, reply) {
     const next = results.slice();
+    /** @param id {number} */
     function at(id) {
         while (next.length <= id) next.push(blankResult(next.length));
         return next[id];
     }
-    for (const ev of reply.results || []) {
+    for (const ev of reply.results) {
         const shown = at(ev.id);
         next[ev.id] = {
             ...shown,
-            parent: ev.parent || 0,
+            parent: ev.parent,
             name: ev.name || shown.name,
             status: ev.status || shown.status,
             durationMs: ev.durationMs || shown.durationMs,
@@ -860,7 +1291,7 @@ function mergeResults(results, reply) {
         };
     }
     // A chunk can name a result that has yet to be reported, such as the test's own.
-    for (const c of reply.chunks || []) at(c.result || 0);
+    for (const c of reply.chunks) at(c.result);
     return next;
 }
 
@@ -868,21 +1299,22 @@ function mergeResults(results, reply) {
  * The results of a finished run, as the outcome records them. The runner streams each result's
  * output as it is written, so these hold none. A widget that has none of the run's live results
  * shows these.
+ * @param outcome {Outcome | null}
  * @returns {ResultNode[]}
  */
 function resultsOfOutcome(outcome) {
-    const results = (outcome && outcome.results) || [];
-    return results.map(function (r) {
+    if (!outcome) return [];
+    return outcome.results.map(function (r) {
         return {
-            ...blankResult(r.id || 0),
-            parent: r.parent || 0,
-            name: r.name || "",
-            status: r.status || "",
-            durationMs: r.durationMs || 0,
-            message: r.message || "",
-            detail: r.detail || "",
-            location: r.location || null,
-            output: r.output || [],
+            id: r.id,
+            parent: r.parent,
+            name: r.name,
+            status: r.status ?? "",
+            durationMs: r.durationMs,
+            message: r.message ?? "",
+            detail: r.detail ?? "",
+            location: r.location ?? null,
+            output: r.output,
         };
     });
 }
@@ -910,6 +1342,7 @@ function failingPaths(results) {
  * @returns {number[][]}
  */
 function childrenOf(results) {
+    /** @type {number[][]} */
     const children = results.map(function () {
         return [];
     });
@@ -945,6 +1378,7 @@ function fieldsOf(st) {
  * Whether a reply is about another run than the one shown. Replies name their run by the identifier
  * that the widget gave it; a run started without one is told apart by its start time.
  * @param shown {{runId: string, startTime: number}}
+ * @param reply {Reply}
  */
 function isOtherRun(shown, reply) {
     if (reply.runId && shown.runId) return reply.runId !== shown.runId;
@@ -1004,7 +1438,7 @@ function step(st, ev) {
                 phase: res.phase || prev.phase,
                 chunks: placeChunks(prev.chunks, res),
                 results:
-                    (res.chunks && res.chunks.length) || (res.results && res.results.length)
+                    res.chunks.length || res.results.length
                         ? mergeResults(prev.results, res)
                         : prev.results,
                 startTime: res.startTime || prev.startTime,
@@ -1038,16 +1472,38 @@ function step(st, ev) {
  * component on the test and a hash of its source remounts it whenever either changes, so every
  * piece of per-test state starts fresh and an edited test loses its cached or in-progress run. The
  * server ends the run of an edited test as it elaborates the edit.
+ *
+ * @typedef {{decl: unknown, module: unknown, name: string, version: string}} WidgetProps the
+ *   test's declaration and module as Lean names them, its name for display, and its source hash
+ * @param rawProps {unknown}
  */
-export default function RunTestWidget(props) {
-    const version = props.version || "";
+export default function RunTestWidget(rawProps) {
     // The file and the declaration together name the test, since two files can each hold a test of
-    // the same name and source. The InfoView opens the widget's RPC session at this file.
-    const uri = React.useContext(EnvPosContext).uri;
-    const declKey = uri + " " + JSON.stringify(props.decl);
+    // the same name and source. The InfoView opens the widget's RPC session at this file, so a
+    // widget shown outside a file position reports that in place of the test.
+    const pos = React.useContext(EnvPosContext);
+    /** @type {WidgetProps} */
+    let props;
+    try {
+        props = readProps(rawProps);
+    } catch (err) {
+        if (!(err instanceof ProtocolError)) throw err;
+        console.error(err);
+        return e("span", { style: { color: errorColor } }, "Errata test: " + err.message);
+    }
+    if (!pos) {
+        return e(
+            "span",
+            { style: { color: errorColor } },
+            "Errata test " + props.name + ": no file position to run from",
+        );
+    }
+    const version = props.version;
+    const declKey = pos.uri + " " + JSON.stringify(props.decl);
     return e(TestRun, { ...props, key: declKey + "@" + version, declKey, version });
 }
 
+/** @param props {WidgetProps & {declKey: string, version: string}} */
 function TestRun(props) {
     const rs = useRpcSession();
     const ec = React.useContext(EditorContext);
@@ -1060,30 +1516,34 @@ function TestRun(props) {
     });
     // Whether the file has no unsaved changes; the test runs the saved version, so Run is gated on
     // it. It is null until the server has said, which holds Run back until the answer is in.
-    const [clean, setClean] = React.useState(null);
+    const [clean, setClean] = React.useState(/** @type {boolean | null} */ (null));
     // Whether the file has changed since the test's run started, as the server last reported it.
     const [edited, setEdited] = React.useState(false);
     // The seed for property tests as typed, or blank to generate a random seed.
     const [seed, setSeed] = React.useState("");
     // The test options as typed, one row for each, in order. Each row has a key of
     // its own, so removing a row leaves the text of the rows after it where it was.
-    const [options, setOptions] = React.useState([]);
+    const [options, setOptions] = React.useState(/** @type {OptionRow[]} */ ([]));
     const nextOptionKey = React.useRef(0);
     // What takes the focus when the rows are next shown: the name field of the row with this key, or
     // the add button for ADD_OPTION. A row that is added or removed sets it.
-    const focusOptionKey = React.useRef(null);
+    const focusOptionKey = React.useRef(/** @type {number | string | null} */ (null));
     // Whether the run settings are shown, behind the gear button.
     const [settingsOpen, setSettingsOpen] = React.useState(false);
     // The error from the last cancel that failed, shown while the run it was meant to stop goes on.
-    const [cancelError, setCancelError] = React.useState(null);
+    const [cancelError, setCancelError] = React.useState(/** @type {string | null} */ (null));
     // The error from the latest of a run of rejected reports, shown while the widget keeps asking.
-    const [awaitError, setAwaitError] = React.useState(null);
+    const [awaitError, setAwaitError] = React.useState(/** @type {string | null} */ (null));
+    // What the server sent that the widget could not read, which stops the widget.
+    const [protocolError, setProtocolError] = React.useState(/** @type {string | null} */ (null));
     // Whether the output disclosure is expanded; open by default, collapsible to hide large output.
     const [outputOpen, setOutputOpen] = React.useState(true);
     // Whether a named result starts open, and the ones the reader has since opened or closed, by
     // identifier. A change of the setting clears those, so the new default reaches the whole tree.
     const [expandNamed, setExpandNamed] = React.useState(false);
-    const [openResults, setOpenResults] = React.useState({});
+    const [openResults, setOpenResults] = React.useState(
+        /** @type {Record<number, boolean>} */ ({}),
+    );
     // Whether the widget's own disclosure is expanded, alongside the InfoView's other sections.
     const [open, setOpen] = React.useState(true);
     // Bumped when the language server restarts, so the widget connects again through its new session.
@@ -1109,19 +1569,21 @@ function TestRun(props) {
     // Whether the widget is connected, so late clean-check replies are dropped.
     const alive = React.useRef(false);
     // The pending re-check while the buffer is dirty, so a fresh check replaces it.
-    const cleanTimer = React.useRef(null);
+    const cleanTimer = React.useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
     // Bumped on each edit and each clean check, so a check begun before an edit reports nothing.
     const cleanGen = React.useRef(0);
     // The identifier and start time of the run being followed, so a reply about another is recognized.
     const shownRun = React.useRef({ runId: "", startTime: 0 });
     // Rejected `awaitOutput` calls since the last reply, and the pending retry of the last of them.
     const awaitFails = React.useRef(0);
-    const retryTimer = React.useRef(null);
+    const retryTimer = React.useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
     // The gear the run settings hang from, and the seed field they hold.
-    const gearRef = React.useRef(null);
-    const seedRef = React.useRef(null);
+    const gearRef = React.useRef(/** @type {HTMLButtonElement | null} */ (null));
+    const seedRef = React.useRef(/** @type {HTMLInputElement | null} */ (null));
     // The output of each result, grouped from the run's chunks as they arrive.
-    const outputCache = React.useRef({ chunks: null, count: 0, byResult: new Map() });
+    const outputCache = React.useRef(
+        /** @type {OutputCache} */ ({ chunks: null, count: 0, byResult: new Map() }),
+    );
 
     const running = st.tag === "running";
     // Whether a run is in progress, for the replies that arrive after the render that started them.
@@ -1130,6 +1592,37 @@ function TestRun(props) {
         runningRef.current = running;
     });
     const starting = st.tag === "running" && st.phase === "starting";
+
+    /**
+     * Calls a method of the widget's server, through the latest session, and reads its reply. A
+     * reply that the widget cannot read stops the widget: every loop and timer ends, and the widget
+     * shows what was wrong in place of its controls. The call's promise is then rejected, and the
+     * handlers that follow find the widget stopped.
+     * @template T
+     * @param method {string}
+     * @param params {unknown}
+     * @param read {(value: unknown, path: string) => T}
+     * @returns {Promise<T>}
+     */
+    function callServer(method, params, read) {
+        return rsRef.current.call(method, params).then(function (value) {
+            try {
+                return read(value, method);
+            } catch (err) {
+                if (err instanceof ProtocolError) {
+                    console.error(err);
+                    gen.current += 1;
+                    alive.current = false;
+                    if (cleanTimer.current) clearTimeout(cleanTimer.current);
+                    cleanTimer.current = null;
+                    if (retryTimer.current) clearTimeout(retryTimer.current);
+                    retryTimer.current = null;
+                    setProtocolError(err.message);
+                }
+                throw err;
+            }
+        });
+    }
 
     // Asks the server about the file: whether it is saved, and whether it has changed since the
     // test's run started. The server holds the document as it is being edited and the run as it was
@@ -1144,7 +1637,7 @@ function TestRun(props) {
         cleanGen.current = myGen;
         // A reply to a check sent before a run started is about the run before it.
         const runGen = gen.current;
-        rsRef.current.call("Errata.Widget.fileState", { decl: props.decl }).then(
+        callServer("Errata.Widget.fileState", { decl: props.decl }, readFileState).then(
             function (file) {
                 if (!alive.current || cleanGen.current !== myGen) return;
                 setClean(file.clean);
@@ -1158,60 +1651,64 @@ function TestRun(props) {
         );
     }
 
+    /** @param myGen {number} */
     function loop(myGen) {
-        rsRef.current
-            .call("Errata.Widget.awaitOutput", {
+        callServer(
+            "Errata.Widget.awaitOutput",
+            {
                 decl: props.decl,
                 since: sinceRef.current,
                 sinceResults: sinceResultsRef.current,
                 version: version,
                 phase: phaseRef.current,
-            })
-            .then(
-                function (res) {
-                    if (gen.current !== myGen) return;
-                    awaitFails.current = 0;
-                    setAwaitError(null);
-                    // A reply about another run than the one being followed, started from a second
-                    // widget instance for the same test: its output is read from the first chunk.
-                    if (isOtherRun(shownRun.current, res)) {
-                        shownRun.current = { runId: res.runId, startTime: res.startTime };
-                        sinceRef.current = 0;
-                        sinceResultsRef.current = 0;
-                        phaseRef.current = "";
-                        loop(myGen);
-                        return;
-                    }
-                    shownRun.current = {
-                        runId: res.runId || shownRun.current.runId,
-                        startTime: res.startTime || shownRun.current.startTime,
-                    };
-                    if (res.phase) phaseRef.current = res.phase;
-                    sinceRef.current = res.nextSince || 0;
-                    sinceResultsRef.current = res.nextSinceResults || 0;
-                    dispatch({ type: "server", res: res, now: Date.now() });
-                    if (!res.done) loop(myGen);
-                },
-                function (err) {
-                    if (gen.current !== myGen) return;
-                    // The session that rejected the call has been replaced by the time the retry
-                    // goes out, so the run is followed on through the new one. A run in progress
-                    // is followed for as long as the widget is up: past the first few retries, the
-                    // widget names the error beside the Cancel button and keeps trying at a slower
-                    // pace. A widget with no run in progress stops asking after the first few.
-                    awaitFails.current += 1;
-                    if (awaitFails.current > AWAIT_RETRIES) {
-                        if (!runningRef.current) return;
-                        setAwaitError(errorMessage(err));
-                    }
-                    retryTimer.current = setTimeout(
-                        function () {
-                            if (gen.current === myGen) loop(myGen);
-                        },
-                        Math.min(AWAIT_RETRY_MS * awaitFails.current, AWAIT_RETRY_MAX_MS),
-                    );
-                },
-            );
+            },
+            readReply,
+        ).then(
+            function (res) {
+                if (gen.current !== myGen) return;
+                awaitFails.current = 0;
+                setAwaitError(null);
+                // A reply about another run than the one being followed, started from a second
+                // widget instance for the same test: its output is read from the first chunk.
+                if (isOtherRun(shownRun.current, res)) {
+                    shownRun.current = { runId: res.runId, startTime: res.startTime };
+                    sinceRef.current = 0;
+                    sinceResultsRef.current = 0;
+                    phaseRef.current = "";
+                    loop(myGen);
+                    return;
+                }
+                shownRun.current = {
+                    runId: res.runId || shownRun.current.runId,
+                    startTime: res.startTime || shownRun.current.startTime,
+                };
+                if (res.phase) phaseRef.current = res.phase;
+                sinceRef.current = res.nextSince;
+                sinceResultsRef.current = res.nextSinceResults;
+                dispatch({ type: "server", res: res, now: Date.now() });
+                if (!res.done) loop(myGen);
+            },
+            /** @param err {any} */
+            function (err) {
+                if (gen.current !== myGen) return;
+                // The session that rejected the call has been replaced by the time the retry
+                // goes out, so the run is followed on through the new one. A run in progress
+                // is followed for as long as the widget is up: past the first few retries, the
+                // widget names the error beside the Cancel button and keeps trying at a slower
+                // pace. A widget with no run in progress stops asking after the first few.
+                awaitFails.current += 1;
+                if (awaitFails.current > AWAIT_RETRIES) {
+                    if (!runningRef.current) return;
+                    setAwaitError(errorMessage(err));
+                }
+                retryTimer.current = setTimeout(
+                    function () {
+                        if (gen.current === myGen) loop(myGen);
+                    },
+                    Math.min(AWAIT_RETRY_MS * awaitFails.current, AWAIT_RETRY_MAX_MS),
+                );
+            },
+        );
     }
 
     // Connect to any run in progress for this test, and find out whether the buffer is saved. Runs on
@@ -1233,6 +1730,7 @@ function TestRun(props) {
                 : { runId: "", startTime: 0 };
             awaitFails.current = 0;
             setAwaitError(null);
+            setProtocolError(null);
             loop(myGen);
             alive.current = true;
             checkFile();
@@ -1284,7 +1782,10 @@ function TestRun(props) {
         [settingsOpen],
     );
 
-    // Has the editor open a file at the check that failed, with the check itself selected.
+    /**
+     * Has the editor open a file at the check that failed, with the check itself selected.
+     * @param source {Source}
+     */
     function reveal(source) {
         const shown = ec.revealLocation({
             uri: source.uri,
@@ -1299,21 +1800,31 @@ function TestRun(props) {
     // A result the reader has opened or closed stays as they left it. Otherwise the settings
     // decide, except on the way down to a result that failed or erred: that path is open, so a failure
     // and the results it happened in are in view as soon as the run reports them.
+    /**
+     * @param id {number}
+     * @param failing {boolean[]}
+     */
     function isResultOpen(id, failing) {
         return id in openResults ? openResults[id] : expandNamed || failing[id];
     }
 
+    /**
+     * @param id {number}
+     * @param open {boolean}
+     */
     function setResultOpen(id, open) {
         setOpenResults(function (opened) {
             return { ...opened, [id]: open };
         });
     }
 
+    /** @param open {boolean} */
     function setNamedResultsOpen(open) {
         setExpandNamed(open);
         setOpenResults({});
     }
 
+    /** @param refocus {boolean} */
     function closeSettings(refocus) {
         setSettingsOpen(false);
         if (refocus && gearRef.current) gearRef.current.focus();
@@ -1334,7 +1845,7 @@ function TestRun(props) {
         });
     const optionsSet = optionsSent.length > 0;
     // The names of the options that the shown run gave the test and the test never read.
-    const unreadOptions = (st.tag === "done" && st.outcome.unreadOptions) || [];
+    const unreadOptions = st.tag === "done" ? st.outcome.unreadOptions : [];
     // The first problem among the rows, which holds back the run until it is fixed.
     const optionsHint = options.map(optionProblem).find(Boolean) || null;
     const optionsValid = optionsHint === null;
@@ -1352,7 +1863,10 @@ function TestRun(props) {
         });
     }
 
-    // Fills the rows with the options of an earlier run, so the next run repeats them.
+    /**
+     * Fills the rows with the options of an earlier run, so the next run repeats them.
+     * @param opts {Option[]}
+     */
     function repeatOptions(opts) {
         setOptions(
             opts.map(function (opt) {
@@ -1361,6 +1875,11 @@ function TestRun(props) {
         );
     }
 
+    /**
+     * @param key {number}
+     * @param field {"name" | "value"}
+     * @param text {string}
+     */
     function editOption(key, field, text) {
         setOptions(function (opts) {
             return opts.map(function (opt) {
@@ -1369,8 +1888,11 @@ function TestRun(props) {
         });
     }
 
-    // Removes a row. The focus moves to the row that takes its place, or to the one before it when
-    // it was the last, or to the add button when no rows are left.
+    /**
+     * Removes a row. The focus moves to the row that takes its place, or to the one before it when
+     * it was the last, or to the add button when no rows are left.
+     * @param key {number}
+     */
     function removeOption(key) {
         const i = options.findIndex(function (opt) {
             return opt.key === key;
@@ -1406,6 +1928,8 @@ function TestRun(props) {
             });
         });
         dispatch({ type: "start", now: Date.now(), runId });
+        /** @type {{decl: unknown, module: unknown, version: string, runId: string, seed?: string,
+         *           options?: Option[]}} */
         const request = {
             decl: props.decl,
             module: props.module,
@@ -1420,6 +1944,7 @@ function TestRun(props) {
                 dispatch({ type: "started" });
                 loop(myGen);
             },
+            /** @param err {any} */
             function (err) {
                 if (gen.current !== myGen) return;
                 function refused() {
@@ -1436,14 +1961,17 @@ function TestRun(props) {
                     refused();
                     return;
                 }
-                rsRef.current
-                    .call("Errata.Widget.awaitOutput", {
+                callServer(
+                    "Errata.Widget.awaitOutput",
+                    {
                         decl: props.decl,
                         since: 0,
                         sinceResults: 0,
                         version: version,
                         phase: "",
-                    })
+                    },
+                    readReply,
+                )
                     .then(
                         function (res) {
                             return res.runId === runId;
@@ -1452,7 +1980,7 @@ function TestRun(props) {
                             return false;
                         },
                     )
-                    .then(function (started) {
+                    .then(function (/** @type {boolean} */ started) {
                         if (gen.current !== myGen) return;
                         if (!started) {
                             refused();
@@ -1475,18 +2003,20 @@ function TestRun(props) {
         // The run as it stands at the click, so a retry names the run the reader asked to stop even
         // when a reply has since pointed the widget at another run of the test.
         const runId = shownRun.current.runId;
+        /** @param failures {number} */
         function attempt(failures) {
             const request = { decl: props.decl, runId: runId };
-            rsRef.current.call("Errata.Widget.cancelTest", request).then(
+            callServer("Errata.Widget.cancelTest", request, readCancelResult).then(
                 function (res) {
                     if (gen.current !== myGen) return;
                     // A run that had finished by the time the cancel arrived keeps its outcome, so
                     // the widget goes on reading the run and shows what it reported.
-                    if (res && res.cancelled === false) return;
+                    if (!res.cancelled) return;
                     gen.current += 1;
                     setAwaitError(null);
                     dispatch({ type: "cancel" });
                 },
+                /** @param err {any} */
                 function (err) {
                     if (gen.current !== myGen) return;
                     if (failures < AWAIT_RETRIES) {
@@ -1505,7 +2035,7 @@ function TestRun(props) {
         attempt(0);
     }
 
-    const name = props.name || "test";
+    const name = props.name;
 
     // What to say about the file beside the button. That the result on show came from the file as
     // it was before a change is a state of the result, so it reads as the verdict does. That the
@@ -1649,7 +2179,7 @@ function TestRun(props) {
         fontFamily: monoFont,
     };
     const addOptionButton = e("button", {
-        ref: function (el) {
+        ref: /** @param el {HTMLButtonElement | null} */ function (el) {
             if (el && focusOptionKey.current === ADD_OPTION) {
                 focusOptionKey.current = null;
                 el.focus();
@@ -1682,7 +2212,9 @@ function TestRun(props) {
                       disabled: running,
                       title: "Seed for property tests; blank chooses one randomly",
                       "aria-invalid": !seedValid,
-                      onChange: function (ev) {
+                      onChange: /** @param ev {React.ChangeEvent<HTMLInputElement>} */ function (
+                          ev,
+                      ) {
                           setSeed(ev.target.value);
                       },
                       style: {
@@ -1700,7 +2232,9 @@ function TestRun(props) {
                       type: "checkbox",
                       checked: expandNamed,
                       title: "Show what each named result reported, rather than its verdict alone",
-                      onChange: function (ev) {
+                      onChange: /** @param ev {React.ChangeEvent<HTMLInputElement>} */ function (
+                          ev,
+                      ) {
                           setNamedResultsOpen(ev.target.checked);
                       },
                       style: { margin: 0 },
@@ -1727,7 +2261,7 @@ function TestRun(props) {
                       },
                       "--",
                       e("input", {
-                          ref: function (el) {
+                          ref: /** @param el {HTMLInputElement | null} */ function (el) {
                               if (el && focusOptionKey.current === opt.key) {
                                   focusOptionKey.current = null;
                                   el.focus();
@@ -1739,9 +2273,10 @@ function TestRun(props) {
                           disabled: running,
                           title: "Option name",
                           "aria-invalid": !nameValid,
-                          onChange: function (ev) {
-                              editOption(opt.key, "name", ev.target.value);
-                          },
+                          onChange:
+                              /** @param ev {React.ChangeEvent<HTMLInputElement>} */ function (ev) {
+                                  editOption(opt.key, "name", ev.target.value);
+                              },
                           style: {
                               ...optionField,
                               outline: nameValid ? undefined : invalidOutline,
@@ -1754,9 +2289,10 @@ function TestRun(props) {
                           placeholder: "value",
                           disabled: running,
                           title: "Option value; blank for a flag",
-                          onChange: function (ev) {
-                              editOption(opt.key, "value", ev.target.value);
-                          },
+                          onChange:
+                              /** @param ev {React.ChangeEvent<HTMLInputElement>} */ function (ev) {
+                                  editOption(opt.key, "value", ev.target.value);
+                              },
                           style: optionField,
                       }),
                       e("button", {
@@ -1892,6 +2428,7 @@ function TestRun(props) {
 
     // Dimmed badges after the status: text, and for the seed and the options, a click that fills
     // the settings with them.
+    /** @type {{text: string, title?: string, onClick?: () => void}[]} */
     const badges = [];
     if (timings && timings.startTime)
         badges.push({ text: "Start " + formatClock(timings.startTime) });
@@ -1911,7 +2448,7 @@ function TestRun(props) {
             },
         });
     }
-    if (outcome && outcome.options && outcome.options.length) {
+    if (outcome && outcome.options.length) {
         const optionsUsed = outcome.options;
         badges.push({
             text: "Options " + optionsCommandLine(optionsUsed),
@@ -2043,7 +2580,7 @@ function TestRun(props) {
                 "span",
                 {
                     className: "fr",
-                    onClick: function (ev) {
+                    onClick: /** @param ev {React.MouseEvent} */ function (ev) {
                         ev.preventDefault();
                     },
                 },
@@ -2052,6 +2589,14 @@ function TestRun(props) {
             ),
         ),
         settingsPopup,
-        open ? e("div", { className: "ml1" }, header, body) : null,
+        open
+            ? protocolError
+                ? e(
+                      "div",
+                      { className: "ml1", style: { color: errorColor } },
+                      "The widget could not read the server's reply: " + protocolError,
+                  )
+                : e("div", { className: "ml1" }, header, body)
+            : null,
     );
 }
