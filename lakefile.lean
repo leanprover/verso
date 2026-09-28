@@ -638,7 +638,7 @@ module_facet literate mod : System.FilePath := do
   let buildDir := ws.root.buildDir
   let litFile := mod.filePath (buildDir / "literate") "json"
   -- The setup locates the module's imports, which are in Lake's artifact cache when that is enabled
-  let setupFile := mod.filePath (buildDir / "literate") "setup.json"
+  let setupFile := mod.filePath (buildDir / "literate-setup") "json"
 
   let optArgs := leanOptionArgs mod
 
