@@ -42,6 +42,9 @@ OPTS may be:
 
   --suppress-namespaces FILE
     Suppress the showing of the whitespace-delimited list of namespaces in FILE
+
+  --setup FILE
+    Load imported modules from the artifacts listed in FILE, a Lake module setup
 "
 
 /--
@@ -623,8 +626,7 @@ private def collectItemImages (items : Array ModuleItem') : Array String :=
 
 end ImageCollection
 
-
-unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (mod : String) (leanOptions : Options) (out : IO.FS.Stream) : IO UInt32 := do
+unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (mod : String) (leanOptions : Options) (importArts : NameMap ImportArtifacts) (out : IO.FS.Stream) : IO UInt32 := do
   try
     initSearchPath (← findSysroot)
     let modName := mod.toName
@@ -642,7 +644,7 @@ unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (m
     let (headerStx, parserState, msgs) ← Parser.parseHeader ictx
     let imports := headerToImports headerStx
     enableInitializersExecution
-    let env ← Compat.importModules (extraImports.map ({module := ·}) ++ imports) {}
+    let env ← importModules (extraImports.map ({module := ·}) ++ imports) {} (loadExts := true) (arts := importArts)
     let pctx : Frontend.Context := {inputCtx := ictx}
 
     let opts := leanOptions.mergeBy (fun _ _ v => v) (maxHeartbeats.set {} 10000000)
@@ -697,6 +699,7 @@ structure Config where
   outFile : Option String := none
   extraImports : Array Name := #[]
   leanOptions : Options := {}
+  importArts : NameMap ImportArtifacts := {}
 
 /--
 Parses a `-Dname=value` flag into a Lean option, registering it in `opts`.
@@ -751,6 +754,12 @@ where
         go { cfg with suppressedNamespaces := cfg.suppressedNamespaces ++ nss' } more
       else
         throw <| .userError "No namespace file given after --suppress-namespaces"
+    | "--setup" :: more => do
+      if let file :: more := more then
+        let setup ← ModuleSetup.load file
+        go { cfg with importArts := setup.importArts } more
+      else
+        throw <| .userError "No setup file given after --setup"
     | "--import" :: more => do
       if let mod :: more := more then
         go { cfg with extraImports := cfg.extraImports.push mod.toName } more
@@ -774,16 +783,16 @@ where
 
 unsafe def main (args : List String) : IO UInt32 := do
   try
-    let {suppressedNamespaces, mod, outFile, extraImports, leanOptions} ← Config.fromArgs args
+    let {suppressedNamespaces, mod, outFile, extraImports, leanOptions, importArts} ← Config.fromArgs args
     if mod.isEmpty then throw <| .userError s!"No import module provided"
     match outFile with
     | none =>
-      go suppressedNamespaces extraImports mod leanOptions (← IO.getStdout)
+      go suppressedNamespaces extraImports mod leanOptions importArts (← IO.getStdout)
     | some outFile =>
       if let some p := (outFile : System.FilePath).parent then
         IO.FS.createDirAll p
       IO.FS.withFile outFile .write fun h =>
-        go suppressedNamespaces extraImports mod leanOptions (.ofHandle h)
+        go suppressedNamespaces extraImports mod leanOptions importArts (.ofHandle h)
   catch e =>
     IO.eprintln e
     IO.println helpText
