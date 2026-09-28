@@ -1,0 +1,47 @@
+# A package that uses Verso's Errata driver as its test driver.
+name = "app"
+testDriver = "verso/Errata.run"
+# Verso's clones of the git dependencies serve this workspace too, so that the modules built from
+# the shared Verso checkout see the same dependency paths from both.
+packagesDir = "../../../../.lake/packages"
+
+[[require]]
+name = "verso"
+path = "../../../.."
+
+# A dependency with tests of its own, selected as `dep/DepLib`.
+[[require]]
+name = "dep"
+path = "../dep"
+
+# Tests that are all safe.
+[[lean_lib]]
+name = "App"
+
+# Tests among which one is `unsafe`.
+[[lean_lib]]
+name = "AppUnsafe"
+
+# A root module with a test, beside a module that nothing reaches.
+[[lean_lib]]
+name = "AppStray"
+
+# A test that panics and passes anyway, beside one that does not panic.
+[[lean_lib]]
+name = "AppPanic"
+
+# Compile-time tests in a module that imports only the compile-time commands.
+[[lean_lib]]
+name = "AppCompileTime"
+
+# A legacy root that imports a module-system child, each with a test.
+[[lean_lib]]
+name = "AppMixed"
+
+# A test whose type has an `IsTest` instance only in its own module.
+[[lean_lib]]
+name = "AppLocalInstance"
+
+# A failing boolean test beside a module whose high-priority `IsTest Bool` instance passes anything.
+[[lean_lib]]
+name = "AppShadow"

@@ -1,0 +1,10 @@
+# A package that requires Verso without wiring its tests to `lake test`, so the Errata driver is
+# reached by its bare name.
+name = "app"
+# Verso's clones of the git dependencies serve this workspace too, so that the modules built from
+# the shared Verso checkout see the same dependency paths from both.
+packagesDir = "../../../../.lake/packages"
+
+[[require]]
+name = "verso"
+path = "../../../.."
