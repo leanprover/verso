@@ -351,15 +351,17 @@ Note: A document part (section/chapter/etc) consists of a header, followed by ze
 * A list
 :::::::
 
-open Lean Lean.Elab Lean.Doc.Syntax Verso.Doc.Elab PartElabM in
+open Lean Lean.Elab Verso.Doc.Elab PartElabM in
 /--
 Adds a finished part with the title {lit}`Built Part` as a sub-part of the root part. It is an
 example of a part command that builds a whole part.
 -/
-@[part_command Lean.Doc.Syntax.command]
+@[part_command Lean.Doc.Parser.Block.command]
 meta def builtPart : PartCommand
-  | stx@`(block|command{builtPart $args*}) => do
-    unless args.isEmpty do throwErrorAt stx "Expected no arguments"
+  | .command v => do
+    unless v.name.getId == `builtPart do throwUnsupportedSyntax
+    let stx ← getRef
+    unless v.args.isEmpty do throwErrorAt stx "Expected no arguments"
     let endPos := stx.getTailPos?.getD 0
     closePartsUntil 1 (stx.getPos?.getD 0)
     addPart <| .mk stx stx #[] "Built Part" none #[] #[] endPos
