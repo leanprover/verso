@@ -1,0 +1,10 @@
+base: total 21 errors 0
+edit 1 editText typing
+  state 1: reused 10 (47.6%) reusable 10 (47.6%) total 21 boundary reuse stopped errors 0
+  state 2: reused 10 (47.6%) reusable 10 (47.6%) total 21 boundary reuse stopped errors 0
+  state 3: reused 10 (47.6%) reusable 10 (47.6%) total 21 boundary reuse stopped errors 0
+  state 4: reused 10 (47.6%) reusable 10 (47.6%) total 21 boundary reuse stopped errors 0
+  state 5: reused 10 (47.6%) reusable 10 (47.6%) total 21 boundary reuse stopped errors 0
+  state 6: reused 10 (47.6%) reusable 10 (47.6%) total 21 boundary reuse stopped errors 0
+  reused 10 (47.6%) reusable 10 (47.6%) total 21 boundary reuse stopped errors 0
+cold: diagnostics match

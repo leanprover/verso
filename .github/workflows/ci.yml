@@ -70,6 +70,10 @@ jobs:
                   lake build
                   popd
 
+            - name: Build the reuse benchmark
+              run: |
+                  lake build verso-internal-reuse-bench verso-internal-edit-scripts
+
             - name: Check for orphaned modules
               run: |
                   # These are all the library modules plus the Errata self-tests, whose modules
@@ -78,7 +82,8 @@ jobs:
                   out="$(lake query VersoUtil:orphanMods Verso:orphanMods MultiVerso:orphanMods \
                     VersoSearch:orphanMods VersoBlog:orphanMods VersoManual:orphanMods \
                     VersoIlluminate:orphanMods VersoTutorial:orphanMods VersoLiterate:orphanMods \
-                    VersoLiterateCode:orphanMods Errata:orphanMods ErrataTests:orphanMods)"
+                    VersoLiterateCode:orphanMods VersoGen:orphanMods Errata:orphanMods \
+                    ErrataTests:orphanMods)"
                   if [ -n "$(printf '%s' "$out" | tr -d '[:space:]')" ]; then
                     echo "Found orphaned modules:"
                     echo "$out"
@@ -99,7 +104,7 @@ jobs:
                   failed=0
                   for root in VersoUtil Verso MultiVerso VersoSearch VersoBlog VersoManual \
                       VersoIlluminate VersoTutorial VersoServe VersoLiterate VersoLiterateCode \
-                      UsersGuide Errata; do
+                      VersoGen UsersGuide Errata; do
                       echo "::group::lake lint $root"
                       lake lint --builtin-lint --builtin-only "$root" || failed=1
                       echo "::endgroup::"

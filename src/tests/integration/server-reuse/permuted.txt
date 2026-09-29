@@ -1,0 +1,5 @@
+base: total 21 errors 0
+edit 1 two regions, permuted
+  state 1: reused 11 (52.4%) reusable 12 (57.1%) total 21 boundary reuse stopped errors 0
+  state 2: reused 0 (0.0%) reusable 0 (0.0%) total 21 boundary reuse stopped errors 0
+  reused 0 (0.0%) reusable 0 (0.0%) total 21 boundary reuse stopped errors 0

@@ -1,0 +1,5 @@
+base: total 21 errors 0
+edit 1 change a paragraph
+  reused 1 (4.8%) reusable 1 (4.8%) total 21 boundary reuse stopped errors 0
+edit 2 paste a copy of it before it
+  reused 2 (9.5%) reusable 2 (9.5%) total 21 boundary reuse stopped errors 0
