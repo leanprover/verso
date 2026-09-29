@@ -785,8 +785,8 @@ mutual
       asStringFn (chFn ':' false) >> ignoreFn (lookaheadFn (chFn ' '))
 
   partial def blockquote (ctxt : BlockCtxt) : ParserFn :=
-    atomicFn <| nodeFn ``blockquote <|
-      takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent >> chFn '>' >>
+    nodeFn ``blockquote <|
+      atomicFn (takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent >> chFn '>') >>
       withCurrentColumn fun c => blocks { ctxt with minIndent := c }
 
   partial def unorderedList (ctxt : BlockCtxt) : ParserFn :=
