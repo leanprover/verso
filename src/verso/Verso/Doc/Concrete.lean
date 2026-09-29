@@ -12,6 +12,7 @@ import Verso.Doc
 public import Verso.Doc.Elab
 public meta import Verso.Doc.Elab.Monad
 import Verso.Doc.Concrete.InlineString
+public import Verso.Doc.Concrete.Environment
 import Verso.Doc.Lsp
 
 namespace Verso.Doc.Concrete
@@ -64,15 +65,6 @@ meta partial def findGenreTm : Syntax → TermElabM Unit
 meta partial def findGenreCmd (genre : Syntax) : Command.CommandElabM Unit :=
   Command.runTermElabM fun _ => findGenreTm genre
 
-meta def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.State) : m Unit := do
-  for r in internalRefs st'.linkDefs st.linkRefs do
-    for stx in r.syntax do
-      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
-  for r in internalRefs st'.footnoteDefs st.footnoteRefs do
-    for stx in r.syntax do
-      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
-
-
 open PartElabM in
 /--
 All-at-once elaboration of verso document syntax to syntax denoting a verso `VersoDoc`. Implements
@@ -105,7 +97,6 @@ private meta def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array S
         | .error stx msg => logErrorAt stx msg
         | oops@(.internal _ _) => throw oops
       pure ()
-  saveRefs docElabState partElabState
 
   let finished := partElabState.partContext.toPartFrame.close endPos
 
@@ -279,20 +270,6 @@ where
       s
 
 /--
-As we elaborate a `#doc` command top-level-block by top-level-block, the Lean environment will
-be used to thread state between the separate top level blocks. These environment extensions contain
-the state that needs to exist across top-level-block parsing events.
--/
-public meta structure DocElabEnvironment where
-  genreSyntax : Term := ⟨.missing⟩
-  ctx : DocElabContext := ⟨.missing, mkConst ``Unit, .always, .none⟩
-  docState : DocElabM.State := { highlightDeduplicationTable := some {} }
-  partState : PartElabM.State := .init (.node .none nullKind #[]) (.node .none nullKind #[])
-deriving Inhabited
-
-public meta initialize docEnvironmentExt : EnvExtension DocElabEnvironment ← registerEnvExtension (pure {})
-
-/--
 The original parser for the `command` category, which is restored while elaborating a Verso block so
 that nested Lean code has the correct syntax.
 -/
@@ -317,10 +294,6 @@ private meta def runPartElabInEnv (act : PartElabM a) : Command.CommandElabM a :
   finally
     modifyEnv (categoryParserFnExtension.setState · versoCmdFn)
 
-private meta def saveRefsInEnv : Command.CommandElabM Unit := do
-  let versoEnv := docEnvironmentExt.getState (← getEnv)
-  saveRefs versoEnv.docState versoEnv.partState
-
 /-!
 When we do incremental parsing of `#doc` commands, we split the behaviors that are done all at once
 in `elabDoc` across three functions: the prelude in `startDoc`, the loop body in `runVersoBlock`,
@@ -343,13 +316,14 @@ private meta def startDoc (genreSyntax : Term) (title: StrLit) : Command.Command
 
 private meta def runVersoBlock (block : TSyntax `block) : Command.CommandElabM Unit := do
   runPartElabInEnv <| partCommand block
-  -- This calls pushInfoLeaf a quadratic number of times for a for a linear number of top-level
-  -- verso blocks, which should be harmless but may be inefficient. It may be desirable to tag
-  -- info leaves that have already been pushed to avoid pushing them again.
-  saveRefsInEnv
 
 open PartElabM in
-private meta def finishDoc : Command.CommandElabM Unit:= do
+/--
+Finishes the document: closes its parts, checks its links and footnotes, and defines the document
+constant. {name}`commandStart?` is the start of the current command, which is the document's last
+top-level block. It is absent when the document has no blocks.
+-/
+private meta def finishDoc (commandStart? : Option String.Pos.Raw := none) : Command.CommandElabM Unit:= do
   let endPos := (← getFileMap).source.rawEndPos
   runPartElabInEnv <| do closePartsUntil 0 endPos
 
@@ -360,6 +334,7 @@ private meta def finishDoc : Command.CommandElabM Unit:= do
   -- The `_root_` prefix ensures that the installed identifier will ignore any ambient namespaces
   let n := mkIdent (`_root_ ++ (← currentDocName))
   let doc ← Command.runTermElabM fun _ => finished.toVersoDoc versoEnv.genreSyntax versoEnv.ctx versoEnv.docState versoEnv.partState
+    (commandStart? := commandStart?)
 
   let ty ← ``(VersoDoc $versoEnv.genreSyntax)
   Command.elabCommand (← `(public def $n : $ty := $doc))
@@ -419,8 +394,10 @@ public meta def elabVersoBlock : Command.CommandElab
 @[command_elab addLastBlockCmd]
 public meta def elabVersoLastBlock : Command.CommandElab
   | `(addLastBlockCmd| $b:block) => do
+    let commandStart? := lastVersoEndPosExt.getState (← getEnv)
     updatePos b
-    runVersoBlock b
-    -- Finish up the document
-    finishDoc
+    -- Verso finishes the document even when its last block fails. An interrupt is rethrown, and then
+    -- Verso does not finish the document.
+    withLogging <| runVersoBlock b
+    finishDoc commandStart?
   | _ => throwUnsupportedSyntax

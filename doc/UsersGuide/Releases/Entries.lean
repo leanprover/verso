@@ -18,6 +18,7 @@ public import UsersGuide.Releases.Entries.FoldingRanges
 public import UsersGuide.Releases.Entries.FullPageSearch
 public import UsersGuide.Releases.Entries.InlineLeanInfoview
 public import UsersGuide.Releases.Entries.LegacyInlineRoles
+public import UsersGuide.Releases.Entries.LinkFootnoteResolution
 public import UsersGuide.Releases.Entries.LiterateHtmlKatex
 public import UsersGuide.Releases.Entries.LiterateProgramming
 public import UsersGuide.Releases.Entries.ManualMarginalia

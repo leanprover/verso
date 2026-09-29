@@ -159,17 +159,17 @@ public meta def _root_.Lean.Doc.Syntax.link.expand : InlineExpander
       match dest with
       | `(link_target| ( $url )) =>
         pure (↑ url)
-      | `(link_target| [ $ref ]) => do
+      | `(link_target| [ $labelStx ]) => do
         -- Round-trip through quote to get rid of source locations, preventing unwanted IDE info
-        addLinkRef ref
+        addLinkRef labelStx
       | _ => throwErrorAt dest "Couldn't parse link destination"
     ``(Inline.link #[$[$(← txt.mapM elabInline)],*] $url)
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Lean.Doc.Syntax.footnote]
 public meta def _root_.Lean.Doc.Syntax.link.footnote : InlineExpander
-  | `(inline| footnote( $name:str )) => do
-    ``(Inline.footnote $(quote name.getString) $(← addFootnoteRef name))
+  | `(inline| footnote( $labelStx:str )) => do
+    ``(Inline.footnote $(quote labelStx.getString) $(← addFootnoteRef labelStx))
   | _ => throwUnsupportedSyntax
 
 
@@ -181,9 +181,9 @@ public meta def _root_.Lean.Doc.Syntax.image.expand : InlineExpander
       match dest with
       | `(link_target| ( $url )) =>
         pure (↑ url)
-      | `(link_target| [ $ref ]) => do
+      | `(link_target| [ $labelStx ]) => do
         -- Round-trip through quote to get rid of source locations, preventing unwanted IDE info
-        addLinkRef ref
+        addLinkRef labelStx
       | _ => throwErrorAt dest "Couldn't parse link destination"
     ``(Inline.image $(quote altText) $url)
   | _ => throwUnsupportedSyntax
@@ -244,14 +244,22 @@ where
 
 @[part_command Lean.Doc.Syntax.footnote_ref]
 public meta partial def _root_.Lean.Doc.Syntax.footnote_ref.command : PartCommand
-  | `(block| [^ $name:str ]: $contents* ) =>
-    addFootnoteDef name =<< contents.mapM (withRefsAllowed .onlyIfDefined <| elabInline ·)
+  | `(block| [^ $labelStx:str ]: $contents* ) => do
+    let before := (← getThe DocElabM.State).footnoteRefs
+    let contents ← contents.mapM (elabInline ·)
+    -- The footnote uses in the contents are tracked so we can check for cycles when finishing the doc
+    let mut contentUses := #[]
+    for (label, uses) in (← getThe DocElabM.State).footnoteRefs do
+      let known := before[label]?.map (·.useSites.size) |>.getD 0
+      for use in uses.useSites.extract known do
+        contentUses := contentUses.push (label, use)
+    addFootnoteDef labelStx contents contentUses
   | _ => throwUnsupportedSyntax
 
 @[part_command Lean.Doc.Syntax.link_ref]
 public meta partial def _root_.Lean.Doc.Syntax.link_ref.command : PartCommand
-  | `(block| [ $name:str ]: $url:str ) =>
-    addLinkDef name url.getString
+  | `(block| [ $labelStx:str ]: $url:str ) =>
+    addLinkDef labelStx url.getString
   | _ => throwUnsupportedSyntax
 
 partial def PartElabM.State.close (endPos : String.Pos.Raw) (state : PartElabM.State) : Option PartElabM.State :=
