@@ -1,0 +1,18 @@
+part "Metadata"
+  metadata: { tag := "root", number := 1 }
+  blocks: 1
+  - para: Text in the root, with a [link](https://example.com) and a footnote.[^note]
+  part "First"
+    metadata: { tag := "first", number := 0 }
+    blocks: 1
+    - para: Text in first.
+    part "First Nested"
+      metadata: { tag := "", number := 2 }
+      blocks: 0
+  part "Second"
+    blocks: 1
+    - para: Text in second, which has no metadata.
+    part "Second Nested"
+      metadata: { tag := "second nested", number := 3 }
+      blocks: 1
+      - para: Text in second nested, with [another link](https://example.org).
