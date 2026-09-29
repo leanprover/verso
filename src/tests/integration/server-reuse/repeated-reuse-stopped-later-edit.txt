@@ -1,0 +1,5 @@
+base: total 21 errors 0
+edit 1 blank line after a directive
+  reused 2 (9.5%) reusable 10 (47.6%) total 21 boundary reuse stopped errors 0
+edit 2 again, then an edit at the end
+  reused 2 (9.5%) reusable 10 (47.6%) total 21 boundary reuse stopped errors 0

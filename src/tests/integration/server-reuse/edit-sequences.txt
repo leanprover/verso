@@ -1,0 +1,23 @@
+base: total 21 errors 0
+edit 1 end of a paragraph
+  reused 10 (47.6%) reusable 10 (47.6%) total 21 boundary reuse stopped errors 0
+edit 2 end of the last block
+  reused 20 (95.2%) reusable 20 (95.2%) total 21 boundary reuse stopped errors 0
+edit 3 in a directive
+  reused 2 (9.5%) reusable 3 (14.3%) total 21 boundary reuse stopped errors 0
+edit 4 two regions, late then early
+  reused 1 (4.8%) reusable 1 (4.8%) total 21 boundary reuse stopped errors 0
+edit 5 new block after a paragraph
+  reused 2 (9.5%) reusable 2 (9.5%) total 21 boundary reuse stopped errors 0
+edit 6 new block in a directive
+  reused 3 (13.6%) reusable 5 (22.7%) total 22 boundary reuse stopped errors 0
+edit 7 two regions, early then late
+  reused 0 (0.0%) reusable 0 (0.0%) total 23 boundary reuse stopped errors 0
+edit 8 blank line between blocks
+  reused 3 (13.0%) reusable 12 (52.2%) total 23 boundary reuse stopped errors 0
+edit 9 new block at the end
+  reused 22 (95.7%) reusable 22 (95.7%) total 23 boundary reuse stopped errors 0
+edit 10 in a list item
+  reused 13 (54.2%) reusable 14 (58.3%) total 24 boundary reuse stopped errors 0
+edit 11 end of a paragraph again
+  reused 12 (50.0%) reusable 12 (50.0%) total 24 boundary reuse stopped errors 0

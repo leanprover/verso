@@ -1,0 +1,11 @@
+base: total 55 errors 0
+edit 1 removeInline garbage
+  reused 18 (32.7%) reusable 21 (38.2%) total 55 boundary reuse stopped errors 0
+edit 2 editText garbage
+  reused 18 (32.7%) reusable 23 (41.8%) total 55 boundary reuse stopped errors 0
+edit 3 removeInline garbage
+  reused 30 (54.5%) reusable 30 (54.5%) total 55 boundary reuse stopped errors 0
+edit 4 insertInline garbage
+  reused 33 (60.0%) reusable 36 (65.5%) total 55 boundary reuse stopped errors 0
+edit 5 wrap garbage
+  reused 33 (60.0%) reusable 39 (70.9%) total 55 boundary reuse stopped errors 0

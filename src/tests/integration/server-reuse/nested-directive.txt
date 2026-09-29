@@ -1,0 +1,3 @@
+base: total 21 errors 0
+edit 1 editText wholeHunks
+  reused 2 (9.5%) reusable 3 (14.3%) total 21 boundary reuse stopped errors 0
