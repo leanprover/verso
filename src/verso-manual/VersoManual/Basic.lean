@@ -429,7 +429,7 @@ def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : Inte
   let mut numPart : Option Nat := none
   repeat
     let attempt := tagStr strPart numPart
-    if (← get).tags.contains  attempt then
+    if (← get).tags.contains (Tag.internal attempt) then
       numPart := some <| numPart.map (· + 1) |>.getD 0
     else break
   let tag := tagStr strPart numPart

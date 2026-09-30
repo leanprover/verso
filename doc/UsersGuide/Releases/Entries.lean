@@ -12,6 +12,7 @@ public import UsersGuide.Releases.Entries.DevelopmentServer
 public import UsersGuide.Releases.Entries.Diagrams
 public import UsersGuide.Releases.Entries.DocSourceRanges
 public import UsersGuide.Releases.Entries.DocstringLabeledGroups
+public import UsersGuide.Releases.Entries.DuplicateHeadingTags
 public import UsersGuide.Releases.Entries.ExtensionDescriptorVisibility
 public import UsersGuide.Releases.Entries.ExtraStep
 public import UsersGuide.Releases.Entries.FoldingRanges
