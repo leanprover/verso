@@ -76,6 +76,23 @@ def markdownPartRangesValid (input : String) : Elab.TermElabM Bool := do
     let (_, _, part) ← addParts.run ⟨Syntax.node .none identKind #[], mkConst ``Manual, .always, .none⟩ default default
     return part.partContext.priorParts.all partRangesValid
 
+open PartElabM in
+/--
+Adds a Markdown header while `currentHeaderLevels` lists one Markdown section. The root part is the
+only part under construction, so closing that section fails.
+-/
+def closeMarkdownSectionAtRoot : Elab.TermElabM Unit := do
+  let some parsed := MD4Lean.parse "# Header"
+    | throwError m!"Couldn't parse markdown"
+  let addParts : PartElabM Unit := do
+    for block in parsed.blocks do
+      discard <| addPartFromMarkdown block (currentHeaderLevels := [1])
+  discard <| addParts.run ⟨Syntax.node .none identKind #[], mkConst ``Manual, .always, .none⟩ default default
+
+/-- error: Failed to close verso part corresponding to markdown section: no parts left -/
+#test_msgs in
+#eval closeMarkdownSectionAtRoot
+
 /-- info: true -/
 #test_msgs in
 #eval markdownPartRangesValid r#"
