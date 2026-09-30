@@ -69,17 +69,14 @@ private def printSuppressed (suppressed depth : Nat) : IO Unit := do
     IO.println s!"{"".pushn ' ' (2 * depth + 4)}(... and {suppressed} more passed)"
 
 /--
-Prints a human-readable report and returns the number of failures. Failures and errors are printed
-at every verbosity. {name}`Verbosity.quiet` adds passing tests, printing at most a fixed number of
-lines per test, the test's own and its named results' at every depth, and summarizing the remainder.
-{name}`Verbosity.verbose` shows all results. {name}`Verbosity.superVerbose` also shows every test's
-docstring.
+Prints the human-readable report of one or more whole tests' results. Failures and errors are
+printed at every verbosity. {name}`Verbosity.quiet` adds passing tests, printing at most a fixed
+number of lines per test, the test's own and its named results' at every depth, and summarizing the
+remainder. {name}`Verbosity.verbose` shows all results. {name}`Verbosity.superVerbose` also shows
+every test's docstring.
 -/
-def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
+def printHumanResults (verbosity : Verbosity) (results : Array Result) : IO Unit := do
   let cap := 50
-  let mut passed := 0
-  let mut failed := 0
-  let mut errors := 0
   let mut curKey : Option (String × String) := none
   let mut shown := 0
   let mut more := 0
@@ -87,10 +84,6 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
   -- The printed results that enclose the current position, outermost first.
   let mut context : Array (Array String) := #[]
   for r in results do
-    match r.status with
-    | .pass => passed := passed + 1
-    | .fail _ => failed := failed + 1
-    | .error _ => errors := errors + 1
     -- Results of one test are contiguous; truncation is per test (its data-driven sub-results).
     let key := (r.moduleTarget, r.test)
     if curKey != some key then
@@ -120,8 +113,50 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
           context := context.push r.resultPath
           shown := shown + 1
   printSuppressed more moreDepth
-  IO.println s!"{passed} passed, {failed} failed, {errors} errors"
-  return failed + errors
+  (← IO.getStdout).flush
+
+/-- The number of results with each status. -/
+structure Tally where
+  /-- The number of passes. -/
+  passes : Nat
+  /-- The number of failures. -/
+  failures : Nat
+  /-- The number of errors. -/
+  errors : Nat
+
+/-- Counts the results with each status. -/
+def tally (results : Array Result) : Tally where
+  passes := results.countP (·.status matches .pass)
+  failures := results.countP (·.status matches .fail _)
+  errors := results.countP (·.status matches .error _)
+
+private theorem tally_total (results : Array Result) :
+    let t := tally results
+    t.passes + t.failures + t.errors = results.size := by
+  let ⟨l⟩ := results
+  simp only [tally, List.countP_toArray, List.size_toArray]
+  induction l with
+  | nil => simp
+  | cons r rs ih =>
+    cases h : r.status <;> grind
+
+/-- The number of failures and errors. -/
+def Tally.failureCount (t : Tally) : Nat :=
+  t.failures + t.errors
+
+/-- Prints the number of passes, failures, and errors among the results. -/
+def printHumanTally (results : Array Result) : IO Unit := do
+  let t := tally results
+  IO.println s!"{t.passes} passed, {t.failures} failed, {t.errors} errors"
+
+/--
+Prints a human-readable report of the results and their tally, and returns the number of failures
+and errors.
+-/
+def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
+  printHumanResults verbosity results
+  printHumanTally results
+  return (tally results).failureCount
 
 /--
 Replaces the forbidden characters in XML 1.0 with {lit}`U+FFFD`, the canonical replacement
