@@ -110,13 +110,11 @@ public def inlineSyntaxToString (env : Environment) (inlines : Syntax) : String 
     if let `<low| ~(.node _ _ args)> := inlines then
       inlinesToString env args
     else
-      dbg_trace "didn't understand inline sequence {inlines} for string"
       "<missing>"
 
 public def headerStxToString (env : Environment) : Syntax → String
   | `(block|header($_){$inlines*}) => inlinesToString env inlines
-  | headerStx => dbg_trace "didn't understand {headerStx} for string"
-    "<missing>"
+  | _ => "<missing>"
 
 /--
 Specifies the elaboration behavior of inline references in Verso.
@@ -172,6 +170,11 @@ public structure PartElabM.State where
   /-- The footnote uses in each footnote's contents, by the footnote's label. -/
   footnoteUses : HashMap String (Array (String × Syntax)) := {}
   deferredBlocks : Array (Name × Term) := #[]
+  /--
+  Whether the top-level block being elaborated contains {lean}`Syntax.missing`, which marks where
+  its parser stopped at a parse error. Such a block is partial syntax.
+  -/
+  blockHasMissing : Bool := false
 deriving Inhabited
 
 public def PartElabM.State.init (rangeSyntax : Syntax) (selectionSyntax : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
@@ -587,29 +590,23 @@ in turning a parsed verso doc into syntax.
 
 It also reports the document's undefined and unused links and footnotes, and compiles the document's
 blocks.
-
-{name}`commandStart?` is the start of the command that finishes the document. It is used when the
-command's syntax has no source range.
 -/
 public def FinishedPart.toVersoDoc
     (genreSyntax : Term)
     (finished : FinishedPart)
     (ctx : DocElabContext)
     (docElabState : DocElabM.State)
-    (partElabState : PartElabM.State)
-    (commandStart? : Option String.Pos.Raw := none) :
+    (partElabState : PartElabM.State) :
     TermElabM Term := do
 
   -- Lean suppresses the elaboration errors of a command with a parse error. Messages about syntax
   -- outside the current command are logged with this suppression turned off. This way, a parse
   -- error in the last block of a `#doc` document leaves the messages about earlier blocks visible.
-  -- When the command's syntax has no source range, `commandStart?` gives its start.
   let cmdRange? := (← getRef).getRange?
   for (stx, severity, msg) in checkLinksAndFootnotes docElabState partElabState do
-    let outsideCommand := match cmdRange?, commandStart?, stx.getPos? with
-      | some r, _, some pos => !(r.start ≤ pos && pos ≤ r.stop)
-      | none, some start, some pos => pos < start
-      | _, _, _ => false
+    let outsideCommand := match cmdRange?, stx.getPos? with
+      | some r, some pos => !(r.start ≤ pos && pos ≤ r.stop)
+      | _, _ => false
     if outsideCommand then
       withTheReader Core.Context ({ · with suppressElabErrors := false }) <|
         logAt stx msg severity
