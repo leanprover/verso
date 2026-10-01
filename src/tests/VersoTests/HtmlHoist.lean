@@ -54,11 +54,11 @@ private def note (label : String) : Html :=
 #test_guard compact (hoist "margin" {{"text without a barrier"}}) ==
   "text without a barrier"
 
-#test_guard compact (.tag "span" #[
+#test_guard compact (.element "span" #[
   (generatedWrapperAttr, ""),
   (hoistAttr, "margin"),
   ("class", "kept")
-] (.text true "text")) ==
+] (.text "text")) ==
   "<span class=\"kept\">text</span>"
 
 #test_guard compact (barrier "margin" false {{<div>{{note "custom"}}</div>}}) ==
@@ -128,14 +128,14 @@ private def futureNote (label : String) : Html :=
 }})) ==
   "<span data-verso-hoisted=\"before\">first</span><div></div><span data-verso-hoisted=\"after\">second</span>"
 
-#test_guard compact (.tag "div" #[
+#test_guard compact (.element "div" #[
   (hoistAttr, "none"),
   (barrierAttr, "none"),
   (barrierBeforeAttr, "none"),
   (noBarrierAttr, "none"),
   (suppressAttr, "none"),
   (suppressibleAttr, "none")
-] (.text true "clean")) == "<div>clean</div>"
+] (.text "clean")) == "<div>clean</div>"
 
 private def titleWithMarginalia : Html :=
   {{"Title"{{marker "1"}}{{note "title note"}}}}
@@ -208,8 +208,8 @@ where
     let attrs ← sizedArrayOf do return (← arbitrary, ← arbitrary)
     frequency (pure contents) [
       (2, pure contents),
-      (2, pure <| .tag (← arbitrary) attrs contents),
-      (1, pure <| .tag "table" attrs contents)
+      (2, pure <| .element (← arbitrary) attrs contents),
+      (1, pure <| .element "table" attrs contents)
     ]
 
 instance : ArbitraryFueled HoistCase where

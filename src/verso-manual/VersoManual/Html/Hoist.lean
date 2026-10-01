@@ -66,16 +66,16 @@ is passed to {name}`f`.
 def mapRootTags
     (f : (name : String) → (attrs : Array (String × String)) → (contents : Output.Html) → Output.Html) :
     Output.Html → Output.Html
-  | .tag name attrs contents => f name attrs contents
+  | .element name attrs contents => f name attrs contents
   | .seq contents => .seq (contents.map (mapRootTags f))
-  | html@(.text ..) => f "span" #[(generatedWrapperAttr, "")] html
+  | html@(.text _) | html@(.raw _) => f "span" #[(generatedWrapperAttr, "")] html
 
 def addTokenAttribute (attr kind : String) : Output.Html → Output.Html :=
   mapRootTags fun name attrs contents =>
     let old := attrTokens attr attrs
     let kinds := if kind ∈ old then old else old.push kind
     let value := String.intercalate " " kinds.toList
-    .tag name (attrs.filter (·.1 != attr) |>.push (attr, value)) contents
+    .element name (attrs.filter (·.1 != attr) |>.push (attr, value)) contents
 
 /--
 Marks the root HTML nodes as auxiliary content that should be moved outside an enclosing barrier
@@ -141,10 +141,10 @@ def effectiveBarriers
 
 partial def rewrite (html : Output.Html) : ReaderT (RewriteContext σ) (ST σ) Output.Html := do
   match html with
-  | .text .. => pure html
+  | .text _ | .raw _ => pure html
   | .seq contents =>
     return .seq (← contents.mapM rewrite)
-  | .tag name attrs contents =>
+  | .element name attrs contents =>
     let context ← read
     let hoistKinds := attrTokens hoistAttr attrs
     let suppressibleKinds := attrTokens suppressibleAttr attrs
@@ -162,9 +162,9 @@ where
   markHoisted (direction : Direction) : Output.Html → Output.Html :=
     mapRootTags fun name attrs contents =>
       if attrs.any fun (attr, _) => attr == generatedWrapperAttr || attr == hoistedAttr then
-        .tag name attrs contents
+        .element name attrs contents
       else
-        .tag name (attrs.push (hoistedAttr, direction.attrValue)) contents
+        .element name (attrs.push (hoistedAttr, direction.attrValue)) contents
   rewriteTag (name : String) (attrs : Array (String × String)) (contents : Output.Html) := do
     let context ← read
     let suppressed := attrTokens suppressAttr attrs
@@ -185,7 +185,7 @@ where
         }
         pure (some (beforeDestination, afterDestination))
     let contents' ← withReader (fun _ => innerContext) (rewrite contents)
-    let out := Output.Html.tag name attrs contents'
+    let out := .element name attrs contents'
     let some (beforeDestination, afterDestination) := destinations? | return out
     let before ← beforeDestination.get
     let after ← afterDestination.get
@@ -193,13 +193,15 @@ where
     return .seq (before ++ #[out] ++ after)
 
 def cleanup (html : Output.Html) : Output.Html :=
-  html.visitM (m := Id) (tag := fun name attrs contents => do
-    let generatedWrapper := attrs.any (·.1 == generatedWrapperAttr)
-    let attrs := attrs.filter fun (attr, _) => attr ∉ rewriteAttributes
-    if name == "span" && generatedWrapper && attrs.isEmpty then
-      pure (some contents)
-    else
-      pure (some (.tag name attrs contents)))
+  html.rewritePost fun
+    | .element name attrs contents =>
+      let generatedWrapper := attrs.any (·.1 == generatedWrapperAttr)
+      let attrs := attrs.filter fun (attr, _) => attr ∉ rewriteAttributes
+      if name == "span" && generatedWrapper && attrs.isEmpty then
+        contents
+      else
+        .element name attrs contents
+    | h => h
 
 /--
 Rewrites HTML to hoist content into a context where it can be used. This is used to lift marginal
