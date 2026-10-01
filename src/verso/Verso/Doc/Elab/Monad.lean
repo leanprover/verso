@@ -37,18 +37,6 @@ initialize registerTraceClass `Elab.Verso
 initialize registerTraceClass `Elab.Verso.part
 initialize registerTraceClass `Elab.Verso.block
 
-class HasLink (name : String) (doc : Name) where
-  url : String
-
-class HasNote (name : String) (doc : Name) (genre : Genre) where
-  contents : Array (Inline genre)
-
-private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSyntax `str) : m Term := do
-  ``(HasLink.url $(quote ref.getString) $(quote docName))
-
-private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName : Name) (ref : TSyntax `str) : m Term :=
-  ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre))
-
 
 -- For use in IDE features and previews and such
 @[inline_to_string Lean.Doc.Syntax.text]
@@ -181,6 +169,8 @@ public structure PartElabM.State where
   partContext : PartContext
   linkDefs : HashMap String (DocDef String) := {}
   footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
+  /-- The footnote uses in each footnote's contents, by the footnote's label. -/
+  footnoteUses : HashMap String (Array (String × Syntax)) := {}
   deferredBlocks : Array (Name × Term) := #[]
 deriving Inhabited
 
@@ -337,11 +327,11 @@ public partial def PartElabM.closePartsUntil (outer : Nat) (endPos : String.Pos.
     | none => pure ()
 
 /--
-Adds a block (syntax denoting a function {lit}`Block g`)to the elaboration state.
+Adds a block (syntax denoting a {lit}`Block g`) to the elaboration state.
 
-If some {name}`blockInternalDocReconstructionPlaceholder` is given to represent unresolved free
-references to a {lean}`DocReconstruction` object within this block, captures those references with a
-function argument.
+The block becomes a function of document reconstruction data. The function's parameter is
+{name}`blockInternalDocReconstructionPlaceholder` if it is given, and otherwise the current
+{name}`DocElabContext`'s {name}`DocElabContext.docReconstructionPlaceholder`.
 -/
 public def PartElabM.addBlock (block : TSyntax `term) (blockInternalDocReconstructionPlaceholder : Option Ident := .none)  : PartElabM Unit := do
   -- The syntax denoting the top-level Part structure will refer to this block by name, passing it
@@ -354,7 +344,7 @@ public def PartElabM.addBlock (block : TSyntax `term) (blockInternalDocReconstru
   -- If the internal block includes a doc reconstruction placeholder, it should be different from
   -- the one in the current `DocElabContext` to maintain good hygiene.
   let blockDefSyntax ← match blockInternalDocReconstructionPlaceholder with
-    | .none => `(fun _ => $block)
+    | .none => `(fun $docReconstructionPlaceholder => $block)
     | .some name => `(fun $name => $block)
 
   modifyThe PartElabM.State fun st =>
@@ -366,87 +356,197 @@ public def PartElabM.addBlock (block : TSyntax `term) (blockInternalDocReconstru
 public def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
   { st with partContext.priorParts := st.partContext.priorParts.push finished }
 
-public def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Unit := do
-  let strName := refName.getString
-  let docName ← currentDocName
-  match (← getThe State).linkDefs[strName]? with
+/--
+The start of the document under construction. It identifies the document within its file.
+-/
+public def PartElabM.State.documentPos? (state : PartElabM.State) : Option String.Pos.Raw :=
+  let root := state.partContext.parents[0]?.getD state.partContext.toPartFrame
+  root.rangeSyntax.getPos?
+
+/--
+Records a definition or use of a link or footnote in the info tree, for editor features.
+-/
+def pushDocRefInfo [Monad m] [MonadInfoTree m]
+    (state : PartElabM.State) (kind : DocRefKind) (labelStx : TSyntax `str) (isDef : Bool) : m Unit :=
+  let info : DocRefInfo :=
+    { kind, label := labelStx.getString, documentPos? := state.documentPos?, isDef }
+  pushInfoLeaf <| .ofCustomInfo { stx := labelStx, value := Dynamic.mk info }
+
+/--
+Describes the location of the definition {name}`d`. The file name is included when it differs from
+the current file.
+-/
+def describeDefLocation {α : Type} (d : DocDef α) : PartElabM MessageData := do
+  let lineCol := m!"line {d.position.line}, column {d.position.column}"
+  if d.fileName == (← getFileName) then
+    return lineCol
+  else
+    return m!"{lineCol} of {d.fileName}"
+
+/-- A definition of the label {name}`labelStx` with the value {name}`val`, in the current file. -/
+def PartElabM.mkDocDef {α : Type} (labelStx : TSyntax `str) (val : α) : PartElabM (DocDef α) := do
+  let position := (← getFileMap).toPosition (labelStx.raw.getPos?.getD 0)
+  return { labelStx, val, fileName := ← getFileName, position }
+
+/--
+Records the definition of the link whose label is {name}`labelStx`. A second definition of the same
+label in one document is an error.
+-/
+public def PartElabM.addLinkDef (labelStx : TSyntax `str) (url : String) : PartElabM Unit := do
+  let label := labelStx.getString
+  match (← getThe State).linkDefs[label]? with
   | none =>
-    let t := mkApp2 (.const ``HasLink []) (toExpr strName) (toExpr docName)
-    let n ← mkFreshUserName (docName ++ `inst.link ++ strName.toName)
-    addAndCompile <| .defnDecl {
-      name := n,
-      levelParams := [],
-      type := t,
-      value := mkApp3 (.const ``HasLink.mk []) (toExpr strName) (toExpr docName) (toExpr url),
-      hints := .abbrev,
-      safety := .safe
-    }
-    setReducibilityStatus n .implicitReducible
-    Meta.addInstance n AttributeKind.global (eval_prio default)
-    modifyThe State fun st => {st with linkDefs := st.linkDefs.insert strName ⟨refName, url⟩}
+    let d ← mkDocDef labelStx url
+    modifyThe State fun st => {st with linkDefs := st.linkDefs.insert label d}
+    pushDocRefInfo (← getThe State) .link labelStx (isDef := true)
+  | some prev =>
+    throwErrorAt labelStx
+      m!"Duplicate definition of link label [{label}]. It is already defined at {← describeDefLocation prev}, with the URL '{prev.val}'. This definition has the URL '{url}'."
 
-  | some ⟨_, url'⟩ =>
-    throwErrorAt refName "Already defined link [{strName}] as '{url'}'"
-
-public def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
-  let strName := refName.getString
+/--
+Records a use of the link whose label is {name}`labelStx`, and returns a term for its URL.
+-/
+public def DocElabM.addLinkRef (labelStx : TSyntax `str) : DocElabM (TSyntax `term) := do
+  let label := labelStx.getString
   match (← readThe DocElabContext).refsAllowed with
     | .always => pure ()
     | .onlyIfDefined =>
-      if !(← readThe PartElabM.State).linkDefs.contains strName then
-        throwErrorAt refName m!"Link reference [{strName}] does not have a definition"
+      if !(← readThe PartElabM.State).linkDefs.contains label then
+        throwErrorAt labelStx m!"Link reference [{label}] does not have a definition"
+  let .some docReconst := (← readThe DocElabContext).docReconstructionPlaceholder
+    | throwErrorAt labelStx m!"The link label [{label}] can't be used here, because this text is elaborated outside of a document"
 
-  match (← getThe State).linkRefs[strName]? with
+  modifyThe State fun st =>
+    {st with linkRefs := st.linkRefs.insert label ((st.linkRefs.getD label {}).add labelStx)}
+  pushDocRefInfo (← readThe PartElabM.State) .link labelStx (isDef := false)
+  ``(DocReconstruction.linkUrl $docReconst $(quote label))
+
+/--
+Elaborates a footnote's contents to check them, and reports their errors. Returns {lean}`true` when
+the contents have no errors. The elaborated term is discarded, and the info tree is left unchanged.
+-/
+def PartElabM.checkFootnoteContents (content : Array (TSyntax `term)) : PartElabM Bool := do
+  let ctx ← readThe DocElabContext
+  let .some docReconst := ctx.docReconstructionPlaceholder
+    | throwError "No doc reconstruction placeholder available"
+  let genre : Term := ⟨ctx.genreSyntax⟩
+  let stx ← ``(fun ($docReconst : DocReconstruction $genre) => (#[$content,*] : Array (Doc.Inline $genre)))
+  let act : TermElabM Bool := withEnableInfoTree false do
+    try
+      let e ← Term.elabTerm stx none
+      Term.synthesizeSyntheticMVarsNoPostponing
+      return !(← instantiateMVars e).hasSyntheticSorry
+    catch ex =>
+      logException ex
+      return false
+  act
+
+/--
+Records the definition of the footnote whose label is {name}`labelStx`, with the contents
+{name}`content`, which are terms that denote inlines. A second definition of the same label in one
+document is an error.
+
+The contents are checked here, so that their errors appear at the definition. Contents with errors
+are recorded as empty.
+
+{name}`contentUses` are the footnote uses in the contents, each paired with its label.
+-/
+public def PartElabM.addFootnoteDef (labelStx : TSyntax `str) (content : Array (TSyntax `term))
+    (contentUses : Array (String × Syntax) := #[]) : PartElabM Unit := do
+  let label := labelStx.getString
+  match (← getThe State).footnoteDefs[label]? with
   | none =>
-    modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨#[refName]⟩}
-    linkRefName (← currentDocName) refName
-  | some ⟨uses⟩ =>
-    modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨uses.push refName⟩}
-    linkRefName (← currentDocName) refName
-
-
-public def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax `term)) : PartElabM Unit := do
-  let strName := refName.getString
-  let docName ← currentDocName
-  let genre := (← readThe DocElabContext).genre
-  match (← getThe State).footnoteDefs[strName]? with
-  | none =>
-    let t := mkApp3 (.const ``HasNote []) (toExpr strName) (toExpr docName) genre
-    let n ← mkFreshUserName (docName ++ `inst.note ++ strName.toName)
-    let inlTy := Expr.app (.const ``Doc.Inline []) genre
-    let inls ← Term.elabTerm (← `(#[$content,*])) (some (.app (.const ``Array [0]) inlTy))
-    let inls ← instantiateMVars inls
-    addAndCompile <| .defnDecl {
-      name := n,
-      levelParams := [],
-      type := t,
-      value := mkApp4 (.const ``HasNote.mk []) (toExpr strName) (toExpr docName) genre inls,
-      hints := .abbrev,
-      safety := .safe
+    let content := if ← checkFootnoteContents content then content else #[]
+    let d ← mkDocDef labelStx content
+    modifyThe State fun st => { st with
+      footnoteDefs := st.footnoteDefs.insert label d
+      footnoteUses := st.footnoteUses.insert label contentUses
     }
-    setReducibilityStatus n .implicitReducible
-    Meta.addInstance n AttributeKind.global (eval_prio default)
-    modifyThe State fun st => {st with footnoteDefs := st.footnoteDefs.insert strName ⟨refName, content⟩}
-  | some _ =>
-    throwErrorAt refName m!"Already defined footnote [^{strName}]"
+    pushDocRefInfo (← getThe State) .footnote labelStx (isDef := true)
+  | some prev =>
+    throwErrorAt labelStx
+      m!"Duplicate definition of footnote label [^{label}]. It is already defined at {← describeDefLocation prev}."
 
-public def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
-  let strName := refName.getString
-  let genre := (← readThe DocElabContext).genreSyntax
+/--
+Records a use of the footnote whose label is {name}`labelStx`, and returns a term for its contents.
+-/
+public def DocElabM.addFootnoteRef (labelStx : TSyntax `str) : DocElabM (TSyntax `term) := do
+  let label := labelStx.getString
   match (← readThe DocElabContext).refsAllowed with
     | .always => pure ()
     | .onlyIfDefined =>
-      if !(← readThe PartElabM.State).footnoteDefs.contains strName then
-        throwErrorAt refName m!"Footnote reference [^{strName}] does not have a definition"
+      if !(← readThe PartElabM.State).footnoteDefs.contains label then
+        throwErrorAt labelStx m!"Footnote reference [^{label}] does not have a definition"
+  let .some docReconst := (← readThe DocElabContext).docReconstructionPlaceholder
+    | throwErrorAt labelStx m!"The footnote label [^{label}] can't be used here, because this text is elaborated outside of a document"
 
-  match (← getThe State).footnoteRefs[strName]? with
-  | none =>
-    modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}
-    footnoteRefName ⟨genre⟩ (← currentDocName) refName
-  | some ⟨uses⟩ =>
-    modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨uses.push refName⟩}
-    footnoteRefName ⟨genre⟩ (← currentDocName) refName
+  modifyThe State fun st =>
+    {st with footnoteRefs := st.footnoteRefs.insert label ((st.footnoteRefs.getD label {}).add labelStx)}
+  pushDocRefInfo (← readThe PartElabM.State) .footnote labelStx (isDef := false)
+  ``(DocReconstruction.footnoteContents $docReconst $(quote label))
 
+/--
+Orders the labels of a document's footnotes so that each footnote comes after the footnotes that its
+contents use. Also returns each use that makes a footnote's contents use the footnote itself,
+directly or through other footnotes. Each of these uses is paired with its label and with the labels
+of the other footnotes in the cycle, in the order of the cycle.
+-/
+public partial def footnoteOrder (partElabState : PartElabM.State) :
+    Array String × Array (String × Array String × Syntax) :=
+  let labels := partElabState.footnoteDefs.toArray.mergeSort (fun (_, d1) (_, d2) =>
+    d1.labelStx.raw.getPos?.getD 0 ≤ d2.labelStx.raw.getPos?.getD 0) |>.map (·.1)
+  let (_, _, order, cycles) := labels.foldl (init := ({}, #[], #[], #[])) fun st label => visit label st
+  (order, cycles)
+where
+  -- `active` holds the labels of the footnotes being visited, from the outermost to the innermost.
+  visit (label : String) :
+      HashSet String × Array String × Array String × Array (String × Array String × Syntax) →
+      HashSet String × Array String × Array String × Array (String × Array String × Syntax)
+    | (done, active, order, cycles) =>
+      if done.contains label then (done, active, order, cycles) else
+      let st := (partElabState.footnoteUses.getD label #[]).foldl (init := (done, active.push label, order, cycles))
+        fun (done, active, order, cycles) (used, useStx) =>
+          if !partElabState.footnoteDefs.contains used then (done, active, order, cycles)
+          else match active.idxOf? used with
+            | some i => (done, active, order, cycles.push (used, active.extract (i + 1) active.size, useStx))
+            | none => visit used (done, active, order, cycles)
+      let (done, active, order, cycles) := st
+      (done.insert label, active.pop, order.push label, cycles)
+
+/--
+Compares a document's link and footnote uses with its definitions. Each use without a definition
+results in an error, and each definition without a use results in a warning. Cyclic footnotes result
+in an error as well. The messages are in source order.
+-/
+public def checkLinksAndFootnotes (docElabState : DocElabM.State) (partElabState : PartElabM.State) :
+    Array (Syntax × MessageSeverity × MessageData) := Id.run do
+  let mut msgs := #[]
+  for (label, uses) in docElabState.footnoteRefs do
+    if !partElabState.footnoteDefs.contains label then
+      for use in uses.useSites do
+        msgs := msgs.push (use, .error, m!"No definition for footnote [^{label}]")
+  for (label, d) in partElabState.footnoteDefs do
+    if !docElabState.footnoteRefs.contains label then
+      msgs := msgs.push (d.labelStx.raw, .warning, m!"Unused footnote [^{label}]")
+  for (label, uses) in docElabState.linkRefs do
+    if !partElabState.linkDefs.contains label then
+      for use in uses.useSites do
+        msgs := msgs.push (use, .error, m!"No definition for link [{label}]")
+  for (label, d) in partElabState.linkDefs do
+    if !docElabState.linkRefs.contains label then
+      msgs := msgs.push (d.labelStx.raw, .warning, m!"Unused link [{label}]")
+  for (label, path, use) in (footnoteOrder partElabState).2 do
+    msgs := msgs.push (use, .error, m!"Footnote [^{label}] is used inside its own contents{through path}")
+  return msgs.mergeSort fun (stx1, _) (stx2, _) => startPos stx1 ≤ startPos stx2
+where
+  startPos (stx : Syntax) : Nat := stx.getPos?.map (·.byteIdx) |>.getD 0
+  -- ", through [^b]", ", through [^b] and [^c]", or ", through [^b], [^c] and [^d]"
+  through (path : Array String) : String :=
+    let labels := path.toList.map (s!"[^{·}]")
+    match labels.reverse with
+    | [] => ""
+    | [l] => s!", through {l}"
+    | last :: rest => s!", through {", ".intercalate rest.reverse} and {last}"
 
 public def PartElabM.push (fr : PartFrame) : PartElabM Unit := modifyThe State fun st => {st with partContext := st.partContext.push fr}
 
@@ -484,38 +584,44 @@ public opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 /--
 Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
 in turning a parsed verso doc into syntax.
+
+It also reports the document's undefined and unused links and footnotes, and compiles the document's
+blocks.
+
+{name}`commandStart?` is the start of the command that finishes the document. It is used when the
+command's syntax has no source range.
 -/
 public def FinishedPart.toVersoDoc
     (genreSyntax : Term)
     (finished : FinishedPart)
     (ctx : DocElabContext)
     (docElabState : DocElabM.State)
-    (partElabState : PartElabM.State) :
+    (partElabState : PartElabM.State)
+    (commandStart? : Option String.Pos.Raw := none) :
     TermElabM Term := do
 
-  -- Check internal refs
-  for (ref, uses) in docElabState.footnoteRefs do
-    if !partElabState.footnoteDefs.contains ref then
-      for use in uses.useSites do
-        throwErrorAt use m!"No definition for footnote [^{ref}]"
-  for (ref, site) in partElabState.footnoteDefs do
-    if !docElabState.footnoteRefs.contains ref then
-      logWarningAt site.defSite m!"Unused footnote [^{ref}]"
-
-  for (ref, uses) in docElabState.linkRefs do
-    if !partElabState.linkDefs.contains ref then
-      for use in uses.useSites do
-        throwErrorAt use m!"No definition for link [{ref}]"
-  for (ref, site) in partElabState.linkDefs do
-    if !docElabState.linkRefs.contains ref then
-      logWarningAt site.defSite m!"Unused link [{ref}]"
+  -- Lean suppresses the elaboration errors of a command with a parse error. Messages about syntax
+  -- outside the current command are logged with this suppression turned off. This way, a parse
+  -- error in the last block of a `#doc` document leaves the messages about earlier blocks visible.
+  -- When the command's syntax has no source range, `commandStart?` gives its start.
+  let cmdRange? := (← getRef).getRange?
+  for (stx, severity, msg) in checkLinksAndFootnotes docElabState partElabState do
+    let outsideCommand := match cmdRange?, commandStart?, stx.getPos? with
+      | some r, _, some pos => !(r.start ≤ pos && pos ≤ r.stop)
+      | none, some start, some pos => pos < start
+      | _, _, _ => false
+    if outsideCommand then
+      withTheReader Core.Context ({ · with suppressElabErrors := false }) <|
+        logAt stx msg severity
+    else
+      logAt stx msg severity
 
   -- Add and compile blocks
   for (name, block) in partElabState.deferredBlocks do
     withRef block do
     withCurrHeartbeats do -- reset the heartbeat count for each block addAndCompile
 
-      let mut type ← Term.elabType (← ``(DocReconstruction → Doc.Block $genreSyntax))
+      let mut type ← Term.elabType (← ``(DocReconstruction $genreSyntax → Doc.Block $genreSyntax))
       let mut blockExpr ← Term.elabTerm block (some type)
 
       -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
@@ -551,7 +657,32 @@ public def FinishedPart.toVersoDoc
     | .none => Json.mkObj []
     | .some table => Json.mkObj [("highlight", table.toExport.toJson)]
 
-  ``(VersoDoc.mk (fun $docReconstructionPlaceholder => $finishedSyntax) $(quote reconstJson.compress))
+  let body ← refTables genreSyntax docReconstructionPlaceholder partElabState finishedSyntax
+  ``(VersoDoc.mk (fun $docReconstructionPlaceholder => $body) $(quote reconstJson.compress))
+where
+  /--
+  Wraps {name}`body` so that the document reconstruction data {name}`docReconst` also holds the
+  document's link table and footnote table.
+  Each footnote's contents can use the links. Footnotes are added in the order of
+  {name}`footnoteOrder`, so each footnote comes after its footnote dependencies.
+  -/
+  refTables (genreSyntax : Term) (docReconst : Ident) (partElabState : PartElabM.State) (body : Term) :
+      TermElabM Term := do
+    if partElabState.linkDefs.isEmpty && partElabState.footnoteDefs.isEmpty then
+      return body
+    let links ← (inSourceOrder partElabState.linkDefs).mapM fun (label, d) =>
+      ``(($(quote label), $(quote d.val)))
+    let footnotes ← (footnoteOrder partElabState).1.filterMapM fun label => do
+      let some d := partElabState.footnoteDefs[label]? | return none
+      some <$> ``(($(quote label),
+          fun ($docReconst : DocReconstruction $genreSyntax) =>
+            (#[$(d.val),*] : Array (Doc.Inline $genreSyntax))))
+    let tables ← ``(DocReconstruction.withDefs $docReconst #[$links,*] #[$footnotes,*])
+    `(let $docReconst := $tables
+      $body)
+  inSourceOrder {α : Type} (defs : HashMap String (DocDef α)) : Array (String × DocDef α) :=
+    defs.toArray.mergeSort fun (_, d1) (_, d2) =>
+      d1.labelStx.raw.getPos?.getD 0 ≤ d2.labelStx.raw.getPos?.getD 0
 
 
 public abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)
