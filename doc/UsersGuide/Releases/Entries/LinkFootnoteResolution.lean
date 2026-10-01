@@ -13,7 +13,7 @@ release_note
   version := ⟨4, 35, 0⟩
   breaking := true
   tag := "link-footnote-resolution"
-  prs := []
+  prs := [1014]
 
 #doc (Manual) "Link and Footnote Label Resolution" =>
 
