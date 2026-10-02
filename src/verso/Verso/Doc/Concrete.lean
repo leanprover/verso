@@ -247,10 +247,9 @@ private meta def versoBlockCommandFn : ParserFn := fun c s =>
   let iniSz  := s.stackSize
   let lastPos? := lastVersoEndPosExt.getState c.env
   let s := lastPos? |>.map s.setPos |>.getD s
-  let s := recoverPartialBlock (Verso.Parser.block {}) c s
+  let s := blockCommandRecovery c s
   if s.hasError then s
   else
-    let s := ignoreFn (manyFn blankLine) c s
     let s := updateTrailing c s
     let i := s.pos
     if c.atEnd i then

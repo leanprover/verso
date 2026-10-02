@@ -979,6 +979,15 @@ mutual
   partial def document (blockContext : BlockCtxt := {}) : ParserFn := ignoreFn (manyFn blankLine) >> blocks blockContext
 end
 
+/--
+Parses one top-level block of a document and the blank lines after it. On a parse error, it
+recovers with `recoverPartialBlock`. The block command parser `versoBlockCommandFn` uses it for each
+top-level block.
+-/
+def blockCommandRecovery : ParserFn := fun c s =>
+  let s := recoverPartialBlock (block {}) c s
+  if s.hasError then s else ignoreFn (manyFn blankLine) c s
+
 end Verso.Parser
 
 namespace Verso.Doc.Concrete

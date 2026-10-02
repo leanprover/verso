@@ -21,11 +21,11 @@ changed byte. Verso parses each top-level block of a `#doc` document as one comm
 fails to parse, error recovery makes it a command anyway. For Verso, the takeaway is that a
 recovered command must end at or after all the text that its parser read.
 
-Each test splits a document into commands as `versoBlockCommandFn` does, with Verso's error
-recovery. Then it checks each command that has a command after next. At each line start after the
-end of the command after next, it changes the text in each of the ways listed in `changes`. It
-parses the command again from its start. The syntax, the end position and the errors must match the
-first parse.
+Each test splits a document into commands with `blockCommandRecovery`. This is the parser that
+`versoBlockCommandFn` uses for each top-level block, with Verso's error recovery. Then the test
+checks each command that has a command after next. At each line start after the end of the command
+after next, it changes the text in each of the ways listed in `changes`. It parses the command again
+from its start. The syntax, the end position and the errors must match the first parse.
 
 The documents are small. Each has a parse error in one block, followed by more paragraphs. In most
 of them, the error is the unfinished role `{hig`. The interactive test
@@ -37,44 +37,34 @@ namespace Verso.IncrementalParsingTest
 
 open Lean Parser Verso.Parser Errata
 
-/--
-Parses one top-level block command at the current position. This is a copy of the recovery step of
-`versoBlockCommandFn` in `Verso.Doc.Concrete`, which is private. It leaves out the update of the
-trailing whitespace and the saved end position. When that recovery step changes, this copy must
-change with it.
--/
-def cmdFn : ParserFn := fun c s =>
-  let s := recoverPartialBlock (block {}) c s
-  if s.hasError then s else ignoreFn (manyFn blankLine) c s
-
 /-- The result of parsing one command: its syntax, its end position and its errors. -/
 structure Parsed where
   stx : String
-  endPos : Nat
-  errors : List (Nat × String)
+  endPos : String.Pos.Raw
+  errors : List (String.Pos.Raw × String)
   failed : Bool
 deriving BEq, Repr
 
-/-- Parses the command that starts at byte `pos` of `input`. -/
-def parseAt (input : String) (pos : Nat) : IO Parsed := do
+/-- Parses the command that starts at position `pos` of `input`. -/
+def parseAt (input : String) (pos : String.Pos.Raw) : IO Parsed := do
   let env ← mkEmptyEnvironment
   let ictx := mkInputContext input "<input>"
   let pmctx : ParserModuleContext := { env, options := {} }
-  let s := cmdFn.run ictx pmctx (getTokenTable env) ((mkParserState input).setPos ⟨pos⟩)
+  let s :=
+    blockCommandRecovery.run ictx pmctx (getTokenTable env) ((mkParserState input).setPos pos)
   let stx := if s.stxStack.size > 0 then toString s.stxStack.back else ""
-  let errors := s.allErrors.toList.map fun (p, _, e) => (p.byteIdx, toString e)
-  return { stx, endPos := s.pos.byteIdx, errors, failed := s.hasError }
+  let errors := s.allErrors.toList.map fun (p, _, e) => (p, toString e)
+  return { stx, endPos := s.pos, errors, failed := s.hasError }
 
 /-- Splits a document into top-level block commands, returning each start position and result. -/
-def commands (input : String) : IO (Array (Nat × Parsed)) := do
+def commands (input : String) : IO (Array (String.Pos.Raw × Parsed)) := do
   let env ← mkEmptyEnvironment
   let ictx := mkInputContext input "<input>"
   let pmctx : ParserModuleContext := { env, options := {} }
   let s := (ignoreFn (manyFn blankLine)).run ictx pmctx (getTokenTable env) (mkParserState input)
-  let mut pos := s.pos.byteIdx
+  let mut pos := s.pos
   let mut out := #[]
-  for _ in [0:input.utf8ByteSize] do
-    if pos ≥ input.utf8ByteSize then break
+  while pos < input.rawEndPos do
     let r ← parseAt input pos
     out := out.push (pos, r)
     if r.failed || r.endPos ≤ pos then break
@@ -85,22 +75,21 @@ def commands (input : String) : IO (Array (Nat × Parsed)) := do
 The ways the text is changed after a cut point: it is cut off there, or text is added at the cut
 point. The additions close or open inline markup and blocks, change indentation, and add lines.
 -/
-def changes (input : String) (cut : Nat) : List String :=
-  let pre := String.Pos.Raw.extract input 0 ⟨cut⟩
-  let rest := String.Pos.Raw.extract input ⟨cut⟩ input.rawEndPos
+def changes (input : String) (cut : String.Pos.Raw) : List String :=
+  let pre := String.Pos.Raw.extract input 0 cut
+  let rest := String.Pos.Raw.extract input cut input.rawEndPos
   [pre, pre ++ "]\n", pre ++ "[x]\n", pre ++ "}\n", pre ++ "x\n\ny\n", pre ++ "> q\n",
    pre ++ "[" ++ rest, pre ++ "]" ++ rest, pre ++ "}" ++ rest, pre ++ "{" ++ rest,
    pre ++ ":::\n" ++ rest, pre ++ "*" ++ rest, pre ++ "```\n" ++ rest, pre ++ "  " ++ rest,
    pre ++ "\n" ++ rest, pre ++ "x" ++ rest]
 
-/-- The byte positions where lines of `input` start. -/
-def lineStarts (input : String) : List Nat := Id.run do
-  let mut acc := 0
-  let mut out := []
-  for l in input.splitOn "\n" do
-    out := acc :: out
-    acc := acc + l.utf8ByteSize + 1
-  return out.reverse.filter (· ≤ input.utf8ByteSize)
+/-- The positions where lines of `input` start. -/
+def lineStarts (input : String) : Array String.Pos.Raw :=
+  let (_, out) := input.foldl (init := ((0 : String.Pos.Raw), #[(0 : String.Pos.Raw)]))
+    fun (pos, out) c =>
+      let pos := pos + c
+      (pos, if c == '\n' then out.push pos else out)
+  out
 
 /--
 Finds the commands whose parse changes when text after the end of the command after next changes.
@@ -119,11 +108,12 @@ def violations (input : String) : IO (Array String) := do
       for changed in changes input cut do
         let parsed' ← parseAt changed start
         if parsed' != parsed then
-          let suffix := String.Pos.Raw.extract changed ⟨cut⟩ changed.rawEndPos
-          out := out.push s!"command {j} at byte {start} ends at {parsed.endPos}, and the command \
-            after next ends at {after.endPos}. Changing the text at byte {cut} to {repr suffix} \
-            changes its parse to end at {parsed'.endPos} with errors at \
-            {parsed'.errors.map (·.1)}, where it had errors at {parsed.errors.map (·.1)}."
+          let suffix := String.Pos.Raw.extract changed cut changed.rawEndPos
+          out := out.push s!"command {j} at byte {start.byteIdx} ends at {parsed.endPos.byteIdx}, \
+            and the command after next ends at {after.endPos.byteIdx}. Changing the text at byte \
+            {cut.byteIdx} to {repr suffix} changes its parse to end at {parsed'.endPos.byteIdx} \
+            with errors at {parsed'.errors.map (·.1.byteIdx)}, where it had errors at \
+            {parsed.errors.map (·.1.byteIdx)}."
           found := true
           break
   return out
