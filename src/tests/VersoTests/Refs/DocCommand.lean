@@ -443,7 +443,10 @@ info: Verso.Doc.Part.mk
   #[Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
         Verso.Doc.Inline.text "."],
-    Verso.Doc.Block.para #[Verso.Doc.Inline.text "Second."]]
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "Second."],
+    Verso.Doc.Block.para
+      #[Verso.Doc.Inline.text "A ",
+        Verso.Doc.Inline.bold #[(Verso.Doc.Inline.text "bold never closed "), (Verso.Doc.Inline.concat #[])]]]
   #[]
 -/
 #test_msgs in
@@ -457,13 +460,24 @@ A *bold never closed {role
 "
 
 /-
-A parse error that leaves the last block without a source range doesn't hide these messages either.
+An unclosed role at the end of the file doesn't hide these messages either. The role is in a block
+with a link use, after a link definition, or after a paragraph.
 -/
 
 /--
 info: command 2: 3:12: error: No definition for link [one]
 ---
-info: The document is defined, and it contains errors, so it can't be evaluated.
+info: Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Unclosed role with a use"]
+  "Unclosed role with a use"
+  none
+  #[Verso.Doc.Block.para
+      #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
+        Verso.Doc.Inline.text "."],
+    Verso.Doc.Block.para
+      #[Verso.Doc.Inline.text "Broken ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "u")] "",
+        Verso.Doc.Inline.text " then ", Verso.Doc.Inline.concat #[]]]
+  #[]
 -/
 #test_msgs in
 #eval checkDocInput "#doc (.none) \"Unclosed role with a use\" =>
@@ -477,7 +491,15 @@ Broken [u][two] then {role
 info: command 3: 3:12: error: No definition for link [one]
 command 3: 5:1: warning: Unused link [d]
 ---
-info: The document is defined, and it contains errors, so it can't be evaluated.
+info: Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Unclosed role after a definition"]
+  "Unclosed role after a definition"
+  none
+  #[Verso.Doc.Block.para
+      #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
+        Verso.Doc.Inline.text "."],
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[]]]
+  #[]
 -/
 #test_msgs in
 #eval checkDocInput "#doc (.none) \"Unclosed role after a definition\" =>
@@ -492,7 +514,16 @@ Broken then {role
 /--
 info: command 3: 3:12: error: No definition for link [one]
 ---
-info: The document is defined, and it contains errors, so it can't be evaluated.
+info: Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Unclosed role after a paragraph"]
+  "Unclosed role after a paragraph"
+  none
+  #[Verso.Doc.Block.para
+      #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
+        Verso.Doc.Inline.text "."],
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "Second."],
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[]]]
+  #[]
 -/
 #test_msgs in
 #eval checkDocInput "#doc (.none) \"Unclosed role after a paragraph\" =>

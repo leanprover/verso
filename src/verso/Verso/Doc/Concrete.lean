@@ -210,7 +210,8 @@ where
       failure
 
   empty : Syntax → Bool
-  | .atom .. | .ident .. | .missing => false
+  | .missing => true
+  | .atom .. | .ident .. => false
   | .node .none _ args | .node (.synthetic ..) _ args => args.all empty
   | .node (.original leading _ trailing _) _ args =>
     leading.startPos == leading.stopPos && trailing.startPos == trailing.stopPos && args.all empty
@@ -246,7 +247,7 @@ private meta def versoBlockCommandFn : ParserFn := fun c s =>
   let iniSz  := s.stackSize
   let lastPos? := lastVersoEndPosExt.getState c.env
   let s := lastPos? |>.map s.setPos |>.getD s
-  let s := recoverBlockWith #[.missing] (Verso.Parser.block {}) c s
+  let s := recoverPartialBlock (Verso.Parser.block {}) c s
   if s.hasError then s
   else
     let s := ignoreFn (manyFn blankLine) c s
@@ -320,10 +321,9 @@ private meta def runVersoBlock (block : TSyntax `block) : Command.CommandElabM U
 open PartElabM in
 /--
 Finishes the document: closes its parts, checks its links and footnotes, and defines the document
-constant. {name}`commandStart?` is the start of the current command, which is the document's last
-top-level block. It is absent when the document has no blocks.
+constant.
 -/
-private meta def finishDoc (commandStart? : Option String.Pos.Raw := none) : Command.CommandElabM Unit:= do
+private meta def finishDoc : Command.CommandElabM Unit:= do
   let endPos := (← getFileMap).source.rawEndPos
   runPartElabInEnv <| do closePartsUntil 0 endPos
 
@@ -334,7 +334,6 @@ private meta def finishDoc (commandStart? : Option String.Pos.Raw := none) : Com
   -- The `_root_` prefix ensures that the installed identifier will ignore any ambient namespaces
   let n := mkIdent (`_root_ ++ (← currentDocName))
   let doc ← Command.runTermElabM fun _ => finished.toVersoDoc versoEnv.genreSyntax versoEnv.ctx versoEnv.docState versoEnv.partState
-    (commandStart? := commandStart?)
 
   let ty ← ``(VersoDoc $versoEnv.genreSyntax)
   Command.elabCommand (← `(public def $n : $ty := $doc))
@@ -394,10 +393,9 @@ public meta def elabVersoBlock : Command.CommandElab
 @[command_elab addLastBlockCmd]
 public meta def elabVersoLastBlock : Command.CommandElab
   | `(addLastBlockCmd| $b:block) => do
-    let commandStart? := lastVersoEndPosExt.getState (← getEnv)
     updatePos b
     -- Verso finishes the document even when its last block fails. An interrupt is rethrown, and then
     -- Verso does not finish the document.
     withLogging <| runVersoBlock b
-    finishDoc commandStart?
+    finishDoc
   | _ => throwUnsupportedSyntax

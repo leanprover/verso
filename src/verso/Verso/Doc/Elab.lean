@@ -212,6 +212,7 @@ public meta def _root_.Lean.Doc.Syntax.display_math.expand : InlineExpander
 public meta def partCommand (cmd : TSyntax `block) : PartElabM Unit :=
   withTraceNode `Elab.Verso.part (fun _ => pure m!"Part modification {cmd}") <|
   withRef cmd <| withFreshMacroScope <| do
+  modifyThe PartElabM.State ({ · with blockHasMissing := cmd.raw.hasMissing })
   match cmd.raw with
   | stx@(.node _ kind _) =>
     let exp ← partCommandsFor kind
@@ -273,8 +274,6 @@ partial def PartElabM.State.closeAll (endPos : String.Pos.Raw) (state : PartElab
       state'.closeAll endPos
     else state'
 
-
-
 @[part_command Lean.Doc.Syntax.header]
 public meta partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
   | stx@`(block|header($headerLevel){$inlines*}) => do
@@ -305,6 +304,11 @@ public meta partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
 
 @[part_command Lean.Doc.Syntax.metadata_block]
 public meta def _root_.Lean.Doc.Syntax.metadata_block.command : PartCommand
+  | stx => do
+    if (← getThe PartElabM.State).blockHasMissing then return
+    go stx
+where
+  go : PartCommand
   | `(block| %%%%$tk $fieldOrAbbrev*  %%%) => do
     let ctxt := (← getThe PartElabM.State).partContext
     if ctxt.blocks.size > 0 || ctxt.priorParts.size > 0 then
@@ -317,7 +321,9 @@ public meta def _root_.Lean.Doc.Syntax.metadata_block.command : PartCommand
 
 @[part_command Lean.Doc.Syntax.command]
 public meta def includeSection : PartCommand
-  | `(block|command{include $args* }) => do
+  | stx@`(block|command{include $args* }) => do
+    -- An include that is partial syntax has no effect.
+    if (← getThe PartElabM.State).blockHasMissing then return
     if h : args.size = 0 then throwError "Expected an argument"
     else if h : args.size > 2 then throwErrorAt args[2] "Expected one or two arguments"
     else

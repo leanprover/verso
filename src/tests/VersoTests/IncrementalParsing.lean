@@ -44,7 +44,7 @@ trailing whitespace and the saved end position. When that recovery step changes,
 change with it.
 -/
 def cmdFn : ParserFn := fun c s =>
-  let s := recoverBlockWith #[.missing] (block {}) c s
+  let s := recoverPartialBlock (block {}) c s
   if s.hasError then s else ignoreFn (manyFn blankLine) c s
 
 /-- The result of parsing one command: its syntax, its end position and its errors. -/
