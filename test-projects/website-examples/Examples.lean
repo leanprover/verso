@@ -6,12 +6,9 @@ Author: David Thrane Christiansen
 
 import Examples.Basic
 
-import SubVerso.Examples
-open SubVerso.Examples
-
 deriving instance Repr for Tree
 
-%example basic
+-- ANCHOR: basic
 def t : Tree Nat := .branch (.branch .leaf 1 .leaf) 2 (.branch (.branch .leaf 3 .leaf) 4 .leaf)
 
 example := t.flip
@@ -19,9 +16,9 @@ example := t.flip
 #eval t.flip
 
 #check Tree.flip
-%end
+-- ANCHOR_END: basic
 
-%example proof
+-- ANCHOR: proof
 theorem Tree.flip_flip_id (t : Tree α) : t.flip.flip = t := by
   induction t with
   | leaf => rfl
@@ -36,26 +33,21 @@ theorem Tree.flip_flip_id' (t : Tree α) : t.flip.flip = t := by
   next l v r ih1 ih2 =>
     simp only [flip]
     rw [ih1]; . rw [ih2]
-%end
+-- ANCHOR_END: proof
 
-%example oldterm
+-- ANCHOR: oldterm
 -- The old syntax:
 def foo (n k : Nat) : Nat :=
   if n < k then
     1 + foo (n + 1) k
   else 0
 termination_by k - n
-%end
+-- ANCHOR_END: oldterm
 
-%example version
+-- ANCHOR: version
 #eval Lean.versionString
-%end
+-- ANCHOR_END: version
 
-%signature Nat.rec
-Nat.rec.{u} {motive : Nat → Sort u}
-  (zero : motive Nat.zero)
-  (succ :
-    (n : Nat) →
-    motive n →
-    motive (Nat.succ n))
-  (t : Nat) : motive t
+-- ANCHOR: natRec
+example : Nat := Nat.rec 3 (fun _ n => n + 1) 2
+-- ANCHOR_END: natRec

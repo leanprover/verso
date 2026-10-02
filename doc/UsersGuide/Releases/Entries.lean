@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 module
 
+public import UsersGuide.Releases.Entries.BlogExampleSubprojects
 public import UsersGuide.Releases.Entries.BlogLeanRole
 public import UsersGuide.Releases.Entries.BuildLog
 public import UsersGuide.Releases.Entries.CodeColorVariables
