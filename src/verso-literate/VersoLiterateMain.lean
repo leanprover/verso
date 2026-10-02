@@ -5,7 +5,6 @@ Author: David Thrane Christiansen
 -/
 module
 public import SubVerso.Compat
-public import SubVerso.Examples.Env
 public import SubVerso.Module
 public import SubVerso.Highlighting.Export
 public import MD4Lean
@@ -22,7 +21,7 @@ public section
 
 open Lean Elab Frontend
 open Lean.Elab.Command hiding Context
-open SubVerso Examples Module
+open SubVerso Module
 open SubVerso.Highlighting (Highlighted highlight highlightMany)
 open VersoLiterate
 open Verso.Doc
