@@ -14,7 +14,7 @@ release_note
   version := ⟨4, 35, 0⟩
   breaking := true
   tag := "blog-example-subprojects"
-  prs := []
+  prs := [1015]
 
 #doc (Manual) "Blog Example Subprojects Removed" =>
 
