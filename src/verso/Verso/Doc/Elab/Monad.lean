@@ -30,8 +30,8 @@ namespace Verso.Doc.Elab
 
 open Lean
 open Lean.Elab
-open Lean.Doc (BlockView BoldView CodeView EmphView HeaderView InlineView LinebreakView RoleView
-  TextView VersoBlock VersoCodeBlock VersoInline VersoRefName)
+open Lean.Doc (BlockView BoldView CodeView EmphView FootnoteView HeaderView ImageView InlineView
+  LinebreakView LinkView RoleView TextView VersoBlock VersoCodeBlock VersoInline VersoRefName)
 open Lean.Doc.Parser
 open Std (HashMap HashSet)
 open Verso.ArgParse (FromArgs SigDoc)
@@ -65,6 +65,19 @@ public meta def _root_.Lean.Doc.Parser.Inline.bold.inline_to_string : InlineToSt
 @[inline_to_string Lean.Doc.Parser.Inline.code]
 public meta def _root_.Lean.Doc.Parser.Inline.code.inline_to_string : InlineToString
   | _, stx => CodeView.of ⟨stx⟩ |>.map (·.getVersoCode)
+
+@[inline_to_string Lean.Doc.Parser.Inline.link]
+public meta def _root_.Lean.Doc.Parser.Inline.link.inline_to_string : InlineToString
+  | env, stx => LinkView.of ⟨stx⟩ |>.map fun v =>
+    String.intercalate " " (v.content.toList.map (inlineToString env ·.raw))
+
+@[inline_to_string Lean.Doc.Parser.Inline.image]
+public meta def _root_.Lean.Doc.Parser.Inline.image.inline_to_string : InlineToString
+  | _, stx => ImageView.of ⟨stx⟩ |>.map fun _ => ""
+
+@[inline_to_string Lean.Doc.Parser.Inline.footnote]
+public meta def _root_.Lean.Doc.Parser.Inline.footnote.inline_to_string : InlineToString
+  | _, stx => FootnoteView.of ⟨stx⟩ |>.map fun _ => ""
 
 @[inline_to_string Lean.Doc.Parser.Inline.role]
 public meta def _root_.Lean.Doc.Parser.Inline.role.inline_to_string : InlineToString
