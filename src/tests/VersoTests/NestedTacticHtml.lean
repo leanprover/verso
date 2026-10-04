@@ -21,7 +21,8 @@ open SubVerso.Highlighting (Highlighted highlightFrontendResult)
 open Verso.Code (HighlightHtmlM)
 open Verso.Doc (Genre)
 open Verso.Output (Html)
-open Lean Elab Command
+open Lean hiding Html
+open Lean.Elab Lean.Elab.Command
 
 namespace Verso.NestedTacticHtmlTest
 
