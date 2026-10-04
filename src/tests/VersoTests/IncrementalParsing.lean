@@ -375,3 +375,32 @@ Then we went home.
 "
 
 @[test] def codeBlockWithBrokenFence : Test := checkInvariant codeBlock
+
+/--
+A header and then seven paragraphs, each of which is an unfinished role. With Lean's block parser,
+each unfinished role fails within its own paragraph, so each paragraph is its own command. In prior
+versions of the block parser, the unfinished roles were read as one nested role, which failed at the
+first `{`. Its recovered command ended before text that its parser had read, and this document broke
+the invariant.
+-/
+def roleChain : String :=
+"# H
+
+{b
+
+{c
+
+{d
+
+{e
+
+{f
+
+{g
+
+{h
+
+hello
+"
+
+@[test] def roleChainWithErrors : Test := checkInvariant roleChain
