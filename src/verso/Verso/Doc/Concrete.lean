@@ -342,12 +342,9 @@ private meta def versoBlockCommandFn : ParserFn := fun c s =>
   let iniSz  := s.stackSize
   let lastPos? := lastVersoEndPosExt.getState c.env
   let s := lastPos? |>.map s.setPos |>.getD s
-  -- The block's final token takes the whitespace after it, so the next block starts at its own first
-  -- token.
-  let s := recoverPartialBlock (blockFn { recordTrailing := true }) c s
+  let s := blockCommandRecovery c s
   if s.hasError then s
   else
-    let s := ignoreFn (manyFn blankLine) c s
     let s := updateTrailing c s
     let i := s.pos
     if c.atEnd i then

@@ -72,6 +72,18 @@ public def recoverPartialBlock (p : ParserFn) : ParserFn :=
       | #[stx] => if stx.hasMissing then s else group #[stx]
       | built => group built
 
+/--
+Parses one top-level block of a document and the blank lines after it. On a parse error, it
+recovers with `recoverPartialBlock`. The block command parser `versoBlockCommandFn` uses it for each
+top-level block.
+
+The block's final token takes the whitespace after it, so the next block starts at its own first
+token.
+-/
+public def blockCommandRecovery : ParserFn := fun c s =>
+  let s := recoverPartialBlock (Lean.Doc.Parser.blockFn { recordTrailing := true }) c s
+  if s.hasError then s else ignoreFn (manyFn blankLine) c s
+
 
 end Verso.Parser
 
