@@ -7,8 +7,9 @@ import Errata
 import Verso
 
 /-!
-These tests check where Verso's block parsers report parse errors and ensure that a `>` begins a
-blockquote precisely when it's in a block-opening position (and not in the middle of text).
+These tests check where Lean's block parser reports parse errors in Verso documents and ensure
+that a `>` begins a blockquote precisely when it's in a block-opening position (and not in the
+middle of text).
 
 When a block parser encounters an error after its opening marker, it fails at the error. Error
 recovery must resume from this position, without rewinding. This is how Verso's top-level blocks
@@ -33,60 +34,55 @@ at the end of input (8:0), because the unclosed role reads past the closing `:::
 -/
 /--
 info: 2 failures:
-  @56 (⟨6, 4⟩): unexpected '
-'; expected positional argument, named argument, flag, or '}' (use '\{' for a literal '{')
+  @56 (⟨6, 4⟩): unexpected newline; expected positional argument, named argument, flag, or '}' (use '\{' for a literal '{')
     "\n:::\n"
   @61 (⟨8, 0⟩): unexpected end of input; expected '![', '$$', '$', '*', '[', '[^', '_', '`' or '{'
     ""
 
 Final stack:
-  (Lean.Doc.Syntax.directive
-   ":::"
+  (Lean.Doc.Parser.Block.directive
+   (Lean.Doc.Parser.directiveDelimiter ":::")
    `note
    []
-   "\n"
-   [(Lean.Doc.Syntax.para
-     "para{"
-     [(Lean.Doc.Syntax.text
-       (str "\"The weather was nice.\""))]
-     "}")
-    (Lean.Doc.Syntax.para
-     "para{"
-     [(Lean.Doc.Syntax.text
-       (str "\"We went for a walk.\""))]
-     "}")
-    (Lean.Doc.Syntax.para
-     "para{"
-     [(Lean.Doc.Syntax.role
+   [(Lean.Doc.Parser.Block.para
+     [(Lean.Doc.Parser.Inline.text
+       (Lean.Doc.Parser.versoText
+        "The weather was nice."))])
+    (Lean.Doc.Parser.Block.para
+     [(Lean.Doc.Parser.Inline.text
+       (Lean.Doc.Parser.versoText
+        "We went for a walk."))])
+    (Lean.Doc.Parser.Block.para
+     [(Lean.Doc.Parser.Inline.role
        "{"
        `hig
        []
-       <missing>
-       "["
-       [(Lean.Doc.Syntax.footnote <missing>)]
-       "]")])])
+       <missing>)])])
 -/
 #test_msgs in
-#eval (block {}).test! ":::note\nThe weather was nice.\n\nWe went for a walk.\n\n{hig\n:::\n"
+#eval (Lean.Doc.Parser.blockFn {}).test! ":::note\nThe weather was nice.\n\nWe went for a walk.\n\n{hig\n:::\n"
 
 /-
 This case checks that a code block fails at an error in its contents. The code block has no closing
 fence, so it reads to the end of input and fails there (5:0).
 -/
 /--
-info: Failure @47 (⟨5, 0⟩): unexpected end of input
+info: Failure @47 (⟨5, 0⟩): unterminated code block opened on line 1; expected '```'
 Final stack:
-  (Lean.Doc.Syntax.codeblock
-   "```"
+  (Lean.Doc.Parser.Block.codeblock
+   (Lean.Doc.Parser.codeBlockFence "```")
    []
-   "\n"
-   (str
-    "\"The weather was nice.\\n\\nWe went for a walk.\\n\"")
+   (Lean.Doc.Parser.versoCodeBlock
+    [(Lean.Doc.Parser.versoCodeLine
+      "The weather was nice.\n")
+     (Lean.Doc.Parser.versoCodeLine "\n")
+     (Lean.Doc.Parser.versoCodeLine
+      "We went for a walk.\n")])
    <missing>)
 Remaining: ""
 -/
 #test_msgs in
-#eval (block {}).test! "```\nThe weather was nice.\n\nWe went for a walk.\n"
+#eval (Lean.Doc.Parser.blockFn {}).test! "```\nThe weather was nice.\n\nWe went for a walk.\n"
 
 /-! # Blockquote placement tests -/
 
@@ -95,26 +91,20 @@ A blockquote with two paragraphs, followed by a paragraph, parses with no errors
 -/
 /--
 info: Success! Final stack:
-  [(Lean.Doc.Syntax.blockquote
+  [(Lean.Doc.Parser.Block.blockquote
     ">"
-    [(Lean.Doc.Syntax.para
-      "para{"
-      [(Lean.Doc.Syntax.text
-        (str "\"The weather was nice.\""))]
-      "}")
-     (Lean.Doc.Syntax.para
-      "para{"
-      [(Lean.Doc.Syntax.text
-        (str "\"We went for a walk.\""))]
-      "}")])
-   (Lean.Doc.Syntax.para
-    "para{"
-    [(Lean.Doc.Syntax.text
-      (str "\"We came home.\""))
-     (Lean.Doc.Syntax.linebreak
-      "line!"
-      (str "\"\\n\""))]
-    "}")]
+    [(Lean.Doc.Parser.Block.para
+      [(Lean.Doc.Parser.Inline.text
+        (Lean.Doc.Parser.versoText
+         "The weather was nice."))])
+     (Lean.Doc.Parser.Block.para
+      [(Lean.Doc.Parser.Inline.text
+        (Lean.Doc.Parser.versoText
+         "We went for a walk."))])])
+   (Lean.Doc.Parser.Block.para
+    [(Lean.Doc.Parser.Inline.text
+      (Lean.Doc.Parser.versoText "We came home."))
+     (Lean.Doc.Parser.Inline.linebreak "\n")])]
 All input consumed.
 -/
 #test_msgs in
@@ -125,15 +115,11 @@ A `>` alone on its line is an empty blockquote.
 -/
 /--
 info: Success! Final stack:
-  [(Lean.Doc.Syntax.blockquote ">" [])
-   (Lean.Doc.Syntax.para
-    "para{"
-    [(Lean.Doc.Syntax.text
-      (str "\"We came home.\""))
-     (Lean.Doc.Syntax.linebreak
-      "line!"
-      (str "\"\\n\""))]
-    "}")]
+  [(Lean.Doc.Parser.Block.blockquote ">" [])
+   (Lean.Doc.Parser.Block.para
+    [(Lean.Doc.Parser.Inline.text
+      (Lean.Doc.Parser.versoText "We came home."))
+     (Lean.Doc.Parser.Inline.linebreak "\n")])]
 All input consumed.
 -/
 #test_msgs in
@@ -144,14 +130,10 @@ A `>` in the middle of a line is text, not a blockquote.
 -/
 /--
 info: Success! Final stack:
-  [(Lean.Doc.Syntax.para
-    "para{"
-    [(Lean.Doc.Syntax.text
-      (str "\"Also, 2 > 3.\""))
-     (Lean.Doc.Syntax.linebreak
-      "line!"
-      (str "\"\\n\""))]
-    "}")]
+  [(Lean.Doc.Parser.Block.para
+    [(Lean.Doc.Parser.Inline.text
+      (Lean.Doc.Parser.versoText "Also, 2 > 3."))
+     (Lean.Doc.Parser.Inline.linebreak "\n")])]
 All input consumed.
 -/
 #test_msgs in
@@ -163,43 +145,36 @@ A `>` that is indented less than a list item's contents ends the list and begins
 -/
 /--
 info: Success! Final stack:
-  [(Lean.Doc.Syntax.ul
-    "ul{"
-    [(Lean.Doc.Syntax.li
-      "*"
-      [(Lean.Doc.Syntax.para
-        "para{"
-        [(Lean.Doc.Syntax.text
-          (str "\"The weather was nice.\""))]
-        "}")])]
-    "}")
-   (Lean.Doc.Syntax.blockquote
+  [(Lean.Doc.Parser.Block.ul
+    [(Lean.Doc.Parser.ListItem.item
+      (Lean.Doc.Parser.listMarker "*")
+      [(Lean.Doc.Parser.Block.para
+        [(Lean.Doc.Parser.Inline.text
+          (Lean.Doc.Parser.versoText
+           "The weather was nice."))])])])
+   (Lean.Doc.Parser.Block.blockquote
     ">"
-    [(Lean.Doc.Syntax.para
-      "para{"
-      [(Lean.Doc.Syntax.text
-        (str "\"We went for a walk.\""))
-       (Lean.Doc.Syntax.linebreak
-        "line!"
-        (str "\"\\n\""))]
-      "}")])]
+    [(Lean.Doc.Parser.Block.para
+      [(Lean.Doc.Parser.Inline.text
+        (Lean.Doc.Parser.versoText
+         "We went for a walk."))
+       (Lean.Doc.Parser.Inline.linebreak
+        "\n")])])]
 All input consumed.
 -/
 #test_msgs in
 #eval (document).test! "* The weather was nice.\n\n> We went for a walk.\n"
 
 /-
-A `>` that is indented less than the required column is not a blockquote. Here blocks must start at
-column 2, and the `>` is at column 0. The parser fails at 1:0 and consumes no input, because the
+A `>` that is indented less than the required column is not a blockquote. Here the saved position is
+at column 2, so blocks must start at column 2 or later. The `>` is at column 0. The parser fails at 1:0 and consumes no input, because the
 error comes before the opening marker. This lets an enclosing block end at that line.
 -/
 /--
-info: Failure @0 (⟨1, 0⟩): unexpected block opener; expected %%% (at line beginning) or expected column at least 2
+info: Failure @0 (⟨1, 0⟩): expected block with indentation at least 2
 Final stack:
-  (Lean.Doc.Syntax.metadata_block
-   <missing>
-   <missing>)
+  <missing>
 Remaining: "> The weather was nice.\n"
 -/
 #test_msgs in
-#eval (block { minIndent := 2 }).test! "> The weather was nice.\n"
+#eval (adaptCacheableContextFn ({ · with savedPos? := some ⟨2⟩ }) (Lean.Doc.Parser.blockFn {})).test! "> The weather was nice.\n"
