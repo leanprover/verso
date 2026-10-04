@@ -85,12 +85,11 @@ elab "#elab_doc " body:str : command => do
 
 /-
 This test checks that the part of a paragraph before an unfinished role is in the document. The
-complete role `{hig}[a heron]` is elaborated. The unfinished role `{hig` has its name, so `hig`
-elaborates it too. Its contents are `Inline.empty`, which is `Inline.concat #[]`.
+complete role `{hig}[a heron]` is elaborated. The unfinished role `{hig` is cut short before its
+closing brace, so it is `Inline.empty`, which is `Inline.concat #[]`.
 -/
 /--
-info: 6:53: unexpected '
-'; expected positional argument, named argument, flag, or '}' (use '\{' for a literal '{')
+info: 6:53: unexpected newline; expected positional argument, named argument, flag, or '}' (use '\{' for a literal '{')
 7:0: unexpected end of input; expected '![', '$$', '$', '*', '[', '[^', '_', '`' or '{'
 defined, depends on sorryAx: false
 Verso.Doc.Part.mk
@@ -101,7 +100,7 @@ Verso.Doc.Part.mk
     Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "We walked to the lake and saw ",
         Verso.Doc.Inline.emph #[(Verso.Doc.Inline.text "a heron")], Verso.Doc.Inline.text " and ",
-        Verso.Doc.Inline.emph #[(Verso.Doc.Inline.concat #[])]]]
+        Verso.Doc.Inline.concat #[]]]
   #[]
 -/
 #guard_msgs in
@@ -115,8 +114,7 @@ This test checks that a list item before a parse error is in the document. The s
 short at the unfinished role.
 -/
 /--
-info: 6:15: unexpected '
-'; expected positional argument, named argument, flag, or '}' (use '\{' for a literal '{')
+info: 6:15: unexpected newline; expected positional argument, named argument, flag, or '}' (use '\{' for a literal '{')
 7:0: unexpected end of input; expected '![', '$$', '$', '*', '[', '[^', '_', '`' or '{'
 defined, depends on sorryAx: false
 Verso.Doc.Part.mk
@@ -125,9 +123,7 @@ Verso.Doc.Part.mk
   none
   #[Verso.Doc.Block.ul
       #[{ contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "We saw a heron."]] },
-        { contents := #[Verso.Doc.Block.para
-                          #[Verso.Doc.Inline.text "We saw a ",
-                            Verso.Doc.Inline.emph #[(Verso.Doc.Inline.concat #[])]]] }]]
+        { contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "We saw a ", Verso.Doc.Inline.concat #[]]] }]]
   #[]
 -/
 #guard_msgs in
@@ -141,8 +137,7 @@ This test checks that a footnote definition with a parse error still defines the
 footnote in the paragraph has the contents before the error.
 -/
 /--
-info: 6:43: unexpected '
-'; expected positional argument, named argument, flag, or '}' (use '\{' for a literal '{')
+info: 6:43: unexpected newline; expected positional argument, named argument, flag, or '}' (use '\{' for a literal '{')
 7:0: unexpected end of input; expected '![', '$$', '$', '*', '[', '[^', '_', '`' or '{'
 defined, depends on sorryAx: false
 Verso.Doc.Part.mk
@@ -153,8 +148,7 @@ Verso.Doc.Part.mk
       #[Verso.Doc.Inline.text "We went to the park.",
         Verso.Doc.Inline.footnote
           "walk"
-          #[(Verso.Doc.Inline.text "We walked to the lake and saw "),
-            (Verso.Doc.Inline.emph #[(Verso.Doc.Inline.concat #[])])]]]
+          #[(Verso.Doc.Inline.text "We walked to the lake and saw "), (Verso.Doc.Inline.concat #[])]]]
   #[]
 -/
 #guard_msgs in
@@ -167,10 +161,11 @@ Verso.Doc.Part.mk
 
 /-
 This test checks that a header with a parse error starts a part. The title is the text before the
-error, `Head` and the unclosed bold text. The paragraph after the header is in the part.
+error. It is `Head` and then `Inline.empty`, which is the unclosed bold text. The paragraph after
+the header is in the part.
 -/
 /--
-info: 6:12: '*'
+info: 6:12: unexpected newline; expected '*' to close bold text
 defined, depends on sorryAx: false
 Verso.Doc.Part.mk
   #[Verso.Doc.Inline.text "Notes"]
@@ -178,8 +173,8 @@ Verso.Doc.Part.mk
   none
   #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "Before."]]
   #[Verso.Doc.Part.mk
-      #[Verso.Doc.Inline.text "Head ", Verso.Doc.Inline.bold #[(Verso.Doc.Inline.text "bold")]]
-      "Head  bold"
+      #[Verso.Doc.Inline.text "Head ", Verso.Doc.Inline.concat #[]]
+      "Head "
       none
       #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After.", Verso.Doc.Inline.linebreak "\n"]]
       #[]]
