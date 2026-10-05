@@ -19,8 +19,12 @@ open Verso.ArgParse (SigDoc)
 
 set_option backward.privateInPublic false
 
+/-- The message that reports that no elaborator accepts `stx`. -/
+def unexpectedSyntaxMessage (stx : Syntax) : MessageData :=
+  m!"unexpected syntax{indentD stx}"
+
 public def throwUnexpected [Monad m] [MonadError m] (stx : Syntax) : m α :=
-  throwErrorAt stx "unexpected syntax{indentD stx}"
+  throwErrorAt stx (unexpectedSyntaxMessage stx)
 
 /--
 Runs `act`, which elaborates `stx`. In a top-level block that is partial syntax, if `stx` contains
@@ -49,6 +53,18 @@ public def elabMissing (empty : Name) (type : Name) : DocElabM (TSyntax `term) :
   if (← readThe PartElabM.State).blockHasMissing then return mkCIdent empty
   ``(sorryAx ($(mkCIdent type) _) (synthetic := true))
 
+/--
+Reports that no elaborator accepts `stx`.
+
+In a top-level block that contains `Syntax.missing`, `stx` may be a node that the parser left
+unfinished. There, the error is logged at `stx` and the result is the constant `empty`. Elsewhere,
+the error is thrown.
+-/
+public def elabUnexpected (stx : Syntax) (empty : Name) : DocElabM (TSyntax `term) := do
+  unless (← readThe PartElabM.State).blockHasMissing do throwUnexpected stx
+  logErrorAt stx (unexpectedSyntaxMessage stx)
+  return mkCIdent empty
+
 public partial def elabInline (inline : VersoInline) : DocElabM (TSyntax `term) :=
   withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
   match inline.raw with
@@ -63,7 +79,7 @@ public partial def elabInline (inline : VersoInline) : DocElabM (TSyntax `term) 
           elabInline ⟨stxNew⟩
     | none =>
       let some view := InlineView.of ⟨stx⟩
-        | throwUnexpected stx
+        | elabUnexpected stx ``Verso.Doc.Inline.empty
       let exp ← inlineExpandersFor kind
       for e in exp do
         try
@@ -74,6 +90,6 @@ public partial def elabInline (inline : VersoInline) : DocElabM (TSyntax `term) 
             if id == unsupportedSyntaxExceptionId then pure ()
             else throw ex
           | ex => throw ex
-      throwUnexpected stx
+      elabUnexpected stx ``Verso.Doc.Inline.empty
   | other =>
-    throwUnexpected other
+    elabUnexpected other ``Verso.Doc.Inline.empty

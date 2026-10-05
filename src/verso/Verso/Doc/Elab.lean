@@ -195,29 +195,41 @@ public meta def _root_.Lean.Doc.Parser.Inline.inline_math.expand : InlineExpande
 public meta def _root_.Lean.Doc.Parser.Inline.display_math.expand : InlineExpander := mathExpand
 
 
-public meta def partCommand (cmd : VersoBlock) : PartElabM Unit :=
-  withTraceNode `Elab.Verso.part (fun _ => pure m!"Part modification {cmd}") <|
-  withRef cmd <| withFreshMacroScope <| do
+/--
+Elaborates a top-level block.
+
+Parser error recovery may result in a null node. The null node contains the trees that the block's
+parser built before its parse error. Each tree is elaborated in order as a top-level block that is
+partial syntax.
+-/
+public meta def partCommand (cmd : VersoBlock) : PartElabM Unit := do
   modifyThe PartElabM.State ({ · with blockHasMissing := cmd.raw.hasMissing })
-  match cmd.raw with
-  | stx@(.node _ kind _) =>
-    let some view := BlockView.of ⟨stx⟩
-      | fallback
-    let exp ← partCommandsFor kind
-    for e in exp do
-      try
-        withFreshMacroScope <| e view
-        return
-      catch
-        | ex@(.internal id) =>
-          if id == unsupportedSyntaxExceptionId then continue
-          else throw ex
-        | ex => throw ex
-    fallback
-  | _ =>
-    fallback
+  if cmd.raw.isOfKind nullKind then
+    for tree in cmd.raw.getArgs do
+      unless tree.isMissing do topLevelBlock ⟨tree⟩
+  else topLevelBlock cmd
 where
-  fallback : PartElabM Unit := do
+  topLevelBlock (cmd : VersoBlock) : PartElabM Unit :=
+    withTraceNode `Elab.Verso.part (fun _ => pure m!"Part modification {cmd}") <|
+    withRef cmd <| withFreshMacroScope <| do
+    match cmd.raw with
+    | stx@(.node _ kind _) =>
+      let some view := BlockView.of ⟨stx⟩
+        | fallback cmd
+      let exp ← partCommandsFor kind
+      for e in exp do
+        try
+          withFreshMacroScope <| e view
+          return
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then continue
+            else throw ex
+          | ex => throw ex
+      fallback cmd
+    | _ =>
+      fallback cmd
+  fallback (cmd : VersoBlock) : PartElabM Unit := do
     if (← getThe PartElabM.State).partContext.priorParts.size > 0 then
       let which := (← getThe PartElabM.State).partContext.priorParts.back?.map fun
         | .mk _ _ _ titleString .. => s!" (namely “{titleString}”)"
