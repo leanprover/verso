@@ -28,6 +28,46 @@ let paramName = params.get("name");
 
 let xref = /** @type {{xref: XRef}} */ (/** @type {unknown} */ (window)).xref;
 
+/**
+ * The replacements for characters that are not valid in slugs. This mirrors the mangling table in
+ * MultiVerso.Slug.
+ * @type {Record<string, string>}
+ */
+const slugReplacements = {
+    "<": "_LT_",
+    ">": "_GT_",
+    ";": "_SEMI_",
+    "‹": "_FLQ_",
+    "›": "_FRQ_",
+    "«": "_FLQQ_",
+    "»": "_FLQQ_",
+    "⟨": "_LANGLE_",
+    "⟩": "_RANGLE_",
+    "(": "_LPAR_",
+    ")": "_RPAR_",
+    "[": "_LSQ_",
+    "]": "_RSQ_",
+    "→": "_ARR_",
+    "↦": "_MAPSTO_",
+    "⊢": "_VDASH_",
+};
+
+/**
+ * Converts a string to a valid slug, mangling as appropriate. This mirrors the slug computation in
+ * MultiVerso.Slug, so names can be compared with links that were minted from their slugs.
+ * @param {string} s
+ * @returns {string}
+ */
+function sluggify(s) {
+    let out = "";
+    for (const c of s) {
+        if (/^[a-zA-Z0-9_-]$/.test(c)) out += c;
+        else if (c === " " || c === "\t" || c === "\r" || c === "\n") out += "-";
+        else out += slugReplacements[c] ?? "___";
+    }
+    return out;
+}
+
 if (paramName) {
     /**
      * @type (Item & {domain: string})[]
@@ -52,6 +92,27 @@ if (paramName) {
             if (opts["contents"].hasOwnProperty(paramName)) {
                 for (const i of opts["contents"][paramName]) {
                     options.push(Object.assign(i, { domain: dom }));
+                }
+            }
+        }
+    }
+
+    if (options.length == 0) {
+        // Permalinks from before a bug fix that separated sections' HTML IDs from their
+        // canonical names in the section domain were mangled as slugs. If we don't find
+        // any results, we try to recover by checking equality modulo sluggification.
+        // This workaround was introduced in August 2026 and should be removed when it
+        // seems unlikely for old permalinks to be a significant problem.
+        const nameSlug = sluggify(paramName);
+        const searchDomains = domains && domains.length > 0 ? domains : Object.keys(xref);
+        for (const domain of searchDomains) {
+            if (!xref.hasOwnProperty(domain)) continue;
+            const contents = xref[domain]["contents"];
+            for (const key of Object.keys(contents)) {
+                if (sluggify(key) === nameSlug) {
+                    for (const i of contents[key]) {
+                        options.push(Object.assign(i, { domain: domain }));
+                    }
                 }
             }
         }

@@ -17,6 +17,7 @@ public import Verso.Output.Html.ElasticLunr
 public import Verso.Doc.Lsp
 public import Verso.Doc.Elab
 public import Verso.FS
+public import Verso.SmartSuggestions
 
 public import VersoSearch
 public import VersoSearch.DomainSearch
@@ -27,6 +28,7 @@ public import VersoManual.Basic
 public import VersoManual.TeX
 public import VersoManual.TeX.Config
 public import VersoManual.Html
+public import VersoManual.Html.Hoist
 public import VersoManual.Html.Config
 public import VersoManual.Html.Features
 public import VersoManual.Html.Style
@@ -60,6 +62,7 @@ open Verso.FS
 open Verso.Doc Elab
 open Verso.Multi
 open Verso.Genre.Manual.TeX
+open Verso.Genre.Manual.Html
 open Verso.Genre.Manual.WordCount
 
 open Verso.Code (LinkTargets)
@@ -83,6 +86,34 @@ deriving BEq, ToJson, FromJson
 
 defmethod Part.htmlToc (part : Part Manual) : Bool :=
   part.metadata.map (·.htmlToc) |>.getD true
+
+/--
+Renders the names among {name}`candidates` that are close to {name}`name`, as a suffix for the
+error message about an unresolved cross-reference. Returns the empty string when no candidate is
+close enough.
+-/
+def suggestRefTargets (candidates : Array String) (name : String) : String :=
+  let suggestions := smartSuggestions candidates name (count := 5)
+  if suggestions.isEmpty then ""
+  else suggestions.foldl (init := "\nDid you mean one of these?") (· ++ s!"\n * '{·}'")
+
+/--
+The error message for a cross-reference to {name}`name` that traversal could not resolve.
+
+When the name is absent from the domain, nearby names from the domain's contents in {name}`st`
+are suggested. When the name is present, resolution failed for another reason, such as the name
+having multiple targets. The resulting message preserves this.
+-/
+def unresolvedRefMessage (st : TraverseState) (domain : Option Name) (name : String) : String :=
+  let domain := domain.getD sectionDomain
+  if (st.getDomainObject? domain name).isSome then
+    match st.resolveDomainObject domain name with
+    | .error e => e
+    | .ok _ =>
+      s!"'{name}' in {domain} was not resolved during traversal; the document may need more traversal passes"
+  else
+    let candidates := st.domains[domain]?.map (·.canonicalNames) |>.getD #[]
+    s!"No destination found for tag '{name}' in {domain}{suggestRefTargets candidates name}"
 
 inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (remote : Option String) (resolvedDestination : Option Link := none) where
   data := ToJson.toJson (RefInfo.mk canonicalName domain remote resolvedDestination)
@@ -108,7 +139,7 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
       | .error e =>
         reportError e; content.mapM go
       | .ok { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
-        reportError ("No destination found for tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
+        reportError (unresolvedRefMessage (← Doc.TeX.state) domain name); content.mapM go
       | .ok { canonicalName := name, domain, remote := some remote, resolvedDestination := none } =>
         reportError ("No destination found for remote '" ++ remote ++ "' tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
       | .ok {resolvedDestination := some dest, remote, ..} =>
@@ -127,7 +158,7 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
       | .error e =>
         reportError e; content.mapM go
       | .ok { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
-        reportError ("No destination found for tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
+        reportError (unresolvedRefMessage (← Doc.Html.HtmlT.state) domain name); content.mapM go
       | .ok { canonicalName := name, domain, remote := some remote, resolvedDestination := _ } =>
         let domain := domain |>.getD sectionDomain
         let remoteData ← readThe AllRemotes
@@ -141,7 +172,7 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
               else
                 let dests := objs.map (s!" * {·.link.link}") |>.toList |> "\n".intercalate
                 reportError s!"Remote '{remote}' domain '{domain}' contains multiple destinations for '{name}':\n{dests}"
-            else reportError s!"Remote '{remote}' contains domain '{domain}, but it not item '{name}'"
+            else reportError s!"Remote '{remote}' contains domain '{domain}', but not item '{name}'{suggestRefTargets dom.canonicalNames name}"
           else reportError s!"Remote '{remote}' does not contain domain '{domain}' (looking up '{name}')"
         else reportError s!"Remote '{remote}' not found for tag '{name}' in domain '{domain}'"
         -- If any error was logged, just don't emit a link
@@ -545,7 +576,8 @@ def emitXrefsJson (dir : System.FilePath) (state : TraverseState) : IO Unit := d
 def emitFindHtml (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseState) (xrefJson : String) (config : Config) : IO Unit := do
   emitXrefsJson dir state
   ensureDir (dir / "find")
-  IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (relativizeLinks <| xref toc xrefJson find.js state config).asString)
+  IO.FS.writeFile (dir / "find" / "index.html")
+    (Html.doctype ++ (Hoist.postprocess <| relativizeLinks <| xref toc xrefJson find.js state config).asString)
 
 open Output.Html in
 /--
@@ -580,7 +612,7 @@ def emitSearchResultsHtml
   ensureDir (dir / "search")
   IO.FS.writeFile
     (dir / "search" / "index.html")
-    (Html.doctype ++ (relativizeLinks <| searchResultsPage toc bookTitle state config).asString)
+    (Html.doctype ++ (Hoist.postprocess <| relativizeLinks <| searchResultsPage toc bookTitle state config).asString)
 
 
 section
@@ -788,7 +820,7 @@ where
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn <| Html.asString <| relativizeLinks <|
+      h.putStrLn <| Html.asString <| Hoist.postprocess <| relativizeLinks <|
         page toc ctxt.path text.titleString titleToShow pageContent state config.toConfig thisPageToc (showNavButtons := false)
 
 
@@ -909,7 +941,7 @@ where
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn <| Html.asString <| relativizeLinks <|
+      h.putStrLn <| Html.asString <| Hoist.postprocess <| relativizeLinks <|
         page bookContents ctxt.path part.titleString bookTitle pageContent state config.toConfig thisPageToc
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do

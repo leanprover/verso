@@ -159,17 +159,17 @@ public meta def _root_.Lean.Doc.Syntax.link.expand : InlineExpander
       match dest with
       | `(link_target| ( $url )) =>
         pure (↑ url)
-      | `(link_target| [ $ref ]) => do
+      | `(link_target| [ $labelStx ]) => do
         -- Round-trip through quote to get rid of source locations, preventing unwanted IDE info
-        addLinkRef ref
+        addLinkRef labelStx
       | _ => throwErrorAt dest "Couldn't parse link destination"
     ``(Inline.link #[$[$(← txt.mapM elabInline)],*] $url)
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Lean.Doc.Syntax.footnote]
 public meta def _root_.Lean.Doc.Syntax.link.footnote : InlineExpander
-  | `(inline| footnote( $name:str )) => do
-    ``(Inline.footnote $(quote name.getString) $(← addFootnoteRef name))
+  | `(inline| footnote( $labelStx:str )) => do
+    ``(Inline.footnote $(quote labelStx.getString) $(← addFootnoteRef labelStx))
   | _ => throwUnsupportedSyntax
 
 
@@ -181,9 +181,9 @@ public meta def _root_.Lean.Doc.Syntax.image.expand : InlineExpander
       match dest with
       | `(link_target| ( $url )) =>
         pure (↑ url)
-      | `(link_target| [ $ref ]) => do
+      | `(link_target| [ $labelStx ]) => do
         -- Round-trip through quote to get rid of source locations, preventing unwanted IDE info
-        addLinkRef ref
+        addLinkRef labelStx
       | _ => throwErrorAt dest "Couldn't parse link destination"
     ``(Inline.image $(quote altText) $url)
   | _ => throwUnsupportedSyntax
@@ -212,6 +212,7 @@ public meta def _root_.Lean.Doc.Syntax.display_math.expand : InlineExpander
 public meta def partCommand (cmd : TSyntax `block) : PartElabM Unit :=
   withTraceNode `Elab.Verso.part (fun _ => pure m!"Part modification {cmd}") <|
   withRef cmd <| withFreshMacroScope <| do
+  modifyThe PartElabM.State ({ · with blockHasMissing := cmd.raw.hasMissing })
   match cmd.raw with
   | stx@(.node _ kind _) =>
     let exp ← partCommandsFor kind
@@ -244,14 +245,22 @@ where
 
 @[part_command Lean.Doc.Syntax.footnote_ref]
 public meta partial def _root_.Lean.Doc.Syntax.footnote_ref.command : PartCommand
-  | `(block| [^ $name:str ]: $contents* ) =>
-    addFootnoteDef name =<< contents.mapM (withRefsAllowed .onlyIfDefined <| elabInline ·)
+  | `(block| [^ $labelStx:str ]: $contents* ) => do
+    let before := (← getThe DocElabM.State).footnoteRefs
+    let contents ← contents.mapM (elabInline ·)
+    -- The footnote uses in the contents are tracked so we can check for cycles when finishing the doc
+    let mut contentUses := #[]
+    for (label, uses) in (← getThe DocElabM.State).footnoteRefs do
+      let known := before[label]?.map (·.useSites.size) |>.getD 0
+      for use in uses.useSites.extract known do
+        contentUses := contentUses.push (label, use)
+    addFootnoteDef labelStx contents contentUses
   | _ => throwUnsupportedSyntax
 
 @[part_command Lean.Doc.Syntax.link_ref]
 public meta partial def _root_.Lean.Doc.Syntax.link_ref.command : PartCommand
-  | `(block| [ $name:str ]: $url:str ) =>
-    addLinkDef name url.getString
+  | `(block| [ $labelStx:str ]: $url:str ) =>
+    addLinkDef labelStx url.getString
   | _ => throwUnsupportedSyntax
 
 partial def PartElabM.State.close (endPos : String.Pos.Raw) (state : PartElabM.State) : Option PartElabM.State :=
@@ -264,8 +273,6 @@ partial def PartElabM.State.closeAll (endPos : String.Pos.Raw) (state : PartElab
     if state'.currentLevel > 0 then
       state'.closeAll endPos
     else state'
-
-
 
 @[part_command Lean.Doc.Syntax.header]
 public meta partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
@@ -297,6 +304,11 @@ public meta partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
 
 @[part_command Lean.Doc.Syntax.metadata_block]
 public meta def _root_.Lean.Doc.Syntax.metadata_block.command : PartCommand
+  | stx => do
+    if (← getThe PartElabM.State).blockHasMissing then return
+    go stx
+where
+  go : PartCommand
   | `(block| %%%%$tk $fieldOrAbbrev*  %%%) => do
     let ctxt := (← getThe PartElabM.State).partContext
     if ctxt.blocks.size > 0 || ctxt.priorParts.size > 0 then
@@ -309,7 +321,9 @@ public meta def _root_.Lean.Doc.Syntax.metadata_block.command : PartCommand
 
 @[part_command Lean.Doc.Syntax.command]
 public meta def includeSection : PartCommand
-  | `(block|command{include $args* }) => do
+  | stx@`(block|command{include $args* }) => do
+    -- An include that is partial syntax has no effect.
+    if (← getThe PartElabM.State).blockHasMissing then return
     if h : args.size = 0 then throwError "Expected an argument"
     else if h : args.size > 2 then throwErrorAt args[2] "Expected one or two arguments"
     else

@@ -18,6 +18,8 @@ import Lean.DocString.Syntax
 public meta import Verso.Hover
 public meta import Verso.Doc.PointOfInterest
 public meta import Verso.Doc.Name
+public meta import Verso.Doc.Concrete.Environment
+public meta import VersoUtil.InfoTree
 
 namespace Verso.Lsp
 
@@ -131,6 +133,77 @@ meta partial instance : FromJson Lean.Lsp.DocumentSymbolResult where
     pure ⟨syms⟩
 
 
+/--
+The link and footnote definitions and uses in the info trees found in `snaps`, each with the syntax
+of its label.
+-/
+meta def docRefs (snaps : List Lean.Server.Snapshots.Snapshot) : Array (Syntax × DocRefInfo) :=
+  snaps.foldl (init := #[]) fun acc snap =>
+    snap.infoTree.foldInfo (init := acc) fun _ctxt info acc =>
+      match info with
+      | .ofCustomInfo ⟨stx, data⟩ =>
+        if let some i := data.get? DocRefInfo then acc.push (stx, i) else acc
+      | _ => acc
+
+/--
+All the custom info data of type `α` in `snap` whose syntax contains `pos`, paired with its syntax.
+-/
+meta def customInfoAt (α : Type) [TypeName α] (snap : Lean.Server.Snapshots.Snapshot)
+    (pos : String.Pos.Raw) : Array (Syntax × α) :=
+  Verso.foldCustomInfoAt α snap.cmdState.infoState pos (init := #[]) fun stx x acc =>
+    if stx.containsPos pos then acc.push (stx, x) else acc
+
+/-- The link and footnote definitions and uses in `snap` whose labels contain `pos`. -/
+meta def docRefsAt (snap : Lean.Server.Snapshots.Snapshot) (pos : String.Pos.Raw) :
+    Array (Syntax × DocRefInfo) :=
+  customInfoAt DocRefInfo snap pos
+
+/--
+Every link and footnote definition and use that the `#doc` document whose state is in the extension
+in `env` has recorded so far. Each is paired with the syntax of its label at that location.
+-/
+meta def envDocRefs (env : Environment) : Array (Syntax × DocRefInfo) := Id.run do
+  let st := Verso.Doc.Concrete.docEnvironmentExt.getState env
+  let documentPos? := st.partState.documentPos?
+  let mut out := #[]
+  for (label, d) in st.partState.linkDefs do
+    out := out.push (d.labelStx.raw, { kind := .link, label, documentPos?, isDef := true })
+  for (label, d) in st.partState.footnoteDefs do
+    out := out.push (d.labelStx.raw, { kind := .footnote, label, documentPos?, isDef := true })
+  for (label, uses) in st.docState.linkRefs do
+    for use in uses.useSites do
+      out := out.push (use, { kind := .link, label, documentPos?, isDef := false })
+  for (label, uses) in st.docState.footnoteRefs do
+    for use in uses.useSites do
+      out := out.push (use, { kind := .footnote, label, documentPos?, isDef := false })
+  return out
+
+open Lean Server RequestM in
+/--
+The definitions and uses of the links and footnotes in `here`, in source order. The entries of
+`here` are from the snapshot `snap`. Each source range appears once in the result.
+-/
+meta def relatedDocRefs (snap : Lean.Server.Snapshots.Snapshot) (here : Array (Syntax × DocRefInfo)) :
+    RequestM (Array (Syntax × DocRefInfo)) := do
+  if here.isEmpty then return #[]
+  let (snaps, _, _) ← (← readDoc).cmdSnaps.getFinishedPrefix
+  let env := snaps.getLast?.getD snap |>.env
+  let envDocumentPos? := (Verso.Doc.Concrete.docEnvironmentExt.getState env).partState.documentPos?
+  let refs :=
+    if envDocumentPos?.isSome && here.any (·.2.documentPos? == envDocumentPos?) then envDocRefs env
+    else docRefs [snap]
+  -- The definitions and uses under the cursor are always included. A block that fails leaves its
+  -- definitions and uses out of the environment.
+  let related := here ++ refs.filter fun (_, r) => here.any (·.2.sameRef r)
+  let mut seen : Std.HashSet (Option String.Pos.Raw × Option String.Pos.Raw) := {}
+  let mut out := #[]
+  for (stx, r) in related do
+    let span := (stx.getPos?, stx.getTailPos?)
+    unless seen.contains span do
+      seen := seen.insert span
+      out := out.push (stx, r)
+  return out.mergeSort fun (s1, _) (s2, _) => s1.getPos?.getD 0 ≤ s2.getPos?.getD 0
+
 open Lean Server Lsp RequestM in
 meta def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) : RequestM (RequestTask (Array Location)) := do
   let doc ← readDoc
@@ -138,21 +211,9 @@ meta def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Locati
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
     withFallbackAs (!·.isEmpty) prev <| do
-      let nodes := snap.infoTree.deepestNodes fun _ctxt info _arr =>
-        match info with
-        | .ofCustomInfo ⟨stx, data⟩ =>
-          if stx.containsPos pos then
-            data.get? DocRefInfo
-          else none
-        | _ => none
-      if nodes.isEmpty then return #[]
-      else
-        let mut locs : Array Location := #[]
-        for node in nodes do
-          for stx in node.syntax do
-            if let some range := stx.lspRange text then
-              locs := locs.push {uri := params.textDocument.uri, range := range}
-        pure <| locs
+      let related ← relatedDocRefs snap (docRefsAt snap pos)
+      return related.filterMap fun (stx, _) =>
+        stx.lspRange text |>.map ({uri := params.textDocument.uri, range := ·})
 
 open Lean Server Lsp RequestM in
 meta partial def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHighlightResult) : RequestM (RequestTask DocumentHighlightResult) := do
@@ -161,33 +222,22 @@ meta partial def handleHl (params : DocumentHighlightParams) (prev : RequestTask
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap =>
     withFallbackAs (!·.isEmpty) prev <| do
-      let nodes : List (_ ⊕ _) := snap.infoTree.deepestNodes fun _ctxt info _arr =>
-        match info with
-        | .ofCustomInfo ⟨stx, data⟩ =>
-          if stx.containsPos pos then
-            (Sum.inl <$> data.get? DocListInfo) <|> (Sum.inr <$> data.get? DocRefInfo)
-          else none
-        | _ => none
-      if nodes.isEmpty then
+      let lists := customInfoAt DocListInfo snap pos |>.map (·.2)
+      let related ← relatedDocRefs snap (docRefsAt snap pos)
+      if lists.isEmpty && related.isEmpty then
         if let some hls := syntactic text pos snap.stx then
           return hls.filterMap (fun stx : Syntax => stx.lspRange text) |>.map ({range := · : DocumentHighlight})
         else
           return #[]
       else
         let mut hls := #[]
-        for node in nodes do
-          match node with
-          | .inl ⟨bulletStxs, _⟩ =>
-            for s in bulletStxs do
-              if let some range := s.lspRange text then
-                hls := hls.push {range : DocumentHighlight}
-          | .inr ⟨defSite, useSites⟩ =>
-            if let some s := defSite then
-              if let some range := s.lspRange text then
-                hls := hls.push {range : DocumentHighlight}
-            for s in useSites do
-              if let some range := s.lspRange text then
-                hls := hls.push {range : DocumentHighlight}
+        for ⟨bulletStxs, _⟩ in lists do
+          for s in bulletStxs do
+            if let some range := s.lspRange text then
+              hls := hls.push {range : DocumentHighlight}
+        for (s, _) in related do
+          if let some range := s.lspRange text then
+            hls := hls.push {range : DocumentHighlight}
         pure hls
 where
   -- Unfortunately, VS Code doesn't do the right thing, so many of these highlights don't work there:
@@ -604,32 +654,17 @@ where
 
 open Lean Server Lsp RequestM in
 meta def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array LeanLocationLink)) : RequestM (RequestTask (Array LeanLocationLink)) := do
-  let ctx ← read
   let doc ← readDoc
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
-  let locTask ← RequestM.asTask do
-    let (snaps, _, _) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 300 (cancelTks := ctx.cancelTk.cancellationTasks)
-    let nodes := snaps.flatMap fun snap =>
-      snap.infoTree.collectNodesBottomUp fun _ctxt info _arr xs =>
-          match info with
-          | .ofCustomInfo ⟨stx, data⟩ =>
-            if stx.containsPos pos then
-              if let some i := data.get? DocRefInfo then i :: xs else xs
-            else xs
-          | _ => xs
-
-    let mut locs : Array LeanLocationLink := #[]
-    for node in nodes do
-      match node with
-      | ⟨some defSite, _⟩ =>
-        let mut origin : Option Range := none
-        for stx in node.syntax do
-          if let some ⟨head, tail⟩ := stx.getRange? then
-            if pos ≥ head && pos ≤ tail then
-              origin := stx.lspRange text
-              break
-        let some target := defSite.lspRange text
+  bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap =>
+    withFallbackAs (!·.isEmpty) prev <| do
+      let here := docRefsAt snap pos
+      let origin := here[0]?.bind (·.1.lspRange text)
+      let mut locs : Array LeanLocationLink := #[]
+      for (labelStx, r) in ← relatedDocRefs snap here do
+        unless r.isDef do continue
+        let some target := labelStx.lspRange text
           | continue
         locs := locs.push {
           originSelectionRange? := origin,
@@ -644,10 +679,7 @@ meta def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Ar
           ident? := none,
           isDefault := true
         }
-      | _ => continue
-    pure locs
-  mergeResponses prev locTask fun xs ys =>
-    xs.getD #[] ++ ys.getD #[]
+      pure locs
 
 open Lean Server Lsp RequestM in
 meta partial def handleTokens (prev : RequestTask SemanticTokens)
@@ -715,13 +747,13 @@ public meta def renumberLists : CodeActionProvider := fun params snap => do
   let text := doc.meta.text
   let startPos := text.lspPosToUtf8Pos params.range.start
   let endPos := text.lspPosToUtf8Pos params.range.end
-  let lists := snap.infoTree.foldInfo (init := #[]) fun ctx info result => Id.run do
-    let .ofCustomInfo ⟨stx, data⟩ := info | result
-    let some listInfo := data.get? DocListInfo | result
-    let (some head, some tail) := (stx.getPos? true, stx.getTailPos? true) | result
-    unless head ≤ endPos && startPos ≤ tail do return result
-    result.push (ctx, listInfo)
-  pure <| lists.map fun (_, ⟨bulletStxs, _⟩) => {
+  let lists :=
+    Verso.foldCustomInfoIn DocListInfo snap.cmdState.infoState startPos endPos (init := #[])
+    fun stx listInfo result => Id.run do
+      let (some head, some tail) := (stx.getPos? true, stx.getTailPos? true) | result
+      unless head ≤ endPos && startPos ≤ tail do return result
+      result.push listInfo
+  pure <| lists.map fun ⟨bulletStxs, _⟩ => {
       eager := {
         title := "Number from 1",
         kind? := some "quickfix",
@@ -913,13 +945,7 @@ meta def handleHover (params : HoverParams) (prev : RequestTask (Option Hover)) 
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
     withFallbackAs (·.isSome) prev <| do
-      let nodes : List (Syntax × CustomHover) := snap.infoTree.deepestNodes fun _ctxt info _arr =>
-        match info with
-        | .ofCustomInfo ⟨stx, data⟩ =>
-          if stx.containsPos pos then
-            (stx, ·) <$> data.get? CustomHover
-          else none
-        | _ => none
+      let nodes := customInfoAt CustomHover snap pos |>.toList
       match nodes with
       | [] => pure none
       | h :: hs =>

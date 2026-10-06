@@ -10,3 +10,4 @@ name = "LibA"
 
 [[lean_lib]]
 name = "LibB"
+leanOptions = {weak.linter.unusedVariables = false, weak.verso.test.nonexistent = true}

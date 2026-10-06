@@ -32,9 +32,8 @@ public partial def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term)
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
   decorateClosing block
   match block.raw with
-  | .missing =>
-    ``(sorryAx (Block _) (synthetic := true))
-  | stx@(.node _ kind _) =>
+  | .missing => elabMissing ``Verso.Doc.Block.empty ``Verso.Doc.Block
+  | stx@(.node _ kind _) => elabWithMissing stx ``Verso.Doc.Block.empty do
     let env ← getEnv
     match (← liftMacroM (expandMacroImpl? env stx)) with
     | some (_decl, stxNew?) => -- TODO terminfo here? Right now, we suppress most uses of it.

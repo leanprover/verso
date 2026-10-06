@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 module
 public import VersoUtil.BinFiles
+public import VersoUtil.InfoTree
 public import VersoUtil.LzCompress
 public import VersoUtil.WfRec
 public import VersoUtil.Zip

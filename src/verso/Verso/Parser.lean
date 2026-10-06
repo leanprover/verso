@@ -240,7 +240,7 @@ def OrderedListType.all : List OrderedListType :=
   [.numDot, .parenAfter]
 
 theorem OrderedListType.all_complete : ∀ x : OrderedListType, x ∈ all := by
-  unfold all; intro x; cases x <;> repeat constructor
+  intro x; cases x <;> simp [all]
 
 inductive UnorderedListType where
    /-- Items like * -/
@@ -255,7 +255,7 @@ def UnorderedListType.all : List UnorderedListType :=
   [.asterisk, .dash, .plus]
 
 theorem UnorderedListType.all_complete : ∀ x : UnorderedListType, x ∈ all := by
-  unfold all; intro x; cases x <;> repeat constructor
+  intro x; cases x <;> simp [all]
 
 def unorderedListIndicator (type : UnorderedListType) : ParserFn :=
   asStringFn <|
@@ -785,8 +785,8 @@ mutual
       asStringFn (chFn ':' false) >> ignoreFn (lookaheadFn (chFn ' '))
 
   partial def blockquote (ctxt : BlockCtxt) : ParserFn :=
-    atomicFn <| nodeFn ``blockquote <|
-      takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent >> chFn '>' >>
+    nodeFn ``blockquote <|
+      atomicFn (takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent >> chFn '>') >>
       withCurrentColumn fun c => blocks { ctxt with minIndent := c }
 
   partial def unorderedList (ctxt : BlockCtxt) : ParserFn :=
@@ -978,6 +978,15 @@ mutual
 
   partial def document (blockContext : BlockCtxt := {}) : ParserFn := ignoreFn (manyFn blankLine) >> blocks blockContext
 end
+
+/--
+Parses one top-level block of a document and the blank lines after it. On a parse error, it
+recovers with `recoverPartialBlock`. The block command parser `versoBlockCommandFn` uses it for each
+top-level block.
+-/
+def blockCommandRecovery : ParserFn := fun c s =>
+  let s := recoverPartialBlock (block {}) c s
+  if s.hasError then s else ignoreFn (manyFn blankLine) c s
 
 end Verso.Parser
 

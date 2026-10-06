@@ -155,8 +155,70 @@ instance : Zipper (List α) Dir (ListZipper α) where
 {include 1 PackageManual.DocFeatures}
 
 # Notes
+%%%
+tag := "margin-notes"
+%%%
 
 Use {lean}`margin` to create a marginal note.{margin}[Marginal notes should be used like footnotes.]
+
+Margin notes are numbered sequentially throughout a page, with matching numbers on the reference mark in the text and on the note itself.
+This page has enough notes that the later ones have two-digit numbers:
+two{margin}[Note two] three{margin}[Note three] four{margin}[Note four] five{margin}[Note five] six{margin}[Note six] seven{margin}[Note seven] eight{margin}[Note eight] nine{margin}[Note nine] ten{margin}[Note ten] eleven{margin}[Note eleven] twelve{margin}[Note twelve].
+
+The following consecutive tables exercise structural hoisting while preserving their inline markers:
+
+:::table
+*
+  * First table marker{margin}[Hoisted table note one]
+  * Ordinary cell
+:::
+
+:::table
+*
+  * Second table marker{margin}[Hoisted table note two]
+  * Ordinary cell
+:::
+
+This docstring exercises the same structural hoisting from a documentation box:
+
+:::tactic "rfl"
+A marker inside the documentation box{margin}[Hoisted docstring note].
+:::
+
+# Table Marginalia Stress{margin}[A note in a section title]
+
+:::table
+*
+  * Stress table row one
+  * One
+*
+  * Stress table row two
+  * Two
+*
+  * Stress table row three
+  * Three
+*
+  * Stress table row four
+  * Four
+*
+  * Stress table row five
+  * Five
+*
+  * Stress table row six
+  * Six
+*
+  * Stress table row seven
+  * Seven
+*
+  * Stress table row eight
+  * Eight
+*
+  * Stress table row nine
+  * Nine
+*
+  * Stress table row ten{margin}[Stress table note one contains enough text to wrap across multiple lines.]{margin}[Stress table note two contains enough text to wrap across multiple lines.]{margin}[Stress table note three contains enough text to wrap across multiple lines.]{margin}[Stress table note four contains enough text to wrap across multiple lines.]{margin}[Stress table note five contains enough text to wrap across multiple lines.]{margin}[Stress table note six contains enough text to wrap across multiple lines.]{margin}[Stress table note seven contains enough text to wrap across multiple lines.]{margin}[Stress table note eight contains enough text to wrap across multiple lines.]
+  * Ten
+:::
 
 # Citations
 
