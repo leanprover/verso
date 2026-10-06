@@ -46,7 +46,7 @@
     --verso-code-info-hover-color: currentcolor;
     --verso-code-info-hover-bg-color: #4777ff;
     --verso-info-indicator-color: #4777ff;
-    --verso-message-info-color: black;
+    --verso-message-info-color: currentcolor;
     --verso-tooltip-info-color: var(--verso-tooltip-color);
     --verso-tooltip-info-bg-color: var(--verso-tooltip-bg-color);
     --verso-tooltip-info-border-color: #4777ff;
@@ -57,7 +57,7 @@
     --verso-code-warning-hover-color: currentcolor;
     --verso-code-warning-hover-bg-color: #ffd580;
     --verso-warning-indicator-color: #e7a71d; /* 2.11 contrast ratio for white, 9.94 for black */
-    --verso-message-warning-color: black;
+    --verso-message-warning-color: currentcolor;
     --verso-tooltip-warning-color: var(--verso-tooltip-color);
     --verso-tooltip-warning-bg-color: var(--verso-tooltip-bg-color);
     --verso-tooltip-warning-border-color: #ffd580;

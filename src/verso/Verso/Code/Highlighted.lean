@@ -975,7 +975,7 @@ severity accent to distinguish them.
   border: none;
 }
 
-.error .verso-message, .error .verso-message label {
+.error .verso-message, .error .verso-message .token, .error .verso-message label {
   color: var(--verso-message-error-color, #cc0000);
 }
 
@@ -1020,12 +1020,12 @@ severity accent to distinguish them.
   border: none;
 }
 
-.warning .verso-message, .warning .verso-message label {
-  color: var(--verso-message-warning-color, black);
+.warning .verso-message, .warning .verso-message .token, .warning .verso-message label {
+  color: var(--verso-message-warning-color, currentcolor);
 }
 
 .warning .verso-message .case-label:has(input[type=\"checkbox\"])::before {
-  background-color: var(--verso-message-warning-color, black) !important;
+  background-color: var(--verso-message-warning-color, currentcolor) !important;
 }
 
 
@@ -1048,12 +1048,12 @@ severity accent to distinguish them.
   border: none;
 }
 
-.information .verso-message, .information .verso-message label {
-  color: var(--verso-message-info-color, black);
+.information .verso-message, .information .verso-message .token, .information .verso-message label {
+  color: var(--verso-message-info-color, currentcolor);
 }
 
 .information .verso-message .case-label:has(input[type=\"checkbox\"])::before {
-  background-color: var(--verso-message-info-color, black) !important;
+  background-color: var(--verso-message-info-color, currentcolor) !important;
 }
 
 .hl.lean div.docstring {

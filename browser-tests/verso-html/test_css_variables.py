@@ -27,7 +27,7 @@ def markup(cls: str, theme: str) -> str:
       <span class="has-info {cls}" id="vt-span">
         <span class="hover-container">
           <span class="hover-info messages">
-            <code class="verso-message {cls}" id="vt-msg">msg</code>
+            <code class="verso-message {cls}" id="vt-msg">msg <span class="token keyword" id="vt-msg-token">kw</span></code>
           </span>
         </span>
         <span class="token const" id="vt-token">tok</span>
@@ -37,14 +37,21 @@ def markup(cls: str, theme: str) -> str:
         </span>
       </span>
     </div>
-    <pre class="lean-output {cls}" id="vt-output">out</pre>
+    <pre class="hl lean lean-output {cls}" id="vt-output"><code class="verso-message {cls}" id="vt-out-msg">out <span class="token keyword" id="vt-out-token">kw</span></code></pre>
     <div class="tippy-box" data-theme="{theme} message" data-placement="top" id="vt-tippy">tip</div>
     <div class="tippy-box" data-theme="lean" data-placement="top" id="vt-tippy-lean">doc</div>
     <div class="tippy-box" data-theme="tactic" data-placement="top" id="vt-tippy-tactic">state</div>
     """
 
 
-def setup(page: Page, server: str, vars: dict, cls: str, theme: str):
+def setup(
+    page: Page,
+    server: str,
+    vars: dict,
+    cls: str,
+    theme: str,
+    text_color: str | None = None,
+):
     page.goto(f"{server}/LitConfig/")
     page.wait_for_load_state("networkidle")
     page.evaluate(
@@ -55,6 +62,8 @@ def setup(page: Page, server: str, vars: dict, cls: str, theme: str):
         }""",
         vars,
     )
+    if text_color is not None:
+        page.evaluate("c => { document.body.style.color = c; }", text_color)
     page.evaluate(
         "html => document.body.insertAdjacentHTML('beforeend', html)",
         markup(cls, theme),
@@ -117,6 +126,50 @@ class TestSeverityVariables:
         )
         assert computed(page, "#vt-msg", "color") == "rgb(130, 140, 150)"
         assert computed(page, "#vt-output", "border-left-color") == "rgb(160, 170, 180)"
+
+    @pytest.mark.parametrize(("cls", "v", "theme"), SEVERITIES)
+    def test_message_is_one_color(
+        self, server: str, page: Page, cls: str, v: str, theme: str
+    ):
+        """A message has one color throughout: the code it quotes takes the message
+        color, whatever the token colors are."""
+        setup(
+            page,
+            server,
+            {
+                f"--verso-message-{v}-color": "rgb(130, 140, 150)",
+                "--verso-code-keyword-color": "rgb(1, 2, 3)",
+            },
+            cls,
+            theme,
+        )
+        assert computed(page, "#vt-msg", "color") == "rgb(130, 140, 150)"
+        assert computed(page, "#vt-msg-token", "color") == "rgb(130, 140, 150)"
+
+    @pytest.mark.parametrize(
+        ("cls", "v", "theme"), [s for s in SEVERITIES if s[0] != "error"]
+    )
+    def test_message_color_defaults_to_surrounding_text(
+        self, server: str, page: Page, cls: str, v: str, theme: str
+    ):
+        """Without a severity variable, a warning or information message in an output
+        block, and the code it quotes, take the color of the text around them."""
+        setup(
+            page,
+            server,
+            {"--verso-code-keyword-color": "rgb(1, 2, 3)"},
+            cls,
+            theme,
+            text_color="rgb(21, 22, 23)",
+        )
+        assert computed(page, "#vt-out-msg", "color") == "rgb(21, 22, 23)"
+        assert computed(page, "#vt-out-token", "color") == "rgb(21, 22, 23)"
+
+    def test_error_message_color_default(self, server: str, page: Page):
+        """Without a severity variable, an error message has its own color."""
+        setup(page, server, {}, "error", "error", text_color="rgb(21, 22, 23)")
+        assert computed(page, "#vt-out-msg", "color") == "rgb(204, 0, 0)"
+        assert computed(page, "#vt-out-token", "color") == "rgb(204, 0, 0)"
 
     @pytest.mark.parametrize(("cls", "v", "theme"), SEVERITIES)
     def test_tooltip_chrome(
