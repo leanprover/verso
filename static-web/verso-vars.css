@@ -35,7 +35,8 @@
     - The affected code itself: foreground and background, both at rest and while hovered,
       plus the indicator color, which draws the wavy underline marking that a message is
       present.
-    - The text of the message, via the message color.
+    - The text of the message, via the message color. This color is also used for embedded
+      code.
     - The tooltip that displays the message: foreground, background, and border. The border
       color also draws the accent bar next to a message when it is shown without scripts,
       and the background also colors the tooltip's arrow.

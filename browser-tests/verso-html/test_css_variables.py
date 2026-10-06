@@ -147,29 +147,33 @@ class TestSeverityVariables:
         assert computed(page, "#vt-msg-token", "color") == "rgb(130, 140, 150)"
 
     @pytest.mark.parametrize(
-        ("cls", "v", "theme"), [s for s in SEVERITIES if s[0] != "error"]
+        ("cls", "v", "theme", "expected"),
+        [
+            ("error", "error", "error", "rgb(204, 0, 0)"),
+            ("warning", "warning", "warning", "rgb(21, 22, 23)"),
+            ("information", "info", "info", "rgb(21, 22, 23)"),
+        ],
     )
-    def test_message_color_defaults_to_surrounding_text(
-        self, server: str, page: Page, cls: str, v: str, theme: str
+    def test_message_color_default(
+        self, server: str, page: Page, cls: str, v: str, theme: str, expected: str
     ):
-        """Without a severity variable, a warning or information message in an output
-        block, and the code it quotes, take the color of the text around them."""
+        """With the severity variable unset, a message in an output block and the code it
+        quotes share one color: errors have their own, and the others take the color of
+        the surrounding text. Setting the variable to `initial` on the root undoes the
+        value that verso-vars.css gives it, so the stylesheet's fallback is what applies."""
         setup(
             page,
             server,
-            {"--verso-code-keyword-color": "rgb(1, 2, 3)"},
+            {
+                f"--verso-message-{v}-color": "initial",
+                "--verso-code-keyword-color": "rgb(1, 2, 3)",
+            },
             cls,
             theme,
             text_color="rgb(21, 22, 23)",
         )
-        assert computed(page, "#vt-out-msg", "color") == "rgb(21, 22, 23)"
-        assert computed(page, "#vt-out-token", "color") == "rgb(21, 22, 23)"
-
-    def test_error_message_color_default(self, server: str, page: Page):
-        """Without a severity variable, an error message has its own color."""
-        setup(page, server, {}, "error", "error", text_color="rgb(21, 22, 23)")
-        assert computed(page, "#vt-out-msg", "color") == "rgb(204, 0, 0)"
-        assert computed(page, "#vt-out-token", "color") == "rgb(204, 0, 0)"
+        assert computed(page, "#vt-out-msg", "color") == expected
+        assert computed(page, "#vt-out-token", "color") == expected
 
     @pytest.mark.parametrize(("cls", "v", "theme"), SEVERITIES)
     def test_tooltip_chrome(
