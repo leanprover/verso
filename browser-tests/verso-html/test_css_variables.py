@@ -44,14 +44,7 @@ def markup(cls: str, theme: str) -> str:
     """
 
 
-def setup(
-    page: Page,
-    server: str,
-    vars: dict,
-    cls: str,
-    theme: str,
-    text_color: str | None = None,
-):
+def setup(page: Page, server: str, vars: dict, cls: str, theme: str):
     page.goto(f"{server}/LitConfig/")
     page.wait_for_load_state("networkidle")
     page.evaluate(
@@ -62,8 +55,6 @@ def setup(
         }""",
         vars,
     )
-    if text_color is not None:
-        page.evaluate("c => { document.body.style.color = c; }", text_color)
     page.evaluate(
         "html => document.body.insertAdjacentHTML('beforeend', html)",
         markup(cls, theme),
@@ -146,16 +137,9 @@ class TestSeverityVariables:
         assert computed(page, "#vt-msg", "color") == "rgb(130, 140, 150)"
         assert computed(page, "#vt-msg-token", "color") == "rgb(130, 140, 150)"
 
-    @pytest.mark.parametrize(
-        ("cls", "v", "theme", "expected"),
-        [
-            ("error", "error", "error", "rgb(204, 0, 0)"),
-            ("warning", "warning", "warning", "rgb(21, 22, 23)"),
-            ("information", "info", "info", "rgb(21, 22, 23)"),
-        ],
-    )
+    @pytest.mark.parametrize(("cls", "v", "theme"), SEVERITIES)
     def test_message_color_default(
-        self, server: str, page: Page, cls: str, v: str, theme: str, expected: str
+        self, server: str, page: Page, cls: str, v: str, theme: str
     ):
         """With the severity variable unset, a message in an output block and the code it
         quotes share one color: errors have their own, and the others take the color of
@@ -170,8 +154,11 @@ class TestSeverityVariables:
             },
             cls,
             theme,
-            text_color="rgb(21, 22, 23)",
         )
+        surrounding = computed(page, "#vt-output", "color")
+        # The page's text is not black, so this tells inheriting apart from a black default
+        assert surrounding != "rgb(0, 0, 0)"
+        expected = "rgb(204, 0, 0)" if cls == "error" else surrounding
         assert computed(page, "#vt-out-msg", "color") == expected
         assert computed(page, "#vt-out-token", "color") == expected
 
