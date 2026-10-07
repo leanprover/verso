@@ -29,16 +29,11 @@ open Lean.Parser
 
 /-
 This case checks that a directive fails at an error in its contents. The directive's third paragraph
-is the unfinished role `{hig`. The role's error is at the end of its line (6:4). The directive fails
-at the end of input (8:0), because the unclosed role reads past the closing `:::`.
+is the unfinished role `{hig`. The role's error is at the end of its line (6:4), and it is the only
+error. The role stops within its paragraph, so the directive's syntax ends with its closing `:::`.
 -/
 /--
-info: 2 failures:
-  @56 (⟨6, 4⟩): unexpected newline; expected positional argument, named argument, flag, or '}' (use '\{' for a literal '{')
-    "\n:::\n"
-  @61 (⟨8, 0⟩): unexpected end of input; expected '![', '$$', '$', '*', '[', '[^', '_', '`' or '{'
-    ""
-
+info: Failure @56 (⟨6, 4⟩): unexpected newline; expected positional argument, named argument, flag, or '}' (use '\{' for a literal '{')
 Final stack:
   (Lean.Doc.Parser.Block.directive
    (Lean.Doc.Parser.directiveDelimiter ":::")
@@ -57,7 +52,12 @@ Final stack:
        "{"
        `hig
        []
-       <missing>)])])
+       <missing>
+       []
+       []
+       [])])]
+   (Lean.Doc.Parser.directiveDelimiter ":::"))
+Remaining: "\n:::\n"
 -/
 #test_msgs in
 #eval (Lean.Doc.Parser.blockFn {}).test! ":::note\nThe weather was nice.\n\nWe went for a walk.\n\n{hig\n:::\n"

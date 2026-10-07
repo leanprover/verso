@@ -11,11 +11,11 @@ type a space and the role `{hig}[x]`. The first edit adds the space and the open
 later edit adds one character. While the role is unfinished, the header has a parse error. After each
 edit, the runner waits for the server and prints the diagnostics and the document symbols.
 
-In every state, the symbols are `TestGenre`, `hig`, the document `Notes` and its sections `Weekend`
-and `Monday`. The section `Weekend` covers the lines up to `Monday`. While the role is unfinished, its
-title is the text that the header's parser read before the error. Until the brace is closed, this is
-`Weekend`. After the opening bracket, the parser reads the next paragraph as the role's contents, so
-the title also has the text of that paragraph.
+In every state except `# Weekend {hig}`, the symbols are `TestGenre`, `hig`, the document `Notes`
+and its sections `Weekend ` and `Monday`, and `Weekend ` covers the lines up to `Monday`. While
+`{hig` is typed, the title is the text that the header's parser read before the error, `Weekend `
+with its trailing space. From the opening bracket on, it is `Weekend ` and the role's contents, as
+in `Weekend  x`. In `# Weekend {hig}`, the header fails after `}`, has no effect and has no symbol.
 
 In prior versions of the error recovery, a header with a parse error was a `sorry` block in the
 document, and the outline had no section `Weekend` while the role was unfinished.

@@ -3,11 +3,9 @@
   "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean"},
  "position": {"line": 42, "character": 26}}
 {"range":
- {"start": {"line": 42, "character": 23}, "end": {"line": 42, "character": 29}},
+ {"start": {"line": 42, "character": 24}, "end": {"line": 42, "character": 28}},
  "contents":
- {"value":
-  "A named reference to a URL defined elsewhere. Use parentheses to write the URL here. ",
-  "kind": "markdown"}}
+ {"value": "The name of a footnote or a link reference.", "kind": "markdown"}}
 {"textDocument":
  {"uri":
   "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean"},
@@ -24,7 +22,7 @@
 {"range":
  {"start": {"line": 42, "character": 39}, "end": {"line": 42, "character": 42}},
  "contents":
- {"value": "Role `hig`\n\nNo parameters\n\nEmphasizes its contents. ",
+ {"value": "Role `hig`\n\nNo parameters\n\nEmphasizes its contents.",
   "kind": "markdown"}}
 {"textDocument":
  {"uri":
@@ -44,11 +42,9 @@
   "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean"},
  "position": {"line": 48, "character": 26}}
 {"range":
- {"start": {"line": 48, "character": 23}, "end": {"line": 48, "character": 29}},
+ {"start": {"line": 48, "character": 24}, "end": {"line": 48, "character": 28}},
  "contents":
- {"value":
-  "A named reference to a URL defined elsewhere. Use parentheses to write the URL here. ",
-  "kind": "markdown"}}
+ {"value": "The name of a footnote or a link reference.", "kind": "markdown"}}
 {"textDocument":
  {"uri":
   "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean"},
@@ -68,7 +64,7 @@
 {"range":
  {"start": {"line": 48, "character": 39}, "end": {"line": 48, "character": 42}},
  "contents":
- {"value": "Role `hig`\n\nNo parameters\n\nEmphasizes its contents. ",
+ {"value": "Role `hig`\n\nNo parameters\n\nEmphasizes its contents.",
   "kind": "markdown"}}
 {"textDocument":
  {"uri":

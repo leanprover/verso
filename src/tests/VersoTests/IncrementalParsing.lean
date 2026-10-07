@@ -377,11 +377,10 @@ Then we went home.
 @[test] def codeBlockWithBrokenFence : Test := checkInvariant codeBlock
 
 /--
-A header and then seven paragraphs, each of which is an unfinished role. This document breaks the
-invariant with Lean's block parser, so the test expects the check to fail. The parser reads the
-chain of unfinished roles up to the first paragraph that is not one. A command's second error
-message names the character that the parser found there. A change to the text there changes the
-message of a command that ends earlier than the command after next.
+This test checks that a header and then seven paragraphs, each of which is an unfinished role,
+satisfy the invariant: no change after the command after next alters a command's syntax, end
+position or errors. Each unfinished role has its parse error at the end of its own line, so each
+paragraph is its own command with one error.
 -/
 def roleChain : String :=
 "# H
@@ -403,4 +402,4 @@ def roleChain : String :=
 hello
 "
 
-@[test] def roleChainWithErrors : Test := expectFail (checkInvariant roleChain)
+@[test] def roleChainWithErrors : Test := checkInvariant roleChain
