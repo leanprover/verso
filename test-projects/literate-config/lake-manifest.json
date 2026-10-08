@@ -1,5 +1,5 @@
 {
-  "version": "1.2.0",
+  "version": "1.3.0",
   "packagesDir": ".lake/packages",
   "packages": [
     {
@@ -9,6 +9,7 @@
       "manifestFile": "lake-manifest.json",
       "inherited": false,
       "dir": "../..",
+      "copy": false,
       "configFile": "lakefile.lean"
     },
     {
@@ -16,7 +17,7 @@
       "type": "git",
       "subDir": null,
       "scope": "",
-      "rev": "e92c9f15fdfacc8536f31cfb3b7ad26c3c8cd204",
+      "rev": "843844fa601dd56767b1eb22b7ada5b64d5e567a",
       "name": "Cli",
       "manifestFile": "lake-manifest.json",
       "inputRev": "main",
@@ -28,7 +29,7 @@
       "type": "git",
       "subDir": null,
       "scope": "",
-      "rev": "a1a61c9678da010e958ed24cdfa6f635b85f172a",
+      "rev": "af451aaa73d8f8025189f228642b6e4fe047ce4f",
       "name": "illuminate",
       "manifestFile": "lake-manifest.json",
       "inputRev": "main",
@@ -40,7 +41,7 @@
       "type": "git",
       "subDir": null,
       "scope": "",
-      "rev": "118aa17ee84656b8bd727fef7c458ee8c833385c",
+      "rev": "fb13df72ecefd8ddbf9291021d7f33a8673eb57b",
       "name": "plausible",
       "manifestFile": "lake-manifest.json",
       "inputRev": "main",
@@ -64,7 +65,7 @@
       "type": "git",
       "subDir": null,
       "scope": "",
-      "rev": "d047cb484b2f3598187450935dbcc84d078cb581",
+      "rev": "892d6dc520270b5fb8c1291dd1b131e8c16255ed",
       "name": "subverso",
       "manifestFile": "lake-manifest.json",
       "inputRev": "main",

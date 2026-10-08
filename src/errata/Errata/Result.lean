@@ -166,6 +166,27 @@ structure Result where
   description? : Option String := none
 deriving Repr, Inhabited, DecidableEq
 
+/--
+What a test is doing, for a runner that follows it while it runs.
+
+Both named results and {name (scope := "Errata.TestM")}`expectFail` are logged both at start and
+finish.  The events of nested tests form a tree.
+-/
+inductive ResultEvent where
+  /-- The named result at this path has started. -/
+  | started (path : Array String)
+  /-- The named result at this path has finished, with this outcome. -/
+  | finished (result : Result)
+  /-- An {name (scope := "Errata.TestM")}`expectFail` has started. -/
+  | expectFailStarted
+  /--
+  An {name (scope := "Errata.TestM")}`expectFail` has ended. When {name}`failuresExpected` is true,
+  the named results that failed within it were expected to fail, so they should be omitted from the
+  test results.
+  -/
+  | expectFailFinished (failuresExpected : Bool)
+deriving Repr, Inhabited
+
 /-- The test name below the module: the declaration and any named result, dotted. -/
 def Result.testName (result : Result) : String :=
   if result.resultPath.isEmpty then result.test

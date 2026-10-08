@@ -72,9 +72,22 @@ structure Context where
   -/
   writeOutput : Option (Output → IO Unit) := none
   /--
+  Receives each named result as it starts and as it finishes. A runner that shows a test's results
+  while they are produced, such as one serving an editor widget, needs this. The batch runner leaves
+  it {lean}`none`.
+
+  It runs under the streams from before the test's output was redirected, as
+  {name (full := Errata.Context.writeOutput)}`writeOutput` does.
+  -/
+  watchResults : Option (ResultEvent → IO Unit) := none
+  /--
   Whether a write to the output destination has failed. If true, further attempts are suppressed.
   -/
   outputFailed : IO.Ref Bool
+  /--
+  Whether a call of the result watcher has failed. If true, further calls are suppressed.
+  -/
+  watchFailed : IO.Ref Bool
   /--
   The time spent so far in the named results directly inside the current scope, in milliseconds.
   -/

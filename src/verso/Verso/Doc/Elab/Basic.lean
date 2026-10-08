@@ -109,10 +109,16 @@ public def PartFrame.close (fr : PartFrame) (endPos : String.Pos.Raw) : Finished
   .mk fr.rangeSyntax fr.selectionSyntax titleInlines titlePreview fr.metadata fr.blocks fr.priorParts endPos
 
 
-/-- References that must be local to the current blob of concrete document syntax -/
+/-- A link or footnote definition in a document. -/
 public structure DocDef (α : Type) where
-  defSite : TSyntax `str
+  /-- The syntax of the defined label. -/
+  labelStx : TSyntax `str
+  /-- The defined value. -/
   val : α
+  /-- The name of the file that contains the definition. -/
+  fileName : String
+  /-- The position of the definition's label in its file. -/
+  position : Position
 deriving Repr
 
 public structure DocUses where
@@ -162,24 +168,31 @@ Makes the frame {name}`fr` the current frame. The former current frame is saved 
 public def PartContext.push (ctxt : PartContext) (fr : PartFrame) : PartContext := ⟨fr, ctxt.parents.push ctxt.toPartFrame⟩
 
 
-/-- Custom info tree data to save footnote and reflink cross-references -/
+/-- Distinguishes links from footnotes. -/
+public inductive DocRefKind where
+  | link
+  | footnote
+deriving Repr, BEq, Inhabited
+
+/--
+Custom info tree data for one definition or use of a link or footnote. The info node's syntax is
+the label in the definition or use.
+-/
 public structure DocRefInfo where
-  defSite : Option Syntax
-  useSites : Array Syntax
+  kind : DocRefKind
+  label : String
+  /--
+  The start of the document that contains the definition or use. It identifies the document within
+  its file.
+  -/
+  documentPos? : Option String.Pos.Raw
+  /-- {lean}`true` for a definition, and {lean}`false` for a use. -/
+  isDef : Bool
 deriving TypeName, Repr
 
-public def DocRefInfo.syntax (dri : DocRefInfo) : Array Syntax :=
-  (dri.defSite.map (#[·])|>.getD #[]) ++ dri.useSites
-
-public def internalRefs (defs : HashMap String (DocDef α)) (refs : HashMap String DocUses) : Array DocRefInfo := Id.run do
-  let keys : HashSet String := defs.fold (fun soFar k _ => HashSet.insert soFar k) <| refs.fold (fun soFar k _ => soFar.insert k) {}
-  let mut refInfo := #[]
-  for k in keys do
-    refInfo := refInfo.push {
-      defSite := defs[k]? |>.map (·.defSite),
-      useSites := refs[k]? |>.map (·.useSites) |>.getD #[]
-    }
-  refInfo
+/-- Whether two definitions or uses are of the same link or footnote of the same document. -/
+public def DocRefInfo.sameRef (r1 r2 : DocRefInfo) : Bool :=
+  r1.kind == r2.kind && r1.label == r2.label && r1.documentPos? == r2.documentPos?
 
 /-- Custom info tree data to save the locations and identities of lists -/
 public structure DocListInfo where

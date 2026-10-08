@@ -11,6 +11,8 @@ public import Errata.TestRegistry
 public import Lean
 public meta import Lean
 public meta import Errata.TestRegistry
+public meta import Errata.NameJson
+public meta import Errata.Widget
 
 open Lean Meta Elab Term
 
@@ -58,6 +60,58 @@ meta def recordTest (decl : Name) : AttrM Unit := do
     name := decl, run, isUnsafe := val.safety == .unsafe, file := ← getFileName, docstring?
   })
 
+/-- A synthetic syntax carrying the given source range, used to position the widget. -/
+meta def rangeSyntax [Monad m] [MonadFileMap m]
+    (startPos stopPos : String.Pos.Raw) : m Syntax := do
+  let str := (← getFileMap).source
+  let leading : Substring.Raw := { str, startPos, stopPos := startPos }
+  let trailing : Substring.Raw := { str, startPos := stopPos, stopPos }
+  return Syntax.atom (.original leading startPos trailing stopPos) ""
+
+/-- How many lines above the marker's line the command around the marker is looked for. -/
+private meta def commandSearchLines : Nat := 20
+
+/--
+The range of the command around {name}`pos`, found by parsing a command from the start of each line
+at or above {name}`pos`'s own, up to {name}`commandSearchLines` above it. A parse that succeeds and
+reaches past {name}`pos` is the command that {name}`pos` is in, and a parse from further up that ends
+where that one does is the same command with its doc comment or its attribute list, so it gives the
+range that the command begins at.
+-/
+private meta def commandAround (pos : String.Pos.Raw) : AttrM (Option Lean.Syntax.Range) := do
+  let fileMap ← getFileMap
+  let inputCtx := Parser.mkInputContext fileMap.source (← getFileName)
+  let pmctx : Parser.ParserModuleContext := { env := ← getEnv, options := ← getOptions }
+  let line := (fileMap.toPosition pos).line
+  let mut found : Option Lean.Syntax.Range := none
+  for back in [0:min commandSearchLines line] do
+    let lineStart := fileMap.ofPosition ⟨line - back, 0⟩
+    let (cmdStx, _, messages) := Parser.parseCommand inputCtx pmctx { pos := lineStart } {}
+    if messages.hasErrors then continue
+    let some range := cmdStx.getRange? | continue
+    unless range.start ≤ pos && pos < range.stop do continue
+    match found with
+    | none => found := some range
+    | some inner =>
+      -- A parse that ends elsewhere is the command around this one, so there is nothing further up
+      -- to find.
+      if range.stop != inner.stop then break
+      found := some range
+  return found
+
+/--
+The source range to show the test's widget over: the whole command that marks the test, including a
+doc comment above it. The command is re-parsed around the marker. Falls back to the marker itself,
+which is also the range for a declaration from another module, marked with {lit}`attribute [test]`.
+-/
+meta def widgetRangeSyntax (decl : Name) (attrStx : Syntax) : AttrM Syntax := do
+  -- The declaration ranges of an imported declaration are positions in its own module's file.
+  if ((← getEnv).getModuleIdxFor? decl).isSome then return attrStx
+  let some attrPos := attrStx.getPos? | return attrStx
+  match ← commandAround attrPos with
+  | some range => rangeSyntax range.start range.stop
+  | none => return attrStx
+
 /-- Marks a definition as a test, discovered and run by the Errata test runner. -/
 meta initialize
   registerBuiltinAttribute {
@@ -70,14 +124,30 @@ meta initialize
       Attribute.Builtin.ensureNoArgs stx
       unless kind == AttributeKind.global do throwAttrMustBeGlobal `test kind
       recordTest decl
+      -- The widget reaches the editor through the info tree, which the language server keeps and a
+      -- build leaves out, so a build skips the work of placing the widget.
+      unless (← getInfoState).enabled do return
+      -- The widget is shown while the cursor is anywhere in the declaration, its docstring included.
+      let widgetStx ← widgetRangeSyntax decl stx
+      -- A hash of the test's source, so a run is invalidated when the test is edited.
+      let source := (← getFileMap).source
+      let version := match widgetStx.getRange? with
+        | some range =>
+          let sub : Substring.Raw := { str := source, startPos := range.start, stopPos := range.stop }
+          toString sub.toString.hash
+        | none => ""
+      -- In the language server, a run of the test's previous source ends as the edited test is
+      -- elaborated.
+      unless version.isEmpty do
+        Errata.Widget.dropRunsOfOtherVersions decl version
+      let props := pure <| json% {
+        decl: $(Errata.nameToJson decl),
+        module: $(Errata.nameToJson (← getMainModule)),
+        name: $(toString (privateToUserName decl)),
+        version: $version
+      }
+      Lean.Widget.savePanelWidgetInfo Errata.Widget.runTestWidget.javascriptHash.val props widgetStx
   }
-
-/-- The test's name below its module: the declaration's components past the module prefix, dotted. -/
-meta def testNameBelow (moduleName declName : Name) : String :=
-  let below :=
-    if moduleName.isPrefixOf declName then declName.components.drop moduleName.components.length
-    else declName.components
-  ".".intercalate (below.map (·.toString))
 
 /--
 A module to read tests from: the module itself, or, with a trailing {lit}`.*`, the module and every
@@ -129,12 +199,7 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
         -- tests
         let userName := privateToUserName test.name
         let testName := testNameBelow moduleName userName
-        let range ← findDeclarationRanges? test.name
-        let location : Location := {
-          file := test.file
-          startPos := (range.map (·.range.pos)).getD ⟨0, 0⟩
-          endPos := (range.map (·.range.endPos)).getD ⟨0, 0⟩
-        }
+        let location ← testLocation test
         -- The docstring captured when the attribute was applied, so the report and widget can show it.
         let docStx ← match test.docstring? with
           | some doc => `(some $(quote doc))

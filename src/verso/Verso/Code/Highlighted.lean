@@ -1021,11 +1021,11 @@ severity accent to distinguish them.
 }
 
 .warning .verso-message, .warning .verso-message .token, .warning .verso-message label {
-  color: var(--verso-message-warning-color, black);
+  color: var(--verso-message-warning-color, currentcolor);
 }
 
 .warning .verso-message .case-label:has(input[type=\"checkbox\"])::before {
-  background-color: var(--verso-message-warning-color, black) !important;
+  background-color: var(--verso-message-warning-color, currentcolor) !important;
 }
 
 
@@ -1049,11 +1049,11 @@ severity accent to distinguish them.
 }
 
 .information .verso-message, .information .verso-message .token, .information .verso-message label {
-  color: var(--verso-message-info-color, black);
+  color: var(--verso-message-info-color, currentcolor);
 }
 
 .information .verso-message .case-label:has(input[type=\"checkbox\"])::before {
-  background-color: var(--verso-message-info-color, black) !important;
+  background-color: var(--verso-message-info-color, currentcolor) !important;
 }
 
 .hl.lean div.docstring {

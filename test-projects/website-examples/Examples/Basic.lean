@@ -4,19 +4,17 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import SubVerso.Examples
-open SubVerso.Examples
-
-%example Tree
+-- ANCHOR: Tree
 inductive Tree (α : Type u) : Type u where
   | leaf
   | branch (left : Tree α) (val : α) (right : Tree α)
-%end
+-- ANCHOR_END: Tree
 
-%example Tree.flip
+-- ANCHOR: Tree.flip
 def Tree.flip : Tree α → Tree α
   | .leaf => .leaf
-  | .branch l v r => %ex{flopped}{.branch r.flip v l.flip}
-%end
-
-%show_name Tree.flip as FLIP
+  | .branch l v r =>
+-- ANCHOR: flopped
+    .branch r.flip v l.flip
+-- ANCHOR_END: flopped
+-- ANCHOR_END: Tree.flip

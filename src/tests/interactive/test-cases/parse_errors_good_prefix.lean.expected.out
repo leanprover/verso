@@ -1,0 +1,85 @@
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean"},
+ "position": {"line": 42, "character": 26}}
+{"range":
+ {"start": {"line": 42, "character": 23}, "end": {"line": 42, "character": 29}},
+ "contents":
+ {"value":
+  "A named reference to a URL defined elsewhere. Use parentheses to write the URL here. ",
+  "kind": "markdown"}}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean"},
+ "position": {"line": 42, "character": 26}}
+[{"range":
+  {"start": {"line": 40, "character": 1}, "end": {"line": 40, "character": 5}}},
+ {"range":
+  {"start": {"line": 42, "character": 24},
+   "end": {"line": 42, "character": 28}}}]
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean"},
+ "position": {"line": 42, "character": 41}}
+{"range":
+ {"start": {"line": 42, "character": 39}, "end": {"line": 42, "character": 42}},
+ "contents":
+ {"value": "Role `hig`\n\nNo parameters\n\nEmphasizes its contents. ",
+  "kind": "markdown"}}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean"},
+ "position": {"line": 42, "character": 41}}
+[{"targetUri":
+  "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean",
+  "targetSelectionRange":
+  {"start": {"line": 33, "character": 4}, "end": {"line": 33, "character": 7}},
+  "targetRange":
+  {"start": {"line": 33, "character": 4}, "end": {"line": 33, "character": 7}},
+  "originSelectionRange":
+  {"start": {"line": 42, "character": 39},
+   "end": {"line": 42, "character": 42}}}]
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean"},
+ "position": {"line": 48, "character": 26}}
+{"range":
+ {"start": {"line": 48, "character": 23}, "end": {"line": 48, "character": 29}},
+ "contents":
+ {"value":
+  "A named reference to a URL defined elsewhere. Use parentheses to write the URL here. ",
+  "kind": "markdown"}}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean"},
+ "position": {"line": 48, "character": 26}}
+[{"range":
+  {"start": {"line": 40, "character": 1}, "end": {"line": 40, "character": 5}}},
+ {"range":
+  {"start": {"line": 42, "character": 24},
+   "end": {"line": 42, "character": 28}}},
+ {"range":
+  {"start": {"line": 48, "character": 24},
+   "end": {"line": 48, "character": 28}}}]
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean"},
+ "position": {"line": 48, "character": 41}}
+{"range":
+ {"start": {"line": 48, "character": 39}, "end": {"line": 48, "character": 42}},
+ "contents":
+ {"value": "Role `hig`\n\nNo parameters\n\nEmphasizes its contents. ",
+  "kind": "markdown"}}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean"},
+ "position": {"line": 48, "character": 41}}
+[{"targetUri":
+  "file:///src/tests/interactive/test-cases/parse_errors_good_prefix.lean",
+  "targetSelectionRange":
+  {"start": {"line": 33, "character": 4}, "end": {"line": 33, "character": 7}},
+  "targetRange":
+  {"start": {"line": 33, "character": 4}, "end": {"line": 33, "character": 7}},
+  "originSelectionRange":
+  {"start": {"line": 48, "character": 39},
+   "end": {"line": 48, "character": 42}}}]

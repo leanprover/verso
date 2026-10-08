@@ -119,6 +119,9 @@ Each message severity (info, warning, and error) has four sets of related styles
 * the marker bar on output blocks, via `--verso-output-error-color`.
 :::
 
+For readability, message text is rendered in a single color.
+Syntax highlighting of embedded Lean code is limited to typographic properties such as weight.
+
 Tooltips share a generic palette (`--verso-tooltip-color`, `--verso-tooltip-bg-color`, `--verso-tooltip-border-color`, and `--verso-tooltip-separator-color`) that the severity-specific tooltip colors default to.
 Proof states are styled by the `--verso-tactic-state-` and `--verso-tactic-toggle-` variable families, and the hover highlight on interactive code by `--verso-code-hover-bg-color`.
 
