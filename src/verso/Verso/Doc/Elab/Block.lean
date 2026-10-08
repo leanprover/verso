@@ -33,9 +33,8 @@ public partial def elabBlock (block : VersoBlock) : DocElabM (TSyntax `term) :=
   withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
   match block.raw with
-  | .missing =>
-    ``(sorryAx (Block _) (synthetic := true))
-  | stx@(.node _ kind _) =>
+  | .missing => elabMissing ``Verso.Doc.Block.empty ``Verso.Doc.Block
+  | stx@(.node _ kind _) => elabWithMissing stx ``Verso.Doc.Block.empty do
     let env ← getEnv
     match (← liftMacroM (expandMacroImpl? env stx)) with
     | some (_decl, stxNew?) => -- TODO terminfo here? Right now, we suppress most uses of it.

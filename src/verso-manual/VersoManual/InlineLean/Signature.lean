@@ -12,7 +12,7 @@ public meta import Verso.WithoutAsync
 public meta import Verso.Code.Highlighted
 public import VersoManual.Basic
 public import VersoManual.HighlightedCode
-public import SubVerso.Examples
+public meta import SubVerso.Signature
 
 public section
 

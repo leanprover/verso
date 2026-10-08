@@ -198,6 +198,7 @@ public meta def _root_.Lean.Doc.Parser.Inline.display_math.expand : InlineExpand
 public meta def partCommand (cmd : VersoBlock) : PartElabM Unit :=
   withTraceNode `Elab.Verso.part (fun _ => pure m!"Part modification {cmd}") <|
   withRef cmd <| withFreshMacroScope <| do
+  modifyThe PartElabM.State ({ · with blockHasMissing := cmd.raw.hasMissing })
   match cmd.raw with
   | stx@(.node _ kind _) =>
     let some view := BlockView.of ⟨stx⟩
@@ -232,8 +233,16 @@ where
 
 @[part_command Lean.Doc.Parser.Block.footnote_ref]
 public meta partial def _root_.Lean.Doc.Parser.Block.footnote_ref.command : PartCommand
-  | .footnoteRef v =>
-    addFootnoteDef v.name =<< v.content.mapM (withRefsAllowed .onlyIfDefined <| elabInline ·)
+  | .footnoteRef v => do
+    let before := (← getThe DocElabM.State).footnoteRefs
+    let contents ← v.content.mapM (elabInline ·)
+    -- The footnote uses in the contents are tracked so we can check for cycles when finishing the doc
+    let mut contentUses := #[]
+    for (label, uses) in (← getThe DocElabM.State).footnoteRefs do
+      let known := before[label]?.map (·.useSites.size) |>.getD 0
+      for use in uses.useSites.extract known do
+        contentUses := contentUses.push (label, use)
+    addFootnoteDef v.name contents contentUses
   | _ => throwUnsupportedSyntax
 
 @[part_command Lean.Doc.Parser.Block.link_ref]
@@ -285,6 +294,11 @@ public meta partial def _root_.Lean.Doc.Parser.Block.header.command : PartComman
 
 @[part_command Lean.Doc.Parser.Block.metadata_block]
 public meta def _root_.Lean.Doc.Parser.Block.metadata_block.command : PartCommand
+  | stx => do
+    if (← getThe PartElabM.State).blockHasMissing then return
+    go stx
+where
+  go : PartCommand
   | .metadata v => do
     let ctxt := (← getThe PartElabM.State).partContext
     if ctxt.blocks.size > 0 || ctxt.priorParts.size > 0 then
@@ -300,6 +314,8 @@ public meta def _root_.Lean.Doc.Parser.Block.metadata_block.command : PartComman
 public meta def includeSection : PartCommand
   | .command v => do
     unless v.name.getId == `include do Lean.Elab.throwUnsupportedSyntax
+    -- An include that is partial syntax has no effect.
+    if (← getThe PartElabM.State).blockHasMissing then return
     let args := v.args
     if h : args.size = 0 then throwError "Expected an argument"
     else if h : args.size > 2 then throwErrorAt args[2] "Expected one or two arguments"

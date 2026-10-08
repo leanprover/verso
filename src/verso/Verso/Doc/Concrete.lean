@@ -12,6 +12,7 @@ import Verso.Doc
 public import Verso.Doc.Elab
 public meta import Verso.Doc.Elab.Monad
 import Verso.Doc.Concrete.InlineString
+public import Verso.Doc.Concrete.Environment
 import Verso.Doc.Lsp
 
 namespace Verso.Doc.Concrete
@@ -148,15 +149,6 @@ meta partial def findGenreTm : Syntax → TermElabM Unit
 meta partial def findGenreCmd (genre : Syntax) : Command.CommandElabM Unit :=
   Command.runTermElabM fun _ => findGenreTm genre
 
-meta def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.State) : m Unit := do
-  for r in internalRefs st'.linkDefs st.linkRefs do
-    for stx in r.syntax do
-      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
-  for r in internalRefs st'.footnoteDefs st.footnoteRefs do
-    for stx in r.syntax do
-      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
-
-
 open PartElabM in
 /--
 All-at-once elaboration of verso document syntax to syntax denoting a verso `VersoDoc`. Implements
@@ -189,7 +181,6 @@ private meta def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array S
         | .error stx msg => logErrorAt stx msg
         | oops@(.internal _ _) => throw oops
       pure ()
-  saveRefs docElabState partElabState
 
   let finished := partElabState.partContext.toPartFrame.close endPos
 
@@ -314,7 +305,8 @@ where
       failure
 
   empty : Syntax → Bool
-  | .atom .. | .ident .. | .missing => false
+  | .missing => true
+  | .atom .. | .ident .. => false
   | .node .none _ args | .node (.synthetic ..) _ args => args.all empty
   | .node (.original leading _ trailing _) _ args =>
     leading.startPos == leading.stopPos && trailing.startPos == trailing.stopPos && args.all empty
@@ -350,12 +342,9 @@ private meta def versoBlockCommandFn : ParserFn := fun c s =>
   let iniSz  := s.stackSize
   let lastPos? := lastVersoEndPosExt.getState c.env
   let s := lastPos? |>.map s.setPos |>.getD s
-  -- The block's final token takes the whitespace after it, so the next block starts at its own first
-  -- token.
-  let s := recoverBlockWith #[.missing] (blockFn { recordTrailing := true }) c s
+  let s := blockCommandRecovery c s
   if s.hasError then s
   else
-    let s := ignoreFn (manyFn blankLine) c s
     let s := updateTrailing c s
     let i := s.pos
     if c.atEnd i then
@@ -374,20 +363,6 @@ where
       s.popSyntax.pushSyntax <| updateSyntaxTrailing tr top
     else
       s
-
-/--
-As we elaborate a `#doc` command top-level-block by top-level-block, the Lean environment will
-be used to thread state between the separate top level blocks. These environment extensions contain
-the state that needs to exist across top-level-block parsing events.
--/
-public meta structure DocElabEnvironment where
-  genreSyntax : Term := ⟨.missing⟩
-  ctx : DocElabContext := ⟨.missing, mkConst ``Unit, .always, .none⟩
-  docState : DocElabM.State := { highlightDeduplicationTable := some {} }
-  partState : PartElabM.State := .init (.node .none nullKind #[]) (.node .none nullKind #[])
-deriving Inhabited
-
-public meta initialize docEnvironmentExt : EnvExtension DocElabEnvironment ← registerEnvExtension (pure {})
 
 /--
 The original parser for the `command` category, which is restored while elaborating a Verso block so
@@ -414,10 +389,6 @@ private meta def runPartElabInEnv (act : PartElabM a) : Command.CommandElabM a :
   finally
     modifyEnv (categoryParserFnExtension.setState · versoCmdFn)
 
-private meta def saveRefsInEnv : Command.CommandElabM Unit := do
-  let versoEnv := docEnvironmentExt.getState (← getEnv)
-  saveRefs versoEnv.docState versoEnv.partState
-
 /-!
 When we do incremental parsing of `#doc` commands, we split the behaviors that are done all at once
 in `elabDoc` across three functions: the prelude in `startDoc`, the loop body in `runVersoBlock`,
@@ -440,12 +411,12 @@ private meta def startDoc (genreSyntax : Term) (title: StrLit) : Command.Command
 
 private meta def runVersoBlock (block : VersoBlock) : Command.CommandElabM Unit := do
   runPartElabInEnv <| partCommand block
-  -- This calls pushInfoLeaf a quadratic number of times for a for a linear number of top-level
-  -- verso blocks, which should be harmless but may be inefficient. It may be desirable to tag
-  -- info leaves that have already been pushed to avoid pushing them again.
-  saveRefsInEnv
 
 open PartElabM in
+/--
+Finishes the document: closes its parts, checks its links and footnotes, and defines the document
+constant.
+-/
 private meta def finishDoc : Command.CommandElabM Unit:= do
   let endPos := (← getFileMap).source.rawEndPos
   runPartElabInEnv <| do closePartsUntil 0 endPos
@@ -512,7 +483,8 @@ public meta def elabVersoBlock : Command.CommandElab
 public meta def elabVersoLastBlock : Command.CommandElab
   | `(addLastBlockCmd| $b:block) => do
     updatePos b
-    runVersoBlock b
-    -- Finish up the document
+    -- Verso finishes the document even when its last block fails. An interrupt is rethrown, and then
+    -- Verso does not finish the document.
+    withLogging <| runVersoBlock b
     finishDoc
   | _ => throwUnsupportedSyntax

@@ -1,0 +1,1031 @@
+{"version": 2,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 50, "character": 20},
+    "end": {"line": 50, "character": 20}},
+   "message": "expected identifier",
+   "fullRange":
+   {"start": {"line": 50, "character": 20},
+    "end": {"line": 50, "character": 20}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 50, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 3,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 50, "character": 21},
+    "end": {"line": 50, "character": 21}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 50, "character": 21},
+    "end": {"line": 50, "character": 21}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 50, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 4,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 50, "character": 22},
+    "end": {"line": 50, "character": 22}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 50, "character": 22},
+    "end": {"line": 50, "character": 22}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 50, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 5,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 50, "character": 23},
+    "end": {"line": 50, "character": 23}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 50, "character": 23},
+    "end": {"line": 50, "character": 23}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 50, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 6,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 76, "character": 0}, "end": {"line": 76, "character": 0}},
+   "message":
+   "unexpected newline; expected '![', '$$', '$', '*', '[', '[^', '_', '`' or '{'",
+   "fullRange":
+   {"start": {"line": 76, "character": 0},
+    "end": {"line": 76, "character": 0}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 50, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 7,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 74, "character": 29},
+    "end": {"line": 74, "character": 29}},
+   "message": "unexpected newline; expected ']'",
+   "fullRange":
+   {"start": {"line": 74, "character": 29},
+    "end": {"line": 74, "character": 29}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 50, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 8,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 74, "character": 29},
+    "end": {"line": 74, "character": 29}},
+   "message": "unexpected newline; expected ']'",
+   "fullRange":
+   {"start": {"line": 74, "character": 29},
+    "end": {"line": 74, "character": 29}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 50, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 9,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics": []}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 50, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 10,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 76, "character": 18},
+    "end": {"line": 76, "character": 18}},
+   "message": "expected identifier",
+   "fullRange":
+   {"start": {"line": 76, "character": 18},
+    "end": {"line": 76, "character": 18}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 76, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 11,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 76, "character": 19},
+    "end": {"line": 76, "character": 19}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 76, "character": 19},
+    "end": {"line": 76, "character": 19}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 76, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 12,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 76, "character": 20},
+    "end": {"line": 76, "character": 20}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 76, "character": 20},
+    "end": {"line": 76, "character": 20}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 76, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 13,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 76, "character": 21},
+    "end": {"line": 76, "character": 21}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 76, "character": 21},
+    "end": {"line": 76, "character": 21}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 76, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 14,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 102, "character": 0},
+    "end": {"line": 102, "character": 0}},
+   "message":
+   "unexpected newline; expected '![', '$$', '$', '*', '[', '[^', '_', '`' or '{'",
+   "fullRange":
+   {"start": {"line": 102, "character": 0},
+    "end": {"line": 102, "character": 0}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 76, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 76},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 15,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 100, "character": 31},
+    "end": {"line": 100, "character": 31}},
+   "message": "unexpected newline; expected ']'",
+   "fullRange":
+   {"start": {"line": 100, "character": 31},
+    "end": {"line": 100, "character": 31}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 76, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 16,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 100, "character": 31},
+    "end": {"line": 100, "character": 31}},
+   "message": "unexpected newline; expected ']'",
+   "fullRange":
+   {"start": {"line": 100, "character": 31},
+    "end": {"line": 100, "character": 31}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 76, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 17,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics": []}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 76, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 18,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 102, "character": 22},
+    "end": {"line": 102, "character": 22}},
+   "message": "expected identifier",
+   "fullRange":
+   {"start": {"line": 102, "character": 22},
+    "end": {"line": 102, "character": 22}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 102, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 19,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 102, "character": 23},
+    "end": {"line": 102, "character": 23}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 102, "character": 23},
+    "end": {"line": 102, "character": 23}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 102, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 20,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 102, "character": 24},
+    "end": {"line": 102, "character": 24}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 102, "character": 24},
+    "end": {"line": 102, "character": 24}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 102, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 21,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 102, "character": 25},
+    "end": {"line": 102, "character": 25}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 102, "character": 25},
+    "end": {"line": 102, "character": 25}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 102, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 22,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 128, "character": 0},
+    "end": {"line": 128, "character": 0}},
+   "message":
+   "unexpected newline; expected '![', '$$', '$', '*', '[', '[^', '_', '`' or '{'",
+   "fullRange":
+   {"start": {"line": 128, "character": 0},
+    "end": {"line": 128, "character": 0}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 102, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 102},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 23,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 126, "character": 31},
+    "end": {"line": 126, "character": 31}},
+   "message": "unexpected newline; expected ']'",
+   "fullRange":
+   {"start": {"line": 126, "character": 31},
+    "end": {"line": 126, "character": 31}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 102, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 24,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 126, "character": 31},
+    "end": {"line": 126, "character": 31}},
+   "message": "unexpected newline; expected ']'",
+   "fullRange":
+   {"start": {"line": 126, "character": 31},
+    "end": {"line": 126, "character": 31}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 102, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 25,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics": []}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 102, "character": 2}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 26,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 129, "character": 19},
+    "end": {"line": 129, "character": 19}},
+   "message": "expected identifier",
+   "fullRange":
+   {"start": {"line": 129, "character": 19},
+    "end": {"line": 129, "character": 19}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 129, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 27,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 129, "character": 20},
+    "end": {"line": 129, "character": 20}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 129, "character": 20},
+    "end": {"line": 129, "character": 20}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 129, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 28,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 129, "character": 21},
+    "end": {"line": 129, "character": 21}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 129, "character": 21},
+    "end": {"line": 129, "character": 21}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 129, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 29,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 129, "character": 22},
+    "end": {"line": 129, "character": 22}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 129, "character": 22},
+    "end": {"line": 129, "character": 22}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 129, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 30,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 156, "character": 0},
+    "end": {"line": 156, "character": 0}},
+   "message":
+   "unexpected newline; expected '![', '$$', '$', '*', '[', '[^', '_', '`' or '{'",
+   "fullRange":
+   {"start": {"line": 156, "character": 0},
+    "end": {"line": 156, "character": 0}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 129, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 129},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 129},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 31,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 153, "character": 29},
+    "end": {"line": 153, "character": 29}},
+   "message": "unexpected newline; expected ']'",
+   "fullRange":
+   {"start": {"line": 153, "character": 29},
+    "end": {"line": 153, "character": 29}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 129, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 32,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 153, "character": 29},
+    "end": {"line": 153, "character": 29}},
+   "message": "unexpected newline; expected ']'",
+   "fullRange":
+   {"start": {"line": 153, "character": 29},
+    "end": {"line": 153, "character": 29}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 129, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]
+{"version": 33,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
+ "isIncremental": false,
+ "diagnostics": []}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean"},
+ "position": {"line": 129, "character": 0}}
+[{"startLine": 46, "endLine": 156},
+ {"startLine": 48, "endLine": 156},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 102, "endLine": 126},
+ {"startLine": 128, "endLine": 154},
+ {"startLine": 76, "endLine": 100},
+ {"startLine": 2, "kind": "comment", "endLine": 20},
+ {"startLine": 25, "kind": "region", "endLine": 30},
+ {"startLine": 34, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 50, "kind": "region", "endLine": 74},
+ {"startLine": 76, "kind": "region", "endLine": 100},
+ {"startLine": 102, "kind": "region", "endLine": 126},
+ {"startLine": 128, "kind": "region", "endLine": 154},
+ {"startLine": 156, "kind": "region", "endLine": 157}]

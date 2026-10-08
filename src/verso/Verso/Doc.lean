@@ -7,6 +7,7 @@ module
 public import Lean.Data.Json
 public import Lean.DocString.Types
 public import SubVerso.Highlighting
+public import Std.Data.HashMap
 import Verso.Doc.Name
 
 set_option doc.verso true
@@ -678,8 +679,51 @@ private partial def Part.reprPrec [Repr genre.Inline] [Repr genre.Block] [Repr g
 public instance [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] : Repr (Part g) where
   reprPrec := private Part.reprPrec
 
-public structure DocReconstruction where
+/--
+Document reconstruction data: the document-wide data that a document's blocks look up when the
+document is constructed.
+-/
+public structure DocReconstruction (genre : Genre) where
+  /-- The table of highlighted code that the document's code refers to by key. -/
   highlightDeduplication : SubVerso.Highlighting.Export
+  /-- The URL of each of the document's link definitions, by link label. -/
+  links : Std.HashMap String String := {}
+  /-- The contents of each of the document's footnote definitions, by footnote label. -/
+  footnotes : Std.HashMap String (Array (Inline genre)) := {}
+
+/--
+The URL of the link with the label {name}`label`, or the empty string if the document has no such
+link.
+-/
+public def DocReconstruction.linkUrl (docReconst : DocReconstruction genre) (label : String) :
+    String :=
+  docReconst.links.getD label ""
+
+/--
+The contents of the footnote with the label {name}`label`, or the empty array if the document has no
+such footnote.
+-/
+public def DocReconstruction.footnoteContents (docReconst : DocReconstruction genre)
+    (label : String) :
+    Array (Inline genre) :=
+  docReconst.footnotes.getD label #[]
+
+/--
+Adds a document's link and footnote definitions to the document reconstruction data
+{name}`docReconst`.
+
+Each footnote's contents are computed from document reconstruction data that has all the links and
+the footnotes that precede it in {name}`footnotes`.
+-/
+public def DocReconstruction.withDefs (docReconst : DocReconstruction genre)
+    (links : Array (String × String))
+    (footnotes : Array (String × (DocReconstruction genre → Array (Inline genre)))) :
+    DocReconstruction genre :=
+  let docReconst := { docReconst with
+    links := links.foldl (init := docReconst.links) fun table (label, url) => table.insert label url
+  }
+  footnotes.foldl (init := docReconst) fun docReconst (label, contents) =>
+    { docReconst with footnotes := docReconst.footnotes.insert label (contents docReconst) }
 
 
 /--
@@ -689,7 +733,11 @@ into a value by invoking the `VersoDoc.toPart` method. The actual structure of a
 should not be relied on.
 -/
 public structure VersoDoc (genre : Genre) where
-  construct : DocReconstruction → Part genre
+  /--
+  Builds the document from its document reconstruction data. The document's own links and footnotes
+  are added to the data first.
+  -/
+  construct : DocReconstruction genre → Part genre
 
   /-- Serialization of the DocReconstruction data structure -/
   docReconstructionData : String := "{}"
@@ -710,8 +758,8 @@ public def VersoDoc.toPart: VersoDoc genre → Part genre
       if let .ok highlightJson := json.getObjVal? "highlight" then
         match SubVerso.Highlighting.Export.fromJson? highlightJson with
         | .error e => panic! s!"Failed to deserialize Export data from parsed JSON: {e}"
-        | .ok table => construct ⟨table⟩
-      else construct ⟨{}⟩
+        | .ok table => construct { highlightDeduplication := table }
+      else construct { highlightDeduplication := {} }
 
 /--
 Replace the metadata in a VersoDoc.

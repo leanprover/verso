@@ -27,7 +27,7 @@ def markup(cls: str, theme: str) -> str:
       <span class="has-info {cls}" id="vt-span">
         <span class="hover-container">
           <span class="hover-info messages">
-            <code class="verso-message {cls}" id="vt-msg">msg</code>
+            <code class="verso-message {cls}" id="vt-msg">msg <span class="token keyword" id="vt-msg-token">kw</span></code>
           </span>
         </span>
         <span class="token const" id="vt-token">tok</span>
@@ -37,7 +37,7 @@ def markup(cls: str, theme: str) -> str:
         </span>
       </span>
     </div>
-    <pre class="lean-output {cls}" id="vt-output">out</pre>
+    <pre class="hl lean lean-output {cls}" id="vt-output"><code class="verso-message {cls}" id="vt-out-msg">out <span class="token keyword" id="vt-out-token">kw</span></code></pre>
     <div class="tippy-box" data-theme="{theme} message" data-placement="top" id="vt-tippy">tip</div>
     <div class="tippy-box" data-theme="lean" data-placement="top" id="vt-tippy-lean">doc</div>
     <div class="tippy-box" data-theme="tactic" data-placement="top" id="vt-tippy-tactic">state</div>
@@ -117,6 +117,50 @@ class TestSeverityVariables:
         )
         assert computed(page, "#vt-msg", "color") == "rgb(130, 140, 150)"
         assert computed(page, "#vt-output", "border-left-color") == "rgb(160, 170, 180)"
+
+    @pytest.mark.parametrize(("cls", "v", "theme"), SEVERITIES)
+    def test_message_is_one_color(
+        self, server: str, page: Page, cls: str, v: str, theme: str
+    ):
+        """A message has one color throughout: the code it quotes takes the message
+        color, whatever the token colors are."""
+        setup(
+            page,
+            server,
+            {
+                f"--verso-message-{v}-color": "rgb(130, 140, 150)",
+                "--verso-code-keyword-color": "rgb(1, 2, 3)",
+            },
+            cls,
+            theme,
+        )
+        assert computed(page, "#vt-msg", "color") == "rgb(130, 140, 150)"
+        assert computed(page, "#vt-msg-token", "color") == "rgb(130, 140, 150)"
+
+    @pytest.mark.parametrize(("cls", "v", "theme"), SEVERITIES)
+    def test_message_color_default(
+        self, server: str, page: Page, cls: str, v: str, theme: str
+    ):
+        """With the severity variable unset, a message in an output block and the code it
+        quotes share one color: errors have their own, and the others take the color of
+        the surrounding text. Setting the variable to `initial` on the root undoes the
+        value that verso-vars.css gives it, so the stylesheet's fallback is what applies."""
+        setup(
+            page,
+            server,
+            {
+                f"--verso-message-{v}-color": "initial",
+                "--verso-code-keyword-color": "rgb(1, 2, 3)",
+            },
+            cls,
+            theme,
+        )
+        surrounding = computed(page, "#vt-output", "color")
+        # The page's text is not black, so this tells inheriting apart from a black default
+        assert surrounding != "rgb(0, 0, 0)"
+        expected = "rgb(204, 0, 0)" if cls == "error" else surrounding
+        assert computed(page, "#vt-out-msg", "color") == expected
+        assert computed(page, "#vt-out-token", "color") == expected
 
     @pytest.mark.parametrize(("cls", "v", "theme"), SEVERITIES)
     def test_tooltip_chrome(

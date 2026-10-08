@@ -48,16 +48,41 @@ where
 
 
 /--
-Recovers from a parse error by skipping input until one or more complete blank lines has been
-skipped.
+Runs `p`. On a parse error, skips input until one or more complete blank lines have been skipped.
 
-The provided `stxs` are pushed to the stack upon recovery.
+After a parse error, exactly one tree is left on the stack: the partial syntax that `p` built before
+the error, which always includes a `Syntax.missing`.
+
+If `p` left multiple items on the stack, or if it left one tree without `Syntax.missing`, the result
+is a null node that contains these items. The node ends with `.missing` if none of the items
+contains one. If `p` left no tree, the result is `Syntax.missing`.
+
+A null node elaborates as an empty block. The block's content before the error appears in the
+document only when `p` left one tree that includes `Syntax.missing`.
 -/
-public def recoverBlockWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
+public def recoverPartialBlock (p : ParserFn) : ParserFn :=
   recoverFn p fun rctx =>
     ignoreFn skipBlock >>
-    show ParserFn from
-      fun _ s => stxs.foldl (init := s.shrinkStack rctx.initialSize) (·.pushSyntax ·)
+    show ParserFn from fun _ s =>
+      let group (built : Array Syntax) :=
+        let built := if built.any (·.hasMissing) then built else built.push .missing
+        (s.shrinkStack rctx.initialSize).pushSyntax (mkNullNode built)
+      match s.stxStack.extract rctx.initialSize s.stxStack.size with
+      | #[] => s.pushSyntax .missing
+      | #[stx] => if stx.hasMissing then s else group #[stx]
+      | built => group built
+
+/--
+Parses one top-level block of a document and the blank lines after it. On a parse error, it
+recovers with `recoverPartialBlock`. The block command parser `versoBlockCommandFn` uses it for each
+top-level block.
+
+The block's final token takes the whitespace after it, so the next block starts at its own first
+token.
+-/
+public def blockCommandRecovery : ParserFn := fun c s =>
+  let s := recoverPartialBlock (Lean.Doc.Parser.blockFn { recordTrailing := true }) c s
+  if s.hasError then s else ignoreFn (manyFn blankLine) c s
 
 
 end Verso.Parser
