@@ -5,7 +5,7 @@ runs:
     using: composite
     steps:
         - name: Install PDF Dependencies
-          uses: zauguin/install-texlive@v4
+          uses: zauguin/install-texlive@f5e7d0b117035fff797d4392ea94131747e03d60 # v4.3.0
           with:
               texlive_version: 2026
               packages: |
