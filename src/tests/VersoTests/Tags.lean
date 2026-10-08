@@ -203,6 +203,38 @@ info: true
     let _ ← tagPart part2 md2 (·.id) (·.xrefTag) (·.tag) savePartXref
   pure failed
 
+/-! Tests for machine-assigned tags with {name}`freshTag`. -/
+
+/-
+Two elements whose hints agree get different tags: the second one is given a numeric suffix, so
+the names they contribute to the document stay unique.
+-/
+/-- info: ("Same", "Same-0", false) -/
+#test_msgs in
+#eval show IO _ from do
+  let ((first, second), _, failed) ← run do
+    let firstId ← freshId
+    let secondId ← freshId
+    let first ← freshTag "Same" firstId
+    let second ← freshTag "Same" secondId
+    pure (first, second)
+  pure (first, second, failed)
+
+/-
+Hints that differ but share a slug are the same case: every unsupported character becomes `___`,
+so headings in a non-Latin script collide as soon as they are the same length.
+-/
+/-- info: ("______", "______-0", false) -/
+#test_msgs in
+#eval show IO _ from do
+  let ((first, second), _, failed) ← run do
+    let firstId ← freshId
+    let secondId ← freshId
+    let first ← freshTag "日本" firstId
+    let second ← freshTag "言語" secondId
+    pure (first, second)
+  pure (first, second, failed)
+
 /-! Tests for suggesting alternatives to unresolved cross-references. -/
 
 /-- info: "" -/

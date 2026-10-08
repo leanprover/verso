@@ -157,11 +157,6 @@ instance : Inhabited Tag where
 instance : ToString Tag where
   toString := toString ∘ repr
 
-instance : Coe String Tag where
-  coe := .provided
-
-
-
 /-- When rendering multi-page HTML, should splitting pages follow the depth setting? -/
 inductive HtmlSplitMode where
   | /-- Follow the main setting -/ default
@@ -429,7 +424,7 @@ def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : Inte
   let mut numPart : Option Nat := none
   repeat
     let attempt := tagStr strPart numPart
-    if (← get).tags.contains  attempt then
+    if (← get).tags.contains (Tag.internal attempt) then
       numPart := some <| numPart.map (· + 1) |>.getD 0
     else break
   let tag := tagStr strPart numPart
