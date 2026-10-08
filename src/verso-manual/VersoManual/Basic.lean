@@ -157,11 +157,6 @@ instance : Inhabited Tag where
 instance : ToString Tag where
   toString := toString ∘ repr
 
-instance : Coe String Tag where
-  coe := .provided
-
-
-
 /-- When rendering multi-page HTML, should splitting pages follow the depth setting? -/
 inductive HtmlSplitMode where
   | /-- Follow the main setting -/ default
