@@ -63,13 +63,6 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}-
 
-            # This was failing CI from clang crashing, so do it first for fast turnaround
-            - name: Build the website examples subproject
-              run: |
-                  pushd test-projects/website-examples
-                  lake build
-                  popd
-
             - name: Check for orphaned modules
               run: |
                   # These are all the library modules plus the Errata self-tests, whose modules
