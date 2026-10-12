@@ -24,9 +24,11 @@
     const KEY_STEP = 16;
     const KEY_STEP_LARGE = 64;
 
-    const handle = document.querySelector(".toc-resize-handle");
-    const toc = document.getElementById("toc");
-    if (!(handle instanceof HTMLElement) || !(toc instanceof HTMLElement)) return;
+    const handleEl = document.querySelector(".toc-resize-handle");
+    const tocEl = document.getElementById("toc");
+    if (!(handleEl instanceof HTMLElement) || !(tocEl instanceof HTMLElement)) return;
+    const handle = handleEl;
+    const toc = tocEl;
 
     function currentWidth() {
         return toc.getBoundingClientRect().width;

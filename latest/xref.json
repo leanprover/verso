@@ -285,7 +285,7 @@
    "release-v4.35.0":
    [{"id": "release-v4___35___0",
      "data":
-     {"title": "Verso 4.35.0 (in development)",
+     {"title": "Verso 4.35.0",
       "shortTitle": null,
       "sectionNum": null,
       "searchPriority": 25,
@@ -294,9 +294,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.35.0 (in development)",
-        "shortTitle": null,
-        "number": "1"}]},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "release-v4.34.0":
    [{"id": "release-v4___34___0",
@@ -925,6 +923,23 @@
        {"title": "Block Syntax", "shortTitle": null, "number": "2"},
        {"title": "Lists", "shortTitle": null, "number": "1"}]},
      "address": "/Verso-Markup/"}],
+   "link-footnote-resolution":
+   [{"id": "link-footnote-resolution",
+     "data":
+     {"title": "Link and Footnote Label Resolution",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 25,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"},
+       {"title": "Link and Footnote Label Resolution",
+        "shortTitle": null,
+        "number": "2"}]},
+     "address": "/releases/"}],
    "inline-syntax":
    [{"id": "inline-syntax",
      "data":
@@ -1392,6 +1407,23 @@
        {"title": "Websites", "shortTitle": null, "number": "6"},
        {"title": "Generating a Site", "shortTitle": null, "number": "1"}]},
      "address": "/Websites/"}],
+   "blog-example-subprojects":
+   [{"id": "blog-example-subprojects",
+     "data":
+     {"title": "Blog Example Subprojects Removed",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 25,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"},
+       {"title": "Blog Example Subprojects Removed",
+        "shortTitle": null,
+        "number": "1"}]},
+     "address": "/releases/"}],
    "block-syntax":
    [{"id": "block-syntax",
      "data":
@@ -2342,16 +2374,14 @@
    [{"id": "--release-note-4___35___0",
      "data":
      {"version": "4.35.0",
-      "title": "Verso 4.35.0 (in development)",
+      "title": "Verso 4.35.0",
       "searchPriority": 25,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.35.0 (in development)",
-        "shortTitle": null,
-        "number": "1"}]},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "4.34.0":
    [{"id": "--release-note-4___34___0",
@@ -2530,9 +2560,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.35.0 (in development)",
-        "shortTitle": null,
-        "number": "1"}]},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "literate429":
    [{"id": "--release-note-literate429",
@@ -2561,6 +2589,20 @@
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
        {"title": "Verso 4.32.0", "shortTitle": null, "number": "4"}]},
+     "address": "/releases/"}],
+   "link-footnote-resolution":
+   [{"id": "--release-note-link-footnote-resolution",
+     "data":
+     {"version": "4.35.0",
+      "title": "Link and Footnote Label Resolution",
+      "searchPriority": 25,
+      "prs": [1014],
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "legacy-inline-roles":
    [{"id": "legacy-inline-roles",
@@ -2616,9 +2658,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.35.0 (in development)",
-        "shortTitle": null,
-        "number": "1"}]},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "feat-test-framework":
    [{"id": "--release-note-feat-test-framework",
@@ -2773,4 +2813,18 @@
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
        {"title": "Verso 4.29.0", "shortTitle": null, "number": "7"}]},
+     "address": "/releases/"}],
+   "blog-example-subprojects":
+   [{"id": "--release-note-blog-example-subprojects",
+     "data":
+     {"version": "4.35.0",
+      "title": "Blog Example Subprojects Removed",
+      "searchPriority": 25,
+      "prs": [1015],
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}]}}}
