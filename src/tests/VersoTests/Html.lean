@@ -16,24 +16,16 @@ open Verso.Output.Html
 
 private def testAttrs := {{ <html charset="UTF-8" charset = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")] }} /> }}
 
-/--
-info: Lean.Html.element
-  "html"
-  #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")]
-  (Lean.Html.seq #[])
--/
+/-- info: Html.element "html" #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")] (seq #[]) -/
+
 #test_msgs in
 #eval testAttrs
 
 private def testAttrsAntiquotes :=
   {{ <html charset={{"UTF" ++ "-8"}} "charset" = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")]}} /> }}
 
-/--
-info: Lean.Html.element
-  "html"
-  #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")]
-  (Lean.Html.seq #[])
--/
+/-- info: Html.element "html" #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")] (seq #[]) -/
+
 #test_msgs in
 #eval testAttrsAntiquotes
 
@@ -52,27 +44,16 @@ private def test : Html := {{
 }}
 
 /--
-info: Lean.Html.element
-  "html"
-  #[]
-  (Lean.Html.seq
-    #[Lean.Html.element
-        "head"
-        #[]
-        (Lean.Html.seq
-          #[Lean.Html.element "meta" #[("charset", "UTF-8")] (Lean.Html.seq #[]),
-            Lean.Html.element "script" #[] (Lean.Html.seq #[])]),
-      Lean.Html.element
-        "body"
-        #[("lang", "en"), ("class", "thing"), ("data-foo", "data foo")]
-        (Lean.Html.seq
-          #[Lean.Html.element "input" #[("type", "checkbox"), ("checked", "")] (Lean.Html.seq #[]),
-            Lean.Html.element
-              "p"
-              #[]
-              (Lean.Html.seq
-                #[Lean.Html.text "foo bar", Lean.Html.element "br" #[] (Lean.Html.seq #[]), Lean.Html.text "hey"])])])
+info: Html.element "html" #[]
+  (seq
+    #[Html.element "head" #[]
+        (seq #[Html.element "meta" #[("charset", "UTF-8")] (seq #[]), Html.element "script" #[] (seq #[])]),
+      Html.element "body" #[("lang", "en"), ("class", "thing"), ("data-foo", "data foo")]
+        (seq
+          #[Html.element "input" #[("type", "checkbox"), ("checked", "")] (seq #[]),
+            Html.element "p" #[] (seq #[Html.text "foo bar", Html.element "br" #[] (seq #[]), Html.text "hey"])])])
 -/
+
 #test_msgs in
   #eval test
 
@@ -80,7 +61,8 @@ private def leanKwTest : Html := {{
   <label for="foo">"Blah"</label>
 }}
 
-/-- info: Lean.Html.element "label" #[("for", "foo")] (Lean.Html.text "Blah") -/
+/-- info: Html.element "label" #[("for", "foo")] (Html.text "Blah") -/
+
 #test_msgs in
   #eval leanKwTest
 

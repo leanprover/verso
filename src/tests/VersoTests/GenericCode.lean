@@ -42,20 +42,14 @@ info: Verso.Doc.Part.mk
 #test_msgs in
   #eval code1.toPart
 /--
-info: Lean.Html.element
-  "section"
-  #[]
+info: Lean.Html.element "section" #[]
   (Lean.Html.seq
     #[Lean.Html.element "h1" #[] (Lean.Html.seq #[Lean.Html.text "More writing"]),
-      Lean.Html.element
-        "section"
-        #[]
+      Lean.Html.element "section" #[]
         (Lean.Html.seq
           #[Lean.Html.element "h2" #[] (Lean.Html.seq #[Lean.Html.text "Section 1"]),
             Lean.Html.element "p" #[] (Lean.Html.text "Here's some code"),
-            Lean.Html.element
-              "pre"
-              #[]
+            Lean.Html.element "pre" #[]
               (Lean.Html.text "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
 -/
 #test_msgs in
