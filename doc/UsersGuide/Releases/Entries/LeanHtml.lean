@@ -5,12 +5,12 @@ Author: Rob Simmons
 -/
 module
 
-public import UsersGuide.REleases.Entry
+public import UsersGuide.Releases.Entry
 
 open Verso.Genre Manual InlineLean UsersGuide.Releases
 
 release_note
-  version := (4, 36, 0)
+  version := ⟨4, 36, 0⟩
   breaking := true
   tag := "lean-html"
   prs := [974]
