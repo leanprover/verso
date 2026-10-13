@@ -302,6 +302,22 @@ private def testUnknownExtensionFallback : Test := do
   assertContains "THIS IS THE FALLBACK" html
     "HTML missing 'THIS IS THE FALLBACK' marker. The conversion's fallback children were not rendered."
 
+/--
+The doc comment on a `#guard_msgs` command is not documentation. Instead, it is a specification of
+the expected messages from the wrapped command. It must not be attributed to the declaration in that
+command as a second docstring.
+-/
+private def testGuardMsgsDocstring (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let html ← IO.FS.readFile (htmlDir / "LitConfig" / "GuardMsgs" / "index.html")
+  let docstring := "A theorem whose proof is left open."
+  let occurrences := (html.splitOn docstring).length - 1
+  unless occurrences == 1 do
+    throw <| IO.userError s!"Expected the docstring of `guarded` once in the HTML, found it {occurrences} times. \
+      The expected-messages comment of `#guard_msgs` was attributed to `guarded` as a docstring."
+  unless hasSubstring html "declaration uses" do
+    throw <| IO.userError "The expected-messages comment of `#guard_msgs` is missing from the HTML."
+
 /-- Excluded modules produce no HTML output and are absent from the navbar. -/
 private def testExclude (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
   IO.FS.writeFile tomlFile "exclude = [\"LitConfig.NoDocstrings\"]\n"
@@ -1205,6 +1221,7 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("all built-in doc roles", testAllBuiltinDocRoles data),
   ("custom literate handlers", testCustomLiterateHandlers data),
   ("docstring code block messages", testDocstringCodeBlockMessages data),
+  ("guard_msgs docstring", testGuardMsgsDocstring data),
   ("unknown extension fallback", testUnknownExtensionFallback)
 ]
 
@@ -1212,7 +1229,7 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
 @[test]
 def literateHtml : Test := do
   let projectDir := "test-projects/literate-config"
-  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings", "LitConfig.Builtins", "LitConfig.UserExt"]
+  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings", "LitConfig.Builtins", "LitConfig.UserExt", "LitConfig.GuardMsgs"]
 
   -- First verify test project toolchain matches root toolchain
   let rootToolchain := (← IO.FS.readFile "lean-toolchain").trimAscii
