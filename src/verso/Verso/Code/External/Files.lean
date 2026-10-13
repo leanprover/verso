@@ -58,17 +58,17 @@ def loadModuleContent' (projectDir : StrLit) (mod : String) (suppressNamespaces 
       | .ok toolchain => pure toolchain
       | .error e => throwErrorAt blame s!"{e}"
 
-  let runCmd (trace : MessageData) (cmd : Array String) : m Unit :=
+  let runCmd (trace : MessageData) (cmd : Array String) (restoreArtifacts : Bool) : m Unit :=
     withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure <| trace.trace {cls := `command} #[m!"{" ".intercalate cmd.toList}"]) do
-      let _ ← Verso.Elan.runCmdWithToolchain projectDir toolchain cmd
-        (env := #[("SUBVERSO_SUPPRESS_NAMESPACES", some (" ".intercalate suppressNamespaces))])
+      let _ ← Verso.Elan.runCmdWithToolchain projectDir toolchain cmd restoreArtifacts
+        (env := #[("SUBVERSO_SUPPRESS_NAMESPACES", .set (" ".intercalate suppressNamespaces))])
 
   let toolchainFile ← IO.FS.Handle.mk (projectDir / "lean-toolchain") .read
   -- Lake tends to get in trouble if used concurrently, so build the Lean code with a lock.
   toolchainFile.lock (exclusive := true)
   try
-    runCmd m!"loadModuleContent': building extractor" #["lake", "build", "subverso-extract-mod"]
-    runCmd m!"loadModuleContent': building highlighted example" #["lake", "build", "+" ++ mod ++ ":highlighted"]
+    runCmd m!"loadModuleContent': building extractor" #["lake", "build", "subverso-extract-mod"] false
+    runCmd m!"loadModuleContent': building highlighted example" #["lake", "build", "+" ++ mod ++ ":highlighted"] true
   finally
     toolchainFile.unlock
 

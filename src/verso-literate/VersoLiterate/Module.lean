@@ -48,9 +48,7 @@ def loadModuleJson
   let projectDir := ((← IO.currentDir) / leanProject).normalize
   let toolchain ← Verso.Elan.getProjectToolchain projectDir (overrideToolchain := overrideToolchain)
 
-  let cmd := #["lake", "query", s!"+{mod}:literate"]
-
-  let res ← Verso.Elan.runCmdWithToolchain toolchain cmd (projectDir := projectDir)
+  let res ← Verso.Elan.runCmdWithToolchain projectDir toolchain #["lake", "query", s!"+{mod}:literate"]
   if let some f := res.stdout.splitToList (· == '\n') |>.find? (!·.isEmpty) then
     IO.FS.readFile f
   else throw <| .userError s!"No result returned from build of {mod}"

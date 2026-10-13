@@ -41,7 +41,7 @@ meta def loadModuleContent
   let projectDir := ((← IO.currentDir) / leanProject).normalize
   let toolchain ← Elan.getProjectToolchain projectDir (overrideToolchain := overrideToolchain)
 
-  discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "build", s!"+{mod}"]
+  discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "build", s!"+{mod}"] (restoreArtifacts := true)
   IO.FS.withTempFile fun h f => do
     discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "exe", "subverso-extract-mod", mod, f.toString]
     h.rewind
@@ -65,7 +65,7 @@ meta def Helper.fromModule
   let toolchain ← Elan.getProjectToolchain projectDir (overrideToolchain := overrideToolchain)
 
   discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "build", "subverso-helper"]
-  discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "build", s!"+{mod}"]
+  discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "build", s!"+{mod}"] (restoreArtifacts := true)
 
   let cmd := #["lake", "env", "subverso-helper", mod]
   let hl ← do
