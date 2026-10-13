@@ -16,42 +16,41 @@ public meta import VersoManual.Html
 namespace Verso.Tests.HtmlHoist
 
 open Verso.Output
-open Verso.Output.Html
 open Verso.Genre.Manual.Html.Hoist
 open Errata
 open Plausible Gen Arbitrary
 
 private def compact (html : Html) : String :=
-  (postprocess html).asString (breakLines := false)
+  (postprocess html).render
 
 private def marker (label : String) : Html :=
-  suppressible "margin" {{<sup>{{label}}</sup>}}
+  suppressible "margin" html%{<sup>{label}</sup>}
 
 private def note (label : String) : Html :=
-  hoist "margin" {{<span class="note">{{label}}</span>}}
+  hoist "margin" html%{<span class="note">{label}</span>}
 
-#test_guard compact {{<p>"text"{{marker "1"}}{{note "A"}}</p>}} ==
+#test_guard compact html%{<p>text{marker "1"}{note "A"}</p>} ==
   "<p>text<sup>1</sup><span class=\"note\">A</span></p>"
 
-#test_guard compact {{
-  <table><tr><td>"text"{{marker "1"}}{{note "A"}}</td></tr></table>
-}} ==
+#test_guard compact html%{
+  <table><tr><td>text{marker "1"}{note "A"}</td></tr></table>
+} ==
   "<span class=\"note\" data-verso-hoisted=\"before\">A</span><table><tr><td>text<sup>1</sup></td></tr></table>"
 
-#test_guard compact {{
-  <table><tr><td>{{note "A"}}{{note "B"}}{{note "C"}}</td></tr></table>
-}} ==
+#test_guard compact html%{
+  <table><tr><td>{note "A"}{note "B"}{note "C"}</td></tr></table>
+} ==
   "<span class=\"note\" data-verso-hoisted=\"before\">A</span><span class=\"note\" data-verso-hoisted=\"before\">B</span><span class=\"note\" data-verso-hoisted=\"before\">C</span><table><tr><td></td></tr></table>"
 
-#test_guard compact {{
-  <table>{{hoist "margin" {{<span>"A"</span><span>"B"</span>}}}}</table>
-}} ==
+#test_guard compact html%{
+  <table>{hoist "margin" html%{<span>A</span><span>B</span>}}</table>
+} ==
   "<span data-verso-hoisted=\"before\">A</span><span data-verso-hoisted=\"before\">B</span><table></table>"
 
-#test_guard compact {{<table>{{hoist "margin" {{"hoisted text"}}}}</table>}} ==
+#test_guard compact html%{<table>{hoist "margin" html%{hoisted text}}</table>} ==
   "hoisted text<table></table>"
 
-#test_guard compact (hoist "margin" {{"text without a barrier"}}) ==
+#test_guard compact (hoist "margin" html%{text without a barrier}) ==
   "text without a barrier"
 
 #test_guard compact (.element "span" #[
@@ -61,71 +60,71 @@ private def note (label : String) : Html :=
 ] (.text "text")) ==
   "<span class=\"kept\">text</span>"
 
-#test_guard compact (barrier "margin" false {{<div>{{note "custom"}}</div>}}) ==
+#test_guard compact (barrier "margin" false html%{<div>{note "custom"}</div>}) ==
   "<div></div><span class=\"note\" data-verso-hoisted=\"after\">custom</span>"
 
-#test_guard compact (barrier "margin" true {{<div>{{note "before"}}</div>}}) ==
+#test_guard compact (barrier "margin" true html%{<div>{note "before"}</div>}) ==
   "<span class=\"note\" data-verso-hoisted=\"before\">before</span><div></div>"
 
-#test_guard compact (barrier "margin" false {{<table>{{note "after"}}</table>}}) ==
+#test_guard compact (barrier "margin" false html%{<table>{note "after"}</table>}) ==
   "<table></table><span class=\"note\" data-verso-hoisted=\"after\">after</span>"
 
-#test_guard compact (noBarrier "margin" {{<table>{{note "safe"}}</table>}}) ==
+#test_guard compact (noBarrier "margin" html%{<table>{note "safe"}</table>}) ==
   "<table><span class=\"note\">safe</span></table>"
 
-#test_guard compact (barrier "margin" false {{
-  <div><table>{{note "A"}}{{note "B"}}</table>{{note "C"}}</div>
-}}) ==
+#test_guard compact (barrier "margin" false html%{
+  <div><table>{note "A"}{note "B"}</table>{note "C"}</div>
+}) ==
   "<div><table></table></div><span class=\"note\" data-verso-hoisted=\"after\">A</span><span class=\"note\" data-verso-hoisted=\"after\">B</span><span class=\"note\" data-verso-hoisted=\"after\">C</span>"
 
-#test_guard compact (suppress "margin" {{
-  <nav>{{marker "1"}}{{note "hidden"}}<span>"kept"</span></nav>
-}}) ==
+#test_guard compact (suppress "margin" html%{
+  <nav>{marker "1"}{note "hidden"}<span>kept</span></nav>
+}) ==
   "<nav><span>kept</span></nav>"
 
-#test_guard compact (barrier "margin" false {{
+#test_guard compact (barrier "margin" false html%{
   <div>
-    {{note "before"}}
-    {{suppress "margin" {{<span>{{note "discarded"}}{{marker "2"}}</span>}}}}
-    {{note "after"}}
+    {note "before"}
+    {suppress "margin" html%{<span>{note "discarded"}{marker "2"}</span>}}
+    {note "after"}
   </div>
-}}) ==
+}) ==
   "<div><span></span></div><span class=\"note\" data-verso-hoisted=\"after\">before</span><span class=\"note\" data-verso-hoisted=\"after\">after</span>"
 
 private def futureNote (label : String) : Html :=
-  hoist "future" {{<span class="future">{{label}}</span>}}
+  hoist "future" html%{<span class="future">{label}</span>}
 
-#test_guard compact (barrier "margin" false {{
+#test_guard compact (barrier "margin" false html%{
   <div>
-    {{barrier "future" false {{<section>{{note "margin"}}{{futureNote "future"}}</section>}}}}
+    {barrier "future" false html%{<section>{note "margin"}{futureNote "future"}</section>}}
   </div>
-}}) ==
+}) ==
   "<div><section></section><span class=\"future\" data-verso-hoisted=\"after\">future</span></div><span class=\"note\" data-verso-hoisted=\"after\">margin</span>"
 
-#test_guard compact (barrier "outer" false {{
+#test_guard compact (barrier "outer" false html%{
   <div>
-    {{barrier "inner" false {{
-      <section>{{hoist "inner" (hoist "outer" {{<span>"both"</span>}})}}</section>
-    }}}}
+    {barrier "inner" false html%{
+      <section>{hoist "inner" (hoist "outer" html%{<span>both</span>})}</section>
+    }}
   </div>
-}}) ==
+}) ==
   "<div><section></section></div><span data-verso-hoisted=\"after\">both</span>"
 
-#test_guard compact (barrier "outer" false {{
+#test_guard compact (barrier "outer" false html%{
   <div>
-    {{hoist "outer" (barrier "inner" true {{
-      <section>{{hoist "inner" {{<span>"inner"</span>}}}}</section>
-    }})}}
+    {hoist "outer" (barrier "inner" true html%{
+      <section>{hoist "inner" html%{<span>inner</span>}}</section>
+    })}
   </div>
-}}) ==
+}) ==
   "<div></div><span data-verso-hoisted=\"before\">inner</span><section data-verso-hoisted=\"after\"></section>"
 
-#test_guard compact (barrier "first" true (barrier "second" false {{
+#test_guard compact (barrier "first" true (barrier "second" false html%{
   <div>
-    {{hoist "first" {{<span>"first"</span>}}}}
-    {{hoist "second" {{<span>"second"</span>}}}}
+    {hoist "first" html%{<span>first</span>}}
+    {hoist "second" html%{<span>second</span>}}
   </div>
-}})) ==
+})) ==
   "<span data-verso-hoisted=\"before\">first</span><div></div><span data-verso-hoisted=\"after\">second</span>"
 
 #test_guard compact (.element "div" #[
@@ -138,7 +137,7 @@ private def futureNote (label : String) : Html :=
 ] (.text "clean")) == "<div>clean</div>"
 
 private def titleWithMarginalia : Html :=
-  {{"Title"{{marker "1"}}{{note "title note"}}}}
+  html%{Title{marker "1"}{note "title note"}}
 
 private def tocEntry : Verso.Genre.Manual.Html.Toc where
   title := titleWithMarginalia

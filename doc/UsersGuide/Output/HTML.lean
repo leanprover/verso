@@ -48,7 +48,7 @@ HTML documents are typically produced using an embedded DSL, accessible via the 
 For example, this definition creates a `<ul>` list:
 ```lean -keep (name := htmllist)
 def mkList (xs : List Html) : Html :=
-  html%{ <ul>{ xs.map fun x => html%{<li>{x}</li>} }</ul>}
+  html%{<ul>{ xs.map fun x => html%{<li>{x}</li>} }</ul>}
 
 #eval mkList ["A", html%{<emph>B</emph>}, "C"]
   |>.render
