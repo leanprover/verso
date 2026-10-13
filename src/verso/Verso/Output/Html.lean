@@ -207,22 +207,22 @@ export Lean (Html Html.seq Html.empty Html.append Html.setAttribute Html.setAttr
 namespace Html
 
 @[deprecated Lean.Html.ofString (since := "2026-09-02")]
-protected abbrev text : Bool → String → Html := Lean.Html.ofString
+public protected abbrev text : Bool → String → Html := Lean.Html.ofString
 
 @[deprecated Lean.Html.element (since := "2026-09-02")]
-protected abbrev tag : String → Array (String × String) → Html → Html := Lean.Html.element
+public protected abbrev tag : String → Array (String × String) → Html → Html := Lean.Html.element
 
 @[deprecated Lean.Html.text (since := "2026-09-02")]
-protected abbrev ofString : String → Html := Lean.Html.text
+public protected abbrev ofString : String → Html := Lean.Html.text
 
 @[deprecated Lean.Html.ofArray (since := "2026-09-02")]
-protected abbrev fromArray : Array Html → Html := Lean.Html.ofArray
+public protected abbrev fromArray : Array Html → Html := Lean.Html.ofArray
 
 @[deprecated Lean.Html.ofList (since := "2026-09-02")]
-protected abbrev fromList : List Html → Html := Lean.Html.ofList
+public protected abbrev fromList : List Html → Html := Lean.Html.ofList
 
 @[deprecated Lean.Html.rewritePostM +typeChanged (since := "2026-09-02")]
-protected abbrev visitM [Monad m]
+public protected abbrev visitM [Monad m]
     (text : (escape : Bool) → String → m (Option Html) := (fun _ _ => pure none))
     (tag : (name : String) → (attrs : Array (String × String)) → (contents : Html) → m (Option Html) := fun _ _ _ => pure none)
     (seq : Array Html → m (Option Html) := fun _ => pure none)
@@ -235,7 +235,7 @@ protected abbrev visitM [Monad m]
 
 set_option linter.unusedVariables false in
 @[deprecated Lean.Html.render +typeChanged (since := "2026-09-02")]
-protected abbrev asString (html : Html) (indent : Nat := 0) (breakLines := true) : String :=
+public protected abbrev asString (html : Html) (indent : Nat := 0) (breakLines := true) : String :=
   html.render
 
 end Verso.Output.Html
