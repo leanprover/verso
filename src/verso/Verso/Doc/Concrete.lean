@@ -14,6 +14,7 @@ public meta import Verso.Doc.Elab.Monad
 import Verso.Doc.Concrete.InlineString
 public import Verso.Doc.Concrete.Environment
 import Verso.Doc.Lsp
+public meta import Verso.Doc.Elab.Finalize
 
 namespace Verso.Doc.Concrete
 
@@ -369,6 +370,7 @@ elab_rules : command
     -- so we detect that case and call finishDoc.
     if stopPos.extract txt.source txt.source.rawEndPos |>.all Char.isWhitespace then
       finishDoc
+      Finalize.runFinalizers
 
 open Command in
 /--
@@ -397,4 +399,5 @@ public meta def elabVersoLastBlock : Command.CommandElab
     -- Verso does not finish the document.
     withLogging <| runVersoBlock b
     finishDoc
+    Finalize.runFinalizers
   | _ => throwUnsupportedSyntax
