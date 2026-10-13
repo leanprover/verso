@@ -13,9 +13,9 @@ release_note
   version := ⟨4, 36, 0⟩
   breaking := true
   tag := "lean-html"
-  prs := [974]
+  prs := [974, 987]
 
-#doc (Manual) "Using Lean's HTML Type" =>
+#doc (Manual) "Use Lean's HTML Type and Syntax" =>
 
 Verso now uses the Lean types and custom HTML syntax provided by Lean, rather than its own implementation of a custom HTML syntax.
 
