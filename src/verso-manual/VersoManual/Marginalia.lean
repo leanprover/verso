@@ -277,22 +277,22 @@ The note is hoistable up to {lean}`"margin"` barriers, and its markers are remov
 content is suppressed.
 -/
 def Marginalia.html (content : Html) (id : String) : Html :=
-  let reference := Hoist.suppressible "margin" {{
+  let reference := Hoist.suppressible "margin" html%{
     <span class="marginalia-reference">
-      <span class="marginalia-marker marginalia-marker-desktop" aria-details={{id}}>
-        <span class="marginalia-accessible-label">"Marginal note"</span>
+      <span class="marginalia-marker marginalia-marker-desktop" aria-details={id}>
+        <span class="marginalia-accessible-label">Marginal note</span>
       </span>
       <button class="marginalia-marker marginalia-marker-mobile"
               type="button"
-              aria-details={{id}}
-              "popovertarget"={{id}}>
-        <span class="marginalia-accessible-label">"Show marginal note"</span>
+              aria-details={id}
+              popovertarget={id}>
+        <span class="marginalia-accessible-label">Show marginal note</span>
       </button>
     </span>
-  }}
-  let note := Hoist.hoist "margin" {{
-    <span class="marginalia-note" id={{id}} role="note" "popover"="auto">{{content}}</span>
-  }}
+  }
+  let note := Hoist.hoist "margin" html%{
+    <span class="marginalia-note" id={id} role="note" popover="auto">{content}</span>
+  }
   reference ++ note
 
 /-
