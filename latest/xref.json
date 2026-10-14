@@ -40,10 +40,29 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.34.0", "shortTitle": null, "number": "2"},
+       {"title": "Verso 4.34.0", "shortTitle": null, "number": "3"},
        {"title": "Versioned Release Note Entries",
         "shortTitle": null,
         "number": "3"}]},
+     "address": "/releases/"}],
+   "upstream-parser":
+   [{"id": "upstream-parser",
+     "data":
+     {"title": "Adaptation to Lean's Rewritten Verso Parser",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 25,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0 (in development)",
+        "shortTitle": null,
+        "number": "1"},
+       {"title": "Adaptation to Lean's Rewritten Verso Parser",
+        "shortTitle": null,
+        "number": "2"}]},
      "address": "/releases/"}],
    "traversal":
    [{"id": "traversal",
@@ -260,7 +279,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.30.0", "shortTitle": null, "number": "6"},
+       {"title": "Verso 4.30.0", "shortTitle": null, "number": "7"},
        {"title": "Search Result Prioritization",
         "shortTitle": null,
         "number": "2"}]},
@@ -282,6 +301,22 @@
         "number": "3"},
        {"title": "Fewer Unused Features", "shortTitle": null, "number": "5"}]},
      "address": "/Verso-Markup/"}],
+   "release-v4.36.0":
+   [{"id": "release-v4___36___0",
+     "data":
+     {"title": "Verso 4.36.0 (in development)",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 25,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0 (in development)",
+        "shortTitle": null,
+        "number": "1"}]},
+     "address": "/releases/"}],
    "release-v4.35.0":
    [{"id": "release-v4___35___0",
      "data":
@@ -294,7 +329,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"}]},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "2"}]},
      "address": "/releases/"}],
    "release-v4.34.0":
    [{"id": "release-v4___34___0",
@@ -308,7 +343,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.34.0", "shortTitle": null, "number": "2"}]},
+       {"title": "Verso 4.34.0", "shortTitle": null, "number": "3"}]},
      "address": "/releases/"}],
    "release-v4.33.0":
    [{"id": "release-v4___33___0",
@@ -322,7 +357,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.33.0", "shortTitle": null, "number": "3"}]},
+       {"title": "Verso 4.33.0", "shortTitle": null, "number": "4"}]},
      "address": "/releases/"}],
    "release-v4.32.0":
    [{"id": "release-v4___32___0",
@@ -336,7 +371,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.32.0", "shortTitle": null, "number": "4"}]},
+       {"title": "Verso 4.32.0", "shortTitle": null, "number": "5"}]},
      "address": "/releases/"}],
    "release-v4.31.0":
    [{"id": "release-v4___31___0",
@@ -350,7 +385,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.31.0", "shortTitle": null, "number": "5"}]},
+       {"title": "Verso 4.31.0", "shortTitle": null, "number": "6"}]},
      "address": "/releases/"}],
    "release-v4.30.0":
    [{"id": "release-v4___30___0",
@@ -364,7 +399,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.30.0", "shortTitle": null, "number": "6"}]},
+       {"title": "Verso 4.30.0", "shortTitle": null, "number": "7"}]},
      "address": "/releases/"}],
    "release-v4.29.0":
    [{"id": "release-v4___29___0",
@@ -378,7 +413,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.29.0", "shortTitle": null, "number": "7"}]},
+       {"title": "Verso 4.29.0", "shortTitle": null, "number": "8"}]},
      "address": "/releases/"}],
    "release-v4.28.0":
    [{"id": "release-v4___28___0",
@@ -392,7 +427,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.28.0", "shortTitle": null, "number": "8"}]},
+       {"title": "Verso 4.28.0", "shortTitle": null, "number": "9"}]},
      "address": "/releases/"}],
    "release-notes":
    [{"id": "release-notes",
@@ -590,7 +625,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.29.0", "shortTitle": null, "number": "7"},
+       {"title": "Verso 4.29.0", "shortTitle": null, "number": "8"},
        {"title": "Literate Programming", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "literate-theming":
@@ -935,10 +970,29 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "2"},
        {"title": "Link and Footnote Label Resolution",
         "shortTitle": null,
         "number": "2"}]},
+     "address": "/releases/"}],
+   "lean-html":
+   [{"id": "lean-html",
+     "data":
+     {"title": "Use Lean's HTML Type and Syntax",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 25,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0 (in development)",
+        "shortTitle": null,
+        "number": "1"},
+       {"title": "Use Lean's HTML Type and Syntax",
+        "shortTitle": null,
+        "number": "1"}]},
      "address": "/releases/"}],
    "inline-syntax":
    [{"id": "inline-syntax",
@@ -1092,7 +1146,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.34.0", "shortTitle": null, "number": "2"},
+       {"title": "Verso 4.34.0", "shortTitle": null, "number": "3"},
        {"title": "Test Framework", "shortTitle": null, "number": "2"}]},
      "address": "/releases/"}],
    "feat-serve":
@@ -1107,7 +1161,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.33.0", "shortTitle": null, "number": "3"},
+       {"title": "Verso 4.33.0", "shortTitle": null, "number": "4"},
        {"title": "Development Server", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "feat-full-page-search-interface":
@@ -1122,7 +1176,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.30.0", "shortTitle": null, "number": "6"},
+       {"title": "Verso 4.30.0", "shortTitle": null, "number": "7"},
        {"title": "Full-Page Search Interface",
         "shortTitle": null,
         "number": "1"}]},
@@ -1139,7 +1193,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.31.0", "shortTitle": null, "number": "5"},
+       {"title": "Verso 4.31.0", "shortTitle": null, "number": "6"},
        {"title": "Breaking Change:  ExtraStep",
         "shortTitle": null,
         "number": "2"}]},
@@ -1156,7 +1210,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.31.0", "shortTitle": null, "number": "5"},
+       {"title": "Verso 4.31.0", "shortTitle": null, "number": "6"},
        {"title": "Logging Abstraction", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "extensions":
@@ -1255,7 +1309,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.32.0", "shortTitle": null, "number": "4"},
+       {"title": "Verso 4.32.0", "shortTitle": null, "number": "5"},
        {"title": "Labeled Groups in Rendered Docstrings",
         "shortTitle": null,
         "number": "1"}]},
@@ -1331,7 +1385,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.34.0", "shortTitle": null, "number": "2"},
+       {"title": "Verso 4.34.0", "shortTitle": null, "number": "3"},
        {"title": "Color Customization", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "compilation":
@@ -1419,7 +1473,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "2"},
        {"title": "Blog Example Subprojects Removed",
         "shortTitle": null,
         "number": "1"}]},
@@ -1573,17 +1627,15 @@
  {"title": "Lean constant suggestions",
   "description": "Search suggestions for Lean constants",
   "contents":
-  {"Verso.Output.Html.none↪Verso.Output.Html.empty":
-   [{"id": "Verso___Output___Html___empty",
+  {"Lean.Html.none↪Lean.Html.empty":
+   [{"id": "Lean___Html___empty",
      "data":
-     {"suggestedRedirect": "Verso.Output.Html.empty",
-      "searchTerm": "Verso.Output.Html.none"},
+     {"suggestedRedirect": "Lean.Html.empty", "searchTerm": "Lean.Html.none"},
      "address": "/Output-Formats/"}],
-   "Verso.Output.Html.nil↪Verso.Output.Html.empty":
-   [{"id": "Verso___Output___Html___empty",
+   "Lean.Html.nil↪Lean.Html.empty":
+   [{"id": "Lean___Html___empty",
      "data":
-     {"suggestedRedirect": "Verso.Output.Html.empty",
-      "searchTerm": "Verso.Output.Html.nil"},
+     {"suggestedRedirect": "Lean.Html.empty", "searchTerm": "Lean.Html.nil"},
      "address": "/Output-Formats/"}]}},
  "Verso.Genre.Manual.doc.option":
  {"title": "Compiler options",
@@ -1644,22 +1696,6 @@
    [{"id": "Verso___Output___Html____FLQQ_verso-vars___css_FLQQ_",
      "data": null,
      "address": "/Output-Formats/"}],
-   "Verso.Output.Html.visitM":
-   [{"id": "Verso___Output___Html___visitM",
-     "data": null,
-     "address": "/Output-Formats/"}],
-   "Verso.Output.Html.text":
-   [{"id": "Verso___Output___Html___text",
-     "data": null,
-     "address": "/Output-Formats/"}],
-   "Verso.Output.Html.tag":
-   [{"id": "Verso___Output___Html___text",
-     "data": null,
-     "address": "/Output-Formats/"}],
-   "Verso.Output.Html.seq":
-   [{"id": "Verso___Output___Html___text",
-     "data": null,
-     "address": "/Output-Formats/"}],
    "Verso.Output.Html.math.js":
    [{"id": "Verso___Output___Html___math___js",
      "data": null,
@@ -1674,34 +1710,6 @@
      "address": "/Output-Formats/"}],
    "Verso.Output.Html.katex.css":
    [{"id": "Verso___Output___Html___katex___css",
-     "data": null,
-     "address": "/Output-Formats/"}],
-   "Verso.Output.Html.fromList":
-   [{"id": "Verso___Output___Html___fromList",
-     "data": null,
-     "address": "/Output-Formats/"}],
-   "Verso.Output.Html.fromArray":
-   [{"id": "Verso___Output___Html___fromArray",
-     "data": null,
-     "address": "/Output-Formats/"}],
-   "Verso.Output.Html.format":
-   [{"id": "Verso___Output___Html___format",
-     "data": null,
-     "address": "/Output-Formats/"}],
-   "Verso.Output.Html.empty":
-   [{"id": "Verso___Output___Html___empty",
-     "data": null,
-     "address": "/Output-Formats/"}],
-   "Verso.Output.Html.asString":
-   [{"id": "Verso___Output___Html___asString",
-     "data": null,
-     "address": "/Output-Formats/"}],
-   "Verso.Output.Html.append":
-   [{"id": "Verso___Output___Html___append",
-     "data": null,
-     "address": "/Output-Formats/"}],
-   "Verso.Output.Html":
-   [{"id": "Verso___Output___Html___text",
      "data": null,
      "address": "/Output-Formats/"}],
    "Verso.Genre.Manual.tech":
@@ -2365,12 +2373,69 @@
    "Verso.ArgParse":
    [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
    "List.forM":
-   [{"id": "List___forM", "data": null, "address": "/Manuals-and-Books/"}]}},
+   [{"id": "List___forM", "data": null, "address": "/Manuals-and-Books/"}],
+   "Lean.Html.text":
+   [{"id": "Lean___Html___element",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Lean.Html.seq":
+   [{"id": "Lean___Html___element",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Lean.Html.rewritePostM":
+   [{"id": "Lean___Html___rewritePostM",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Lean.Html.render":
+   [{"id": "Lean___Html___render",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Lean.Html.raw":
+   [{"id": "Lean___Html___element",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Lean.Html.ofList":
+   [{"id": "Lean___Html___ofList",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Lean.Html.ofArray":
+   [{"id": "Lean___Html___ofArray",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Lean.Html.empty":
+   [{"id": "Lean___Html___empty", "data": null, "address": "/Output-Formats/"}],
+   "Lean.Html.element":
+   [{"id": "Lean___Html___element",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Lean.Html.append":
+   [{"id": "Lean___Html___append",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Lean.Html":
+   [{"id": "Lean___Html___element",
+     "data": null,
+     "address": "/Output-Formats/"}]}},
  "UsersGuide.Releases.version":
  {"title": "Releases of Verso",
   "description": null,
   "contents":
-  {"4.35.0":
+  {"4.36.0":
+   [{"id": "--release-note-4___36___0",
+     "data":
+     {"version": "4.36.0",
+      "title": "Verso 4.36.0 (in development)",
+      "searchPriority": 25,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0 (in development)",
+        "shortTitle": null,
+        "number": "1"}]},
+     "address": "/releases/"}],
+   "4.35.0":
    [{"id": "--release-note-4___35___0",
      "data":
      {"version": "4.35.0",
@@ -2381,7 +2446,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"}]},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "2"}]},
      "address": "/releases/"}],
    "4.34.0":
    [{"id": "--release-note-4___34___0",
@@ -2394,7 +2459,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.34.0", "shortTitle": null, "number": "2"}]},
+       {"title": "Verso 4.34.0", "shortTitle": null, "number": "3"}]},
      "address": "/releases/"}],
    "4.33.0":
    [{"id": "--release-note-4___33___0",
@@ -2407,7 +2472,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.33.0", "shortTitle": null, "number": "3"}]},
+       {"title": "Verso 4.33.0", "shortTitle": null, "number": "4"}]},
      "address": "/releases/"}],
    "4.32.0":
    [{"id": "--release-note-4___32___0",
@@ -2420,7 +2485,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.32.0", "shortTitle": null, "number": "4"}]},
+       {"title": "Verso 4.32.0", "shortTitle": null, "number": "5"}]},
      "address": "/releases/"}],
    "4.31.0":
    [{"id": "--release-note-4___31___0",
@@ -2433,7 +2498,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.31.0", "shortTitle": null, "number": "5"}]},
+       {"title": "Verso 4.31.0", "shortTitle": null, "number": "6"}]},
      "address": "/releases/"}],
    "4.30.0":
    [{"id": "--release-note-4___30___0",
@@ -2446,7 +2511,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.30.0", "shortTitle": null, "number": "6"}]},
+       {"title": "Verso 4.30.0", "shortTitle": null, "number": "7"}]},
      "address": "/releases/"}],
    "4.29.0":
    [{"id": "--release-note-4___29___0",
@@ -2459,7 +2524,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.29.0", "shortTitle": null, "number": "7"}]},
+       {"title": "Verso 4.29.0", "shortTitle": null, "number": "8"}]},
      "address": "/releases/"}],
    "4.28.0":
    [{"id": "--release-note-4___28___0",
@@ -2472,7 +2537,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.28.0", "shortTitle": null, "number": "8"}]},
+       {"title": "Verso 4.28.0", "shortTitle": null, "number": "9"}]},
      "address": "/releases/"}]}},
  "UsersGuide.Releases.entry":
  {"title": "Individual changes in a release",
@@ -2490,7 +2555,23 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.34.0", "shortTitle": null, "number": "2"}]},
+       {"title": "Verso 4.34.0", "shortTitle": null, "number": "3"}]},
+     "address": "/releases/"}],
+   "upstream-parser":
+   [{"id": "--release-note-upstream-parser",
+     "data":
+     {"version": "4.36.0",
+      "title": "Adaptation to Lean's Rewritten Verso Parser",
+      "searchPriority": 25,
+      "prs": [989],
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0 (in development)",
+        "shortTitle": null,
+        "number": "1"}]},
      "address": "/releases/"}],
    "search-priority":
    [{"id": "--release-note-search-priority",
@@ -2504,7 +2585,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.30.0", "shortTitle": null, "number": "6"}]},
+       {"title": "Verso 4.30.0", "shortTitle": null, "number": "7"}]},
      "address": "/releases/"}],
    "role-diagnostics":
    [{"id": "role-diagnostics",
@@ -2518,7 +2599,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.31.0", "shortTitle": null, "number": "5"}]},
+       {"title": "Verso 4.31.0", "shortTitle": null, "number": "6"}]},
      "address": "/releases/"}],
    "release-notes-chapter":
    [{"id": "release-notes-chapter",
@@ -2532,7 +2613,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.28.0", "shortTitle": null, "number": "8"}]},
+       {"title": "Verso 4.28.0", "shortTitle": null, "number": "9"}]},
      "address": "/releases/"}],
    "method-in-multiverso":
    [{"id": "method-in-multiverso",
@@ -2546,7 +2627,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.32.0", "shortTitle": null, "number": "4"}]},
+       {"title": "Verso 4.32.0", "shortTitle": null, "number": "5"}]},
      "address": "/releases/"}],
    "manual-marginalia":
    [{"id": "manual-marginalia",
@@ -2560,7 +2641,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"}]},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "2"}]},
      "address": "/releases/"}],
    "literate429":
    [{"id": "--release-note-literate429",
@@ -2574,7 +2655,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.29.0", "shortTitle": null, "number": "7"}]},
+       {"title": "Verso 4.29.0", "shortTitle": null, "number": "8"}]},
      "address": "/releases/"}],
    "literate-html-katex":
    [{"id": "literate-html-katex",
@@ -2588,7 +2669,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.32.0", "shortTitle": null, "number": "4"}]},
+       {"title": "Verso 4.32.0", "shortTitle": null, "number": "5"}]},
      "address": "/releases/"}],
    "link-footnote-resolution":
    [{"id": "--release-note-link-footnote-resolution",
@@ -2602,7 +2683,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"}]},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "2"}]},
      "address": "/releases/"}],
    "legacy-inline-roles":
    [{"id": "legacy-inline-roles",
@@ -2616,7 +2697,23 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.31.0", "shortTitle": null, "number": "5"}]},
+       {"title": "Verso 4.31.0", "shortTitle": null, "number": "6"}]},
+     "address": "/releases/"}],
+   "lean-html":
+   [{"id": "--release-note-lean-html",
+     "data":
+     {"version": "4.36.0",
+      "title": "Use Lean's HTML Type and Syntax",
+      "searchPriority": 25,
+      "prs": [974, 987],
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0 (in development)",
+        "shortTitle": null,
+        "number": "1"}]},
      "address": "/releases/"}],
    "inline-lean-infoview":
    [{"id": "inline-lean-infoview",
@@ -2630,7 +2727,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.28.0", "shortTitle": null, "number": "8"}]},
+       {"title": "Verso 4.28.0", "shortTitle": null, "number": "9"}]},
      "address": "/releases/"}],
    "folding-ranges":
    [{"id": "folding-ranges",
@@ -2644,7 +2741,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.29.0", "shortTitle": null, "number": "7"}]},
+       {"title": "Verso 4.29.0", "shortTitle": null, "number": "8"}]},
      "address": "/releases/"}],
    "feat-test-widget":
    [{"id": "feat-test-widget",
@@ -2658,7 +2755,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"}]},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "2"}]},
      "address": "/releases/"}],
    "feat-test-framework":
    [{"id": "--release-note-feat-test-framework",
@@ -2672,7 +2769,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.34.0", "shortTitle": null, "number": "2"}]},
+       {"title": "Verso 4.34.0", "shortTitle": null, "number": "3"}]},
      "address": "/releases/"}],
    "feat-serve":
    [{"id": "--release-note-feat-serve",
@@ -2686,7 +2783,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.33.0", "shortTitle": null, "number": "3"}]},
+       {"title": "Verso 4.33.0", "shortTitle": null, "number": "4"}]},
      "address": "/releases/"}],
    "feat-full-page-search-interface":
    [{"id": "--release-note-feat-full-page-search-interface",
@@ -2700,7 +2797,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.30.0", "shortTitle": null, "number": "6"}]},
+       {"title": "Verso 4.30.0", "shortTitle": null, "number": "7"}]},
      "address": "/releases/"}],
    "feat-diagrams":
    [{"id": "feat-diagrams",
@@ -2714,7 +2811,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.30.0", "shortTitle": null, "number": "6"}]},
+       {"title": "Verso 4.30.0", "shortTitle": null, "number": "7"}]},
      "address": "/releases/"}],
    "feat-build-log-breaking":
    [{"id": "--release-note-feat-build-log-breaking",
@@ -2728,7 +2825,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.31.0", "shortTitle": null, "number": "5"}]},
+       {"title": "Verso 4.31.0", "shortTitle": null, "number": "6"}]},
      "address": "/releases/"}],
    "feat-build-log":
    [{"id": "--release-note-feat-build-log",
@@ -2742,7 +2839,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.31.0", "shortTitle": null, "number": "5"}]},
+       {"title": "Verso 4.31.0", "shortTitle": null, "number": "6"}]},
      "address": "/releases/"}],
    "extension-descriptor-visibility":
    [{"id": "extension-descriptor-visibility",
@@ -2756,7 +2853,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.32.0", "shortTitle": null, "number": "4"}]},
+       {"title": "Verso 4.32.0", "shortTitle": null, "number": "5"}]},
      "address": "/releases/"}],
    "docstring-labeled-groups":
    [{"id": "--release-note-docstring-labeled-groups",
@@ -2770,7 +2867,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.32.0", "shortTitle": null, "number": "4"}]},
+       {"title": "Verso 4.32.0", "shortTitle": null, "number": "5"}]},
      "address": "/releases/"}],
    "doc-source-ranges":
    [{"id": "doc-source-ranges",
@@ -2784,7 +2881,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.31.0", "shortTitle": null, "number": "5"}]},
+       {"title": "Verso 4.31.0", "shortTitle": null, "number": "6"}]},
      "address": "/releases/"}],
    "css-color-vars":
    [{"id": "--release-note-css-color-vars",
@@ -2798,7 +2895,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.34.0", "shortTitle": null, "number": "2"}]},
+       {"title": "Verso 4.34.0", "shortTitle": null, "number": "3"}]},
      "address": "/releases/"}],
    "blog-lean-role":
    [{"id": "blog-lean-role",
@@ -2812,7 +2909,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.29.0", "shortTitle": null, "number": "7"}]},
+       {"title": "Verso 4.29.0", "shortTitle": null, "number": "8"}]},
      "address": "/releases/"}],
    "blog-example-subprojects":
    [{"id": "--release-note-blog-example-subprojects",
@@ -2826,5 +2923,5 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.35.0", "shortTitle": null, "number": "1"}]},
+       {"title": "Verso 4.35.0", "shortTitle": null, "number": "2"}]},
      "address": "/releases/"}]}}}
