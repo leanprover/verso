@@ -731,7 +731,7 @@ meta def leanOutput : CodeBlockExpanderOf LeanOutputConfig
             let lines := str.getVersoCodeBlock.splitOn "\n"
             let pre := lines.take 3
             let post := String.join (lines.drop 3 |>.intersperse "\n")
-            let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
+            let preHtml : Html := pre.map (fun (l : String) => html%{<code>{l}</code>})
             ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr m.severity)) $(quote preHtml)) #[Block.code $(quote post)])
           else
             let myEnv ← getEnv

@@ -144,7 +144,7 @@ open HtmlT
 defmethod LexedText.toHtml (text : LexedText) : Html :=
   text.content.map fun
     | (none, txt) => (txt : Html)
-    | (some cls, txt) => {{ <span class={{cls}}>{{txt}}</span>}}
+    | (some cls, txt) => html%{<span class={cls}>{txt}</span>}
 
 instance [Pure m] : MonadLift Id m where
   monadLift x := pure x
@@ -155,18 +155,18 @@ def blockHtml (g : Genre)
     (goB : Block g → HtmlM g Html) :
     Blog.BlockExt → Array (Block g) → HtmlM g Html
   | .lexedText content, _contents => do
-    pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
+    pure html%{<pre class={s!"lexed {content.name}"}>{ content.toHtml }</pre>}
   | .highlightedCode { contextName, showProofStates } hls, _contents =>
     withReader (fun ρ => { ρ with codeOptions.inlineProofStates := showProofStates }) <|
     hls.blockHtml (toString contextName) (g := g)
   | .message summarize msg expandTraces, _contents => do
-    return {{<pre class=s!"lean-output hl lean {msg.severity.class}">{{← msg.toHtml (expandTraces := expandTraces) (g := g)}}</pre>}}
+    return html%{<pre class={s!"lean-output hl lean {msg.severity.class}"}>{← msg.toHtml (expandTraces := expandTraces) (g := g)}</pre>}
   | .htmlDetails classes summary, contents => do
-    pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM goB}}</details>}}
+    pure html%{<details class={classes}><summary>{summary}</summary>{← contents.mapM goB}</details>}
   | .htmlWrapper name attrs, contents => do
     Html.element name attrs <$> contents.mapM goB
   | .htmlDiv classes, contents => do
-    pure {{ <div class={{classes}}> {{← contents.mapM goB}} </div> }}
+    pure html%{<div class={classes}>{← contents.mapM goB}</div>}
   | .blob html, _ => pure html
   | .component name json, contents => do
     let ⟨_, _, _, _⟩ := bg
@@ -183,22 +183,22 @@ def blockHtml (g : Genre)
         (fun x => goB (x.cast bg.inline_eq.symm bg.block_eq.symm) |>.cast)
         (contents.map (·.cast bg.inline_eq bg.block_eq)) |>.cast (by simp [Page, *]) (by simp [Page, *])
   | .docstring indent declName?, contents => do
-    return {{
-      <div class="docstring" {{declName?.map ("data-docstring-for", ·.toString) |>.toArray}} style=s!"--indent: {indent}">
-        {{← contents.mapM goB}}
+    return html%{
+      <div class="docstring" {...declName?.map ("data-docstring-for", ·.toString) |>.toArray} style={s!"--indent: {indent}"}>
+        {← contents.mapM goB}
       </div>
-    }}
+    }
   | .docstringSection lvl, contents => do
     if lvl > 5 then
       reportError s!"Docstring header level {lvl + 1} is greater than the allowed HTML nesting of `<h6>`"
     if let some (Block.para first) := contents[0]? then
       let contents := contents.extract 1
-      return {{
+      return html%{
         <section>
-          {{ .element s!"h{lvl + 1}" #[] (← first.mapM goI) }}
-          {{ ← contents.mapM goB }}
+          { .element s!"h{lvl + 1}" #[] (← first.mapM goI) }
+          { ← contents.mapM goB }
         </section>
-      }}
+      }
     else
       reportError "Internal error: docstring section missing leading paragraph as title"
       contents.mapM goB
@@ -212,9 +212,9 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
     withReader (fun ρ => { ρ with codeOptions.inlineProofStates := showProofStates }) <|
     hls.inlineHtml (some <| toString contextName) (g := g)
   | .message msg expandTraces, _contents => do
-    return {{<code class="lean-output hl lean">{{← msg.toHtml expandTraces (g := g)}}</code>}}
+    return html%{<code class="lean-output hl lean">{← msg.toHtml expandTraces (g := g)}</code>}
   | .lexedText content, _contents => do
-    pure {{ <code class=s!"lexed {content.name}"> {{ content.toHtml }} </code> }}
+    pure html%{<code class={s!"lexed {content.name}"}>{ content.toHtml }</code>}
   | .customHighlight hls, _contents => do
     hls.inlineHtml none (g := g)
   | .label x, contents => do
@@ -222,13 +222,13 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
     let st ← bg.state_eq ▸ state
     let some tgt := st.targets.find? x
       | panic! "No label for {x}"
-    pure {{ <span id={{tgt.htmlId.toString}}> {{ contentHtml }} </span>}}
+    pure html%{<span id={tgt.htmlId.toString}>{ contentHtml }</span>}
   | .ref x, contents => do
     let st ← bg.state_eq ▸ state
     match st.targets.find? x with
     | none =>
       reportError s!"Can't find target {x}"
-      pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
+      pure html%{<strong class="internal-error">{s!"Can't find target {x}"}</strong>}
     | some tgt =>
       let addr := tgt.relativeLink
       go <| .link contents addr
@@ -237,12 +237,12 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
     match st.pageIds.find? x <|> st.pageIds.find? (docName x) with
     | none =>
       reportError s!"Can't find target {x} - options are {st.pageIds.toList.map (·.fst)}"
-      pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
+      pure html%{<strong class="internal-error">{s!"Can't find target {x}"}</strong>}
     | some «meta» =>
       let addr := meta.path.relativeLink ++ (id?.map ("#" ++ ·) |>.getD "")
       go <| .link contents addr
   | .htmlSpan classes, contents => do
-    pure {{ <span class={{classes}}> {{← contents.mapM go}} </span> }}
+    pure html%{<span class={classes}>{← contents.mapM go}</span>}
   | .blob html, _ => pure html
   | .component name json, contents => do
     let ⟨_, _, _, _⟩ := bg
@@ -350,28 +350,28 @@ def builtinHeader : TemplateM Html := do
   let siteRoot := String.join ((← currentPath).toList.map fun _ => "../") ++ "./"
   let mut out := .empty
   -- Establish that all relative paths should be relative to siteRoot
-  out := out ++ {{<base href={{siteRoot}}/>}}
+  out := out ++ html%{<base href={siteRoot}/>}
   -- These should come first so later stylesheets can easily override them.
-  out := out ++ {{<style>{{«verso-vars.css»}}</style>}}
+  out := out ++ html%{<style>{«verso-vars.css»}</style>}
   for style in (← read).builtInStyles do
-    out := out ++ {{<style>"\n"{{.raw style}}"\n"</style>"\n"}}
+    out := out ++ html%{<style>{"\n"}{.raw style}{"\n"}</style>{"\n"}}
   for script in (← read).builtInScripts do
-    out := out ++ {{<script>"\n"{{.raw script}}"\n"</script>"\n"}}
+    out := out ++ html%{<script>{"\n"}{.raw script}{"\n"}</script>{"\n"}}
   for js in (← read).jsFiles do
-    out := out ++ {{<script src=s!"-verso-data/{js}"></script>}}
+    out := out ++ html%{<script src={s!"-verso-data/{js}"}></script>}
   for css in (← read).cssFiles do
-    out := out ++ {{<link rel="stylesheet" href=s!"-verso-data/{css}"/>}}
-  out := out ++ {{
+    out := out ++ html%{<link rel="stylesheet" href={s!"-verso-data/{css}"}/>}
+  out := out ++ html%{
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous"/>
     <script defer="defer" src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
-  }}
+  }
 
   -- Components
   for style in (← get).headerCss do
-    out := out ++ {{<style>"\n"{{.raw style}}"\n"</style>"\n"}}
+    out := out ++ html%{<style>{"\n"}{.raw style}{"\n"}</style>{"\n"}}
   for script in (← get).headerJs do
-    out := out ++ {{<script>"\n"{{.raw script}}"\n"</script>"\n"}}
+    out := out ++ html%{<script>{"\n"}{.raw script}{"\n"}</script>{"\n"}}
   pure out
 
 

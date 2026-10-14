@@ -621,19 +621,19 @@ def internalSignature.descr : BlockDescr where
     open Verso.Output Html in do
       let .ok (name, signature) := FromJson.fromJson? (α := Highlighted × Option Highlighted) info
         | do reportError "Failed to deserialize docstring section data while generating HTML"; pure .empty
-      return {{
+      return html%{
         <section class="subdocs">
           <pre class="name-and-type hl lean">
-            {{← name.toHtml (g := Manual)}}
-            {{← if let some s := signature then do
-                  pure {{" : " {{← s.toHtml (g := Manual)}} }}
-                else pure .empty}}
+            {← name.toHtml (g := Manual)}
+            {← if let some s := signature then do
+                  pure html%{ : {← s.toHtml (g := Manual)}}
+                else pure .empty}
           </pre>
           <div class="docs">
-            {{← contents.mapM goB}}
+            {← contents.mapM goB}
           </div>
         </section>
-      }}
+      }
 
 
 
@@ -651,18 +651,18 @@ def inheritance.descr : BlockDescr where
       let .ok (name, parents) := FromJson.fromJson? (α := Name × Array Block.Docstring.ParentInfo) info
         | do reportError "Failed to deserialize docstring structure inheritance data while generating HTML"; pure .empty
       if parents.isEmpty then pure .empty
-      else pure {{
+      else pure html%{
           <ul class="extends">
-            {{← parents.mapM fun parent => do
+            {← parents.mapM fun parent => do
               let filterId := s!"{parent.index}-{parent.name}-{name}"
-              pure {{
+              pure html%{
                 <li>
-                  <input type="checkbox" id={{filterId}} data-parent-idx={{toString parent.index}}/>
-                  <label for={{filterId}}><code class="hl lean inline">{{← parent.parent.toHtml (g := Manual)}}</code></label>
-                </li>}}
-            }}
+                  <input type="checkbox" id={filterId} data-parent-idx={toString parent.index}/>
+                  <label for={filterId}><code class="hl lean inline">{← parent.parent.toHtml (g := Manual)}</code></label>
+                </li>}
+            }
           </ul>
-        }}
+        }
 
 open Block.Docstring (Visibility) in
 @[block_extension Block.fieldSignature]
@@ -693,29 +693,29 @@ def fieldSignature.descr : BlockDescr where
       let visibility : Html :=
         match visibility with
         | .public => .empty
-        | .private => {{<span class="keyword">"private"</span>" "}}
+        | .private => html%{<span class="keyword">private</span>{" "}}
         | .protected => .empty
-      return {{
-        <section class="subdocs" {{inheritedAttr}}>
+      return html%{
+        <section class="subdocs" {...inheritedAttr}>
           <pre class="name-and-type hl lean">
-            {{visibility}}{{← name.toHtml (g := Manual)}} " : " {{ ← signature.toHtml (g := Manual)}}
+            {visibility}{← name.toHtml (g := Manual)} : { ← signature.toHtml (g := Manual)}
           </pre>
-          {{← if inheritedFrom.isSome then do
-              pure {{
-                <div class="inheritance docs" {{inheritedAttr}}>
-                  "Inherited from "
+          {← if inheritedFrom.isSome then do
+              pure html%{
+                <div class="inheritance docs" {...inheritedAttr}>
+                  {"Inherited from "}
                   <ol>
-                  {{ ← parents.mapM fun p => do
-                      pure {{<li><code class="hl lean inline">{{ ← p.toHtml (g := Manual) }}</code></li>}}
-                  }}
+                  { ← parents.mapM fun p => do
+                      pure html%{<li><code class="hl lean inline">{ ← p.toHtml (g := Manual) }</code></li>}
+                  }
                   </ol>
-                </div>}}
-            else pure .empty}}
+                </div>}
+            else pure .empty}
           <div class="docs">
-            {{← contents.mapM goB}}
+            {← contents.mapM goB}
           </div>
         </section>
-      }}
+      }
 
 @[block_extension Block.constructorSignature]
 def constructorSignature.descr : BlockDescr where
@@ -737,19 +737,19 @@ def constructorSignature.descr : BlockDescr where
       let .ok signature := FromJson.fromJson? (α := Highlighted) info
         | do reportError "Failed to deserialize docstring section data while generating HTML"; pure .empty
 
-      return {{
+      return html%{
         <div class="constructor">
-          <pre class="name-and-type hl lean">{{← signature.toHtml (g := Manual)}}</pre>
+          <pre class="name-and-type hl lean">{← signature.toHtml (g := Manual)}</pre>
           <div class="docs">
-            {{← contents.mapM goB}}
+            {← contents.mapM goB}
           </div>
         </div>
-      }}
+      }
 
 open Verso.Output Html in
 def Signature.toHtml  : Signature → HighlightHtmlM Manual Html
   | {wide, narrow} => do
-    return {{<div class="wide-only">{{← wide.toHtml}}</div><div class="narrow-only">{{← narrow.toHtml}}</div>}}
+    return html%{<div class="wide-only">{← wide.toHtml}</div><div class="narrow-only">{← narrow.toHtml}</div>}
 
 open Verso.Output TeX in
 def Signature.toTeX [Monad m] [Doc.TeX.GenreTeX g m] : Signature → Doc.TeX.TeXT g m TeX
@@ -790,20 +790,19 @@ def docSuggestionMapper : DomainMapper := {
 }.setFont { family := .code }
 
 open Verso.Genre.Manual.Markdown in
-open Verso.Output Html in
 /--
 Renders a documentation box with a permalink, a label, a signature, and body text. The box is a
 barrier for margin content, which is placed before it.
 -/
 def namedocsBox (id : InternalId) (xref : TraverseState) (label sig text : Html) : Html :=
-  Hoist.barrier "margin" true {{
-    <div class="namedocs" {{xref.htmlId id}}>
-      {{permalink id xref false}}
-      <span class="label">{{label}}</span>
-      <pre class="signature hl lean block">{{sig}}</pre>
-      <div class="text">{{text}}</div>
+  Hoist.barrier "margin" true html%{
+    <div class="namedocs" {... xref.htmlId id}>
+      {permalink id xref false}
+      <span class="label">{label}</span>
+      <pre class="signature hl lean block">{sig}</pre>
+      <div class="text">{text}</div>
     </div>
-  }}
+  }
 
 @[block_extension Block.docstring]
 def docstring.descr : BlockDescr := withHighlighting {
@@ -884,7 +883,7 @@ def docstring.descr : BlockDescr := withHighlighting {
     let  (name, _declType, _signature, _customLabel, _altNames) ←
       FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
     let names := #[name.getString!, name.toString]
-    pure <| names.map fun s => (s, {{<code>{{s}}</code>}})
+    pure <| names.map fun s => (s, html%{<code>{s}</code>})
 
   toTeX := some <| fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
@@ -1628,15 +1627,15 @@ def optionDocs.descr : BlockDescr := withHighlighting {
         | do reportError "Failed to deserialize docstring data while generating HTML for an option"; pure .empty
       let x : Html := Html.text <| Name.toString name
 
-      return namedocsBox id (← HtmlT.state) "option" x {{
-        <p>"Default value: " <code class="hl lean inline">{{← defaultValue.toHtml (g := Manual)}}</code></p>
-        {{← contents.mapM goB}}
-      }}
+      return namedocsBox id (← HtmlT.state) "option" x html%{
+        <p>Default value: <code class="hl lean inline">{← defaultValue.toHtml (g := Manual)}</code></p>
+        {← contents.mapM goB}
+      }
   localContentItem := fun _id info _contents => open Verso.Output.Html in do
     let (name, _defaultValue) ← FromJson.fromJson? (α := Name × Highlighted) info
     pure #[
-      (name.toString, {{<code>{{name.toString}}</code>}}),
-      (s!"{name.toString} (Option)", {{<code>{{name.toString}}</code>" (Option)"}})
+      (name.toString, html%{<code>{name.toString}</code>}),
+      (s!"{name.toString} (Option)", html%{<code>{name.toString}</code> (Option)})
     ]
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [docstringStyle]
@@ -1793,7 +1792,7 @@ def tactic.descr : BlockDescr := withHighlighting {
   localContentItem := fun _id info _contents => open Verso.Output.Html in do
     let (tactic, «show») ← FromJson.fromJson? (α := TacticDoc × Option String) info
     let str := show.getD tactic.userName
-    pure #[(str, {{<code class="tactic-name">{{str}}</code>}})]
+    pure #[(str, html%{<code class="tactic-name">{str}</code>})]
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [docstringStyle]
 }
@@ -1932,7 +1931,7 @@ def conv.descr : BlockDescr := withHighlighting {
       return namedocsBox id (← HtmlT.state) "conv tactic" (← x.toHtml (g := Manual)) (← contents.mapM goB)
   localContentItem := fun _id info _contents => open Verso.Output.Html in do
     let (_name, «show», _docs?) ← FromJson.fromJson? (α := Name × String × Option String) info
-    pure #[(«show», {{<code class="tactic-name">{{«show»}}</code>}})]
+    pure #[(«show», html%{<code class="tactic-name">{«show»}</code>})]
 
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [docstringStyle]
