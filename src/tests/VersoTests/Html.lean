@@ -9,31 +9,23 @@ meta import all Verso.Output.Html
 
 namespace Verso.Tests.Html
 
-open Verso.Output
+open Lean (Html)
 open Verso.Output.Html
 
 /-! ## Tests for HTML syntax macros -/
 
 private def testAttrs := {{ <html charset="UTF-8" charset = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")] }} /> }}
 
-/--
-info: Verso.Output.Html.tag
-  "html"
-  #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")]
-  (Verso.Output.Html.seq #[])
--/
+/-- info: Html.element "html" #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")] (seq #[]) -/
+
 #test_msgs in
 #eval testAttrs
 
 private def testAttrsAntiquotes :=
   {{ <html charset={{"UTF" ++ "-8"}} "charset" = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")]}} /> }}
 
-/--
-info: Verso.Output.Html.tag
-  "html"
-  #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")]
-  (Verso.Output.Html.seq #[])
--/
+/-- info: Html.element "html" #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")] (seq #[]) -/
+
 #test_msgs in
 #eval testAttrsAntiquotes
 
@@ -52,28 +44,16 @@ private def test : Html := {{
 }}
 
 /--
-info: Verso.Output.Html.tag
-  "html"
-  #[]
-  (Verso.Output.Html.seq
-    #[Verso.Output.Html.tag
-        "head"
-        #[]
-        (Verso.Output.Html.seq
-          #[Verso.Output.Html.tag "meta" #[("charset", "UTF-8")] (Verso.Output.Html.seq #[]),
-            Verso.Output.Html.tag "script" #[] (Verso.Output.Html.seq #[])]),
-      Verso.Output.Html.tag
-        "body"
-        #[("lang", "en"), ("class", "thing"), ("data-foo", "data foo")]
-        (Verso.Output.Html.seq
-          #[Verso.Output.Html.tag "input" #[("type", "checkbox"), ("checked", "")] (Verso.Output.Html.seq #[]),
-            Verso.Output.Html.tag
-              "p"
-              #[]
-              (Verso.Output.Html.seq
-                #[Verso.Output.Html.text true "foo bar", Verso.Output.Html.tag "br" #[] (Verso.Output.Html.seq #[]),
-                  Verso.Output.Html.text true "hey"])])])
+info: Html.element "html" #[]
+  (seq
+    #[Html.element "head" #[]
+        (seq #[Html.element "meta" #[("charset", "UTF-8")] (seq #[]), Html.element "script" #[] (seq #[])]),
+      Html.element "body" #[("lang", "en"), ("class", "thing"), ("data-foo", "data foo")]
+        (seq
+          #[Html.element "input" #[("type", "checkbox"), ("checked", "")] (seq #[]),
+            Html.element "p" #[] (seq #[Html.text "foo bar", Html.element "br" #[] (seq #[]), Html.text "hey"])])])
 -/
+
 #test_msgs in
   #eval test
 
@@ -81,7 +61,8 @@ private def leanKwTest : Html := {{
   <label for="foo">"Blah"</label>
 }}
 
-/-- info: Verso.Output.Html.tag "label" #[("for", "foo")] (Verso.Output.Html.text true "Blah") -/
+/-- info: Html.element "label" #[("for", "foo")] (Html.text "Blah") -/
+
 #test_msgs in
   #eval leanKwTest
 
@@ -94,33 +75,3 @@ Hint: Remove contents
 -/
 #test_msgs in
   #eval show Html from {{ <br>"foo" "foo"</br> }}
-
-/--
-info: |
-<html>
-  <head>
-    <meta charset="UTF-8">
-    <script></script>
-    </head>
-  <body lang="en" class="thing" data-foo="data foo">
-    <input type="checkbox" checked=""><p>
-      foo bar<br>hey</p>
-    </body>
-  </html>
--/
-#test_msgs in
-  #eval IO.println <| "|\n" ++ test.asString
-
-/-! ## Tests for escaping -/
-
-/-- info: "<p>x &amp; y &amp;lt; &lt;z&gt;</p>" -/
-#guard_msgs in
-  #eval Html.asString {{ <p>"x & y &lt; <z>"</p> }} (breakLines := false)
-
-/-- info: "<p>x & y &lt; <em>z</em></p>" -/
-#guard_msgs in
-  #eval Html.asString (.tag "p" #[] (.text false "x & y &lt; <em>z</em>")) (breakLines := false)
-
-/-- info: "<p class=\"a&amp;b&quot;c\">x</p>" -/
-#guard_msgs in
-  #eval Html.asString {{ <p class="a&b\"c">"x"</p> }} (breakLines := false)

@@ -206,7 +206,7 @@ instance : GenreHtml SimplePage (BuildLogT IO) where
     -- It's important that this not include the metadata in the recursive call, or the generator
     -- will loop (the metadata's presence is what triggers the call to `GenreHtml.part`)
     let part' := .mk title titleString none content' subParts
-    recur part' (fun lvl title => .tag s!"h{lvl}" #[("id", metadata.tag)] title)
+    recur part' (fun lvl title => .element s!"h{lvl}" #[("id", metadata.tag)] title)
   -- There are no genre-specific blocks, so no code is needed here
   block _ _ blkExt := nomatch blkExt
   inline recur
@@ -264,7 +264,7 @@ def render (doc : Part SimplePage) : IO UInt32 := do
 
     IO.println "Writing to index.html"
     IO.FS.withFile "index.html" .write fun h => do
-      h.putStrLn html.asString
+      h.putStrLn html.render
 
 end SimplePage
 

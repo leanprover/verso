@@ -15,6 +15,7 @@ public section
 open Verso Doc Output Html HtmlT FS
 open Verso.Code.Hover (State)
 open Verso.Code (LinkTargets)
+open Lean (Html)
 
 namespace Verso.Genre.Blog
 
@@ -166,7 +167,7 @@ def writePage (theme : Theme) (params : Template.Params) (template : Template :=
   let header := (← read).header
   IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
     h.putStrLn header
-    h.putStrLn output.asString
+    h.putStrLn output.render
 
 def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array BlogPost) : GenerateM Unit := do
   -- path from site to here

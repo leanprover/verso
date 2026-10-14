@@ -17,6 +17,7 @@ import VersoManual.Html.Style
 namespace Verso.Genre.Manual.Html
 open Std (HashSet)
 open Verso.Output Html Multi
+open Lean (Html)
 
 public structure Toc.Meta where
   title : Html
@@ -265,9 +266,9 @@ where
   safeTags := ["code", "span", "a"]
 
   getHtmlTitle : Html → Option String
-  | .text _e s => some s
+  | .text s | .raw s => some s
   | .seq es => (String.join ∘ (·.toList)) <$> es.mapM getHtmlTitle
-  | .tag t _ e =>
+  | .element t _ e =>
     if t ∈ safeTags then
       getHtmlTitle e
     else none
@@ -374,7 +375,7 @@ where
 
   linkify (path : Path) (id : Option String) (html : Html) :=
     match html with
-    | .tag "a" _ _ => html
+    | .element "a" _ _ => html
     | other => {{<a href={{path.link id}}>{{other}}</a>}}
   sectionNum num :=
       match num with
@@ -458,8 +459,8 @@ public def page
         <script src="toc-resize.js" defer="defer"></script>
         {{extraJsFiles.map fun f => ({{<script src=s!"{f.1}" {{if f.2 then defer else #[]}}></script>}})}}
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
-        {{extraCss.toArray.map ({{<style>{{Html.text false ·.css}}</style>}})}}
-        {{extraJs.toArray.map ({{<script>{{Html.text false ·.js}}</script>}})}}
+        {{extraCss.toArray.map ({{<style>{{Html.raw ·.css}}</style>}})}}
+        {{extraJs.toArray.map ({{<script>{{Html.raw ·.js}}</script>}})}}
         {{extraHead}}
       </head>
       <body>
@@ -520,7 +521,8 @@ public def page
 
 
 public def relativize (path : Path) (html : Html) : Html :=
-  html.visitM (m := ReaderT Path Id) (tag := rwTag) |>.run path
+  html.rewritePostM (m := ReaderT Path Id)
+    (fun | .element t a c => rwTag t a c | h => return h) |>.run path
 where
   urlAttr (name : String) : Bool := name ∈ ["href", "src", "data", "poster"]
   rwAttr (attr : String × String) : ReaderT Path Id (String × String) := do
@@ -531,9 +533,9 @@ where
       }
     else
       pure attr
-  rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT Path Id (Option Html) := do
-    if tag == "base" then return none
+  rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT Path Id Html := do
+    if tag == "base" then return .element tag attrs content
     -- Don't rewrite URLs that come from remote content. This attribute is inserted by the `ref`
     -- role when referring to remote content.
-    if attrs.any (·.1 == "data-verso-remote") then return none
-    return some <| .tag tag (← attrs.mapM rwAttr) content
+    if attrs.any (·.1 == "data-verso-remote") then return .element tag attrs content
+    return .element tag (← attrs.mapM rwAttr) content
