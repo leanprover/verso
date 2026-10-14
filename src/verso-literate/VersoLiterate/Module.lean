@@ -7,6 +7,7 @@ module
 import Verso.BEq
 public import VersoLiterate.Exported
 public import Verso.Doc
+import VersoUtil.Elan
 
 public section
 
@@ -45,54 +46,11 @@ def loadModuleJson
     (overrideToolchain : Option String := none) : IO String := do
 
   let projectDir := ((← IO.currentDir) / leanProject).normalize
+  let toolchain ← Verso.Elan.getProjectToolchain projectDir (overrideToolchain := overrideToolchain)
 
-  -- Validate that the path is really a Lean project
-  let lakefile := projectDir / "lakefile.lean"
-  let lakefile' := projectDir / "lakefile.toml"
-  if !(← lakefile.pathExists) && !(← lakefile'.pathExists) then
-    throw <| .userError s!"Neither {lakefile} nor {lakefile'} exist, couldn't load project"
-  let toolchain ← match overrideToolchain with
-    | none =>
-      let toolchainfile := projectDir / "lean-toolchain"
-      if !(← toolchainfile.pathExists) then
-        throw <| .userError s!"File {toolchainfile} doesn't exist, couldn't load project"
-      pure (← IO.FS.readFile toolchainfile).trimAscii.copy
-    | some override => pure override
+  let cmd := #["lake", "query", s!"+{mod}:literate"]
 
-  -- Kludge: remove variables introduced by Lake. Clearing out DYLD_LIBRARY_PATH and
-  -- LD_LIBRARY_PATH is useful so the version selected by Elan doesn't get the wrong shared
-  -- libraries.
-  let lakeVars :=
-    #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
-      "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
-      "LEAN_GITHASH",
-      "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
-  let cmd := "elan"
-  let args := #["run", "--install", toolchain, "lake", "query", s!"+{mod}:literate"]
-  let res ← IO.Process.output {
-    cmd, args, cwd := projectDir
-    -- Unset Lake's environment variables
-    env := lakeVars.map (·, none)
-  }
-  if res.exitCode != 0 then reportFail projectDir cmd args res
+  let res ← Verso.Elan.runCmdWithToolchain toolchain cmd (projectDir := projectDir)
   if let some f := res.stdout.splitToList (· == '\n') |>.find? (!·.isEmpty) then
     IO.FS.readFile f
   else throw <| .userError s!"No result returned from build of {mod}"
-
-where
-  decorateOut (name : String) (out : String) : String :=
-    if out.isEmpty then "" else s!"\n{name}:\n{out}\n"
-  reportFail {α} (projectDir : FilePath) (cmd : String) (args : Array String) (res : IO.Process.Output) : IO α := do
-    IO.eprintln <|
-      "Build process failed." ++
-      "\nCWD: " ++ projectDir.toString ++
-      "\nCommand: " ++ cmd ++
-      "\nArgs: " ++ repr args ++
-      "\nExit code: " ++ toString res.exitCode ++
-      "\nstdout: " ++ res.stdout ++
-      "\nstderr: " ++ res.stderr
-
-    throw <| .userError <|
-      "Build process failed." ++
-      decorateOut "stdout" res.stdout ++
-      decorateOut "stderr" res.stderr

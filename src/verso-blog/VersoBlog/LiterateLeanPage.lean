@@ -19,6 +19,7 @@ public meta import VersoBlog.LiterateLeanPage.Rewrite
 public import MD4Lean
 public import Std.Sync.Mutex
 public import Verso.Parser
+import VersoUtil.Elan
 
 public section
 
@@ -38,40 +39,11 @@ meta def loadModuleContent
     (overrideToolchain : Option String := none) : IO (Array ModuleItem) := do
 
   let projectDir := ((← IO.currentDir) / leanProject).normalize
+  let toolchain ← Elan.getProjectToolchain projectDir (overrideToolchain := overrideToolchain)
 
-  -- Validate that the path is really a Lean project
-  let lakefile := projectDir / "lakefile.lean"
-  let lakefile' := projectDir / "lakefile.toml"
-  if !(← lakefile.pathExists) && !(← lakefile'.pathExists) then
-    throw <| .userError s!"Neither {lakefile} nor {lakefile'} exist, couldn't load project"
-  let toolchain ← match overrideToolchain with
-    | none =>
-      let toolchainfile := projectDir / "lean-toolchain"
-      if !(← toolchainfile.pathExists) then
-        throw <| .userError s!"File {toolchainfile} doesn't exist, couldn't load project"
-      pure (← IO.FS.readFile toolchainfile).trimAscii.copy
-    | some override => pure override
-
-  -- Kludge: remove variables introduced by Lake. Clearing out DYLD_LIBRARY_PATH and
-  -- LD_LIBRARY_PATH is useful so the version selected by Elan doesn't get the wrong shared
-  -- libraries.
-  let lakeVars :=
-    #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
-      "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
-      "LEAN_GITHASH",
-      "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
-
-
+  discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "build", s!"+{mod}"]
   IO.FS.withTempFile fun h f => do
-    let cmd := "elan"
-
-    let args := #["run", "--install", toolchain, "lake", "exe", "subverso-extract-mod", mod, f.toString]
-    let res ← IO.Process.output {
-      cmd, args, cwd := projectDir
-      -- Unset Lake's environment variables
-      env := lakeVars.map (·, none)
-    }
-    if res.exitCode != 0 then reportFail projectDir cmd args res
+    discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "exe", "subverso-extract-mod", mod, f.toString]
     h.rewind
 
     let .ok json := Json.parse (← h.readToEnd)
@@ -80,24 +52,6 @@ meta def loadModuleContent
     | .error err =>
       throw <| IO.userError s!"Couldn't parse JSON from output file: {err}\nIn:\n{json}"
     | .ok val => pure val.items
-
-where
-  decorateOut (name : String) (out : String) : String :=
-    if out.isEmpty then "" else s!"\n{name}:\n{out}\n"
-  reportFail {α} (projectDir : FilePath) (cmd : String) (args : Array String) (res : IO.Process.Output) : IO α := do
-    IO.eprintln <|
-      "Build process failed." ++
-      "\nCWD: " ++ projectDir.toString ++
-      "\nCommand: " ++ cmd ++
-      "\nArgs: " ++ repr args ++
-      "\nExit code: " ++ toString res.exitCode ++
-      "\nstdout: " ++ res.stdout ++
-      "\nstderr: " ++ res.stderr
-
-    throw <| .userError <|
-      "Build process failed." ++
-      decorateOut "stdout" res.stdout ++
-      decorateOut "stderr" res.stderr
 
 structure Helper where
   highlight (term : String) (type? : Option String) : IO Highlighted
@@ -108,46 +62,15 @@ meta def Helper.fromModule
     (overrideToolchain : Option String := none) : IO Helper := do
 
   let projectDir := ((← IO.currentDir) / leanProject).normalize
+  let toolchain ← Elan.getProjectToolchain projectDir (overrideToolchain := overrideToolchain)
 
-  -- Validate that the path is really a Lean project
-  let lakefile := projectDir / "lakefile.lean"
-  let lakefile' := projectDir / "lakefile.toml"
-  if !(← lakefile.pathExists) && !(← lakefile'.pathExists) then
-    throw <| .userError s!"Neither {lakefile} nor {lakefile'} exist, couldn't load project"
-  let toolchain ← match overrideToolchain with
-    | none =>
-      let toolchainfile := projectDir / "lean-toolchain"
-      if !(← toolchainfile.pathExists) then
-        throw <| .userError s!"File {toolchainfile} doesn't exist, couldn't load project"
-      pure (← IO.FS.readFile toolchainfile).trimAscii.copy
-    | some override => pure override
+  discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "build", "subverso-helper"]
+  discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "build", s!"+{mod}"]
 
-  -- Kludge: remove variables introduced by Lake. Clearing out DYLD_LIBRARY_PATH and
-  -- LD_LIBRARY_PATH is useful so the version selected by Elan doesn't get the wrong shared
-  -- libraries.
-  let lakeVars :=
-    #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
-      "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
-      "LEAN_GITHASH",
-      "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
-
-  let cmd := "elan"
-
-  let args := #["run", "--install", toolchain, "lake", "build", "subverso-helper"]
-  let res ← IO.Process.output {
-    cmd, args, cwd := projectDir
-    -- Unset Lake's environment variables
-    env := lakeVars.map (·, none)
-  }
-  if res.exitCode != 0 then reportFail projectDir cmd args res
-
-  let args := #["run", "--install", toolchain, "lake", "env", "subverso-helper", mod]
+  let cmd := #["lake", "env", "subverso-helper", mod]
   let hl ← do
     let (procIn, proc) ← do
-      let proc ← IO.Process.spawn {
-        cmd, args, cwd := projectDir
-        -- Unset Lake's environment variables
-        env := lakeVars.map (·, none)
+      let proc ← IO.Process.spawn {Elan.getSpawnArgsForToolchain projectDir toolchain cmd with
         stdin := .piped
         stdout := .piped
         stderr := .inherit
@@ -170,25 +93,6 @@ meta def Helper.fromModule
         | none => throw <| .userError "Helper process no longer running"
 
   return ⟨hl⟩
-where
-  decorateOut (name : String) (out : String) : String :=
-    if out.isEmpty then "" else s!"\n{name}:\n{out}\n"
-
-  reportFail {α} (projectDir : FilePath) (cmd : String) (args : Array String) (res : IO.Process.Output) : IO α := do
-    IO.eprintln <|
-      "Build process failed." ++
-      "\nCWD: " ++ projectDir.toString ++
-      "\nCommand: " ++ cmd ++
-      "\nArgs: " ++ repr args ++
-      "\nExit code: " ++ toString res.exitCode ++
-      "\nstdout: " ++ res.stdout ++
-      "\nstderr: " ++ res.stderr
-
-    throw <| .userError <|
-      "Build process failed." ++
-      decorateOut "stdout" res.stdout ++
-      decorateOut "stderr" res.stderr
-
 
 meta def loadLiteratePage (root : System.FilePath) (module : String) : IO (Array ModuleItem) := do
   loadModuleContent root module
