@@ -444,9 +444,7 @@ info: Verso.Doc.Part.mk
       #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
         Verso.Doc.Inline.text "."],
     Verso.Doc.Block.para #[Verso.Doc.Inline.text "Second."],
-    Verso.Doc.Block.para
-      #[Verso.Doc.Inline.text "A ",
-        Verso.Doc.Inline.bold #[(Verso.Doc.Inline.text "bold never closed "), (Verso.Doc.Inline.concat #[])]]]
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "A ", Verso.Doc.Inline.concat #[]]]
   #[]
 -/
 #test_msgs in
@@ -476,7 +474,7 @@ info: Verso.Doc.Part.mk
         Verso.Doc.Inline.text "."],
     Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "Broken ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "u")] "",
-        Verso.Doc.Inline.text " then ", Verso.Doc.Inline.concat #[]]]
+        Verso.Doc.Inline.text " then ", Verso.Doc.Inline.concat #[], Verso.Doc.Inline.linebreak "\n"]]
   #[]
 -/
 #test_msgs in
@@ -498,7 +496,8 @@ info: Verso.Doc.Part.mk
   #[Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
         Verso.Doc.Inline.text "."],
-    Verso.Doc.Block.para #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[]]]
+    Verso.Doc.Block.para
+      #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[], Verso.Doc.Inline.linebreak "\n"]]
   #[]
 -/
 #test_msgs in
@@ -522,7 +521,8 @@ info: Verso.Doc.Part.mk
       #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
         Verso.Doc.Inline.text "."],
     Verso.Doc.Block.para #[Verso.Doc.Inline.text "Second."],
-    Verso.Doc.Block.para #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[]]]
+    Verso.Doc.Block.para
+      #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[], Verso.Doc.Inline.linebreak "\n"]]
   #[]
 -/
 #test_msgs in

@@ -33,7 +33,7 @@ open Verso.Output Html
 namespace Verso.Genre.Blog
 
 
-open Lean.Doc.Syntax
+open Lean.Doc (CodeView RoleView)
 open Verso ArgParse Doc Elab
 open Lean Elab
 open Verso.SyntaxUtils (parserInputString strLitInputContext)
@@ -362,10 +362,10 @@ meta instance : FromArgs NoArgs m where
 @[role]
 meta def leanKw : RoleExpanderOf NoArgs
   | ⟨⟩, #[arg] => do
-    let `(inline|code( $kw:str )) := arg
+    let some { content := kw, .. } := CodeView.of arg
       | throwErrorAt arg "Expected code literal with the keyword"
-    let hl : SubVerso.Highlighting.Highlighted := .token ⟨.keyword none none none, kw.getString⟩
-    ``(Inline.other (Blog.InlineExt.customHighlight $(quote hl)) #[Inline.code $(quote kw.getString)])
+    let hl : SubVerso.Highlighting.Highlighted := .token ⟨.keyword none none none, kw.getVersoCode⟩
+    ``(Inline.other (Blog.InlineExt.customHighlight $(quote hl)) #[Inline.code $(quote kw.getVersoCode)])
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -447,7 +447,7 @@ meta def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
         let commandState := { commandState with scopes := [{ header := "", opts := pp.tagAppFns.set {} true }] }
         modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState state)}
     if config.show then
-      ``(Block.code $(quote str.getString)) -- TODO highlighting hack
+      ``(Block.code $(quote str.getVersoCodeBlock)) -- TODO highlighting hack
     else
       ``(Block.concat #[])
 where
@@ -510,7 +510,7 @@ meta def lean : CodeBlockExpanderOf LeanBlockConfig
         setInfoState infoSt
         setEnv env
       if config.show then
-        `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote x.getId), showProofStates := $(quote config.showProofStates) } $(quote hls)) #[Block.code $(quote str.getString)])
+        `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote x.getId), showProofStates := $(quote config.showProofStates) } $(quote hls)) #[Block.code $(quote str.getVersoCodeBlock)])
       else
         ``(Block.concat #[])
 
@@ -590,7 +590,7 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
   | config, elts => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| do
     let #[code] := elts
       | throwError "Expected precisely one code element"
-    let `(inline|code( $str:str )) := code
+    let some { content := str, .. } := CodeView.of code
       | throwErrorAt code "Expected an inline code element"
     let x := config.exampleContext
     let (commandState, _) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
@@ -655,16 +655,16 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
 
       pushInfoTree tree
 
-      if let `(inline|role{%$s $f $_*}%$e[$_*]) ← getRef then
-        Hover.addCustomHover (mkNullNode #[s, e]) type
-        Hover.addCustomHover f type
+      if let some v := RoleView.of ⟨← getRef⟩ then
+        Hover.addCustomHover (mkNullNode #[v.braceOpen, v.braceClose]) type
+        Hover.addCustomHover v.name type
 
       for msg in newMsgs.toArray do
           logMessage {msg with
             isSilent := msg.isSilent || msg.severity != .error
           }
 
-      `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote config.exampleContext.getId) } $(quote hls)) #[Inline.code $(quote str.getString)])
+      `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote config.exampleContext.getId) } $(quote hls)) #[Inline.code $(quote str.getVersoCode)])
 
 @[role lean]
 meta def leanCanonical : RoleExpanderOf LeanInlineConfig :=
@@ -723,15 +723,15 @@ meta def leanOutput : CodeBlockExpanderOf LeanOutputConfig
     let (_, env, log) ← messageContextExt.getState (← getEnv) |>.messages |>.getOrSuggest config.name
     let messages ← liftM <| log.toArray.mapM contents
     for m in log.toArray do
-      if mostlyEqual config.whitespace str.getString (← contents m) then
+      if mostlyEqual config.whitespace str.getVersoCodeBlock (← contents m) then
         if let some s := config.severity then
           if s != m.severity then
             throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr m.severity}"
         let content ← if config.summarize then
-            let lines := str.getString.splitOn "\n"
+            let lines := str.getVersoCodeBlock.splitOn "\n"
             let pre := lines.take 3
             let post := String.join (lines.drop 3 |>.intersperse "\n")
-            let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
+            let preHtml : Html := pre.map (fun (l : String) => html%{<code>{l}</code>})
             ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr m.severity)) $(quote preHtml)) #[Block.code $(quote post)])
           else
             let myEnv ← getEnv
@@ -741,12 +741,12 @@ meta def leanOutput : CodeBlockExpanderOf LeanOutputConfig
                 withOptions (·.set `pp.tagAppFns true) do
                   SubVerso.Highlighting.highlightMessage m
               finally setEnv myEnv
-            ``(Block.other (Blog.BlockExt.message false $(quote m') ([] : List Lean.Name)) #[Block.code $(quote str.getString)])
+            ``(Block.other (Blog.BlockExt.message false $(quote m') ([] : List Lean.Name)) #[Block.code $(quote str.getVersoCodeBlock)])
         return content
 
     for m in messages do
       Verso.Doc.Suggestion.saveSuggestion str ((m.take 30).copy ++ "…") m
-    throwErrorAt str "Didn't match - expected one of: {indentD (toMessageData messages)}\nbut got:{indentD (toMessageData str.getString)}"
+    throwErrorAt str "Didn't match - expected one of: {indentD (toMessageData messages)}\nbut got:{indentD (toMessageData str.getVersoCodeBlock)}"
 where
   withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
 
@@ -768,14 +768,14 @@ elab "define_lexed_text" blockName:ident " ← " lexerName:ident : command => do
   elabCommand <| ← `(@[code_block]
     def $blockName : Doc.Elab.CodeBlockExpanderOf NoArgs
       | ⟨⟩, str => do
-        let out ← Verso.Genre.Blog.LexedText.highlight $(mkIdentFrom lexerName lexer) str.getString
+        let out ← Verso.Genre.Blog.LexedText.highlight $(mkIdentFrom lexerName lexer) str.getVersoCodeBlock
         ``(Block.other (Blog.BlockExt.lexedText $$(quote out)) #[]))
   elabCommand <| ← `(@[role]
     def $(mkIdent <| blockName.getId ++ `role) : Doc.Elab.RoleExpanderOf NoArgs
       | ⟨⟩, #[inl] => do
-        let `(inline|code($$str)) := inl
+        let some { content := str, .. } := CodeView.of inl
           | throwErrorAt inl "Expected code"
-        let out ← Verso.Genre.Blog.LexedText.highlight $(mkIdentFrom lexerName lexer) str.getString
+        let out ← Verso.Genre.Blog.LexedText.highlight $(mkIdentFrom lexerName lexer) str.getVersoCode
         ``(Inline.other (Blog.InlineExt.lexedText $$(quote out)) #[])
       | _, str => throwError "Expected no arguments and a single code element")
 
@@ -850,7 +850,7 @@ where
     else
       pure attr
   rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT TraverseContext Id (Option Html) := do
-    pure <| some <| .tag tag (← attrs.mapM rwAttr) content
+    pure <| some <| .element tag (← attrs.mapM rwAttr) content
 
 open Verso.Code.External
 

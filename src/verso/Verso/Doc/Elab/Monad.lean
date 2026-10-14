@@ -10,6 +10,7 @@ import Std.Data.HashSet
 import Lean.Elab.DeclUtil
 import Lean.Meta.Reduce
 import Lean.DocString.Syntax
+public import Lean.DocString.View
 import Lean.DocString
 
 import SubVerso.Highlighting
@@ -29,7 +30,9 @@ namespace Verso.Doc.Elab
 
 open Lean
 open Lean.Elab
-open Lean.Doc.Syntax
+open Lean.Doc (BlockView BoldView CodeView EmphView FootnoteView HeaderView ImageView InlineView
+  LinebreakView LinkView RoleView TextView VersoBlock VersoCodeBlock VersoInline VersoRefName)
+open Lean.Doc.Parser
 open Std (HashMap HashSet)
 open Verso.ArgParse (FromArgs SigDoc)
 
@@ -38,56 +41,48 @@ initialize registerTraceClass `Elab.Verso.part
 initialize registerTraceClass `Elab.Verso.block
 
 
--- For use in IDE features and previews and such
-@[inline_to_string Lean.Doc.Syntax.text]
-public meta def _root_.Lean.Doc.Syntax.text.inline_to_string : InlineToString
-  | _, `(inline| $s:str) => some s.getString
-  | _, _ => none
+-- For use in IDE features and previews and such.
+-- `inline_to_string` takes its key literally rather than resolving it, so these names are
+-- written in full.
+@[inline_to_string Lean.Doc.Parser.Inline.text]
+public meta def _root_.Lean.Doc.Parser.Inline.text.inline_to_string : InlineToString
+  | _, stx => TextView.of ⟨stx⟩ |>.map (·.getVersoText)
 
-@[inline_to_string Lean.Doc.Syntax.linebreak]
-public meta def _root_.Lean.Doc.Syntax.linebreak.inline_to_string : InlineToString
-  | _, `(inline|line! $_) => some " "
-  | _, _ => none
+@[inline_to_string Lean.Doc.Parser.Inline.linebreak]
+public meta def _root_.Lean.Doc.Parser.Inline.linebreak.inline_to_string : InlineToString
+  | _, stx => LinebreakView.of ⟨stx⟩ |>.map fun _ => " "
 
-@[inline_to_string Lean.Doc.Syntax.emph]
-public meta def _root_.Lean.Doc.Syntax.emph.inline_to_string : InlineToString
-  | env, `(inline| _[ $args* ]) =>
-    some <| String.intercalate " " (Array.map (inlineToString env) args).toList
-  | _, _ => none
+@[inline_to_string Lean.Doc.Parser.Inline.emph]
+public meta def _root_.Lean.Doc.Parser.Inline.emph.inline_to_string : InlineToString
+  | env, stx => EmphView.of ⟨stx⟩ |>.map fun v =>
+    String.intercalate " " (v.content.toList.map (inlineToString env ·.raw))
 
-@[inline_to_string Lean.Doc.Syntax.bold]
-public meta def _root_.Lean.Doc.Syntax.bold.inline_to_string : InlineToString
-  | env, `(inline| *[ $args* ]) =>
-    some <| String.intercalate " " (Array.map (inlineToString env) args).toList
-  | _, _ => none
+@[inline_to_string Lean.Doc.Parser.Inline.bold]
+public meta def _root_.Lean.Doc.Parser.Inline.bold.inline_to_string : InlineToString
+  | env, stx => BoldView.of ⟨stx⟩ |>.map fun v =>
+    String.intercalate " " (v.content.toList.map (inlineToString env ·.raw))
 
-@[inline_to_string Lean.Doc.Syntax.code]
-public meta def _root_.Lean.Doc.Syntax.code.inline_to_string : InlineToString
-  | _, `(inline| code( $str )) =>
-    some str.getString
-  | _, _ => none
+@[inline_to_string Lean.Doc.Parser.Inline.code]
+public meta def _root_.Lean.Doc.Parser.Inline.code.inline_to_string : InlineToString
+  | _, stx => CodeView.of ⟨stx⟩ |>.map (·.getVersoCode)
 
-@[inline_to_string Lean.Doc.Syntax.link]
-public meta def _root_.Lean.Doc.Syntax.link.inline_to_string : InlineToString
-  | env, `(inline| link[ $args* ] $_:link_target) =>
-    some <| String.intercalate " " (Array.map (inlineToString env) args).toList
-  | _, _ => none
+@[inline_to_string Lean.Doc.Parser.Inline.link]
+public meta def _root_.Lean.Doc.Parser.Inline.link.inline_to_string : InlineToString
+  | env, stx => LinkView.of ⟨stx⟩ |>.map fun v =>
+    String.intercalate " " (v.content.toList.map (inlineToString env ·.raw))
 
-@[inline_to_string Lean.Doc.Syntax.image]
-public meta def _root_.Lean.Doc.Syntax.image.inline_to_string : InlineToString
-  | _, `(inline| image( $_:str ) $_:link_target) => some ""
-  | _, _ => none
+@[inline_to_string Lean.Doc.Parser.Inline.image]
+public meta def _root_.Lean.Doc.Parser.Inline.image.inline_to_string : InlineToString
+  | _, stx => ImageView.of ⟨stx⟩ |>.map fun _ => ""
 
-@[inline_to_string Lean.Doc.Syntax.footnote]
-public meta def _root_.Lean.Doc.Syntax.footnote.inline_to_string : InlineToString
-  | _, `(inline| footnote( $_:str )) => some ""
-  | _, _ => none
+@[inline_to_string Lean.Doc.Parser.Inline.footnote]
+public meta def _root_.Lean.Doc.Parser.Inline.footnote.inline_to_string : InlineToString
+  | _, stx => FootnoteView.of ⟨stx⟩ |>.map fun _ => ""
 
-@[inline_to_string Lean.Doc.Syntax.role]
-public meta def _root_.Lean.Doc.Syntax.role.inline_to_string : InlineToString
-  | env, `(inline| role{ $_ $_* }[ $body* ]) =>
-    String.join (body.toList.map (inlineToString env <| ·.raw))
-  | _, _ => none
+@[inline_to_string Lean.Doc.Parser.Inline.role]
+public meta def _root_.Lean.Doc.Parser.Inline.role.inline_to_string : InlineToString
+  | env, stx => RoleView.of ⟨stx⟩ |>.map fun v =>
+    String.join (v.content.toList.map (inlineToString env ·.raw))
 
 @[inline_to_string null]
 public meta def nullInline_to_string : InlineToString
@@ -112,9 +107,10 @@ public def inlineSyntaxToString (env : Environment) (inlines : Syntax) : String 
     else
       "<missing>"
 
-public def headerStxToString (env : Environment) : Syntax → String
-  | `(block|header($_){$inlines*}) => inlinesToString env inlines
-  | _ => "<missing>"
+public def headerStxToString (env : Environment) (headerStx : Syntax) : String :=
+  match HeaderView.of ⟨headerStx⟩ with
+  | some v => inlinesToString env (v.content.map (·.raw))
+  | none => "<missing>"
 
 /--
 Specifies the elaboration behavior of inline references in Verso.
@@ -370,9 +366,9 @@ public def PartElabM.State.documentPos? (state : PartElabM.State) : Option Strin
 Records a definition or use of a link or footnote in the info tree, for editor features.
 -/
 def pushDocRefInfo [Monad m] [MonadInfoTree m]
-    (state : PartElabM.State) (kind : DocRefKind) (labelStx : TSyntax `str) (isDef : Bool) : m Unit :=
+    (state : PartElabM.State) (kind : DocRefKind) (labelStx : VersoRefName) (isDef : Bool) : m Unit :=
   let info : DocRefInfo :=
-    { kind, label := labelStx.getString, documentPos? := state.documentPos?, isDef }
+    { kind, label := labelStx.getVersoRefName, documentPos? := state.documentPos?, isDef }
   pushInfoLeaf <| .ofCustomInfo { stx := labelStx, value := Dynamic.mk info }
 
 /--
@@ -387,7 +383,7 @@ def describeDefLocation {α : Type} (d : DocDef α) : PartElabM MessageData := d
     return m!"{lineCol} of {d.fileName}"
 
 /-- A definition of the label {name}`labelStx` with the value {name}`val`, in the current file. -/
-def PartElabM.mkDocDef {α : Type} (labelStx : TSyntax `str) (val : α) : PartElabM (DocDef α) := do
+def PartElabM.mkDocDef {α : Type} (labelStx : VersoRefName) (val : α) : PartElabM (DocDef α) := do
   let position := (← getFileMap).toPosition (labelStx.raw.getPos?.getD 0)
   return { labelStx, val, fileName := ← getFileName, position }
 
@@ -395,8 +391,8 @@ def PartElabM.mkDocDef {α : Type} (labelStx : TSyntax `str) (val : α) : PartEl
 Records the definition of the link whose label is {name}`labelStx`. A second definition of the same
 label in one document is an error.
 -/
-public def PartElabM.addLinkDef (labelStx : TSyntax `str) (url : String) : PartElabM Unit := do
-  let label := labelStx.getString
+public def PartElabM.addLinkDef (labelStx : VersoRefName) (url : String) : PartElabM Unit := do
+  let label := labelStx.getVersoRefName
   match (← getThe State).linkDefs[label]? with
   | none =>
     let d ← mkDocDef labelStx url
@@ -409,8 +405,8 @@ public def PartElabM.addLinkDef (labelStx : TSyntax `str) (url : String) : PartE
 /--
 Records a use of the link whose label is {name}`labelStx`, and returns a term for its URL.
 -/
-public def DocElabM.addLinkRef (labelStx : TSyntax `str) : DocElabM (TSyntax `term) := do
-  let label := labelStx.getString
+public def DocElabM.addLinkRef (labelStx : VersoRefName) : DocElabM (TSyntax `term) := do
+  let label := labelStx.getVersoRefName
   match (← readThe DocElabContext).refsAllowed with
     | .always => pure ()
     | .onlyIfDefined =>
@@ -454,9 +450,9 @@ are recorded as empty.
 
 {name}`contentUses` are the footnote uses in the contents, each paired with its label.
 -/
-public def PartElabM.addFootnoteDef (labelStx : TSyntax `str) (content : Array (TSyntax `term))
+public def PartElabM.addFootnoteDef (labelStx : VersoRefName) (content : Array (TSyntax `term))
     (contentUses : Array (String × Syntax) := #[]) : PartElabM Unit := do
-  let label := labelStx.getString
+  let label := labelStx.getVersoRefName
   match (← getThe State).footnoteDefs[label]? with
   | none =>
     let content := if ← checkFootnoteContents content then content else #[]
@@ -473,8 +469,8 @@ public def PartElabM.addFootnoteDef (labelStx : TSyntax `str) (content : Array (
 /--
 Records a use of the footnote whose label is {name}`labelStx`, and returns a term for its contents.
 -/
-public def DocElabM.addFootnoteRef (labelStx : TSyntax `str) : DocElabM (TSyntax `term) := do
-  let label := labelStx.getString
+public def DocElabM.addFootnoteRef (labelStx : VersoRefName) : DocElabM (TSyntax `term) := do
+  let label := labelStx.getVersoRefName
   match (← readThe DocElabContext).refsAllowed with
     | .always => pure ()
     | .onlyIfDefined =>
@@ -572,7 +568,7 @@ public def closes (openTok closeTok : Syntax) : DocElabM Unit := do
   let lineStr := if lineStr.startsWith "`" || lineStr.endsWith "`" then " " ++ lineStr ++ " " else lineStr.copy
   Hover.addCustomHover closeTok (.markdown s!"Closes line {line + 1}: ``````````{lineStr}``````````")
 
-public abbrev InlineExpander := Syntax → DocElabM (TSyntax `term)
+public abbrev InlineExpander := InlineView → DocElabM (TSyntax `term)
 
 initialize inlineExpanderAttr : KeyedDeclsAttribute InlineExpander ←
   mkDocExpanderAttribute `inline_expander ``InlineExpander "Indicates that this function expands inline elements of a given name" `inlineExpanderAttr
@@ -682,7 +678,7 @@ where
       d1.labelStx.raw.getPos?.getD 0 ≤ d2.labelStx.raw.getPos?.getD 0
 
 
-public abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)
+public abbrev BlockExpander := BlockView → DocElabM (TSyntax `term)
 
 initialize blockExpanderAttr : KeyedDeclsAttribute BlockExpander ←
   mkDocExpanderAttribute `block_expander ``BlockExpander "Indicates that this function expands block elements of a given name" `blockExpanderAttr
@@ -725,7 +721,7 @@ initialize expanderSignatureExt :
 public def sig (α) [inst : FromArgs α DocElabM] : Option ArgParse.SigDoc :=
   inst.fromArgs.signature
 
-public abbrev PartCommand := Syntax → PartElabM Unit
+public abbrev PartCommand := BlockView → PartElabM Unit
 
 initialize partCommandAttr : KeyedDeclsAttribute PartCommand ←
   mkDocExpanderAttribute `part_command ``PartCommand "Indicates that this function is used for side effects on the structure of the document" `partCommandAttr
@@ -760,14 +756,15 @@ private def mkExpanderExtension (name : Name) : IO ExpanderExtension :=
       .uniform entries.toArray
   }
 
-public abbrev RoleExpander := Array Arg → TSyntaxArray `inline → DocElabM (Array (TSyntax `term))
+public abbrev RoleExpander := Array Arg → Array VersoInline → DocElabM (Array (TSyntax `term))
 
-public abbrev RoleExpanderOf α := α → TSyntaxArray `inline → DocElabM Term
+public abbrev RoleExpanderOf α := α → Array VersoInline → DocElabM Term
 
 initialize roleExpanderAttr : KeyedDeclsAttribute RoleExpander ←
   mkDocExpanderAttribute `role_expander ``RoleExpander "Indicates that this function is used to implement a given role" `roleExpanderAttr
 
-public def toRole {α : Type} [FromArgs α DocElabM] (expander : α → TSyntaxArray `inline → DocElabM Term) : RoleExpander :=
+public def toRole {α : Type} [FromArgs α DocElabM]
+    (expander : α → Array VersoInline → DocElabM Term) : RoleExpander :=
   fun args inlines => do
     let v ← ArgParse.parse args
     return #[← expander v inlines]
@@ -906,15 +903,17 @@ unsafe initialize registerBuiltinAttribute {
 }
 
 
-public abbrev CodeBlockExpander := Array Arg → TSyntax `str → DocElabM (Array (TSyntax `term))
+public abbrev CodeBlockExpander :=
+  Array Arg → VersoCodeBlock → DocElabM (Array (TSyntax `term))
 
-public abbrev CodeBlockExpanderOf α := α → StrLit → DocElabM Term
+public abbrev CodeBlockExpanderOf α := α → VersoCodeBlock → DocElabM Term
 
 
 initialize codeBlockExpanderAttr : KeyedDeclsAttribute CodeBlockExpander ←
   mkDocExpanderAttribute `code_block_expander ``CodeBlockExpander "Indicates that this function is used to implement a given code block" `codeBlockExpanderAttr
 
-public def toCodeBlock {α : Type} [FromArgs α DocElabM] (expander : α → StrLit → DocElabM Term) : CodeBlockExpander :=
+public def toCodeBlock {α : Type} [FromArgs α DocElabM]
+    (expander : α → VersoCodeBlock → DocElabM Term) : CodeBlockExpander :=
   fun args str => do
     let v ← ArgParse.parse args
     return #[← expander v str]
@@ -997,15 +996,16 @@ private def registeredCodeBlockNamesImpl : DocElabM (Array Name) :=
 @[implemented_by registeredCodeBlockNamesImpl]
 public opaque registeredCodeBlockNames : DocElabM (Array Name)
 
-public abbrev DirectiveExpander := Array Arg → TSyntaxArray `block → DocElabM (Array (TSyntax `term))
+public abbrev DirectiveExpander := Array Arg → Array VersoBlock → DocElabM (Array (TSyntax `term))
 
-public abbrev DirectiveExpanderOf α := α → TSyntaxArray `block → DocElabM Term
+public abbrev DirectiveExpanderOf α := α → Array VersoBlock → DocElabM Term
 
 
 initialize directiveExpanderAttr : KeyedDeclsAttribute DirectiveExpander ←
   mkDocExpanderAttribute `directive_expander ``DirectiveExpander "Indicates that this function is used to implement a given directive" `directiveExpanderAttr
 
-public def toDirective {α : Type} [FromArgs α DocElabM] (expander : α → TSyntaxArray `block → DocElabM Term) : DirectiveExpander :=
+public def toDirective {α : Type} [FromArgs α DocElabM]
+    (expander : α → Array VersoBlock → DocElabM Term) : DirectiveExpander :=
   fun args blocks => do
     let v ← ArgParse.parse args
     return #[← expander v blocks]

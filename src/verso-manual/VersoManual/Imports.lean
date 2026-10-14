@@ -13,7 +13,6 @@ public meta import Verso.Doc.Elab.Monad
 
 public section
 
-open scoped Lean.Doc.Syntax
 
 open Verso Doc Elab
 open Lean
@@ -39,6 +38,6 @@ meta def imports : CodeBlockExpanderOf ImportsParams
     let headerStx ← parseStrLitWith p str
     let hl ← highlight headerStx #[] {}
     if «show» then
-      ``(Block.other (Block.lean $(quote hl) {}) #[Block.code $(quote str.getString)])
+      ``(Block.other (Block.lean $(quote hl) {}) #[Block.code $(quote str.getVersoCodeBlock)])
     else
       ``(Block.empty)

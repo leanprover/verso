@@ -13,7 +13,8 @@ namespace Verso.Doc.Elab
 open Lean Elab
 open PartElabM
 open DocElabM
-open Lean.Doc.Syntax
+open Lean.Doc (InlineView VersoInline)
+open Lean.Doc.Parser
 open Verso.ArgParse (SigDoc)
 
 set_option backward.privateInPublic false
@@ -48,7 +49,7 @@ public def elabMissing (empty : Name) (type : Name) : DocElabM (TSyntax `term) :
   if (← readThe PartElabM.State).blockHasMissing then return mkCIdent empty
   ``(sorryAx ($(mkCIdent type) _) (synthetic := true))
 
-public partial def elabInline (inline : TSyntax `inline) : DocElabM (TSyntax `term) :=
+public partial def elabInline (inline : VersoInline) : DocElabM (TSyntax `term) :=
   withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
   match inline.raw with
   | .missing => elabMissing ``Verso.Doc.Inline.empty ``Verso.Doc.Inline
@@ -61,10 +62,12 @@ public partial def elabInline (inline : TSyntax `inline) : DocElabM (TSyntax `te
         withRef stxNew <|
           elabInline ⟨stxNew⟩
     | none =>
+      let some view := InlineView.of ⟨stx⟩
+        | throwUnexpected stx
       let exp ← inlineExpandersFor kind
       for e in exp do
         try
-          let termStx ← withFreshMacroScope <| e stx
+          let termStx ← withFreshMacroScope <| e view
           return termStx
         catch
           | ex@(.internal id) =>

@@ -112,7 +112,7 @@ public def PartFrame.close (fr : PartFrame) (endPos : String.Pos.Raw) : Finished
 /-- A link or footnote definition in a document. -/
 public structure DocDef (α : Type) where
   /-- The syntax of the defined label. -/
-  labelStx : TSyntax `str
+  labelStx : Lean.Doc.VersoRefName
   /-- The defined value. -/
   val : α
   /-- The name of the file that contains the definition. -/

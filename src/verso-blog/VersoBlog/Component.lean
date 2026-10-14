@@ -18,6 +18,7 @@ open Verso.Doc
 open Verso Output Html
 
 open Std (HashSet)
+open Lean (Html)
 
 namespace Verso.Genre.Blog
 

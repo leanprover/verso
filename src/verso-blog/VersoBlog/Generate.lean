@@ -15,6 +15,7 @@ public section
 open Verso Doc Output Html HtmlT FS
 open Verso.Code.Hover (State)
 open Verso.Code (LinkTargets)
+open Lean (Html)
 
 namespace Verso.Genre.Blog
 
@@ -166,7 +167,7 @@ def writePage (theme : Theme) (params : Template.Params) (template : Template :=
   let header := (← read).header
   IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
     h.putStrLn header
-    h.putStrLn output.asString
+    h.putStrLn output.render
 
 def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array BlogPost) : GenerateM Unit := do
   -- path from site to here
@@ -197,21 +198,21 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
         let some post := posts.find? (·.id == postId)
           | pure none
         pure <| some (addr, post)
-      let postList := {{
+      let postList := html%{
         <ul class="post-list">
-          {{← catPosts.mapM fun (_addr, p) => do
-            theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk pathToBlog, #[]⟩), ("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}}
+          {← catPosts.mapM fun (_addr, p) => do
+            theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk pathToBlog, #[]⟩), ("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}
         </ul>
-      }}
+      }
       let catParams := Template.Params.ofList [("title", cat.name), ("category", ⟨.mk cat, #[]⟩), ("posts", ⟨.mk postList, #[]⟩)]
       writePage theme catParams (template := theme.categoryTemplate)
 
-  let postList := {{
+  let postList := html%{
     <ul class="post-list">
-      {{← posts.mapM fun p => do
-        theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk pathToBlog, #[]⟩), ("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}}
+      {← posts.mapM fun p => do
+        theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk pathToBlog, #[]⟩), ("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}
     </ul>
-  }}
+  }
   let path ← currentPath
   let allCats : Post.Categories := .mk <| meta.categories.toArray.map fun (c, _) =>
     (dirPathToString (trailing := true) <| (path / c.slug).toList, c)

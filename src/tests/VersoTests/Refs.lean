@@ -540,13 +540,13 @@ Without this binding, elaboration would fail with an unknown identifier.
 -/
 
 section
-open Lean Elab Lean.Doc.Syntax Verso.Doc.Elab PartElabM
+open Lean Elab Verso.Doc.Elab PartElabM
 
-@[part_command Lean.Doc.Syntax.directive]
+@[part_command Lean.Doc.Parser.Block.directive]
 meta def plainDirective : PartCommand
-  | `(block|:::%$_ $name $_args* { $contents* }%$_) => do
-    unless name.getId == `plain do throwUnsupportedSyntax
-    let blocks ← liftDocElabM <| contents.mapM elabBlock
+  | .directive v => do
+    unless v.name.getId == `plain do throwUnsupportedSyntax
+    let blocks ← liftDocElabM <| v.content.mapM elabBlock
     addBlock (← ``(Verso.Doc.Block.concat #[$blocks,*]))
   | _ => throwUnsupportedSyntax
 

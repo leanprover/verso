@@ -31,22 +31,23 @@ class TestSearch:
         )
 
         page.get_by_role("searchbox").clear()
-        page.get_by_role("searchbox").type("Html.visitM")
+        page.get_by_role("searchbox").type("Html.rewritePo")
         expect(page.get_by_label("Results")).to_match_aria_snapshot(
             """
           - listbox "Results":
-            - option "Verso.Output.Html.visitM Documentation" [selected]:
-              - link "Verso.Output.Html.visitM Documentation":
+            - option "Lean.Html.rewritePostM Documentation" [selected]:
+              - link "Lean.Html.rewritePostM Documentation":
                 - paragraph:
-                  - text: Verso.Output.
-                  - emphasis: Html.visitM
+                  - text: Lean.
+                  - emphasis: Html.rewritePo
+                  - text: stM
                 - paragraph: Documentation
             - listitem: Showing 1/1 results""".strip()
         )
 
-        page.get_by_role("searchbox").type("onadsville")
+        page.get_by_role("searchbox").type("ndsville")
         expect(page.get_by_role("searchbox")).to_match_aria_snapshot(
-            '- searchbox "Search": Html.visitMonadsville'
+            '- searchbox "Search": Html.rewritePondsville'
         )
         print(page.get_by_label("Results").aria_snapshot())
         expect(page.get_by_label("Results")).to_match_aria_snapshot(
@@ -82,12 +83,12 @@ class TestSearch:
         expect(page.get_by_label("Results")).to_match_aria_snapshot(
             """
           - listbox "Results":
-            - option "Verso.Output.Html.none ↪ Verso.Output.Html.empty Suggestion" [selected]:
-              - link "Verso.Output.Html.none ↪ Verso.Output.Html.empty Suggestion":
+            - option "Lean.Html.none ↪ Lean.Html.empty Suggestion" [selected]:
+              - link "Lean.Html.none ↪ Lean.Html.empty Suggestion":
                 - paragraph:
-                  - text: Verso.Output.
+                  - text: Lean.
                   - emphasis: Html.none
-                  - text: ↪ Verso.Output.Html.empty
+                  - text: ↪ Lean.Html.empty
                 - paragraph: Suggestion
             - listitem: Showing 1/1 results""".strip()
         )
@@ -102,12 +103,12 @@ class TestSearch:
         expect(page.get_by_label("Results")).to_match_aria_snapshot(
             """
           - listbox "Results":
-            - option "Verso.Output.Html.nil ↪ Verso.Output.Html.empty Suggestion" [selected]:
-              - link "Verso.Output.Html.nil ↪ Verso.Output.Html.empty Suggestion":
+            - option "Lean.Html.nil ↪ Lean.Html.empty Suggestion" [selected]:
+              - link "Lean.Html.nil ↪ Lean.Html.empty Suggestion":
                 - paragraph:
-                  - text: Verso.Output.
+                  - text: Lean.
                   - emphasis: Html.nil
-                  - text: ↪ Verso.Output.Html.empty
+                  - text: ↪ Lean.Html.empty
                 - paragraph: Suggestion
             - listitem: Showing 1/1 results""".strip()
         )

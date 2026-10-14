@@ -10,10 +10,10 @@ paragraph is valid. The second paragraph is the same up to its end, where an unf
 parse error. In each paragraph, the runner asks for the hover and the highlights of the label, and
 for the hover and the definition of the role name.
 
-The hovers and the definition are the same in both paragraphs. The hover of the label explains link
-references. The hover of the role name is the role's documentation, and its definition is the role's
-declaration in this file. The highlights of the label are its definition and its uses up to and
-including the paragraph.
+The hovers and the definition are the same in both paragraphs. The hover of the label says that the
+label is the name of a footnote or a link reference. The hover of the role name is the role's
+documentation, and its definition is the role's declaration in this file. The highlights of the
+label are its definition and its uses up to and including the paragraph.
 
 In prior versions of the error recovery, the second paragraph had no hovers, highlights or
 definitions.

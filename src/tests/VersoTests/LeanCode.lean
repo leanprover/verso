@@ -73,7 +73,7 @@ info: (some (Verso.Genre.Manual.InlineLean.Inline.lean, [{"seq":
         {"occurrence": "«term_+_»-840",
          "name": ["term_+_"],
          "docs":
-         "`a + b` computes the sum of `a` and `b`.\nThe meaning of this notation is type-dependent. \n\nConventions for notations in identifiers:\n\n * The recommended spelling of `+` in identifiers is `add`."}},
+         "`a + b` computes the sum of `a` and `b`.\nThe meaning of this notation is type-dependent.\n\nConventions for notations in identifiers:\n\n * The recommended spelling of `+` in identifiers is `add`."}},
        "content": "+"}}},
     {"text": {"str": " "}},
     {"token":

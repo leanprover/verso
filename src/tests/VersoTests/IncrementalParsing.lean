@@ -375,3 +375,31 @@ Then we went home.
 "
 
 @[test] def codeBlockWithBrokenFence : Test := checkInvariant codeBlock
+
+/--
+This test checks that a header and then seven paragraphs, each of which is an unfinished role,
+satisfy the invariant: no change after the command after next alters a command's syntax, end
+position or errors. Each unfinished role has its parse error at the end of its own line, so each
+paragraph is its own command with one error.
+-/
+def roleChain : String :=
+"# H
+
+{b
+
+{c
+
+{d
+
+{e
+
+{f
+
+{g
+
+{h
+
+hello
+"
+
+@[test] def roleChainWithErrors : Test := checkInvariant roleChain

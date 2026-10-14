@@ -99,6 +99,6 @@ meta def signature : CodeBlockExpanderOf SignatureConfig
       else hls
 
     if «show» then
-      `(Block.other {Block.signature with data := ToJson.toJson $(quote hls)} #[Block.code $(quote str.getString)])
+      `(Block.other {Block.signature with data := ToJson.toJson $(quote hls)} #[Block.code $(quote str.getVersoCodeBlock)])
     else
       ``(Block.concat #[])
