@@ -1295,16 +1295,26 @@ private def testWeakLeanOptions (data : TestData) : Test := do
   assertNotContains warning libB
     "LibB.Utils JSON has an unused variable warning, so `weak.linter.unusedVariables` had no effect"
 
+/--
+A module system root that imports a module from the same package is highlighted with the imported
+constant's docstring.
+-/
+private def testModuleSystemImports (data : TestData) : Test := do
+  let libC ← IO.FS.readFile (jsonPath data.jsonDir "LibC")
+  assertContains "\"content\":\"doubleC\",\"kind\":{\"const\":{\"docs\":\"Doubles a number." libC
+    "LibC JSON has no docs on the `doubleC` token, so the import of LibC.Core was not loaded at the server level"
+
 private def multiRootHtmlTests (data : TestData) : List (String × Test) := [
   ("multi-root nav tree", testMultiRootNavTree data),
-  ("weak lean options", testWeakLeanOptions data)
+  ("weak lean options", testWeakLeanOptions data),
+  ("module system imports", testModuleSystemImports data)
 ]
 
 /-- The literate HTML generator produces the expected output for the multi-root test project. -/
 @[test]
 def literateHtmlMultiRoot : Test := do
   let projectDir := "test-projects/literate-multi-root"
-  let modules := #["LibA", "LibA.Core", "LibB", "LibB.Utils"]
+  let modules := #["LibA", "LibA.Core", "LibB", "LibB.Utils", "LibC", "LibC.Core"]
 
   let rootToolchain := (← IO.FS.readFile "lean-toolchain").trimAscii
   let testToolchain := (← IO.FS.readFile (projectDir / "lean-toolchain")).trimAscii
@@ -1340,7 +1350,7 @@ def literateHtmlMultiRoot : Test := do
 
     -- Write module list with library annotations
     let moduleEntries := modules.map fun m =>
-      let lib := if m.startsWith "LibA" then "LibA" else "LibB"
+      let lib := m.splitOn "." |>.head!
       s!"{lib}\t{m}"
     IO.FS.writeFile moduleListFile ("\n".intercalate moduleEntries.toList ++ "\n")
 
