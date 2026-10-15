@@ -13,6 +13,7 @@ import SubVerso.Helper
 public import SubVerso.Module
 import MD4Lean
 public import Verso.Code.External.Env
+public import VersoUtil.Elan
 
 public section
 
@@ -52,48 +53,22 @@ def loadModuleContent' (projectDir : StrLit) (mod : String) (suppressNamespaces 
   let blame := projectDir
 
   let projectDir : FilePath := projectDir.getString
+  let toolchain ←
+    match ← (Elan.getProjectToolchain projectDir).toBaseIO with
+      | .ok toolchain => pure toolchain
+      | .error e => throwErrorAt blame s!"{e}"
 
-  -- Validate that the path is really a Lean project
-  let lakefile := projectDir / "lakefile.lean"
-  let lakefile' := projectDir / "lakefile.toml"
-  if !(← lakefile.pathExists) && !(← lakefile'.pathExists) then
-    throwErrorAt blame m!"Neither {lakefile} nor {lakefile'} exist, couldn't load project"
-  let toolchainfile := projectDir / "lean-toolchain"
-  let toolchain ← do
-      if !(← toolchainfile.pathExists) then
-        throwErrorAt blame m!"File {toolchainfile} doesn't exist, couldn't load project"
-      pure (← IO.FS.readFile toolchainfile).trimAscii.copy
+  let runCmd (trace : MessageData) (cmd : Array String) (restoreArtifacts : Bool) : m Unit :=
+    withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure <| trace.trace {cls := `command} #[m!"{" ".intercalate cmd.toList}"]) do
+      let _ ← Verso.Elan.runCmdWithToolchain projectDir toolchain cmd restoreArtifacts
+        (env := #[("SUBVERSO_SUPPRESS_NAMESPACES", .set (" ".intercalate suppressNamespaces))])
 
-  -- Kludge: remove variables introduced by Lake. Clearing out DYLD_LIBRARY_PATH and
-  -- LD_LIBRARY_PATH is useful so the version selected by Elan doesn't get the wrong shared
-  -- libraries.
-  let lakeVars :=
-    #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
-      "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
-      "LEAN", "ELAN", "ELAN_HOME", "LEAN_GITHASH",
-      "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
-
-  let cmd := "elan"
-  let runCmd' (args : Array String) : m Unit := do
-      let res ← IO.Process.output {
-        cmd, args, cwd := projectDir
-        -- Unset Lake's environment variables and ensure that artifacts are copied to the build dir.
-        env :=
-          lakeVars.map (·, none) ++
-          #[("SUBVERSO_SUPPRESS_NAMESPACES", some (" ".intercalate suppressNamespaces)),
-            ("LAKE_RESTORE_ARTIFACTS", some "true")]
-      }
-      if res.exitCode != 0 then reportFail projectDir cmd args res
-
-  let runCmd (trace : MessageData) (args : Array String) : m Unit :=
-    withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure <| trace.trace {cls := `command} #[m!"elan {" ".intercalate args.toList}"]) (runCmd' args)
-
-  let toolchainFile ← IO.FS.Handle.mk toolchainfile .read
+  let toolchainFile ← IO.FS.Handle.mk (projectDir / "lean-toolchain") .read
   -- Lake tends to get in trouble if used concurrently, so build the Lean code with a lock.
   toolchainFile.lock (exclusive := true)
   try
-    runCmd m!"loadModuleContent': building extractor" #["run", "--install", toolchain, "lake", "build", "subverso-extract-mod"]
-    runCmd m!"loadModuleContent': building highlighted example" #["run", "--install", toolchain, "lake", "build", "+" ++ mod ++ ":highlighted"]
+    runCmd m!"loadModuleContent': building extractor" #["lake", "build", "subverso-extract-mod"] false
+    runCmd m!"loadModuleContent': building highlighted example" #["lake", "build", "+" ++ mod ++ ":highlighted"] true
   finally
     toolchainFile.unlock
 
@@ -111,18 +86,6 @@ def loadModuleContent' (projectDir : StrLit) (mod : String) (suppressNamespaces 
   | .error err =>
     throwError s!"Couldn't deserialize JSON from output file: {err}\nIn:\n{json}"
   | .ok val => pure val.items
-
-where
-  decorateOut (name : String) (out : String) : String :=
-    if out.isEmpty then "" else s!"\n{name}:\n{out}\n"
-  reportFail {α} (projectDir : FilePath) (cmd : String) (args : Array String) (res : IO.Process.Output) : m α := do
-    throwError ("Build process failed." ++
-      "\nCWD: " ++ projectDir.toString ++
-      "\nCommand: " ++ cmd ++
-      "\nArgs: " ++ repr args ++
-      "\nExit code: " ++ toString res.exitCode ++
-      "\nstdout: " ++ res.stdout ++
-      "\nstderr: " ++ res.stderr)
 
 def getSuppress : m (List String) := do
   let some nss ← verso.externalExamples.suppressedNamespaces.get? <$> getOptions
