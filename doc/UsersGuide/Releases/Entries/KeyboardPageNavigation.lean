@@ -13,7 +13,7 @@ release_note
   version := ⟨4, 36, 0⟩
   breaking := false
   tag := "keyboard-page-navigation"
-  prs := []
+  prs := [1042]
 
 #doc (Manual) "Keyboard Page Navigation" =>
 
