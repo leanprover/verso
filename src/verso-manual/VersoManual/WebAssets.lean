@@ -11,3 +11,5 @@ namespace Verso.Genre.Manual
 public def find.js := include_str "../../../static-web/find.js"
 
 public def tocResize.js := include_str "../../../static-web/toc-resize.js"
+
+public def pageNav.js := include_str "../../../static-web/page-nav.js"

@@ -725,6 +725,9 @@ end
 def emitTocResizeJs (dir : System.FilePath) : IO Unit := do
   IO.FS.writeFile (dir / "toc-resize.js") tocResize.js
 
+def emitPageNavJs (dir : System.FilePath) : IO Unit := do
+  IO.FS.writeFile (dir / "page-nav.js") pageNav.js
+
 def wordCount
     (wcPath : System.FilePath) (config : Config)
     (text : Part Manual) : EmitM Unit := do
@@ -805,6 +808,7 @@ where
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     emitTocResizeJs dir
+    emitPageNavJs dir
     for (src, dest) in config.extraFiles do
       copyRecursively src (dir.join dest)
     for (src, dest) in config.extraFilesHtml do
@@ -874,6 +878,7 @@ where
     IO.FS.withFile (root / "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     emitTocResizeJs root
+    emitPageNavJs root
     for (src, dest) in config.extraFiles do
       copyRecursively src (root.join dest)
     for (src, dest) in config.extraFilesHtml do
