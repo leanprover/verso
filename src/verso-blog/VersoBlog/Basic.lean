@@ -322,6 +322,10 @@ structure Post.Meta where
   date : Blog.Date
   /-- The authors of the post -/
   authors : List String
+  /-- Subtitle of the post -/
+  subtitle: Option String
+  /-- Path to logo of the post -/
+  logo: Option String
   /-- The categories in which to include the post -/
   categories : List Post.Category := []
   /-- If `true`, the post is not rendered by default -/
