@@ -1,0 +1,418 @@
+{"version": 2,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 42, "character": 11},
+    "end": {"line": 42, "character": 11}},
+   "message": "expected identifier",
+   "fullRange":
+   {"start": {"line": 42, "character": 11},
+    "end": {"line": 42, "character": 11}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean"},
+ "position": {"line": 42, "character": 0}}
+[{"selectionRange":
+  {"start": {"line": 26, "character": 4}, "end": {"line": 26, "character": 13}},
+  "range":
+  {"start": {"line": 25, "character": 0}, "end": {"line": 31, "character": 23}},
+  "name": "TestGenre",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 35, "character": 4}, "end": {"line": 35, "character": 7}},
+  "range":
+  {"start": {"line": 33, "character": 0}, "end": {"line": 38, "character": 44}},
+  "name": "hig",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 40, "character": 17},
+   "end": {"line": 40, "character": 24}},
+  "range":
+  {"start": {"line": 40, "character": 0}, "end": {"line": 73, "character": 0}},
+  "name": "Notes",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 42, "character": 11}},
+    "range":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 70, "character": 0}},
+    "name": "Weekend ",
+    "kind": 15},
+   {"selectionRange":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 70, "character": 8}},
+    "range":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 73, "character": 0}},
+    "name": "Monday",
+    "kind": 15}]}]
+{"version": 3,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 42, "character": 12},
+    "end": {"line": 42, "character": 12}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 42, "character": 12},
+    "end": {"line": 42, "character": 12}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean"},
+ "position": {"line": 42, "character": 0}}
+[{"selectionRange":
+  {"start": {"line": 26, "character": 4}, "end": {"line": 26, "character": 13}},
+  "range":
+  {"start": {"line": 25, "character": 0}, "end": {"line": 31, "character": 23}},
+  "name": "TestGenre",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 35, "character": 4}, "end": {"line": 35, "character": 7}},
+  "range":
+  {"start": {"line": 33, "character": 0}, "end": {"line": 38, "character": 44}},
+  "name": "hig",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 40, "character": 17},
+   "end": {"line": 40, "character": 24}},
+  "range":
+  {"start": {"line": 40, "character": 0}, "end": {"line": 73, "character": 0}},
+  "name": "Notes",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 42, "character": 12}},
+    "range":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 70, "character": 0}},
+    "name": "Weekend ",
+    "kind": 15},
+   {"selectionRange":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 70, "character": 8}},
+    "range":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 73, "character": 0}},
+    "name": "Monday",
+    "kind": 15}]}]
+{"version": 4,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 42, "character": 13},
+    "end": {"line": 42, "character": 13}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 42, "character": 13},
+    "end": {"line": 42, "character": 13}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean"},
+ "position": {"line": 42, "character": 0}}
+[{"selectionRange":
+  {"start": {"line": 26, "character": 4}, "end": {"line": 26, "character": 13}},
+  "range":
+  {"start": {"line": 25, "character": 0}, "end": {"line": 31, "character": 23}},
+  "name": "TestGenre",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 35, "character": 4}, "end": {"line": 35, "character": 7}},
+  "range":
+  {"start": {"line": 33, "character": 0}, "end": {"line": 38, "character": 44}},
+  "name": "hig",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 40, "character": 17},
+   "end": {"line": 40, "character": 24}},
+  "range":
+  {"start": {"line": 40, "character": 0}, "end": {"line": 73, "character": 0}},
+  "name": "Notes",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 42, "character": 13}},
+    "range":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 70, "character": 0}},
+    "name": "Weekend ",
+    "kind": 15},
+   {"selectionRange":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 70, "character": 8}},
+    "range":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 73, "character": 0}},
+    "name": "Monday",
+    "kind": 15}]}]
+{"version": 5,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 42, "character": 14},
+    "end": {"line": 42, "character": 14}},
+   "message":
+   "unexpected newline; expected positional argument, named argument, flag, or '}' (use '\\{' for a literal '{')",
+   "fullRange":
+   {"start": {"line": 42, "character": 14},
+    "end": {"line": 42, "character": 14}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean"},
+ "position": {"line": 42, "character": 0}}
+[{"selectionRange":
+  {"start": {"line": 26, "character": 4}, "end": {"line": 26, "character": 13}},
+  "range":
+  {"start": {"line": 25, "character": 0}, "end": {"line": 31, "character": 23}},
+  "name": "TestGenre",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 35, "character": 4}, "end": {"line": 35, "character": 7}},
+  "range":
+  {"start": {"line": 33, "character": 0}, "end": {"line": 38, "character": 44}},
+  "name": "hig",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 40, "character": 17},
+   "end": {"line": 40, "character": 24}},
+  "range":
+  {"start": {"line": 40, "character": 0}, "end": {"line": 73, "character": 0}},
+  "name": "Notes",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 42, "character": 14}},
+    "range":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 70, "character": 0}},
+    "name": "Weekend ",
+    "kind": 15},
+   {"selectionRange":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 70, "character": 8}},
+    "range":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 73, "character": 0}},
+    "name": "Monday",
+    "kind": 15}]}]
+{"version": 6,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 68, "character": 0}, "end": {"line": 68, "character": 0}},
+   "message":
+   "unexpected newline; expected '![', '$$', '$', '*', '[', '[^', '_', '`' or '{'",
+   "fullRange":
+   {"start": {"line": 68, "character": 0},
+    "end": {"line": 68, "character": 0}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean"},
+ "position": {"line": 42, "character": 0}}
+[{"selectionRange":
+  {"start": {"line": 26, "character": 4}, "end": {"line": 26, "character": 13}},
+  "range":
+  {"start": {"line": 25, "character": 0}, "end": {"line": 31, "character": 23}},
+  "name": "TestGenre",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 35, "character": 4}, "end": {"line": 35, "character": 7}},
+  "range":
+  {"start": {"line": 33, "character": 0}, "end": {"line": 38, "character": 44}},
+  "name": "hig",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 40, "character": 17},
+   "end": {"line": 40, "character": 24}},
+  "range":
+  {"start": {"line": 40, "character": 0}, "end": {"line": 73, "character": 0}},
+  "name": "Notes",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 70, "character": 8}},
+    "range":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 73, "character": 0}},
+    "name": "Monday",
+    "kind": 15}]}]
+{"version": 7,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 42, "character": 16},
+    "end": {"line": 42, "character": 16}},
+   "message": "unexpected newline; expected ']'",
+   "fullRange":
+   {"start": {"line": 42, "character": 16},
+    "end": {"line": 42, "character": 16}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean"},
+ "position": {"line": 42, "character": 0}}
+[{"selectionRange":
+  {"start": {"line": 26, "character": 4}, "end": {"line": 26, "character": 13}},
+  "range":
+  {"start": {"line": 25, "character": 0}, "end": {"line": 31, "character": 23}},
+  "name": "TestGenre",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 35, "character": 4}, "end": {"line": 35, "character": 7}},
+  "range":
+  {"start": {"line": 33, "character": 0}, "end": {"line": 38, "character": 44}},
+  "name": "hig",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 40, "character": 17},
+   "end": {"line": 40, "character": 24}},
+  "range":
+  {"start": {"line": 40, "character": 0}, "end": {"line": 73, "character": 0}},
+  "name": "Notes",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 42, "character": 16}},
+    "range":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 70, "character": 0}},
+    "name": "Weekend ",
+    "kind": 15},
+   {"selectionRange":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 70, "character": 8}},
+    "range":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 73, "character": 0}},
+    "name": "Monday",
+    "kind": 15}]}]
+{"version": 8,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 1,
+   "range":
+   {"start": {"line": 42, "character": 17},
+    "end": {"line": 42, "character": 17}},
+   "message": "unexpected newline; expected ']'",
+   "fullRange":
+   {"start": {"line": 42, "character": 17},
+    "end": {"line": 42, "character": 17}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean"},
+ "position": {"line": 42, "character": 0}}
+[{"selectionRange":
+  {"start": {"line": 26, "character": 4}, "end": {"line": 26, "character": 13}},
+  "range":
+  {"start": {"line": 25, "character": 0}, "end": {"line": 31, "character": 23}},
+  "name": "TestGenre",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 35, "character": 4}, "end": {"line": 35, "character": 7}},
+  "range":
+  {"start": {"line": 33, "character": 0}, "end": {"line": 38, "character": 44}},
+  "name": "hig",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 40, "character": 17},
+   "end": {"line": 40, "character": 24}},
+  "range":
+  {"start": {"line": 40, "character": 0}, "end": {"line": 73, "character": 0}},
+  "name": "Notes",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 42, "character": 17}},
+    "range":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 70, "character": 0}},
+    "name": "Weekend  x",
+    "kind": 15},
+   {"selectionRange":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 70, "character": 8}},
+    "range":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 73, "character": 0}},
+    "name": "Monday",
+    "kind": 15}]}]
+{"version": 9,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean",
+ "isIncremental": false,
+ "diagnostics": []}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_header_symbols.lean"},
+ "position": {"line": 42, "character": 0}}
+[{"selectionRange":
+  {"start": {"line": 26, "character": 4}, "end": {"line": 26, "character": 13}},
+  "range":
+  {"start": {"line": 25, "character": 0}, "end": {"line": 31, "character": 23}},
+  "name": "TestGenre",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 35, "character": 4}, "end": {"line": 35, "character": 7}},
+  "range":
+  {"start": {"line": 33, "character": 0}, "end": {"line": 38, "character": 44}},
+  "name": "hig",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 40, "character": 17},
+   "end": {"line": 40, "character": 24}},
+  "range":
+  {"start": {"line": 40, "character": 0}, "end": {"line": 73, "character": 0}},
+  "name": "Notes",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 42, "character": 18}},
+    "range":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 70, "character": 0}},
+    "name": "Weekend  x",
+    "kind": 15},
+   {"selectionRange":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 70, "character": 8}},
+    "range":
+    {"start": {"line": 70, "character": 0},
+     "end": {"line": 73, "character": 0}},
+    "name": "Monday",
+    "kind": 15}]}]

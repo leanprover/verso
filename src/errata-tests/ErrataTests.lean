@@ -1113,11 +1113,15 @@ def junitOmitsEmptyOutput : Test := do
   assertNotContains "system-out" xml
   assertNotContains "system-err" xml
 
+/-- Sixty named results of the test `many`, past the truncation cap, with the given statuses. -/
+private def manyCases (status : Nat → Status := fun _ => .pass) : Array Result :=
+  (Array.range 60).map fun i =>
+    { package := "p", moduleName := "M", test := "many", resultPath := #[s!"case {i}"], status := status i }
+
 /-- A test's results are truncated after the cap at quiet verbosity, with a summary, but not at verbose. -/
 @[test]
 def reportTruncates : Test := do
-  let many := (Array.range 60).map fun i =>
-    ({ package := "p", moduleName := "M", test := "many", resultPath := #[s!"case {i}"], status := .pass } : Result)
+  let many := manyCases
   let quiet ← captureOutput do discard <| humanReport .quiet many
   assertBEq 51 (quiet.stdout.splitOn "ok    ").length
   -- The summary lines up with the named results' rows, which are one level deep.
@@ -1132,13 +1136,28 @@ around them are summarized.
 -/
 @[test]
 def reportTruncationShowsFailures : Test := do
-  let many := (Array.range 60).map fun i =>
-    let status : Status := if i == 55 then .fail { message := "boom" } else .pass
-    ({ package := "p", moduleName := "M", test := "many", resultPath := #[s!"case {i}"], status } : Result)
+  let many := manyCases fun i => if i == 55 then .fail { message := "boom" } else .pass
   let quiet ← captureOutput do discard <| humanReport .quiet many
   -- The named results have no parent line, so the failure is named in full.
   assertContains "\nFAIL  p/M  many.case 55: boom" quiet.stdout
   assertContains "(... and 9 more passed)" quiet.stdout
+
+/--
+Printing a report one test at a time prints the same output as reporting every result at once,
+including a truncated test's summary before the next test's results.
+-/
+@[test]
+def reportPerTest : Test := do
+  let many := manyCases
+  let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail { message := "boom" } }
+  let all := many.push fail
+  let whole ← captureOutput do discard <| humanReport .quiet all
+  let fed ← captureOutput do
+    printHumanResults .quiet many
+    printHumanResults .quiet #[fail]
+    printHumanTally all
+  assertBEq whole.stdout fed.stdout
+  assertContains "(... and 10 more passed)\nFAIL  p/M  u: boom" fed.stdout
 
 /-- `humanReport` returns the number of failures and errors. -/
 @[test]

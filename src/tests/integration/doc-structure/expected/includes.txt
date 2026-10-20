@@ -1,0 +1,49 @@
+part "Includes"
+  blocks: 1
+  - para: Text before the first include.
+  part "Included Document"
+    metadata: { tag := "included", number := 0 }
+    blocks: 1
+    - para: Text of the included document.
+    part "Included Section"
+      blocks: 1
+      - para: Text of the included section.
+  part "Section"
+    blocks: 1
+    - para: Text in section.
+    part "Nested"
+      blocks: 1
+      - para: Text in nested.
+    part "Included Document"
+      metadata: { tag := "included", number := 0 }
+      blocks: 1
+      - para: Text of the included document.
+      part "Included Section"
+        blocks: 1
+        - para: Text of the included section.
+  part "Included Document"
+    metadata: { tag := "included", number := 0 }
+    blocks: 1
+    - para: Text of the included document.
+    part "Included Section"
+      blocks: 1
+      - para: Text of the included section.
+  part "After"
+    blocks: 1
+    - para: Text after the includes.
+    part "After Nested"
+      blocks: 0
+      part "Included Document"
+        metadata: { tag := "included", number := 0 }
+        blocks: 1
+        - para: Text of the included document.
+        part "Included Section"
+          blocks: 1
+          - para: Text of the included section.
+      part "Included Document"
+        metadata: { tag := "included", number := 0 }
+        blocks: 1
+        - para: Text of the included document.
+        part "Included Section"
+          blocks: 1
+          - para: Text of the included section.

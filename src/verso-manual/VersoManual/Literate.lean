@@ -24,7 +24,7 @@ open Lean
 block_extension Block.literateDocstring where
   traverse _ _ _ _ := pure none
   toHtml := some fun _goI goB _id _data contents => do
-    pure {{<div class="literate-docstring">{{← contents.mapM goB}}</div>}}
+    pure html%{<div class="literate-docstring">{← contents.mapM goB}</div>}
   toTeX := some fun _goI goB _id _data contents => do
     contents.mapM goB
 
@@ -46,12 +46,12 @@ block_extension Block.literateDocstringPart (level : Nat) where
         reportError s!"Expected a block at the beginning of a docstring section"
         pure .empty
     let contents := contents.extract 1
-    pure {{
+    pure html%{
       <section>
-        {{.tag s!"h{level + 1}" #[] title}}
-        {{← contents.mapM goB}}
+        {.element s!"h{level + 1}" #[] title}
+        {← contents.mapM goB}
       </section>
-    }}
+    }
   toTeX := some fun goI goB _id data contents =>
     open Verso.Output.TeX in do
       let .ok (level : Nat) := FromJson.fromJson? data
@@ -85,7 +85,6 @@ instance : LoadLiterate Manual where
   docstringPart lvl title contents := .other (Block.literateDocstringPart lvl) (#[.para title] ++ contents)
 
 
-open Lean.Doc.Syntax
 open Verso.Doc Elab Concrete
 open Lean.Elab Command Term
 open PartElabM
@@ -155,10 +154,11 @@ meta instance : FromArgs IncludeLiterateConfig m where
     IncludeLiterateConfig.mk <$> .positional' `path  <*> .named' `level true <*> .positional' `name <*> .positional' `title
 
 
-@[part_command Lean.Doc.Syntax.command]
+@[part_command Lean.Doc.Parser.Block.command]
 meta def includeLiterateSection : PartCommand
-  | `(block|command{includeLiterate $args* }) => do
-    let {path, level, modName, title} ← parseThe IncludeLiterateConfig (← parseArgs args)
+  | .command v => do
+    unless v.name.getId == `includeLiterate do Lean.Elab.throwUnsupportedSyntax
+    let {path, level, modName, title} ← parseThe IncludeLiterateConfig (← parseArgs v.args)
     let ref ← getRef
     if let some lvl := level then
       let name ← getModuleWithDocs path modName title none

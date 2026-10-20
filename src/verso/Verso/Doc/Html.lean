@@ -13,6 +13,7 @@ public import Verso.BuildLog
 namespace Verso.Doc.Html
 
 open Verso Output Doc Html
+open Lean (Html)
 open Verso (Severity SourceSpan MonadBuildLog Logger)
 open Verso.Code (HighlightHtmlM)
 
@@ -86,7 +87,7 @@ public instance [Monad m] : MonadLift (HighlightHtmlM genre) (HtmlT genre m) whe
 open HtmlT
 
 public def mkPartHeader (level : Nat) (contents : Html) (headerAttrs : Array (String × String) := #[]) : Html :=
-  .tag s!"h{level}" headerAttrs contents
+  .element s!"h{level}" headerAttrs contents
 
 public class ToHtml (genre : Genre) (m : Type → Type) (α : Type u) where
   toHtml (val : α) : HtmlT genre m Html
@@ -118,22 +119,22 @@ section
 open ToHtml
 
 partial def Inline.toHtml [Monad m] [GenreHtml g m] : Inline g → HtmlT g m Html
-  | .text str => pure <| .text true str
+  | .text str => return .text str
   | .link content dest => do
-    pure {{ <a href={{dest}}> {{← content.mapM toHtml}} </a> }}
+    pure html%{<a href={dest}>{← content.mapM toHtml}</a>}
   | .image alt dest => do
-    pure {{ <img src={{dest}} alt={{alt}}/> }}
+    pure html%{<img src={dest} alt={alt}/>}
   | .footnote name content => do
-      pure {{ <details class="footnote"><summary>"["{{name}}"]"</summary>{{← content.mapM toHtml}}</details>}}
-  | .linebreak str => pure <| Html.text false str
+      pure html%{<details class="footnote"><summary>[{name}]</summary>{← content.mapM toHtml}</details>}
+  | .linebreak str => return .raw str
   | .emph content => do
-    pure {{ <em> {{← content.mapM toHtml }} </em> }}
+    pure html%{<em>{← content.mapM toHtml }</em>}
   | .bold content => do
-    pure {{ <strong> {{← content.mapM toHtml}} </strong> }}
-  | .code str => pure {{ <code> {{str}} </code> }}
+    pure html%{<strong>{← content.mapM toHtml}</strong>}
+  | .code str => return html%{<code>{str}</code>}
   | .math mode str => do
      let classes := "math " ++ match mode with | .inline => "inline" | .display => "display"
-     pure {{ <code class={{classes}}>{{str}}</code> }}
+     pure html%{<code class={classes}>{str}</code>}
   | .concat inlines => inlines.mapM toHtml
   | .other container content => GenreHtml.inline Inline.toHtml container content
 
@@ -144,25 +145,25 @@ partial def Block.toHtml [Monad m] [GenreHtml g m] [TraverseBlock g] (b : Block 
   withReader (fun ctxt => { ctxt with traverseContext := TraverseBlock.inBlock b ctxt.traverseContext } ) do
   match b with
   | .para xs => do
-    pure {{ <p> {{← xs.mapM Inline.toHtml }} </p> }}
+    pure html%{<p>{← xs.mapM Inline.toHtml }</p>}
   | .blockquote bs => do
-    pure {{ <blockquote> {{← bs.mapM Block.toHtml }} </blockquote> }}
+    pure html%{<blockquote>{← bs.mapM Block.toHtml }</blockquote>}
   | .ul items => do
-    pure {{ <ul> {{← items.mapM fun li => do pure {{ <li> {{← li.contents.mapM Block.toHtml }} </li>}} }} </ul> }}
+    pure html%{<ul>{← items.mapM fun li => do pure html%{<li>{← li.contents.mapM Block.toHtml }</li>} }</ul>}
   | .ol start items => do
-    pure {{ <ol start={{max start 0 |> toString}}> {{← items.mapM fun li => do pure {{ <li> {{← li.contents.mapM Block.toHtml }} </li>}} }} </ol> }}
+    pure html%{<ol start={max start 0 |> toString}>{← items.mapM fun li => do pure html%{<li>{← li.contents.mapM Block.toHtml }</li>} }</ol>}
   | .dl items => do
-    pure {{
+    pure html%{
       <dl>
-        {{← items.mapM fun ⟨t, d⟩ => do
-          pure {{
-            <dt>{{← t.mapM Inline.toHtml }}</dt>
-            <dd>{{← d.mapM Block.toHtml }}</dd>
-          }}
-        }}
+        {← items.mapM fun ⟨t, d⟩ => do
+          pure html%{
+            <dt>{← t.mapM Inline.toHtml }</dt>
+            <dd>{← d.mapM Block.toHtml }</dd>
+          }
+        }
       </dl>
-    }}
-  | .code content => pure #[{{ <pre> {{ content }} </pre>}}]
+    }
+  | .code content => return html%{<pre>{ content }</pre>}
   | .concat items => Html.seq <$> items.mapM Block.toHtml
   | .other container content => GenreHtml.block Inline.toHtml Block.toHtml container content
 
@@ -173,16 +174,16 @@ partial def Part.toHtml [Monad m] [GenreHtml g m] [TraversePart g] [TraverseBloc
     (p : Part g) (mkHeader : Nat → Html → Html := mkPartHeader) : HtmlT g m Html :=
   match p.metadata with
   | .none => do
-    pure {{
+    pure html%{
       <section>
-        {{ mkHeader (← options).headerLevel (.seq <| ← p.title.mapM ToHtml.toHtml) }}
-        {{← p.content.mapM ToHtml.toHtml  }}
-        {{← withOptions (fun o => {o with headerLevel := o.headerLevel + 1}) <|
+        { mkHeader (← options).headerLevel (.seq <| ← p.title.mapM ToHtml.toHtml) }
+        {← p.content.mapM ToHtml.toHtml  }
+        {← withOptions (fun o => {o with headerLevel := o.headerLevel + 1}) <|
           p.subParts.mapM fun subPart =>
             withReader (fun ctxt => {ctxt with traverseContext := TraversePart.inPart subPart ctxt.traverseContext}) <|
-              Part.toHtml (mkHeader := mkPartHeader) subPart }}
+              Part.toHtml (mkHeader := mkPartHeader) subPart }
       </section>
-    }}
+    }
   | some m =>
     GenreHtml.part (fun p mkHeader => Part.toHtml p (mkHeader := mkHeader)) m p.withoutMetadata
 

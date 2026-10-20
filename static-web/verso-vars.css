@@ -35,7 +35,8 @@
     - The affected code itself: foreground and background, both at rest and while hovered,
       plus the indicator color, which draws the wavy underline marking that a message is
       present.
-    - The text of the message, via the message color.
+    - The text of the message, via the message color. This color is also used for embedded
+      code.
     - The tooltip that displays the message: foreground, background, and border. The border
       color also draws the accent bar next to a message when it is shown without scripts,
       and the background also colors the tooltip's arrow.
@@ -46,7 +47,7 @@
     --verso-code-info-hover-color: currentcolor;
     --verso-code-info-hover-bg-color: #4777ff;
     --verso-info-indicator-color: #4777ff;
-    --verso-message-info-color: black;
+    --verso-message-info-color: currentcolor;
     --verso-tooltip-info-color: var(--verso-tooltip-color);
     --verso-tooltip-info-bg-color: var(--verso-tooltip-bg-color);
     --verso-tooltip-info-border-color: #4777ff;
@@ -57,7 +58,7 @@
     --verso-code-warning-hover-color: currentcolor;
     --verso-code-warning-hover-bg-color: #ffd580;
     --verso-warning-indicator-color: #e7a71d; /* 2.11 contrast ratio for white, 9.94 for black */
-    --verso-message-warning-color: black;
+    --verso-message-warning-color: currentcolor;
     --verso-tooltip-warning-color: var(--verso-tooltip-color);
     --verso-tooltip-warning-bg-color: var(--verso-tooltip-bg-color);
     --verso-tooltip-warning-border-color: #ffd580;

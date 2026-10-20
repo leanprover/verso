@@ -16,7 +16,7 @@ public section
 
 open Lean Elab
 open Verso ArgParse Doc Elab Genre.Manual Html
-open Verso.Output (Html)
+open Verso.Output
 open Verso.Doc.Html (HtmlT)
 open Verso.Illuminate (elabAndStoreDiagram)
 open Verso.Genre.Manual.InlineLean.Scopes (runWithOpenDecls runWithVariables)
@@ -96,11 +96,11 @@ block_extension Block.diagram
         ";".intercalate <|
           s!"width: {css}" ::
           (if isInline then ["display: inline-block"] else [])
-      pure {{
-        <div class="diagram" style={{style}}>
-          {{Html.text false svgStr}}
+      pure html%{
+        <div class="diagram" style={style}>
+          {Html.raw svgStr}
         </div>
-      }}
+      }
   usePackages := ["\\usepackage{svg}"]
   toTeX :=
     some <| fun _ _ _ data _ => do
@@ -163,4 +163,4 @@ meta def diagram : CodeBlockExpanderOf DiagramConfig
     ``(Verso.Doc.Block.other
         (Block.diagram $(quote svg) $(quote cssWidth)
         $(quote <| cfg.texWidth.getD "\\textwidth") $(quote cfg.inline))
-        #[Verso.Doc.Block.code $(quote str.getString)])
+        #[Verso.Doc.Block.code $(quote str.getVersoCodeBlock)])

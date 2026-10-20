@@ -1,0 +1,39 @@
+part "Nesting"
+  blocks: 2
+  - para: Text before any header.
+  - para: A second paragraph before any header.
+  part "One"
+    blocks: 1
+    - para: Text in one.
+    part "One A"
+      blocks: 1
+      - para: Text in one A.
+      part "One A i"
+        blocks: 1
+        - para: Text in one A i.
+        part "One A i x"
+          blocks: 1
+          - para: Text in one A i x.
+    part "One B"
+      blocks: 1
+      - para: Text in one B.
+      part "One B i"
+        blocks: 0
+  part "Two"
+    blocks: 0
+    part "Two A"
+      blocks: 0
+      part "Two A i"
+        blocks: 1
+        - para: Text in two A i.
+  part "Three"
+    blocks: 2
+    - para: Text in three.
+    - ul: 2 items
+    part "Three A"
+      blocks: 0
+    part "Three B"
+      blocks: 0
+    part "Three C"
+      blocks: 1
+      - para: Text in three C.

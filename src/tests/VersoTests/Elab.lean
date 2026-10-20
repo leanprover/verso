@@ -43,7 +43,7 @@ def totallyUndefined : RoleExpanderOf Unit
 /--
 error: don't know how to synthesize placeholder for argument `head`
 context:
-docReconstInBlock✝ : Doc.DocReconstruction
+docReconstInBlock✝ : Doc.DocReconstruction Doc.Genre.none
 ⊢ Doc.Inline Doc.Genre.none
 -/
 #test_msgs in

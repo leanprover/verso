@@ -284,21 +284,21 @@ by every genre at once.
 emitted search assets. It is spliced into every {lit}`src`/{lit}`href`, with a trailing
 slash added automatically if missing.
 -/
-public def searchAssetTags (searchDir : String := "-verso-search") : Verso.Output.Html :=
+public def searchAssetTags (searchDir : String := "-verso-search") : Html :=
   open Verso.Output.Html in
   let d := if searchDir.endsWith "/" then searchDir else searchDir ++ "/"
   -- Deferring the four scripts keeps them off the render-blocking path. `search-init.js` below is a
   -- `type="module"` script and is deferred implicitly; listing it last keeps it after the globals
   -- it consumes.
-  {{
-    <script defer="defer" src=s!"{d}elasticlunr.min.js"></script>
-    <script defer="defer" src=s!"{d}fuzzysort.min.js"></script>
-    <script defer="defer" src=s!"{d}searchIndex.js"></script>
-    <script defer="defer" src=s!"{d}search-config.js"></script>
-    <script type="module" src=s!"{d}search-init.js"></script>
-    <link rel="stylesheet" href=s!"{d}search-box.css"/>
-    <link rel="stylesheet" href=s!"{d}search-page.css"/>
-    <link rel="stylesheet" href=s!"{d}search-highlight.css"/>
-    <link rel="stylesheet" href=s!"{d}domain-display.css"/>
-    <script src=s!"{d}search-highlight.js" defer="defer"></script>
-  }}
+  html%{
+    <script defer="defer" src={s!"{d}elasticlunr.min.js"}></script>
+    <script defer="defer" src={s!"{d}fuzzysort.min.js"}></script>
+    <script defer="defer" src={s!"{d}searchIndex.js"}></script>
+    <script defer="defer" src={s!"{d}search-config.js"}></script>
+    <script type="module" src={s!"{d}search-init.js"}></script>
+    <link rel="stylesheet" href={s!"{d}search-box.css"}/>
+    <link rel="stylesheet" href={s!"{d}search-page.css"}/>
+    <link rel="stylesheet" href={s!"{d}search-highlight.css"}/>
+    <link rel="stylesheet" href={s!"{d}domain-display.css"}/>
+    <script src={s!"{d}search-highlight.js"} defer="defer"></script>
+  }

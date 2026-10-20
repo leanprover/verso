@@ -445,10 +445,13 @@ private meta def buildAndRun (source : System.FilePath) (moduleJson declJson opt
   let (buildErr, queryOut, buildCode) ← withBuildLock do
     if ← state.finished.get then return ("", "", 0)
     -- `lake query` builds the runner and the module, then prints the runner's path. Its own process
-    -- group lets a cancel kill the compilers that Lake starts.
+    -- group lets a cancel kill the compilers that Lake starts. The runner reads the `.olean` files
+    -- of the module and its imports from the build directories on `LEAN_PATH`, so Lake needs to
+    -- actually restore the modules.
     let build ← IO.Process.spawn {
       stdin := .null, stdout := .piped, stderr := .piped, setsid := true
       cmd := lake, args := #["query", "errata-run-one", source.toString]
+      env := #[("LAKE_RESTORE_ARTIFACTS", some "1")]
     }
     unless ← setKill state build.kill do
       let _ ← build.wait

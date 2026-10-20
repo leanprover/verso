@@ -77,10 +77,11 @@ def loadModuleContent' (projectDir : StrLit) (mod : String) (suppressNamespaces 
   let runCmd' (args : Array String) : m Unit := do
       let res ← IO.Process.output {
         cmd, args, cwd := projectDir
-        -- Unset Lake's environment variables
+        -- Unset Lake's environment variables and ensure that artifacts are copied to the build dir.
         env :=
           lakeVars.map (·, none) ++
-          #[("SUBVERSO_SUPPRESS_NAMESPACES", some (" ".intercalate suppressNamespaces))]
+          #[("SUBVERSO_SUPPRESS_NAMESPACES", some (" ".intercalate suppressNamespaces)),
+            ("LAKE_RESTORE_ARTIFACTS", some "true")]
       }
       if res.exitCode != 0 then reportFail projectDir cmd args res
 

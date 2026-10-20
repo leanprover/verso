@@ -109,7 +109,7 @@ class TestSearchPage:
         """A query that yields hits in only some buckets should disable + gray the
         filters that have zero hits."""
         # Pick a query that's narrow enough that at least one domain has no matches.
-        page.goto(f"{server}/search/?q=Html.visitM")
+        page.goto(f"{server}/search/?q=Html.rewritePo")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(
             "/\\d+ (of \\d+ )?results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
@@ -367,7 +367,7 @@ class TestSearchPage:
 
         searchbox = page.get_by_role("searchbox")
         searchbox.focus()
-        searchbox.type("Html.visitM", delay=20)
+        searchbox.type("Html.rewritePos", delay=20)
         # Arrow down to focus the listbox, then Enter → jumps to the selected item.
         searchbox.press("ArrowDown")
         searchbox.press("Enter")

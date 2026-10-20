@@ -162,7 +162,7 @@ block_extension Block.entry
       let some link := (← read).traverseState.externalTags[id]?
         | reportError "Release note entry without an assigned tag"
           return .seq (← contents.mapM goB)
-      pure {{<div id={{link.htmlId.toString}}>{{← contents.mapM goB}}</div>}}
+      pure html%{<div id={link.htmlId.toString}>{← contents.mapM goB}</div>}
   toTeX :=
     open Verso.Output.TeX in
     some <| fun _goI goB id _data contents => do
@@ -201,7 +201,7 @@ block_extension Block.release
       let some link := (← read).traverseState.externalTags[id]?
         | reportError "Release without an assigned tag"
           return .empty
-      pure {{<span id={{link.htmlId.toString}}></span>}}
+      pure html%{<span id={link.htmlId.toString}></span>}
   toTeX :=
     open Verso.Output.TeX in
     some <| fun _goI _goB id _data _contents => do

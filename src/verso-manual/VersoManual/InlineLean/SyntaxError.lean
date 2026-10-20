@@ -106,14 +106,14 @@ block_extension Block.syntaxError via withHighlighting where
               let spanned := pos'.extract str pos''  -- TODO account for cases where the error range spans multiple lines
               -- If the error is just a newline, add a space so there's something to highlight
               let spanned := if spanned.isEmpty || spanned.all (· == '\n') then " " ++ spanned else spanned
-              line := line.push {{<span class="parse-message has-info error"><code class="hover-info">{{errText}}</code>{{spanned}}</span>}}
+              line := line.push html%{<span class="parse-message has-info error"><code class="hover-info">{errText}</code>{spanned}</span>}
               pos := pos''
           line := line.push <| pos.extract str lineEnd
-          out := out.push {{<code class="line">{{line}}</code>}}
+          out := out.push html%{<code class="line">{line}</code>}
           line := #[]
           pos := lineEnd.next str
 
-        pure {{<pre class="syntax-error hl lean">{{out}}</pre>}}
+        pure html%{<pre class="syntax-error hl lean">{out}</pre>}
 
 
 structure SyntaxErrorConfig where
@@ -145,7 +145,7 @@ meta def syntaxError : CodeBlockExpanderOf SyntaxErrorConfig
       (kind := Lsp.SymbolKind.file)
       (detail? := some "Syntax error")
 
-    let s := str.getString
+    let s := str.getVersoCodeBlock
     match runParserCategory' (← getEnv) (← getOptions) config.category s with
     | .ok stx =>
       throwErrorAt str m!"Expected a syntax error for category {config.category}, but got {indentD stx}"

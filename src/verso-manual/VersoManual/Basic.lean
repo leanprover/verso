@@ -29,7 +29,7 @@ set_option doc.verso true
 
 public section
 
-open Lean (Name Json NameMap ToJson FromJson)
+open Lean (Name Json NameMap ToJson FromJson Html)
 open Std (HashSet HashMap TreeSet)
 open Verso.Doc
 open Verso.Multi
@@ -157,11 +157,6 @@ instance : Inhabited Tag where
 instance : ToString Tag where
   toString := toString ∘ repr
 
-instance : Coe String Tag where
-  coe := .provided
-
-
-
 /-- When rendering multi-page HTML, should splitting pages follow the depth setting? -/
 inductive HtmlSplitMode where
   | /-- Follow the main setting -/ default
@@ -238,7 +233,7 @@ structure PartMetadata where
   file : Option String := none
   /-- The internal unique ID, which is automatically assigned during traversal. -/
   id : Option InternalId := none
-  /-- Should this section be numbered? If {name}`false`, then it's like `\section*` in LaTeX -/
+  /-- Should this section be numbered? If {name}`false`, then it's like {lit}`\section*` in LaTeX -/
   number : Bool := true
   /-- If {name}`true`, the part is only rendered in draft mode. -/
   draft : Bool := false
@@ -341,7 +336,7 @@ structure TraverseState extends HtmlAssets where
   ids : TreeSet InternalId := {}
   quickJump : DomainMappers := {}
   /--
-  TeX `\usepackage{…}` lines contributed by block and inline extensions whose blocks actually
+  TeX {lit}`\usepackage{…}` lines contributed by block and inline extensions whose blocks actually
   occur in the document. Populated during traversal at each block/inline occurrence so unused
   extensions don't pollute the preamble.
   -/
@@ -429,7 +424,7 @@ def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : Inte
   let mut numPart : Option Nat := none
   repeat
     let attempt := tagStr strPart numPart
-    if (← get).tags.contains  attempt then
+    if (← get).tags.contains (Tag.internal attempt) then
       numPart := some <| numPart.map (· + 1) |>.getD 0
     else break
   let tag := tagStr strPart numPart
@@ -496,10 +491,10 @@ def getDomainObject? (state : TraverseState) (domain : Name) (canonicalName : St
   state.domains.get? domain >>= fun d => d.get? canonicalName
 
 def setDomainTitle (state : TraverseState) (domain : Name) (title : String) : TraverseState :=
-  {state with domains := state.domains.insert! domain {state.domains.get? domain |>.getD {} with title := some title}}
+  {state with domains := state.domains.insert! domain {state.domains.get? domain |>.getD {} with title := some title} }
 
 def setDomainDescription (state : TraverseState) (domain : Name) (description : String) : TraverseState :=
-  {state with domains := state.domains.insert! domain {state.domains.get? domain |>.getD {} with description := some description}}
+  {state with domains := state.domains.insert! domain {state.domains.get? domain |>.getD {} with description := some description} }
 
 open Verso.Search in
 def addQuickJumpMapper (state : TraverseState) (domain : Name) (domainMapper : DomainMapper) : TraverseState :=
@@ -665,9 +660,9 @@ abbrev BlockTraversal genre :=
   ReaderT TraverseContext (StateT TraverseState (BuildLogT IO)) (Option (Doc.Block genre))
 
 abbrev BlockToHtml (genre : Genre) (m) :=
-  (Doc.Inline genre → Html.HtmlT genre m Output.Html) →
-  (Doc.Block genre → Html.HtmlT genre m Output.Html) →
-  InternalId → Json → Array (Doc.Block genre) → Html.HtmlT genre m Output.Html
+  (Doc.Inline genre → Html.HtmlT genre m Html) →
+  (Doc.Block genre → Html.HtmlT genre m Html) →
+  InternalId → Json → Array (Doc.Block genre) → Html.HtmlT genre m Html
 
 abbrev BlockToTeX (genre : Genre) (m) :=
   (Doc.Inline genre → TeX.TeXT genre m Output.TeX) →
@@ -679,8 +674,8 @@ abbrev InlineTraversal genre :=
   ReaderT TraverseContext (StateT TraverseState (BuildLogT IO)) (Option (Doc.Inline genre))
 
 abbrev InlineToHtml (genre : Genre) (m) :=
-  (Doc.Inline genre → Html.HtmlT genre m Output.Html) →
-    InternalId → Json → Array (Doc.Inline genre) → Html.HtmlT genre m Output.Html
+  (Doc.Inline genre → Html.HtmlT genre m Html) →
+    InternalId → Json → Array (Doc.Inline genre) → Html.HtmlT genre m Html
 
 abbrev InlineToTeX (genre : Genre) (m) :=
   (Doc.Inline genre → TeX.TeXT genre m Output.TeX) →
@@ -783,7 +778,7 @@ structure InlineDescr extends HtmlAssets where
 
   The empty array means that the inline should not be included.
   -/
-  localContentItem : InternalId → Json → Array (Doc.Inline Manual) → Except String (Array (String × Verso.Output.Html)) :=
+  localContentItem : InternalId → Json → Array (Doc.Inline Manual) → Except String (Array (String × Html)) :=
     fun _ _ _ => pure #[]
 
   /--
@@ -791,7 +786,7 @@ structure InlineDescr extends HtmlAssets where
   will fail.
   -/
   toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
-  /-- Required TeX `\usepackage` lines -/
+  /-- Required TeX {lit}`\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
   preamble : List String := {}
@@ -827,7 +822,7 @@ structure BlockDescr extends HtmlAssets where
 
   The empty array means that the block should not be included.
   -/
-  localContentItem : InternalId → Json → Array (Doc.Block Manual) → Except String (Array (String × Verso.Output.Html)) :=
+  localContentItem : InternalId → Json → Array (Doc.Block Manual) → Except String (Array (String × Html)) :=
     fun _ _ _ => pure #[]
 
   /--
@@ -835,7 +830,7 @@ structure BlockDescr extends HtmlAssets where
   will fail.
   -/
   toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
-  /-- Required TeX `\usepackage` lines -/
+  /-- Required TeX {lit}`\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
   preamble : List String := {}
@@ -1575,7 +1570,7 @@ def sectionHtml (ctxt : TraverseContext) : Html :=
   match sectionString ctxt with
   | none => .empty
    -- Non-breaking space because section numbers shouldn't end up on a line alone
-  | some s => .text true (s ++ " ")
+  | some s => .text (s ++ " ")
 
 open Html in
 /--
@@ -1601,25 +1596,45 @@ def permalink (id : InternalId) (st : TraverseState) (inline : Bool := true) : H
     -- The names may contain characters with meaning in URLs, such as spaces or ampersands.
     let domain := System.Uri.escapeUri (toString domain)
     let canonicalName := System.Uri.escapeUri canonicalName
-    {{<span class={{classes}}>
-        <a href=s!"/find/?domain={domain}&name={canonicalName}" title="Permalink">"🔗"</a>
+    html%{<span class={classes}>
+        <a href={s!"/find/?domain={domain}&name={canonicalName}"} title="Permalink">🔗</a>
       </span>
-    }}
+    }
 
+/-- A manual heading: its level, the value of its {lit}`id` attribute, and its contents. -/
+structure Heading where
+  /-- The HTML heading level. -/
+  level : Nat
+  /-- The value of the heading's {lit}`id` attribute, when one was registered. -/
+  htmlId : Option Slug
+  /-- The heading contents, including any section number and permalink widget. -/
+  content : Html
+
+/-- Renders the heading element, with its {lit}`id` attribute when it has one. -/
+def Heading.toHtml (heading : Heading) : Html :=
+  let attrs := heading.htmlId.map (fun id => #[("id", id.toString)]) |>.getD #[]
+  .element s!"h{heading.level}" attrs heading.content
+
+/--
+Constructs a manual heading with its registered {lit}`id` attribute, section number, and permalink.
+
+The optional parameters {name}`showNumber` and {name}`showPermalink` control the display of the
+section number and permalink widget, respectively.
+-/
+def partHeading (state : TraverseState) (ctxt : TraverseContext) (id : Option InternalId)
+    (level : Nat) (title : Html) (showNumber : Bool := true) (showPermalink : Bool := true) : Heading :=
+  let numberHtml := if showNumber then sectionHtml ctxt else .empty
+  let permalinkHtml := if showPermalink then id.map (permalink · state) |>.getD .empty else .empty
+  { level,
+    htmlId := id.bind (fun id => state.externalTags[id]?) |>.map (·.htmlId),
+    content := numberHtml ++ title ++ permalinkHtml }
 
 open Verso.Output.Html in
 instance : Html.GenreHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) where
   part go «meta» txt := do
     let st ← Verso.Doc.Html.HtmlT.state
-    let attrs := meta.id.map (st.htmlId) |>.getD #[]
     let ctxt ← Verso.Doc.Html.HtmlT.context
-    let sectionNumber : Html := sectionHtml ctxt
-    let permalink? m :=
-      if let some id := m.id then permalink id st
-      else .empty
-    let mkHeader lvl content :=
-      .tag s!"h{lvl}" attrs (sectionNumber ++ content ++ permalink? «meta»)
-    go txt mkHeader
+    go txt fun level title => (partHeading st ctxt meta.id level title).toHtml
 
   block goI goB b content := do
     let some id := b.id

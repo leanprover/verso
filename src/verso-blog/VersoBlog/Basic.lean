@@ -24,7 +24,7 @@ public import VersoBlog.LexedText
 public section
 
 open Std (HashSet HashMap)
-open Lean (Json ToJson FromJson)
+open Lean (Json ToJson FromJson Html)
 
 open Verso Doc Output Html Code
 open Verso.Multi

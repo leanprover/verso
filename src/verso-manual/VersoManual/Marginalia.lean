@@ -277,22 +277,22 @@ The note is hoistable up to {lean}`"margin"` barriers, and its markers are remov
 content is suppressed.
 -/
 def Marginalia.html (content : Html) (id : String) : Html :=
-  let reference := Hoist.suppressible "margin" {{
+  let reference := Hoist.suppressible "margin" html%{
     <span class="marginalia-reference">
-      <span class="marginalia-marker marginalia-marker-desktop" aria-details={{id}}>
-        <span class="marginalia-accessible-label">"Marginal note"</span>
+      <span class="marginalia-marker marginalia-marker-desktop" aria-details={id}>
+        <span class="marginalia-accessible-label">Marginal note</span>
       </span>
       <button class="marginalia-marker marginalia-marker-mobile"
               type="button"
-              aria-details={{id}}
-              "popovertarget"={{id}}>
-        <span class="marginalia-accessible-label">"Show marginal note"</span>
+              aria-details={id}
+              popovertarget={id}>
+        <span class="marginalia-accessible-label">Show marginal note</span>
       </button>
     </span>
-  }}
-  let note := Hoist.hoist "margin" {{
-    <span class="marginalia-note" id={{id}} role="note" "popover"="auto">{{content}}</span>
-  }}
+  }
+  let note := Hoist.hoist "margin" html%{
+    <span class="marginalia-note" id={id} role="note" popover="auto">{content}</span>
+  }
   reference ++ note
 
 /-
@@ -352,12 +352,11 @@ meta def margin : RoleExpanderOf Unit
     let content ← inlines.mapM elabInline
     ``(Doc.Inline.other (Inline.margin $(quote slug)) #[$content,*])
 
-open Lean.Doc.Syntax in
 /--
 Margin notes should be dropped from plain-text previews.
 -/
-@[inline_to_string Lean.Doc.Syntax.role]
+@[inline_to_string Lean.Doc.Parser.Inline.role]
 meta def margin.inline_to_string : InlineToString
-  | _, `(inline| role{ $name $_* }[ $_* ]) =>
-    if name.getId ∈ [`margin, ``margin] then some "" else none
-  | _, _ => none
+  | _, stx => do
+    let v ← Lean.Doc.RoleView.of ⟨stx⟩
+    if v.name.getId ∈ [`margin, ``margin] then some "" else none

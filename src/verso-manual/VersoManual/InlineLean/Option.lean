@@ -18,7 +18,7 @@ open Verso Genre Manual ArgParse Doc Elab
 open Verso Output Html
 open Verso Code Highlighted WebAssets
 open Lean
-open Lean.Doc.Syntax
+open Lean.Doc (CodeView)
 
 namespace Verso.Genre.Manual.InlineLean
 
@@ -29,9 +29,9 @@ meta def option : RoleExpanderOf Unit
   | (), inlines => withoutAsync do
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
-    let `(inline|code( $optName:str )) := arg
+    let some { content := optName, .. } := CodeView.of arg
       | throwErrorAt arg "Expected code literal with the option name"
-    let optName := optName.getString.toName
+    let optName := optName.getVersoCode.toName
     let optDecl ← getOptionDecl optName
     let hl : Highlighted := optTok optName optDecl.declName optDecl.descr
 
