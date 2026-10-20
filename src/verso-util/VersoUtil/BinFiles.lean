@@ -42,7 +42,9 @@ where
     match (← here.metadata).type with
     | .dir =>
       for entry in (← here.readDir) do
-        go base (path / entry.fileName)
+        -- Not `path / entry.fileName`, which joins with the build host's separator: the name ends up
+        -- in the compiled module, so it is joined with `/` everywhere
+        go base ⟨path.toString ++ "/" ++ entry.fileName⟩
     | .file =>
       let contents ← IO.FS.readBinFile here
       let e : Expr := mkApp2 (.const ``Z85.decode []) (mkStrLit (Z85.encode contents)) (toExpr contents.size)
@@ -55,8 +57,8 @@ Recursively includes a directory of binary files in the Lean module. The directo
 relative to the current file.
 
 All files in the directory are included. The resulting value is an array of pairs of `String`s and
-`ByteArray`s, where the strings are the filenames; the provided path is a prefix of all of them.
-Symbolic links are not followed.
+`ByteArray`s, where the strings are the filenames; the provided path is a prefix of all of them, and
+the names below it are separated by `/` on every platform. Symbolic links are not followed.
 
 Internally, the files' contents are represented using string literals in the Z85 encoding, which is
 similar to Base64 but more efficient.

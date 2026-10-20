@@ -100,7 +100,7 @@ class TestSearchUnderPathPrefix:
         _open_landing(page, prefixed_server)
         searchbox = page.get_by_role("searchbox")
         searchbox.focus()
-        searchbox.type("Html.visitM", delay=20)
+        searchbox.type("Html.rewritePo", delay=20)
         expect(_first_result_link(page)).to_be_visible()
         searchbox.press("ArrowDown")
         searchbox.press("Enter")
@@ -125,7 +125,7 @@ class TestSearchUnderPathPrefix:
         _open_landing(page, prefixed_server)
         searchbox = page.get_by_role("searchbox")
         searchbox.focus()
-        searchbox.type("Html.visitM", delay=20)
+        searchbox.type("Html.rewritePo", delay=20)
 
         link = _first_result_link(page)
         expect(link).to_be_visible()
@@ -142,7 +142,7 @@ class TestSearchUnderPathPrefix:
         _open_landing(page, prefixed_server)
         searchbox = page.get_by_role("searchbox")
         searchbox.focus()
-        searchbox.type("Html.visitM", delay=20)
+        searchbox.type("Html.rewritePo", delay=20)
 
         link = _first_result_link(page)
         expect(link).to_be_visible()

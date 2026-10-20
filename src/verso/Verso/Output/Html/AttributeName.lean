@@ -9,6 +9,8 @@ public import Lean.DocString.Parser
 public import Lean.PrettyPrinter.Formatter
 public import Lean.PrettyPrinter.Parenthesizer
 
+deprecated_module "use Lean.Data.Html.Syntax instead" (since := "2026-09-16")
+
 namespace Verso.Output.Html
 
 public abbrev attributeNameKind := `Verso.Output.Html.attributeName
@@ -19,7 +21,7 @@ open Lean.Doc.Parser
 public def attributeNameFn : ParserFn :=
   atomicFn <|
     nodeFn attributeNameKind <|
-      asStringFn <| andthenFn (satisfyFn versoAttributeNameChar) (manyFn attributeNameCharFn)
+      asTokenFn <| andthenFn (satisfyFn versoAttributeNameChar) (manyFn attributeNameCharFn)
 where
   -- A slight divergence from the spec for the sake of quasiquotation syntax:
   -- attribute names can't start with a few special characters that the spec allows but that

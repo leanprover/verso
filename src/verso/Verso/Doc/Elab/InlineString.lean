@@ -22,15 +22,16 @@ unsafe def inlineToStringForUnsafe (env : Environment) (x : Name) : Array Inline
 @[implemented_by inlineToStringForUnsafe]
 opaque inlineToStringFor (env : Environment) (x : Name) : Array InlineToString
 
-/-- Heuristically construct a plain string preview of the syntax of an inline element -/
+/--
+Heuristically constructs a plain string preview of the syntax of an inline element.
+
+The preview of `Syntax.missing` is empty. The preview of an inline that has no string conversion is
+empty if the inline contains `Syntax.missing`, and `"<missing>"` otherwise.
+-/
 public def inlineToString (env : Environment) (inline : Syntax) : String := Id.run do
+  if inline.isMissing then return ""
   let kind := inline.getKind
   let toStr ← inlineToStringFor env kind
   for f in toStr do
     if let some str := f env inline then return str
-
-  dbg_trace "Failed to convert {inline} with {kind}"
-
-  fallback
-where
-  fallback := pure "<missing>"
+  return if inline.hasMissing then "" else "<missing>"

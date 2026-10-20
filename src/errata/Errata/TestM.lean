@@ -56,17 +56,17 @@ instance : Alternative TestM where
   failure := failHere "failure"
   orElse x y := tryCatch x fun _ => y ()
 
-/-- All values supplied for a project option, in order; records that the option was read. -/
+/-- All values supplied for a test option, in order; records that the option was read. -/
 def optionValues (name : String) : TestM (Array String) := do
   let ctx ← read
   ctx.usedOptions.modify (·.insert name)
   return ctx.options.getD name #[]
 
-/-- The last value supplied for a project option, if any; records that the option was read. -/
+/-- The last value supplied for a test option, if any; records that the option was read. -/
 def option? (name : String) : TestM (Option String) :=
   return (← optionValues name).back?
 
-/-- Whether a project option is present and not set to an explicit false value; records the read. -/
+/-- Whether a test option is present and not set to an explicit false value; records the read. -/
 def flag (name : String) : TestM Bool :=
   return match (← optionValues name).back? with
     | some v => v != "false" && v != "0" && v != "no"
@@ -172,6 +172,36 @@ private def captureStream (emit : Output → IO Unit) (mk : String → Output) :
   return (stream, close)
 
 /--
+Runs an action that reports to a live destination, with the streams from before the test's output was
+captured. A destination that prints then reaches the runner's own streams from any nesting depth.
+
+The first failure is reported on the runner's stderr, under the name {name}`what`. {name}`failed`
+records it, and later calls leave the destination alone.
+-/
+private def toLiveDestination (ctx : Context) (failed : IO.Ref Bool) (what : String)
+    (act : IO Unit) : IO Unit := do
+  unless ← failed.get do
+    let run : IO Unit :=
+      match ctx.realStreams? with
+      | some real => IO.withStdout real.stdout <| IO.withStderr real.stderr <| act
+      | none => act
+    try
+      run
+    catch e =>
+      failed.set true
+      -- Saying so can fail in turn, when the destination that just failed was stderr itself.
+      if let some real := ctx.realStreams? then
+        try real.stderr.putStr s!"warning: {what} failed: {e}\n" catch _ => pure ()
+
+/--
+Hands a result event to the context's watcher, as output is handed to its destination. The watcher
+has a failure record of its own, so it keeps receiving events after a write of output has failed.
+-/
+private def notifyResult (ctx : Context) (ev : ResultEvent) : IO Unit := do
+  if let some watch := ctx.watchResults then
+    toLiveDestination ctx ctx.watchFailed "result watcher" (watch ev)
+
+/--
 Runs a test action with the given context, capturing its outcome as data rather than letting it
 propagate. The action's stdout and stderr are recorded as text, in order and tagged by stream, and
 returned alongside the outcome. Each fragment is also handed to the context's output destination as
@@ -192,13 +222,7 @@ def runCapturing (ctx : Context) (act : TestM Unit) :
   let emit (o : Output) : IO Unit := do
     log.modify (·.push o)
     if let some dest := ctx.writeOutput then
-      unless ← ctx.outputFailed.get do
-        try
-          IO.withStdout real.stdout <| IO.withStderr real.stderr <| dest o
-        catch e =>
-          ctx.outputFailed.set true
-          -- Saying so can fail in turn, when the destination that just failed was stderr itself.
-          try real.stderr.putStr s!"warning: live output destination failed: {e}\n" catch _ => pure ()
+      toLiveDestination ctx ctx.outputFailed "live output destination" (dest o)
   let (outStream, outClose) ← captureStream emit .stdout
   let (errStream, errClose) ← captureStream emit .stderr
   -- Closing inside the captured action makes dangling bytes at the end of the test an error of the
@@ -263,12 +287,14 @@ def result (name : String) (act : TestM Unit) : TestM Unit := do
   let dur ← withReader (fun c =>
       { c with resultPath := c.resultPath.push name, log, insideMs, description? := none }) do
     let ctx ← read
+    notifyResult ctx (.started ctx.resultPath)
     let start ← IO.monoMsNow
     let (outcome, output) ← runCapturing ctx act
     let stop ← IO.monoMsNow
     let dur := stop - start
     let recorded ← log.get
     let own := ctx.resultOfOutcome outcome output dur (← insideMs.get) recorded
+    notifyResult ctx (.finished own)
     outer.log.modify (·.push own ++ recorded)
     pure dur
   -- The enclosing scope's own time leaves out this block's whole duration.
@@ -282,16 +308,25 @@ error, so broken setup is not mistaken for a passing negative test.
 def expectFail (act : TestM Unit) (loc : Location := by exact here%) : TestM Unit := do
   let ctx ← read
   let before := (← ctx.log.get).size
-  let threw ←
-    try
-      act
-      pure false
-    catch _ =>
-      pure true
+  notifyResult ctx .expectFailStarted
+  let (threw, _) ←
+    tryFinally'
+      (do
+        try
+          act
+          pure false
+        catch _ =>
+          pure true)
+      fun finished? => do
+        -- The action ends without a value when an `IO.Error` escapes it, which leaves its failures
+        -- in the log and the code below unrun, so the end is reported to the watcher here.
+        if finished?.isNone then
+          notifyResult ctx (.expectFailFinished (failuresExpected := false))
   let logged ← ctx.log.get
   let added := logged.extract before logged.size
   let failedInside := added.any (·.status matches .fail _)
   let erroredInside := added.any (·.status matches .error _)
   ctx.log.set (logged.extract 0 before ++ added.filter (fun r => !(r.status matches .fail _)))
+  notifyResult ctx (.expectFailFinished (failuresExpected := true))
   unless threw || failedInside || erroredInside do
     failAt loc "expected the action to fail, but it passed"

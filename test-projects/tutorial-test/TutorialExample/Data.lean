@@ -323,7 +323,7 @@ example : SubList [1, 3] [1, 2, 3, 4] :=
   .cons₂ (.cons (.cons₂ .nil))
 ```
 
-#. Advanced Topics
+# Advanced Topics
 
 ## Mutually Inductive Types
 

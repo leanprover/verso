@@ -5,7 +5,7 @@ Author: David Thrane Christiansen
 -/
 
 module
-public import Verso.Output.Html
+public import Lean.Data.Html
 import Verso.BEq
 public import Lean.Data.Json.FromToJson
 import VersoUtil.BinFiles.Z85
@@ -20,9 +20,9 @@ public structure HtmlConfig extends HtmlAssets where
   htmlDepth := 2
   extraFilesHtml : List (System.FilePath × String) := []
   /-- Extra elements to add to every page's `head` tag -/
-  extraHead : Array Output.Html := #[]
+  extraHead : Array Html := #[]
   /-- Extra elements to add to every page's contents -/
-  extraContents : Array Output.Html := #[]
+  extraContents : Array Html := #[]
   /-- The URL from which to draw the logo to show, if any -/
   logo : Option String := none
   /-- The URL that the logo should link to, if any (default is site root) -/

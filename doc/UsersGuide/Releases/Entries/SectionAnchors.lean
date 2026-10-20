@@ -10,7 +10,7 @@ public import UsersGuide.Releases.Entry
 open Verso.Genre Manual InlineLean UsersGuide.Releases
 
 release_note
-  version := ⟨4, 34, 0⟩
+  version := ⟨4, 36, 0⟩
   breaking := true
   tag := "manual-heading-anchors"
   prs := [983]

@@ -144,7 +144,7 @@ const tokenizeText = (text) => {
     const regex = /\S+/g;
     let match;
     while ((match = regex.exec(text)) !== null) {
-        let stems = searchIndex.pipeline.run([match[0]]);
+        let stems = searchIndex?.pipeline.run([match[0]]) ?? [];
         for (const stem of stems) {
             toks.push({
                 original: match[0],
@@ -201,13 +201,14 @@ const highlightTextResult = (text, query, options = {}) => {
         maxSnippets = 3, // maximum number of snippets to return
     } = options;
 
-    const terms = searchIndex.pipeline.run(
-        query
-            .trim()
-            .toLowerCase()
-            .split(/\s+/)
-            .filter((term) => term.length > 0),
-    );
+    const terms =
+        searchIndex?.pipeline.run(
+            query
+                .trim()
+                .toLowerCase()
+                .split(/\s+/)
+                .filter((term) => term.length > 0),
+        ) ?? [];
     const toks = tokenizeText(text);
     const matches = expandMatches
         ? toks.filter((t) => terms.some((tm) => t.stem.startsWith(tm)))
@@ -310,7 +311,7 @@ const dataToSearchableMap = (json, domainMappers) =>
             }
             acc[cur.searchKey].push(cur);
             return acc;
-        }, {});
+        }, /** @type {Record<string, Searchable[]>} */ ({}));
 
 /**
  * Maps from a data item to a HTML LI element. `asOption` controls whether the `<li>` gets
@@ -391,11 +392,12 @@ const loadBucket = async (ref) => {
     }
 
     /** @type {(data : any) => void} */
-    let resolveFun;
+    let resolveFun = () => {};
+    /** @type {DocContentPromise} */
     const promise = new Promise((resolve) => {
         resolveFun = resolve;
     });
-    /** @type {any} */ (promise).resolve = resolveFun;
+    promise.resolve = resolveFun;
     docContents[bucket] = promise;
     const script = document.createElement("script");
     // `window.searchIndexVersion` is emitted by the Lean side alongside the
@@ -806,7 +808,7 @@ class SearchBox {
      */
     searchPagePath;
 
-    /** @type {InputAbbreviationRewriter} */
+    /** @type {InstanceType<typeof InputAbbreviationRewriter>} */
     imeRewriter;
 
     /**

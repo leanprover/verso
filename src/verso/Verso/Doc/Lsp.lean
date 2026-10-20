@@ -18,13 +18,16 @@ import Lean.DocString.Syntax
 public meta import Verso.Hover
 public meta import Verso.Doc.PointOfInterest
 public meta import Verso.Doc.Name
+public meta import Verso.Doc.Concrete.Environment
+public meta import VersoUtil.InfoTree
 
 namespace Verso.Lsp
 
 open Verso.Doc.Elab (DocListInfo DocRefInfo TOC)
 open Verso.Doc (PointOfInterest)
 open Verso.Hover
-open Lean.Doc.Syntax
+open Lean.Doc
+open Lean.Doc.Parser
 
 open Lean
 
@@ -131,6 +134,77 @@ meta partial instance : FromJson Lean.Lsp.DocumentSymbolResult where
     pure ⟨syms⟩
 
 
+/--
+The link and footnote definitions and uses in the info trees found in `snaps`, each with the syntax
+of its label.
+-/
+meta def docRefs (snaps : List Lean.Server.Snapshots.Snapshot) : Array (Syntax × DocRefInfo) :=
+  snaps.foldl (init := #[]) fun acc snap =>
+    snap.infoTree.foldInfo (init := acc) fun _ctxt info acc =>
+      match info with
+      | .ofCustomInfo ⟨stx, data⟩ =>
+        if let some i := data.get? DocRefInfo then acc.push (stx, i) else acc
+      | _ => acc
+
+/--
+All the custom info data of type `α` in `snap` whose syntax contains `pos`, paired with its syntax.
+-/
+meta def customInfoAt (α : Type) [TypeName α] (snap : Lean.Server.Snapshots.Snapshot)
+    (pos : String.Pos.Raw) : Array (Syntax × α) :=
+  Verso.foldCustomInfoAt α snap.cmdState.infoState pos (init := #[]) fun stx x acc =>
+    if stx.containsPos pos then acc.push (stx, x) else acc
+
+/-- The link and footnote definitions and uses in `snap` whose labels contain `pos`. -/
+meta def docRefsAt (snap : Lean.Server.Snapshots.Snapshot) (pos : String.Pos.Raw) :
+    Array (Syntax × DocRefInfo) :=
+  customInfoAt DocRefInfo snap pos
+
+/--
+Every link and footnote definition and use that the `#doc` document whose state is in the extension
+in `env` has recorded so far. Each is paired with the syntax of its label at that location.
+-/
+meta def envDocRefs (env : Environment) : Array (Syntax × DocRefInfo) := Id.run do
+  let st := Verso.Doc.Concrete.docEnvironmentExt.getState env
+  let documentPos? := st.partState.documentPos?
+  let mut out := #[]
+  for (label, d) in st.partState.linkDefs do
+    out := out.push (d.labelStx.raw, { kind := .link, label, documentPos?, isDef := true })
+  for (label, d) in st.partState.footnoteDefs do
+    out := out.push (d.labelStx.raw, { kind := .footnote, label, documentPos?, isDef := true })
+  for (label, uses) in st.docState.linkRefs do
+    for use in uses.useSites do
+      out := out.push (use, { kind := .link, label, documentPos?, isDef := false })
+  for (label, uses) in st.docState.footnoteRefs do
+    for use in uses.useSites do
+      out := out.push (use, { kind := .footnote, label, documentPos?, isDef := false })
+  return out
+
+open Lean Server RequestM in
+/--
+The definitions and uses of the links and footnotes in `here`, in source order. The entries of
+`here` are from the snapshot `snap`. Each source range appears once in the result.
+-/
+meta def relatedDocRefs (snap : Lean.Server.Snapshots.Snapshot) (here : Array (Syntax × DocRefInfo)) :
+    RequestM (Array (Syntax × DocRefInfo)) := do
+  if here.isEmpty then return #[]
+  let (snaps, _, _) ← (← readDoc).cmdSnaps.getFinishedPrefix
+  let env := snaps.getLast?.getD snap |>.env
+  let envDocumentPos? := (Verso.Doc.Concrete.docEnvironmentExt.getState env).partState.documentPos?
+  let refs :=
+    if envDocumentPos?.isSome && here.any (·.2.documentPos? == envDocumentPos?) then envDocRefs env
+    else docRefs [snap]
+  -- The definitions and uses under the cursor are always included. A block that fails leaves its
+  -- definitions and uses out of the environment.
+  let related := here ++ refs.filter fun (_, r) => here.any (·.2.sameRef r)
+  let mut seen : Std.HashSet (Option String.Pos.Raw × Option String.Pos.Raw) := {}
+  let mut out := #[]
+  for (stx, r) in related do
+    let span := (stx.getPos?, stx.getTailPos?)
+    unless seen.contains span do
+      seen := seen.insert span
+      out := out.push (stx, r)
+  return out.mergeSort fun (s1, _) (s2, _) => s1.getPos?.getD 0 ≤ s2.getPos?.getD 0
+
 open Lean Server Lsp RequestM in
 meta def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) : RequestM (RequestTask (Array Location)) := do
   let doc ← readDoc
@@ -138,21 +212,9 @@ meta def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Locati
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
     withFallbackAs (!·.isEmpty) prev <| do
-      let nodes := snap.infoTree.deepestNodes fun _ctxt info _arr =>
-        match info with
-        | .ofCustomInfo ⟨stx, data⟩ =>
-          if stx.containsPos pos then
-            data.get? DocRefInfo
-          else none
-        | _ => none
-      if nodes.isEmpty then return #[]
-      else
-        let mut locs : Array Location := #[]
-        for node in nodes do
-          for stx in node.syntax do
-            if let some range := stx.lspRange text then
-              locs := locs.push {uri := params.textDocument.uri, range := range}
-        pure <| locs
+      let related ← relatedDocRefs snap (docRefsAt snap pos)
+      return related.filterMap fun (stx, _) =>
+        stx.lspRange text |>.map ({uri := params.textDocument.uri, range := ·})
 
 open Lean Server Lsp RequestM in
 meta partial def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHighlightResult) : RequestM (RequestTask DocumentHighlightResult) := do
@@ -161,33 +223,22 @@ meta partial def handleHl (params : DocumentHighlightParams) (prev : RequestTask
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap =>
     withFallbackAs (!·.isEmpty) prev <| do
-      let nodes : List (_ ⊕ _) := snap.infoTree.deepestNodes fun _ctxt info _arr =>
-        match info with
-        | .ofCustomInfo ⟨stx, data⟩ =>
-          if stx.containsPos pos then
-            (Sum.inl <$> data.get? DocListInfo) <|> (Sum.inr <$> data.get? DocRefInfo)
-          else none
-        | _ => none
-      if nodes.isEmpty then
+      let lists := customInfoAt DocListInfo snap pos |>.map (·.2)
+      let related ← relatedDocRefs snap (docRefsAt snap pos)
+      if lists.isEmpty && related.isEmpty then
         if let some hls := syntactic text pos snap.stx then
           return hls.filterMap (fun stx : Syntax => stx.lspRange text) |>.map ({range := · : DocumentHighlight})
         else
           return #[]
       else
         let mut hls := #[]
-        for node in nodes do
-          match node with
-          | .inl ⟨bulletStxs, _⟩ =>
-            for s in bulletStxs do
-              if let some range := s.lspRange text then
-                hls := hls.push {range : DocumentHighlight}
-          | .inr ⟨defSite, useSites⟩ =>
-            if let some s := defSite then
-              if let some range := s.lspRange text then
-                hls := hls.push {range : DocumentHighlight}
-            for s in useSites do
-              if let some range := s.lspRange text then
-                hls := hls.push {range : DocumentHighlight}
+        for ⟨bulletStxs, _⟩ in lists do
+          for s in bulletStxs do
+            if let some range := s.lspRange text then
+              hls := hls.push {range : DocumentHighlight}
+        for (s, _) in related do
+          if let some range := s.lspRange text then
+            hls := hls.push {range : DocumentHighlight}
         pure hls
 where
   -- Unfortunately, VS Code doesn't do the right thing, so many of these highlights don't work there:
@@ -195,35 +246,40 @@ where
   -- Tested in Emacs and the problem isn't server side.
   syntactic (text : FileMap) (pos : String.Pos.Raw) (stx : Syntax) : Option (Array Syntax) := do
     if includes stx pos |>.getD true then
-      match stx with
-        | `(block|:::%$opener $_name $_args* {$_contents*}%$closer )
-        | `(block|```%$opener | $_contents ```%$closer)
-        | `(block|```%$opener $_name $_args* | $_contents ```%$closer) =>
-          if (includes opener pos).getD false || (includes closer pos).getD false then
-            return #[opener, closer]
-        | _ =>
-          match stx with
-          | `(inline| \math%$opener1 code(%$opener2 $_ )%$closer1)
-          | `(inline| \displaymath%$opener1 code(%$opener2 $_ )%$closer1) =>
-            if (includes opener1 pos).getD false || (includes closer1 pos).getD false || (includes opener2 pos).getD false then
-              return #[opener1, closer1, opener2]
-          | `(inline| link[%$opener1 $_* ]%$closer1 (%$opener2 $_ )%$closer2)
-          | `(inline| link[%$opener1 $_* ]%$closer1 [%$opener2 $_ ]%$closer2) =>
-            if (includes opener1 pos).getD false || (includes closer1 pos).getD false || (includes opener2 pos).getD false || (includes closer2 pos).getD false then
-              return #[opener1, closer1, opener2, closer2]
-          |  `(inline| code(%$opener $_ )%$closer) =>
-            if (includes opener pos).getD false || (includes closer pos).getD false then
-              return #[opener, closer]
-          | `(inline| role{%$opener1 $name $_* }%$closer1 [%$opener2 $subjects ]%$closer2) =>
-            if (includes opener1 pos).getD false || (includes closer1 pos).getD false ||
-               (includes opener2 pos).getD false || (includes closer2 pos).getD false ||
-               (includes name pos).getD false then
-              return #[opener1, closer1, opener2, closer2, subjects.raw]
-          | _ => pure ()
+      if let some (toHighlight, alsoTriggers) := delimiters stx then
+        if (toHighlight ++ alsoTriggers).any (fun s => (includes s pos).getD false) then
+          return toHighlight
       if let .node _ _ contents := stx then
         for s in contents do
           if let some r := syntactic text pos s then return r
     failure
+
+  /--
+  An element's delimiters, which are highlighted together, paired with the syntax that highlights
+  them without being highlighted itself.
+  -/
+  delimiters (stx : Syntax) : Option (Array Syntax × Array Syntax) :=
+    match BlockView.of ⟨stx⟩ with
+    | some (.directive v) => some (#[v.opener, v.closer], #[])
+    | some (.codeblock v) => some (#[v.openFence, v.closeFence], #[])
+    | some (.metadata v) => some (#[v.opener, v.closer], #[])
+    | _ =>
+      match InlineView.of ⟨stx⟩ with
+      | some (.math v) => some (#[v.marker, v.code.opener, v.code.closer], #[])
+      | some (.code v) => some (#[v.opener, v.closer], #[])
+      | some (.emph v) => some (#[v.opener, v.closer], #[])
+      | some (.bold v) => some (#[v.opener, v.closer], #[])
+      | some (.footnote v) => some (#[v.opener, v.closer], #[])
+      | some (.link v) => some (#[v.opener, v.closer] ++ targetDelimiters v.target, #[])
+      | some (.image v) => some (#[v.opener, v.closer] ++ targetDelimiters v.target, #[])
+      | some (.role v) =>
+        let brackets := v.brackets.map (fun (o, c) => #[o, c]) |>.getD #[]
+        some (#[v.braceOpen, v.braceClose] ++ brackets, #[v.name])
+      | _ => none
+
+  targetDelimiters : LinkTargetView → Array Syntax
+    | .url (opener := opener) (closer := closer) ..
+    | .ref (opener := opener) (closer := closer) .. => #[opener, closer]
 
   includes (stx : Syntax) (pos : String.Pos.Raw) : Option Bool :=
     stx.getRange?.map (fun r => pos ≥ r.start && pos < r.stop)
@@ -395,7 +451,7 @@ structure SemanticTokenEntry where
   length : Nat
   type : Nat
   modifierMask : Nat
-deriving Inhabited, Repr
+deriving Inhabited, Repr, BEq
 
 protected meta def SemanticTokenEntry.ordLt (a b : SemanticTokenEntry) : Bool :=
   a.line < b.line ∨ (a.line = b.line ∧ a.startChar < b.startChar)
@@ -423,127 +479,195 @@ meta def decodeLeanTokens (data : Array Nat) : Array SemanticTokenEntry := Id.ru
     entries := entries.push ⟨line, char, len, type, modMask⟩
   return entries
 
+/--
+Overlays `overrides` on `base`, splitting base tokens where necessary so the result has no overlap
+between the two sets.
+
+`overrides` and `base` must both be free of internal overlaps and multi-line tokens.
+-/
+meta def overlaySemanticTokens
+    (overrides base : Array SemanticTokenEntry) : Array SemanticTokenEntry := Id.run do
+  let mut result := #[]
+  for token in base do
+    let mut remaining := #[token]
+    for override in overrides do
+      let mut next := #[]
+      for segment in remaining do
+        let segmentEnd := segment.startChar + segment.length
+        let overrideEnd := override.startChar + override.length
+        if segment.line != override.line || segmentEnd ≤ override.startChar ||
+            overrideEnd ≤ segment.startChar then
+          next := next.push segment
+        else
+          if segment.startChar < override.startChar then
+            next := next.push {
+              segment with length := override.startChar - segment.startChar
+            }
+          if overrideEnd < segmentEnd then
+            next := next.push {
+              segment with startChar := overrideEnd, length := segmentEnd - overrideEnd
+            }
+      remaining := next
+    result := result ++ remaining
+  return (result ++ overrides).qsort (·.ordLt ·)
+
+structure SemanticTokenRegion where
+  start : Lsp.Position
+  «end» : Lsp.Position
+deriving Inhabited, Repr, BEq
+
+structure VersoSemanticTokens where
+  tokens : Array SemanticTokenEntry := #[]
+  regions : Array SemanticTokenRegion := #[]
+  leanRegions : Array SemanticTokenRegion := #[]
+deriving Inhabited
+
+private meta def SemanticTokenRegion.contains (region : SemanticTokenRegion)
+    (token : SemanticTokenEntry) : Bool :=
+  let start := ⟨token.line, token.startChar⟩
+  let stop := ⟨token.line, token.startChar + token.length⟩
+  region.start ≤ start && stop ≤ region.end
+
+private meta def SemanticTokenEntry.sameSpan (a b : SemanticTokenEntry) : Bool :=
+  a.line == b.line && a.startChar == b.startChar && a.length == b.length
+
+/-- Merge Lean tokens into the regions where a Verso document permits them. -/
+meta def mergeSemanticTokens
+    (verso : VersoSemanticTokens) (lean : Array SemanticTokenEntry) : Array SemanticTokenEntry :=
+  let permitted := lean.filter fun token =>
+    let isOpaqueKeyword :=
+      token.type == SemanticTokenType.keyword.toNat &&
+        verso.tokens.any fun versoToken =>
+          versoToken.type == SemanticTokenType.string.toNat && token.sameSpan versoToken
+    token.length > 0 &&
+      (!verso.regions.any (·.contains token) ||
+        (verso.leanRegions.any (·.contains token) && !isOpaqueKeyword))
+  let overrides := permitted.filter fun token => verso.leanRegions.any (·.contains token)
+  overlaySemanticTokens overrides (overlaySemanticTokens verso.tokens permitted)
+
 deriving instance Repr, BEq for SemanticTokenType
 
-meta partial def versoTokens (text : FileMap) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
+private meta def documentWrapperDelimiters (stx : Syntax) : Option (Array Syntax) :=
   match stx with
-  | `(inline|$_s:str) =>
-    mkTok text .string stx
-  | `(inline|_[%$s $inlines* ]%$e) | `(inline|*[%$s $inlines* ]%$e) =>
-    mkTok text .keyword s ++ versoTokens text (mkNullNode inlines) ++ mkTok text .keyword e
-  | `(inline|role{%$s $f $args*}%$e [%$s' $inlines* ]%$e') =>
-    mkTok text .keyword s ++
-    mkTok text .function f ++
-    versoTokens text (mkNullNode args) ++
-    mkTok text .keyword e ++
-    mkTok text .keyword s' ++
-    versoTokens text (mkNullNode inlines) ++
-    mkTok text .keyword e'
-  | `(inline|link[%$s $inlines* ]%$e (%$s' $tgt )%$e')
-  | `(inline|link[%$s $inlines* ]%$e [%$s' $tgt ]%$e') =>
-    mkTok text .keyword s ++
-    versoTokens text (mkNullNode inlines) ++
-    mkTok text .keyword e ++
-    mkTok text .keyword s' ++
-    mkTok text .parameter tgt ++
-    mkTok text .keyword e'
-  | `(inline|image(%$s $alt )%$e (%$s' $tgt )%$e')
-  | `(inline|image(%$s $alt )%$e [%$s' $tgt ]%$e') =>
-    mkTok text .keyword s ++
-    versoTokens text alt ++
-    mkTok text .keyword e ++
-    mkTok text .keyword s' ++
-    mkTok text .parameter tgt ++
-    mkTok text .keyword e'
-  | `(inline|footnote(%$s $note )%$e) =>
-    mkTok text .keyword s ++
-    mkTok text .parameter note ++
-    mkTok text .keyword e
-  | `(inline|code(%$s $_str )%$e) =>
-    mkTok text .keyword s ++
-    -- None for str, so Lean's can pass through
-    mkTok text .keyword e
-  | `(inline|\math%$m code(%$s $str )%$e)
-  | `(inline|\displaymath%$m code(%$s $str )%$e) =>
-    mkTok text .keyword m ++
-    mkTok text .keyword s ++
-     -- Enum member arbitrarily chosen for uniqueness
-    mkTok text .enumMember str ++
-    mkTok text .keyword e
-  | `(desc_item| :%$s $inlines* =>%$e $blocks*) =>
-    mkTok text .keyword s ++
-    versoTokens text (mkNullNode inlines) ++
-    mkTok text .keyword e ++
-    versoTokens text (mkNullNode blocks)
-  | `(list_item| *%$bulletOrNum $contents*) =>
-    mkTok text .keyword bulletOrNum ++
-    versoTokens text (mkNullNode contents)
-  | `(block| :::%$s $f $args* {%$s' $body* }%$e) =>
-    mkTok text .keyword s ++
-    mkTok text .function f ++
-    versoTokens text (mkNullNode args) ++
-    mkTok text .keyword s' ++
-    versoTokens text (mkNullNode body) ++
-    mkTok text .keyword e
-  | `(block| ```%$s $f $args* |%$s' $_code ```%$e) =>
-    mkTok text .keyword s ++
-    mkTok text .function f ++
-    versoTokens text (mkNullNode args) ++
-    mkTok text .keyword s' ++
-    -- No token for the code, because we want Lean's tokens to shine through
-    mkTok text .keyword e
-  | `(block| >%$s $blocks*) =>
-    mkTok text .keyword s ++ versoTokens text (mkNullNode blocks)
-  | `(block|header(%$s $n )%$e {%$s' $txt* }%$e') =>
-    mkTok text .keyword s ++
-    versoTokens text n ++
-    mkTok text .keyword e ++
-    mkTok text .keyword s' ++
-    versoTokens text (mkNullNode txt) ++
-    mkTok text .keyword e'
-  | `(block|[^%$s $n ]:%$e $txt*) =>
-    mkTok text .keyword s ++
-    mkTok text .parameter n ++
-    mkTok text .keyword e ++
-    versoTokens text (mkNullNode txt)
-  | `(block|[%$s $n ]:%$e $url) =>
-    mkTok text .keyword s ++
-    mkTok text .parameter n ++
-    mkTok text .keyword e ++
-    mkTok text .parameter url
-  | `(block| %%%%$s $_defs* %%%%$e) =>
-    mkTok text .keyword s ++
-    -- No tokens for defs, because Lean should supply them
-    mkTok text .keyword e
-  | `(block| command{%$s $f $args* }%$e) =>
-    mkTok text .keyword s ++
-    mkTok text .function f ++
-    versoTokens text (mkNullNode args) ++
-    mkTok text .keyword e
-  | `(doc_arg| $x:ident :=%$eq $v:arg_val) =>
-    mkTok text .parameter x ++
-    mkTok text .keyword eq ++
-    versoTokens text v
-  | `(doc_arg| $v:arg_val) =>
-    versoTokens text v
-  -- In the next three cases, no token is returned. This is to allow Lean's to shine through, if
-  -- there are any. It would be nice to add a priority mechanism to fall back to these defaults if
-  -- Lean didn't provide any.
-  | `(arg_val| $_v:num) =>
-    --mkTok text .number v
-    #[]
-  | `(arg_val| $_v:ident) =>
-    -- mkTok text .variable v
-    #[]
-  | `(arg_val| $_v:str) =>
-    -- mkTok text .string v
-    #[]
-  | _ =>
+  | .node _ `Verso.Doc.Concrete.docTermBody #[.node _ `group #[opener, _, closer]] =>
+    some #[opener, closer]
+  | .node _ _ #[.atom _ "#docs", _, _, _, _, _, _, opener, _, closer] =>
+    some #[opener, closer]
+  | _ => none
+
+meta partial def versoTokens (text : FileMap) (stx : Syntax) : Array SemanticTokenEntry :=
+    Id.run do
+  if let some delimiters := documentWrapperDelimiters stx then
+    delimiters.flatMap (mkTok text .keyword) ++
+      stx.getArgs.flatMap (versoTokens text)
+  else if let some v := InlineView.of ⟨stx⟩ then inlineTokens text v
+  else if let some v := BlockView.of ⟨stx⟩ then blockTokens text v
+  else if let some v := DescItemView.of ⟨stx⟩ then
+    mkTok text .keyword v.marker ++
+    versoTokens text (mkNullNode (v.term.map (·.raw))) ++
+    versoTokens text (mkNullNode (v.desc.map (·.raw)))
+  else if let some v := UnorderedListItemView.of ⟨stx⟩ then
+    mkTok text .keyword v.marker ++ versoTokens text (mkNullNode (v.contents.map (·.raw)))
+  else if let some v := OrderedListItemView.of ⟨stx⟩ then
+    mkTok text .keyword v.marker ++ versoTokens text (mkNullNode (v.contents.map (·.raw)))
+  else if let some v := ArgView.of ⟨stx⟩ then
+    match v with
+    | .anon (val := val) .. => versoTokens text val
+    | .named (name := x) (assign := eq) (val := val) .. =>
+      mkTok text .parameter x ++ mkTok text .keyword eq ++ versoTokens text val
+    | .flag (sign := sign) (name := x) .. =>
+      mkTok text .keyword sign ++ mkTok text .parameter x
+  -- An argument value yields no token, so that Lean's own tokens show through.
+  else if (ArgValView.of ⟨stx⟩).isSome then #[]
+  else Id.run do
     let mut out := #[]
     for arg in stx.getArgs do
       out := out ++ versoTokens text arg
     return out
 where
+  inlineTokens (text : FileMap) : InlineView → Array SemanticTokenEntry
+    | .text v => mkTok text .string v.stx
+    | .linebreak _ => #[]
+    | .emph v =>
+      mkTok text .keyword v.opener ++
+      versoTokens text (mkNullNode (v.content.map (·.raw))) ++
+      mkTok text .keyword v.closer
+    | .bold v =>
+      mkTok text .keyword v.opener ++
+      versoTokens text (mkNullNode (v.content.map (·.raw))) ++
+      mkTok text .keyword v.closer
+    | .role v =>
+      mkTok text .keyword v.braceOpen ++
+      mkTok text .function v.name ++
+      versoTokens text (mkNullNode (v.args.map (·.raw))) ++
+      mkTok text .keyword v.braceClose ++
+      (v.brackets.map (fun (o, _) => mkTok text .keyword o) |>.getD #[]) ++
+      versoTokens text (mkNullNode (v.content.map (·.raw))) ++
+      (v.brackets.map (fun (_, c) => mkTok text .keyword c) |>.getD #[])
+    | .link v =>
+      mkTok text .keyword v.opener ++
+      versoTokens text (mkNullNode (v.content.map (·.raw))) ++
+      mkTok text .keyword v.closer ++
+      targetTokens text v.target
+    | .image v =>
+      mkTok text .keyword v.opener ++
+      mkTok text .string v.alt ++
+      mkTok text .keyword v.closer ++
+      targetTokens text v.target
+    | .footnote v =>
+      mkTok text .keyword v.opener ++
+      mkTok text .parameter v.name ++
+      mkTok text .keyword v.closer
+    | .code v =>
+      mkTok text .keyword v.opener ++ codeTokens text v ++ mkTok text .keyword v.closer
+    | .math v =>
+      mkTok text .keyword v.marker ++
+      mkTok text .keyword v.code.opener ++
+      -- Enum member arbitrarily chosen for uniqueness
+      mkTok text .enumMember v.code.content ++
+      mkTok text .keyword v.code.closer
+
+  targetTokens (text : FileMap) : LinkTargetView → Array SemanticTokenEntry
+    | .url (opener := o) (url := target) (closer := c) ..
+    | .ref (opener := o) (name := target) (closer := c) .. =>
+      mkTok text .keyword o ++ mkTok text .parameter target ++ mkTok text .keyword c
+
+  blockTokens (text : FileMap) : BlockView → Array SemanticTokenEntry
+    | .para v => versoTokens text (mkNullNode (v.content.map (·.raw)))
+    | .ul v => versoTokens text (mkNullNode (v.items.map (·.stx.raw)))
+    | .ol v => versoTokens text (mkNullNode (v.items.map (·.stx.raw)))
+    | .dl v => versoTokens text (mkNullNode (v.items.map (·.stx.raw)))
+    | .blockquote v =>
+      mkTok text .keyword v.marker ++ versoTokens text (mkNullNode (v.content.map (·.raw)))
+    | .directive v =>
+      mkTok text .keyword v.opener ++
+      mkTok text .function v.name ++
+      versoTokens text (mkNullNode (v.args.map (·.raw))) ++
+      versoTokens text (mkNullNode (v.content.map (·.raw))) ++
+      mkTok text .keyword v.closer
+    | .codeblock v =>
+      mkTok text .keyword v.openFence ++
+      (v.name?.map (mkTok text .function ·) |>.getD #[]) ++
+      versoTokens text (mkNullNode (v.args.map (·.raw))) ++
+      v.content.getVersoCodeBlockLines.flatMap (codeLineToken text) ++
+      mkTok text .keyword v.closeFence
+    | .command v =>
+      mkTok text .function v.name ++ versoTokens text (mkNullNode (v.args.map (·.raw)))
+    | .header v =>
+      mkTok text .keyword v.marker ++ versoTokens text (mkNullNode (v.content.map (·.raw)))
+    | .footnoteRef v =>
+      mkTok text .keyword v.opener ++
+      mkTok text .parameter v.name ++
+      mkTok text .keyword v.closer ++
+      versoTokens text (mkNullNode (v.content.map (·.raw)))
+    | .linkRef v =>
+      mkTok text .keyword v.opener ++
+      mkTok text .parameter v.name ++
+      mkTok text .keyword v.closer ++
+      mkTok text .parameter v.url
+    -- No tokens for the fields, because Lean should supply them.
+    | .metadata v => mkTok text .keyword v.opener ++ mkTok text .keyword v.closer
+
   mkTok (text : FileMap) (tokenType : SemanticTokenType) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
     let (some startPos, some endPos) := (stx.getPos?, stx.getTailPos?)
       | return #[]
@@ -561,17 +685,61 @@ where
       }]
     else #[]
 
-meta def mergeTokens (mine : Array SemanticTokenEntry) (leans : SemanticTokens) : Array Nat:=
+  codeLineToken (text : FileMap) (line : VersoCodeLine) : Array SemanticTokenEntry := Id.run do
+    let some ⟨pos, tailPos⟩ := line.raw.getRange? | return #[]
+    let tailPos := if line.getVersoCodeLine.endsWith "\n" then tailPos - '\n' else tailPos
+    return mkTok text .string (.ofRange ⟨pos, tailPos⟩)
+
+  codeTokens (text : FileMap) (code : CodeView) : Array SemanticTokenEntry :=
+    code.content.getVersoCodeLines.flatMap (codeLineToken text)
+
+private meta def syntaxRegion (text : FileMap) (stx : Syntax) : Option SemanticTokenRegion := do
+  let ⟨start, stop⟩ ← stx.getRange?
+  return ⟨text.utf8PosToLspPos start, text.utf8PosToLspPos stop⟩
+
+private meta partial def versoTokenRegions (text : FileMap) (stx : Syntax) : VersoSemanticTokens :=
+    Id.run do
+  let mut out := {}
+  if (InlineView.of ⟨stx⟩).isSome || (BlockView.of ⟨stx⟩).isSome then
+    if let some region := syntaxRegion text stx then out := { out with regions := #[region] }
+  if let some (.code v) := InlineView.of ⟨stx⟩ then
+    for line in v.content.getVersoCodeLines do
+      if let some region := syntaxRegion text line.raw then
+        out := { out with leanRegions := out.leanRegions.push region }
+  else if let some (.codeblock v) := BlockView.of ⟨stx⟩ then
+    for line in v.content.getVersoCodeBlockLines do
+      if let some region := syntaxRegion text line.raw then
+        out := { out with leanRegions := out.leanRegions.push region }
+  for arg in stx.getArgs do
+    let child := versoTokenRegions text arg
+    out := {
+      out with
+      regions := out.regions ++ child.regions
+      leanRegions := out.leanRegions ++ child.leanRegions
+    }
+  return out
+
+meta def mergeTokens (mine : VersoSemanticTokens) (leans : SemanticTokens) : Array Nat:=
   let toks := decodeLeanTokens leans.data
-  encodeTokenEntries (toks ++ mine |>.qsort (·.ordLt ·))
+  encodeTokenEntries (mergeSemanticTokens mine toks)
 
 open Lean Server Lsp RequestM in
-meta def snapshotTokens (beginPos : String.Pos.Raw) (text : FileMap) (snap : Snapshots.Snapshot) : Array SemanticTokenEntry :=
-  if snap.endPos <= beginPos then #[] else versoTokens text snap.stx
+meta def snapshotTokens (beginPos : String.Pos.Raw) (text : FileMap)
+    (snap : Snapshots.Snapshot) : VersoSemanticTokens :=
+  if snap.endPos <= beginPos then {} else
+    let regions := versoTokenRegions text snap.stx
+    { regions with tokens := versoTokens text snap.stx }
 
 open Lean Server Lsp RequestM in
-meta def snapshotsTokens (beginPos : String.Pos.Raw) (text : FileMap) (snaps : List Snapshots.Snapshot) : Array SemanticTokenEntry :=
-  snaps.foldl (init := #[]) fun toks snap => toks ++ snapshotTokens beginPos text snap
+meta def snapshotsTokens (beginPos : String.Pos.Raw) (text : FileMap)
+    (snaps : List Snapshots.Snapshot) : VersoSemanticTokens :=
+  snaps.foldl (init := {}) fun all snap =>
+    let next := snapshotTokens beginPos text snap
+    {
+      tokens := all.tokens ++ next.tokens
+      regions := all.regions ++ next.regions
+      leanRegions := all.leanRegions ++ next.leanRegions
+    }
 
 open Lean Server Lsp IO in
 partial def getFinishedPrefixWithTimeout' (xs : AsyncList ε α) (timeoutMs : UInt32)
@@ -604,32 +772,17 @@ where
 
 open Lean Server Lsp RequestM in
 meta def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array LeanLocationLink)) : RequestM (RequestTask (Array LeanLocationLink)) := do
-  let ctx ← read
   let doc ← readDoc
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
-  let locTask ← RequestM.asTask do
-    let (snaps, _, _) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 300 (cancelTks := ctx.cancelTk.cancellationTasks)
-    let nodes := snaps.flatMap fun snap =>
-      snap.infoTree.collectNodesBottomUp fun _ctxt info _arr xs =>
-          match info with
-          | .ofCustomInfo ⟨stx, data⟩ =>
-            if stx.containsPos pos then
-              if let some i := data.get? DocRefInfo then i :: xs else xs
-            else xs
-          | _ => xs
-
-    let mut locs : Array LeanLocationLink := #[]
-    for node in nodes do
-      match node with
-      | ⟨some defSite, _⟩ =>
-        let mut origin : Option Range := none
-        for stx in node.syntax do
-          if let some ⟨head, tail⟩ := stx.getRange? then
-            if pos ≥ head && pos ≤ tail then
-              origin := stx.lspRange text
-              break
-        let some target := defSite.lspRange text
+  bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap =>
+    withFallbackAs (!·.isEmpty) prev <| do
+      let here := docRefsAt snap pos
+      let origin := here[0]?.bind (·.1.lspRange text)
+      let mut locs : Array LeanLocationLink := #[]
+      for (labelStx, r) in ← relatedDocRefs snap here do
+        unless r.isDef do continue
+        let some target := labelStx.lspRange text
           | continue
         locs := locs.push {
           originSelectionRange? := origin,
@@ -644,10 +797,7 @@ meta def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Ar
           ident? := none,
           isDefault := true
         }
-      | _ => continue
-    pure locs
-  mergeResponses prev locTask fun xs ys =>
-    xs.getD #[] ++ ys.getD #[]
+      pure locs
 
 open Lean Server Lsp RequestM in
 meta partial def handleTokens (prev : RequestTask SemanticTokens)
@@ -658,22 +808,22 @@ meta partial def handleTokens (prev : RequestTask SemanticTokens)
   let text := doc.meta.text
   if let some endPos := endPos? then
     let t := doc.cmdSnaps.waitUntil (·.endPos >= endPos)
-    let toks : RequestTask (Array SemanticTokenEntry) :=
+    let toks : RequestTask VersoSemanticTokens :=
       t.mapCostly fun (snaps, _) => pure <| snapshotsTokens beginPos text snaps
     let response ← mergeIntoPrev toks
     return response.mapCheap fun t =>
       t.map ({ response := ·, isComplete := true })
   else
     let (snaps, _, isComplete) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 2000 (cancelTks := ctx.cancelTk.cancellationTasks)
-    let toks : Array SemanticTokenEntry := snapshotsTokens beginPos text snaps
+    let toks := snapshotsTokens beginPos text snaps
     let response ← mergeIntoPrev (.pure toks)
     pure <| response.mapCheap fun t => t.map ({ response := ·, isComplete := isComplete })
 
 where
-  mergeIntoPrev (toks : RequestTask (Array SemanticTokenEntry)) :=
+  mergeIntoPrev (toks : RequestTask VersoSemanticTokens) :=
     mergeResponses toks prev fun
       | none, none => SemanticTokens.mk none #[]
-      | some xs, none => SemanticTokens.mk none <| encodeTokenEntries <| xs.qsort (·.ordLt ·)
+      | some xs, none => SemanticTokens.mk none <| encodeTokenEntries <| xs.tokens.qsort (·.ordLt ·)
       | none, some r => r
       | some mine, some leans => {leans with data := mergeTokens mine leans}
 
@@ -701,7 +851,7 @@ meta def handleTokensFullStateful
   let text := doc.meta.text
   let (snaps, _, isComplete) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 2000
   RequestM.checkCancelled
-  let toks : Array SemanticTokenEntry := snapshotsTokens 0 text snaps
+  let toks := snapshotsTokens 0 text snaps
   RequestM.checkCancelled
   let response := {prev with data := mergeTokens toks prev.response}
   RequestM.checkCancelled
@@ -715,13 +865,13 @@ public meta def renumberLists : CodeActionProvider := fun params snap => do
   let text := doc.meta.text
   let startPos := text.lspPosToUtf8Pos params.range.start
   let endPos := text.lspPosToUtf8Pos params.range.end
-  let lists := snap.infoTree.foldInfo (init := #[]) fun ctx info result => Id.run do
-    let .ofCustomInfo ⟨stx, data⟩ := info | result
-    let some listInfo := data.get? DocListInfo | result
-    let (some head, some tail) := (stx.getPos? true, stx.getTailPos? true) | result
-    unless head ≤ endPos && startPos ≤ tail do return result
-    result.push (ctx, listInfo)
-  pure <| lists.map fun (_, ⟨bulletStxs, _⟩) => {
+  let lists :=
+    Verso.foldCustomInfoIn DocListInfo snap.cmdState.infoState startPos endPos (init := #[])
+    fun stx listInfo result => Id.run do
+      let (some head, some tail) := (stx.getPos? true, stx.getTailPos? true) | result
+      unless head ≤ endPos && startPos ≤ tail do return result
+      result.push listInfo
+  pure <| lists.map fun ⟨bulletStxs, _⟩ => {
       eager := {
         title := "Number from 1",
         kind? := some "quickfix",
@@ -746,7 +896,8 @@ meta partial def directiveResizings
     (parents : Array (Syntax × Syntax))
     (subject : Syntax) :
     StateM (Array (Bool × Syntax × Syntax × TextEditBatch)) Unit := do
-  if let `(block|:::%$opener $_name $_args* { $contents* }%$closer ) := subject then
+  if let some v := DirectiveView.of ⟨subject⟩ then
+    let (opener, closer, contents) := (v.opener.raw, v.closer.raw, v.content.map (·.raw))
     let parents := parents.push (opener, closer)
     if onLine opener || onLine closer then
       if let some edit := parents.flatMapM getIncreases then
@@ -794,8 +945,8 @@ where
     pure (outer ++ inner)
 
   getDecreasesIn (stx : Syntax) : Option TextEditBatch :=
-    if let `(block|:::%$opener $_name $_args* {$contents*}%$closer) := stx then
-      getDecreases (opener, closer) contents
+    if let some v := DirectiveView.of ⟨stx⟩ then
+      getDecreases (v.opener.raw, v.closer.raw) (v.content.map (·.raw))
     else if let .node _ _ children := stx then children.flatMapM getDecreasesIn
     else pure #[]
 
@@ -880,10 +1031,9 @@ where
         children.flatMap (getFromSyntax text) ++ here
       | _ => #[]
     isFoldable : Name → Bool
-      | `Lean.Doc.Syntax.codeblock | `Lean.Doc.Syntax.directive | `Lean.Doc.Syntax.metadata_block | `Lean.Doc.Syntax.blockquote
-      | `Lean.Doc.Syntax.ol | `Lean.Doc.Syntax.ul | `Lean.Doc.Syntax.dl => true
-      | `Verso.Syntax.codeblock | `Verso.Syntax.directive | `Verso.Syntax.metadata_block | `Verso.Syntax.blockquote
-      | `Verso.Syntax.ol | `Verso.Syntax.ul | `Verso.Syntax.dl => true
+      | ``Parser.Block.codeblock | ``Parser.Block.directive
+      | ``Parser.Block.metadata_block | ``Parser.Block.blockquote
+      | ``Parser.Block.ol | ``Parser.Block.ul | ``Parser.Block.dl => true
       | _ => false
     getSections (text : FileMap) (ss : List Snapshots.Snapshot) : Array FoldingRange := Id.run do
       let mut regions := #[]
@@ -913,13 +1063,7 @@ meta def handleHover (params : HoverParams) (prev : RequestTask (Option Hover)) 
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
     withFallbackAs (·.isSome) prev <| do
-      let nodes : List (Syntax × CustomHover) := snap.infoTree.deepestNodes fun _ctxt info _arr =>
-        match info with
-        | .ofCustomInfo ⟨stx, data⟩ =>
-          if stx.containsPos pos then
-            (stx, ·) <$> data.get? CustomHover
-          else none
-        | _ => none
+      let nodes := customInfoAt CustomHover snap pos |>.toList
       match nodes with
       | [] => pure none
       | h :: hs =>

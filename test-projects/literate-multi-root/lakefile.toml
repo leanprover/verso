@@ -1,5 +1,5 @@
 name = "literate-multi-root-test"
-defaultTargets = ["LibA", "LibB"]
+defaultTargets = ["LibA", "LibB", "LibC"]
 
 [[require]]
 name = "verso"
@@ -10,3 +10,7 @@ name = "LibA"
 
 [[lean_lib]]
 name = "LibB"
+leanOptions = {weak.linter.unusedVariables = false, weak.verso.test.nonexistent = true}
+
+[[lean_lib]]
+name = "LibC"

@@ -22,7 +22,7 @@ open Lean.Parser.Command
 
 
 instance : Quote String (k := ``docComment) where
-  quote str := ⟨.node .none ``docComment #[ .atom .none "/--", .atom .none (str ++ "-/")]⟩
+  quote str := mkMarkdownDocComment str
 
 deriving instance Quote for String.Pos.Raw
 

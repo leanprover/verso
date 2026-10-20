@@ -28,9 +28,10 @@ run_cmd do
   let mut e ← `(False)
   for c in validCharString.toList do
     e ← `($x = $(Lean.quote c) ∨ $e)
-  elabCommand <| ← `(def $(mkIdent `Slug.ValidChar) ($x : Char) : Prop := $e)
+  elabCommand <| ← `(
+    @[grind =] def $(mkIdent `Slug.ValidChar) ($x : Char) : Prop := $e)
   for c in validCharString.toList do
-    elabCommand <| ← `(@[simp, grind .] theorem $(mkIdent <| `Slug.ValidChar ++ .str .anonymous s!"{c}") : $(mkIdent `Slug.ValidChar) $(quote c) := by unfold $(mkIdent `Slug.ValidChar); simp)
+    elabCommand <| ← `(@[simp] theorem $(mkIdent <| `Slug.ValidChar ++ .str .anonymous s!"{c}") : $(mkIdent `Slug.ValidChar) $(quote c) := by unfold $(mkIdent `Slug.ValidChar); simp)
 
 /--
 Checks whether a character is valid in slugs (that is, whether it's an English letter, a digit, a

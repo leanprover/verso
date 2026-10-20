@@ -1,0 +1,56 @@
+{"version": 7,
+ "uri":
+ "file:///src/tests/interactive/test-cases/parse_errors_blockquote_in_directive.lean",
+ "isIncremental": false,
+ "diagnostics": []}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_blockquote_in_directive.lean"},
+ "position": {"line": 64, "character": 2}}
+[{"startLine": 53, "endLine": 79},
+ {"startLine": 55, "endLine": 79},
+ {"startLine": 58, "endLine": 78},
+ {"startLine": 57, "endLine": 79},
+ {"startLine": 2, "kind": "comment", "endLine": 27},
+ {"startLine": 32, "kind": "region", "endLine": 37},
+ {"startLine": 41, "kind": "region", "endLine": 44},
+ {"startLine": 48, "kind": "region", "endLine": 51},
+ {"startLine": 57, "kind": "region", "endLine": 79}]
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/parse_errors_blockquote_in_directive.lean"},
+ "position": {"line": 64, "character": 2}}
+[{"selectionRange":
+  {"start": {"line": 32, "character": 4}, "end": {"line": 32, "character": 13}},
+  "range":
+  {"start": {"line": 31, "character": 0}, "end": {"line": 37, "character": 23}},
+  "name": "TestGenre",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 41, "character": 4}, "end": {"line": 41, "character": 13}},
+  "range":
+  {"start": {"line": 39, "character": 0}, "end": {"line": 44, "character": 44}},
+  "name": "highlight",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 48, "character": 4}, "end": {"line": 48, "character": 8}},
+  "range":
+  {"start": {"line": 46, "character": 0}, "end": {"line": 51, "character": 43}},
+  "name": "note",
+  "kind": 6},
+ {"selectionRange":
+  {"start": {"line": 53, "character": 17},
+   "end": {"line": 53, "character": 24}},
+  "range":
+  {"start": {"line": 53, "character": 0}, "end": {"line": 80, "character": 0}},
+  "name": "Notes",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 55, "character": 0},
+     "end": {"line": 55, "character": 9}},
+    "range":
+    {"start": {"line": 55, "character": 0},
+     "end": {"line": 80, "character": 0}},
+    "name": "Weekend",
+    "kind": 15}]}]

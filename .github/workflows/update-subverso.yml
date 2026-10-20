@@ -16,7 +16,7 @@ jobs:
 
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v7
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   ref: main
                   token: ${{ secrets.GITHUB_TOKEN }}
@@ -64,14 +64,14 @@ jobs:
 
             - name: Install uv
               if: steps.check-changes.outputs.changed == 'true'
-              uses: astral-sh/setup-uv@v7
+              uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
               with:
                   enable-cache: true
                   cache-dependency-glob: "browser-tests/pyproject.toml"
 
             - name: Cache Playwright browsers
               if: steps.check-changes.outputs.changed == 'true'
-              uses: actions/cache@v6
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: .playwright-browsers
                   key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}

@@ -206,7 +206,7 @@ instance : GenreHtml SimplePage (BuildLogT IO) where
     -- It's important that this not include the metadata in the recursive call, or the generator
     -- will loop (the metadata's presence is what triggers the call to `GenreHtml.part`)
     let part' := .mk title titleString none content' subParts
-    recur part' (fun lvl title => .tag s!"h{lvl}" #[("id", metadata.tag)] title)
+    recur part' (fun lvl title => .element s!"h{lvl}" #[("id", metadata.tag)] title)
   -- There are no genre-specific blocks, so no code is needed here
   block _ _ blkExt := nomatch blkExt
   inline recur
@@ -219,10 +219,10 @@ instance : GenreHtml SimplePage (BuildLogT IO) where
     -- If no ID was assigned, log an error
     | .inr ⟨dest, none⟩, contents => do
       reportError s!"No ID assigned to section link of {dest}"
-      pure {{<a href=s!"#{dest}"> {{← contents.mapM recur}} </a>}}
+      pure html%{<a href={s!"#{dest}"}>{← contents.mapM recur}</a>}
     -- Otherwise emit the right ID
     | .inr ⟨dest, some t⟩, contents => do
-      pure {{<a href=s!"#{dest}" id=s!"link-{t}"> {{← contents.mapM recur}} </a>}}
+      pure html%{<a href={s!"#{dest}"} id={s!"link-{t}"}>{← contents.mapM recur}</a>}
 
 /--
 The main function to be called to produce HTML output
@@ -252,19 +252,19 @@ def render (doc : Part SimplePage) : IO UInt32 := do
     -- toHtml returns both deduplicated hover contents and the actual content.
     -- Since we're not rendering Lean code, we can ignore the hover contents.
     let (content, _) ← SimplePage.toHtml (m := BuildLogT IO) {} context state {} {} {} doc .empty |>.run logger
-    let html := {{
+    let html := html%{
       <html>
         <head>
-          <title>{{doc.titleString}}</title>
+          <title>{doc.titleString}</title>
           <meta charset="utf-8"/>
         </head>
-        <body>{{ content }}</body>
+        <body>{ content }</body>
       </html>
-    }}
+    }
 
     IO.println "Writing to index.html"
     IO.FS.withFile "index.html" .write fun h => do
-      h.putStrLn html.asString
+      h.putStrLn html.render
 
 end SimplePage
 

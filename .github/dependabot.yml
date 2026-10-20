@@ -4,3 +4,18 @@ updates:
       directory: "/"
       schedule:
           interval: "weekly"
+
+    # The widget is type-checked against these packages, so a new InfoView release shows up here.
+    - package-ecosystem: "npm"
+      directory: "/"
+      schedule:
+          interval: "weekly"
+      ignore:
+          # The React declarations follow the React the InfoView is built with, and a new major
+          # version of that arrives with an InfoView release.
+          - dependency-name: "@types/react"
+            update-types: ["version-update:semver-major"]
+          - dependency-name: "@types/react-dom"
+            update-types: ["version-update:semver-major"]
+          # Prettier's version is also pinned in check-format.yml, and the two move together.
+          - dependency-name: "prettier"

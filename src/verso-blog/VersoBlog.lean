@@ -6,7 +6,6 @@ Author: David Thrane Christiansen
 module
 
 public import SubVerso.Highlighting
-public import SubVerso.Examples
 
 public import VersoBlog.Basic
 public import VersoBlog.LiterateLeanPage
@@ -34,12 +33,11 @@ open Verso.Output Html
 namespace Verso.Genre.Blog
 
 
-open Lean.Doc.Syntax
+open Lean.Doc (CodeView RoleView)
 open Verso ArgParse Doc Elab
 open Lean Elab
 open Verso.SyntaxUtils (parserInputString strLitInputContext)
 
-open SubVerso.Examples (loadExamples Example)
 open SubVerso.Examples.Messages (messagesMatch)
 open SubVerso.Module (ModuleItem)
 
@@ -205,7 +203,6 @@ section
 
 meta inductive LeanExampleData where
   | inline (commandState : Command.State) (parserState : Parser.ModuleParserState)
-  | subproject (loaded : NameSuffixMap Example)
   | module (positioned : Array ModuleItem)
 deriving Inhabited
 
@@ -216,7 +213,7 @@ deriving Inhabited
 meta initialize exampleContextExt : EnvExtension ExampleContext ← registerEnvExtension (pure {})
 
 meta structure ExampleMessages where
-  messages : NameSuffixMap ((Environment × MessageLog) ⊕ List (MessageSeverity × String)) := {}
+  messages : NameSuffixMap (Environment × MessageLog) := {}
 deriving Inhabited
 
 meta initialize messageContextExt : EnvExtension ExampleMessages ← registerEnvExtension (pure {})
@@ -229,28 +226,29 @@ meta initialize registerTraceClass `Elab.Verso.block.lean
 meta instance : FromArgs leanExampleProject.Args DocElabM :=
   ⟨(·, ·) <$> .positional `name .name <*> .positional `projectDir .string⟩
 
-open System in
+/--
+The URL of the release notes entry that explains how to migrate from example subprojects to
+anchor-based examples.
+-/
+private meta def subprojectMigrationUrl : String :=
+  "https://verso.lean-lang.org/doc/latest/releases/#blog-example-subprojects"
+
+/--
+Throws an error stating that the example subproject command `feature` was removed. The error names
+the anchor-based replacement and links to the migration instructions.
+-/
+private meta def throwSubprojectsRemoved (feature : String) : DocElabM α :=
+  throwError m!"`{feature}` was removed along with SubVerso's `%example` commands. \
+    Write the example project as ordinary Lean modules with `-- ANCHOR:` comments, then show its \
+    code with `leanExampleModule` and `leanCommandAt` or with the anchor-based commands that read \
+    `verso.exampleProject`." ++ m!"Migration instructions are at {subprojectMigrationUrl}".note
+
+/--
+Reports an error that explains how to migrate example subprojects to anchor-based examples.
+-/
 @[block_command]
 meta def leanExampleProject : BlockCommandOf leanExampleProject.Args
-  | (name, projectDir) => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Loading example project") <| do
-    if exampleContextExt.getState (← getEnv) |>.contexts |>.contains name then
-      throwError "Example context '{name}' already defined in this module"
-    let path : FilePath := ⟨projectDir⟩
-    if path.isAbsolute then
-      throwError "Expected a relative path, got {path}"
-    let loadedExamples ← loadExamples path
-    let mut savedExamples := {}
-    for (mod, modExamples) in loadedExamples.toList do
-      for (exName, ex) in modExamples.toList do
-        savedExamples := savedExamples.insert (mod ++ exName) ex
-
-    modifyEnv fun env => exampleContextExt.modifyState env fun s => {s with
-      contexts := s.contexts.insert name (.subproject savedExamples)
-    }
-    for (name, ex) in savedExamples.toArray do
-      modifyEnv fun env => messageContextExt.modifyState env fun s => {s with messages := s.messages.insert name (.inr ex.messages) }
-    Verso.Hover.addCustomHover (← getRef) <| "Contains:\n" ++ String.join (savedExamples.toList.map (s!" * `{toString ·.fst}`\n"))
-    ``(Block.concat #[])
+  | _ => throwSubprojectsRemoved "leanExampleProject"
 
 @[expose] def leanExampleModule.Args := Name × String × Name
 meta instance : FromArgs leanExampleModule.Args DocElabM :=
@@ -272,14 +270,6 @@ meta def leanExampleModule : BlockCommandOf leanExampleModule.Args
     }
     ``(Block.concat #[])
 
-
-private meta def getSubproject (project : Ident) : TermElabM (NameSuffixMap Example) := do
-  let some ctxt := exampleContextExt.getState (← getEnv) |>.contexts |>.find? project.getId
-    | throwErrorAt project "Subproject '{project}' not loaded"
-  let .subproject projectExamples := ctxt
-    | throwErrorAt project "'{project}' is not loaded as a subproject"
-  Verso.Hover.addCustomHover project <| "Contains:\n" ++ String.join (projectExamples.toList.map (s!" * `{toString ·.fst}`\n"))
-  pure projectExamples
 
 private meta def getModule (project : Ident) : TermElabM (Array ModuleItem) := do
   let some ctxt := exampleContextExt.getState (← getEnv) |>.contexts |>.find? project.getId
@@ -319,13 +309,12 @@ meta instance : FromArgs LeanCommandConfig m where
     LeanCommandConfig.mk <$> .positional `project .ident <*> .positional `exampleName .ident <*> .flag `showProofStates true
 end
 
+/--
+Reports an error that explains how to migrate example subprojects to anchor-based examples.
+-/
 @[block_command]
 meta def leanCommand : BlockCommandOf LeanCommandConfig
-  | { project, exampleName, showProofStates } => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanCommand") <| do
-    let projectExamples ← getSubproject project
-    let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest exampleName
-    Verso.Hover.addCustomHover exampleName s!"```lean\n{str}\n```"
-    `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote project.getId), showProofStates := $(quote showProofStates) } $(quote hls)) #[Block.code $(quote str)])
+  | _ => throwSubprojectsRemoved "leanCommand"
 
 structure LeanCommandAtArgs where
   project : Ident
@@ -373,10 +362,10 @@ meta instance : FromArgs NoArgs m where
 @[role]
 meta def leanKw : RoleExpanderOf NoArgs
   | ⟨⟩, #[arg] => do
-    let `(inline|code( $kw:str )) := arg
+    let some { content := kw, .. } := CodeView.of arg
       | throwErrorAt arg "Expected code literal with the keyword"
-    let hl : SubVerso.Highlighting.Highlighted := .token ⟨.keyword none none none, kw.getString⟩
-    ``(Inline.other (Blog.InlineExt.customHighlight $(quote hl)) #[Inline.code $(quote kw.getString)])
+    let hl : SubVerso.Highlighting.Highlighted := .token ⟨.keyword none none none, kw.getVersoCode⟩
+    ``(Inline.other (Blog.InlineExt.customHighlight $(quote hl)) #[Inline.code $(quote kw.getVersoCode)])
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -393,21 +382,12 @@ meta instance : FromArgs LeanTermArgs DocElabM where
       .positional `project .ident <*>
       .flag `showProofStates true
 
+/--
+Reports an error that explains how to migrate example subprojects to anchor-based examples.
+-/
 @[role]
 meta def leanTerm : RoleExpanderOf LeanTermArgs
-  | {project, showProofStates}, #[arg] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanTerm") <| do
-    let `(inline|code( $name:str )) := arg
-      | throwErrorAt arg "Expected code literal with the example name"
-    let exampleName := name.getString.toName
-    let projectExamples ← getSubproject project
-    let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest <| mkIdentFrom name exampleName
-    Verso.Hover.addCustomHover arg s!"```lean\n{str}\n```"
-    `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote project.getId) } $(quote hls)) #[Inline.code $(quote str)])
-  | _, more =>
-    if h : more.size > 0 then
-      throwErrorAt more[0] "Unexpected contents"
-    else
-      throwError "Unexpected arguments"
+  | _, _ => throwSubprojectsRemoved "leanTerm"
 
 
 structure LeanBlockConfig where
@@ -467,7 +447,7 @@ meta def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
         let commandState := { commandState with scopes := [{ header := "", opts := pp.tagAppFns.set {} true }] }
         modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState state)}
     if config.show then
-      ``(Block.code $(quote str.getString)) -- TODO highlighting hack
+      ``(Block.code $(quote str.getVersoCodeBlock)) -- TODO highlighting hack
     else
       ``(Block.concat #[])
 where
@@ -481,7 +461,6 @@ meta def lean : CodeBlockExpanderOf LeanBlockConfig
     let x := config.exampleContext
     let (commandState, state) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
       | some (.inline commandState state) => pure (commandState, state)
-      | some (.subproject ..) => throwErrorAt x "Expected an example context for inline Lean, but found a subproject"
       | some (.module ..) => throwErrorAt x "Expected an example context for inline Lean, but found a module"
       | none => throwErrorAt x "Can't find example context"
     let (context, startPos) ← strLitInputContext str.raw (← getFileName)
@@ -513,7 +492,7 @@ meta def lean : CodeBlockExpanderOf LeanBlockConfig
       }
     if let some infoName := config.name then
       modifyEnv fun env => messageContextExt.modifyState env fun st => {st with
-        messages := st.messages.insert infoName (.inl (s.commandState.env, s.commandState.messages))
+        messages := st.messages.insert infoName (s.commandState.env, s.commandState.messages)
       }
     withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Highlighting syntax") do
       let mut hls := Highlighted.empty
@@ -531,7 +510,7 @@ meta def lean : CodeBlockExpanderOf LeanBlockConfig
         setInfoState infoSt
         setEnv env
       if config.show then
-        `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote x.getId), showProofStates := $(quote config.showProofStates) } $(quote hls)) #[Block.code $(quote str.getString)])
+        `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote x.getId), showProofStates := $(quote config.showProofStates) } $(quote hls)) #[Block.code $(quote str.getVersoCodeBlock)])
       else
         ``(Block.concat #[])
 
@@ -611,12 +590,11 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
   | config, elts => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| do
     let #[code] := elts
       | throwError "Expected precisely one code element"
-    let `(inline|code( $str:str )) := code
+    let some { content := str, .. } := CodeView.of code
       | throwErrorAt code "Expected an inline code element"
     let x := config.exampleContext
     let (commandState, _) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
       | some (.inline commandState state) => pure (commandState, state)
-      | some (.subproject ..) => throwErrorAt x "Expected an example context for inline Lean, but found a subproject"
       | some (.module ..) => throwErrorAt x "Expected an example context for inline Lean, but found a module"
       | none => throwErrorAt x "Can't find example context"
 
@@ -677,16 +655,16 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
 
       pushInfoTree tree
 
-      if let `(inline|role{%$s $f $_*}%$e[$_*]) ← getRef then
-        Hover.addCustomHover (mkNullNode #[s, e]) type
-        Hover.addCustomHover f type
+      if let some v := RoleView.of ⟨← getRef⟩ then
+        Hover.addCustomHover (mkNullNode #[v.braceOpen, v.braceClose]) type
+        Hover.addCustomHover v.name type
 
       for msg in newMsgs.toArray do
           logMessage {msg with
             isSilent := msg.isSilent || msg.severity != .error
           }
 
-      `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote config.exampleContext.getId) } $(quote hls)) #[Inline.code $(quote str.getString)])
+      `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote config.exampleContext.getId) } $(quote hls)) #[Inline.code $(quote str.getVersoCode)])
 
 @[role lean]
 meta def leanCanonical : RoleExpanderOf LeanInlineConfig :=
@@ -742,53 +720,33 @@ def leanOutputInline [bg : BlogGenre genre] (message : Highlighted.Message) (pla
 @[code_block]
 meta def leanOutput : CodeBlockExpanderOf LeanOutputConfig
   | config, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanOutput") <| do
-    let (_, savedInfo) ← messageContextExt.getState (← getEnv) |>.messages |>.getOrSuggest config.name
-    let messages ← match savedInfo with
-      | .inl (env, log) =>
-        let messages ← liftM <| log.toArray.mapM contents
-        for m in log.toArray do
-          if mostlyEqual config.whitespace str.getString (← contents m) then
-            if let some s := config.severity then
-              if s != m.severity then
-                throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr m.severity}"
-            let content ← if config.summarize then
-                let lines := str.getString.splitOn "\n"
-                let pre := lines.take 3
-                let post := String.join (lines.drop 3 |>.intersperse "\n")
-                let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
-                ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr m.severity)) $(quote preHtml)) #[Block.code $(quote post)])
-              else
-                let myEnv ← getEnv
-                let m' ←
-                  try
-                    setEnv env
-                    withOptions (·.set `pp.tagAppFns true) do
-                      SubVerso.Highlighting.highlightMessage m
-                  finally setEnv myEnv
-                ``(Block.other (Blog.BlockExt.message false $(quote m') ([] : List Lean.Name)) #[Block.code $(quote str.getString)])
-            return content
-        pure messages
-      | .inr msgs =>
-        let messages := msgs.toArray.map Prod.snd
-        for (sev, txt) in msgs do
-          if mostlyEqual config.whitespace str.getString txt then
-            if let some s := config.severity then
-              if s != sev then
-                throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr sev}"
-            let content ← if config.summarize then
-                let lines := str.getString.splitOn "\n"
-                let pre := lines.take 3
-                let post := String.join (lines.drop 3 |>.intersperse "\n")
-                let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
-                ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr sev)) $(quote preHtml)) #[Block.code $(quote post)])
-              else
-                ``(Block.other (Blog.BlockExt.htmlDiv $(quote (sevStr sev))) #[Block.code $(quote str.getString)])
-            return content
-        pure messages
+    let (_, env, log) ← messageContextExt.getState (← getEnv) |>.messages |>.getOrSuggest config.name
+    let messages ← liftM <| log.toArray.mapM contents
+    for m in log.toArray do
+      if mostlyEqual config.whitespace str.getVersoCodeBlock (← contents m) then
+        if let some s := config.severity then
+          if s != m.severity then
+            throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr m.severity}"
+        let content ← if config.summarize then
+            let lines := str.getVersoCodeBlock.splitOn "\n"
+            let pre := lines.take 3
+            let post := String.join (lines.drop 3 |>.intersperse "\n")
+            let preHtml : Html := pre.map (fun (l : String) => html%{<code>{l}</code>})
+            ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr m.severity)) $(quote preHtml)) #[Block.code $(quote post)])
+          else
+            let myEnv ← getEnv
+            let m' ←
+              try
+                setEnv env
+                withOptions (·.set `pp.tagAppFns true) do
+                  SubVerso.Highlighting.highlightMessage m
+              finally setEnv myEnv
+            ``(Block.other (Blog.BlockExt.message false $(quote m') ([] : List Lean.Name)) #[Block.code $(quote str.getVersoCodeBlock)])
+        return content
 
     for m in messages do
       Verso.Doc.Suggestion.saveSuggestion str ((m.take 30).copy ++ "…") m
-    throwErrorAt str "Didn't match - expected one of: {indentD (toMessageData messages)}\nbut got:{indentD (toMessageData str.getString)}"
+    throwErrorAt str "Didn't match - expected one of: {indentD (toMessageData messages)}\nbut got:{indentD (toMessageData str.getVersoCodeBlock)}"
 where
   withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
 
@@ -810,14 +768,14 @@ elab "define_lexed_text" blockName:ident " ← " lexerName:ident : command => do
   elabCommand <| ← `(@[code_block]
     def $blockName : Doc.Elab.CodeBlockExpanderOf NoArgs
       | ⟨⟩, str => do
-        let out ← Verso.Genre.Blog.LexedText.highlight $(mkIdentFrom lexerName lexer) str.getString
+        let out ← Verso.Genre.Blog.LexedText.highlight $(mkIdentFrom lexerName lexer) str.getVersoCodeBlock
         ``(Block.other (Blog.BlockExt.lexedText $$(quote out)) #[]))
   elabCommand <| ← `(@[role]
     def $(mkIdent <| blockName.getId ++ `role) : Doc.Elab.RoleExpanderOf NoArgs
       | ⟨⟩, #[inl] => do
-        let `(inline|code($$str)) := inl
+        let some { content := str, .. } := CodeView.of inl
           | throwErrorAt inl "Expected code"
-        let out ← Verso.Genre.Blog.LexedText.highlight $(mkIdentFrom lexerName lexer) str.getString
+        let out ← Verso.Genre.Blog.LexedText.highlight $(mkIdentFrom lexerName lexer) str.getVersoCode
         ``(Inline.other (Blog.InlineExt.lexedText $$(quote out)) #[])
       | _, str => throwError "Expected no arguments and a single code element")
 
@@ -892,7 +850,7 @@ where
     else
       pure attr
   rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT TraverseContext Id (Option Html) := do
-    pure <| some <| .tag tag (← attrs.mapM rwAttr) content
+    pure <| some <| .element tag (← attrs.mapM rwAttr) content
 
 open Verso.Code.External
 

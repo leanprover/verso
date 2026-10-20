@@ -10,7 +10,7 @@ open Lake DSL
 require subverso from git "https://github.com/leanprover/subverso"@"main"
 
 package «examples» where
-  -- add package configuration options here
+  restoreAllArtifacts := true
 
 @[default_target]
 lean_lib «Examples» where

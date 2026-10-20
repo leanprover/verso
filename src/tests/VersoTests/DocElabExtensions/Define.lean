@@ -27,7 +27,7 @@ def inheritedRole : RoleExpanderOf Unit
 
 @[code_block]
 def inheritedCode : CodeBlockExpanderOf Unit
-  | (), str => ``(Doc.Block.code $(quote str.getString))
+  | (), str => ``(Doc.Block.code $(quote str.getVersoCodeBlock))
 
 @[directive]
 def inheritedDirective : DirectiveExpanderOf Unit

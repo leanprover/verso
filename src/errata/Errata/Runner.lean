@@ -59,12 +59,14 @@ def runEntry (cfg : Context) (entry : TestEntry) : IO (Array Result) := do
   let logged ← log.get
   return #[ctx.resultOfOutcome outcome output dur (← insideMs.get) logged] ++ logged
 
-/-- Runs all the test entries and collects their results. -/
-def run (cfg : Context) (entries : Array TestEntry) : IO (Array Result) := do
-  let mut all : Array Result := #[]
+/--
+Runs all the test entries, passing each test's results to {name}`onResults` as soon as the test
+finishes.
+-/
+def run (cfg : Context) (entries : Array TestEntry) (onResults : Array Result → IO Unit) :
+    IO Unit := do
   for entry in entries do
-    all := all ++ (← runEntry cfg entry)
-  return all
+    onResults (← runEntry cfg entry)
 
 /--
 A base context with the given settings and a fresh, empty log. Without a seed for property tests,
@@ -80,8 +82,11 @@ def mkContext (updateGolden : Bool := false)
   let log ← IO.mkRef (#[] : Array Result)
   let usedOptions ← IO.mkRef ({} : Std.HashSet String)
   let outputFailed ← IO.mkRef false
+  let watchFailed ← IO.mkRef false
   let insideMs ← IO.mkRef 0
-  return { updateGolden, options, seed, ignorePanics, log, usedOptions, outputFailed, insideMs }
+  return {
+    updateGolden, options, seed, ignorePanics, log, usedOptions, outputFailed, watchFailed, insideMs
+  }
 
 /-- The settings parsed from the runner's command line. -/
 structure Options where
@@ -204,7 +209,7 @@ collected into a multi-map so repeated options accumulate. The {lit}`--name valu
 next token as the value when that token does not begin with {lit}`-`; a value that does uses the
 {lit}`--name=value` form. Any other token is rejected.
 -/
-partial def projectOptions (tokens : List String) : Except String OptionMap :=
+partial def parseTestOptions (tokens : List String) : Except String OptionMap :=
   go {} tokens
 where
   push (acc : OptionMap) (name value : String) : OptionMap :=
@@ -251,7 +256,7 @@ def optionsOfParsed (p : Cli.Parsed) : Except String Options := do
     markdownPath := ← pathFlag p "markdown",
     wfail := p.hasFlag "wfail",
     ignorePanics := p.hasFlag "ignore-panics",
-    options := ← projectOptions (p.variableArgsAs! String).toList
+    options := ← parseTestOptions (p.variableArgsAs! String).toList
   }
 
 /--
@@ -280,7 +285,20 @@ def runMain (invocation : Invocation) (entries : Array TestEntry) (args : List S
     let cfg ← mkContext (updateGolden := opts.updateGolden)
       (options := opts.options) (seed := opts.seed)
       (ignorePanics := opts.ignorePanics)
-    let results ← run cfg entries
+    -- The console report stops if it can't write to stdout (e.g. due to a closed pipe), but the
+    -- tests and the report files carry on.
+    let consoleOk ← IO.mkRef true
+    let toConsole (act : IO Unit) : IO Unit := do
+      if ← consoleOk.get then
+        try act catch e =>
+          consoleOk.set false
+          try IO.eprintln s!"warning: stopped printing the report to the console: {e}"
+          catch _ => pure ()
+    let all ← IO.mkRef (#[] : Array Result)
+    run cfg entries fun rs => do
+      all.modify (· ++ rs)
+      toConsole (printHumanResults opts.verbosity rs)
+    let results ← all.get
     -- The issues with the run as a whole: a test tool with no tests is a broken setup, and an
     -- option that no test read is a typo or a removed flag. Under `--wfail`, every warning fails
     -- the run.
@@ -302,7 +320,8 @@ def runMain (invocation : Invocation) (entries : Array TestEntry) (args : List S
     writeReport opts.junitPath junitReport
     writeReport opts.jsonPath jsonReport
     writeReport opts.markdownPath markdownReport
-    let failures ← humanReport opts.verbosity results
+    toConsole (printHumanTally results)
+    let failures := (tally results).failureCount
     for issue in issues do
       IO.eprintln s!"{issue.level}: {issue.message}"
     -- A process exit status keeps only its low 8 bits, so report a failing run as 1 rather than the

@@ -16,8 +16,11 @@ multi.json
 single.json
 *.html
 !/doc/stats.html
+!/browser-tests/errata-widget/page/index.html
 *.produced.out
 __pycache__
 test-projects/literate-config/lake-manifest.json
 test-projects/literate-multi-root/lake-manifest.json
+test-projects/errata-widget/lake-manifest.json
+test-projects/errata-widget/WidgetFixtures/Scratch.lean
 src/errata-tests/fixtures/*/lake-manifest.json
