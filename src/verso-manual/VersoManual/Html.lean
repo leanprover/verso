@@ -247,9 +247,14 @@ where
   button (toc : Option Toc) (label : Html) (rel : Option String := none) : Html :=
     if let some dest := toc then
       let relAttr := rel.map (fun r => #[("rel", r)]) |>.getD #[]
+      -- The arrow keys follow these links; see `static-web/page-nav.js`.
+      let keyAttr := match rel with
+        | some "prev" => #[("aria-keyshortcuts", "ArrowLeft")]
+        | some "next" => #[("aria-keyshortcuts", "ArrowRight")]
+        | _ => #[]
       let titleAttr := toc.bind getTitle |>.map (fun t => #[("title", t)]) |>.getD #[]
       html%{
-        <a class="local-button active" href={dest.path.link dest.id} {...relAttr ++ titleAttr}>
+        <a class="local-button active" href={dest.path.link dest.id} {...relAttr ++ keyAttr ++ titleAttr}>
           {label}
         </a>
       }
@@ -455,6 +460,7 @@ public def page
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
         { searchAssetTags }
         <script src="toc-resize.js" defer="defer"></script>
+        <script src="page-nav.js" defer="defer"></script>
         {extraJsFiles.map fun f => (html%{<script src={s!"{f.1}"} {...if f.2 then defer else #[]}></script>})}
         {extraStylesheets.map (fun url => html%{<link rel="stylesheet" href={url}/>})}
         {extraCss.toArray.map (html%{<style>{Html.raw ·.css}</style>})}
