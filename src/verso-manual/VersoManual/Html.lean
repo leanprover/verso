@@ -215,9 +215,7 @@ public partial def Toc.html (depth : Option Nat) : Toc → Html
   | {title, shortTitle := _, path, id, sectionNum, children} =>
     if depth = some 0 then .empty
     else
-      let page :=
-        if path.isEmpty then "/"
-        else path.link id
+      let page := path.link id
       let sectionNum :=
         match sectionNum with
         | none => html%{<span class="unnumbered"></span>}
