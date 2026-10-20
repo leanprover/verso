@@ -66,9 +66,6 @@ find test-projects -name "lake-manifest.json" -not -path "$ROOT_MANIFEST" | grep
         # Projects that depend on Verso as a path dependency inherit its
         # `module` status and need the modulized SubVerso rev. Other
         # projects need the de-modulized rev.
-        # The directory containing this manifest's project
-        project_dir=$(dirname "$manifest_file")
-
         if jq -e '.packages[] | select(.name == "verso" and .type == "path")' "$manifest_file" > /dev/null 2>&1; then
             TARGET_REV="$SUBVERSO_REV"
             echo "  Uses Verso path dependency → modulized rev"
@@ -96,8 +93,8 @@ done
 echo "All manifests processed successfully"
 
 # Projects listed in root-toolchain-projects.txt build against Verso's source and
-# must track the root toolchain. They are handled here rather than in the loop
-# above, which only reaches projects that have a lake-manifest.json.
+# must track the root toolchain. The list covers them whether or not they keep a
+# lake-manifest.json.
 PROJECT_LIST="test-projects/root-toolchain-projects.txt"
 mapfile -t ROOT_TOOLCHAIN_PROJECTS < <(grep -vE '^[[:space:]]*(#|$)' "$PROJECT_LIST")
 
