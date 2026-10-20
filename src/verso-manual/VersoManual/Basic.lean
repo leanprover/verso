@@ -1601,31 +1601,32 @@ def permalink (id : InternalId) (st : TraverseState) (inline : Bool := true) : H
       </span>
     }
 
-/-- A manual heading whose level, anchor, and contents are rendered together. -/
+/-- A manual heading: its level, the value of its {lit}`id` attribute, and its contents. -/
 structure Heading where
   /-- The HTML heading level. -/
   level : Nat
-  /-- The registered HTML anchor, or none for an unanchored heading. -/
-  id : Option Slug
+  /-- The value of the heading's {lit}`id` attribute, when one was registered. -/
+  htmlId : Option Slug
   /-- The heading contents, including any section number and permalink widget. -/
   content : Html
 
-/-- Renders the heading element and its optional anchor. -/
+/-- Renders the heading element, with its {lit}`id` attribute when it has one. -/
 def Heading.toHtml (heading : Heading) : Html :=
-  let attrs := heading.id.map (fun id => #[("id", id.toString)]) |>.getD #[]
+  let attrs := heading.htmlId.map (fun id => #[("id", id.toString)]) |>.getD #[]
   .element s!"h{heading.level}" attrs heading.content
 
 /--
-Constructs a manual heading with its registered anchor, section number, and permalink.
-The single-page document title omits numbering and the permalink by setting
-{name}`showNumber` and {name}`showPermalink` to false.
+Constructs a manual heading with its registered {lit}`id` attribute, section number, and permalink.
+
+The optional parameters {name}`showNumber` and {name}`showPermalink` control the display of the
+section number and permalink widget, respectively.
 -/
 def partHeading (state : TraverseState) (ctxt : TraverseContext) (id : Option InternalId)
     (level : Nat) (title : Html) (showNumber : Bool := true) (showPermalink : Bool := true) : Heading :=
   let numberHtml := if showNumber then sectionHtml ctxt else .empty
   let permalinkHtml := if showPermalink then id.map (permalink · state) |>.getD .empty else .empty
   { level,
-    id := id.bind (fun id => state.externalTags[id]?) |>.map (·.htmlId),
+    htmlId := id.bind (fun id => state.externalTags[id]?) |>.map (·.htmlId),
     content := numberHtml ++ title ++ permalinkHtml }
 
 open Verso.Output.Html in

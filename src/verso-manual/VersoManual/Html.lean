@@ -381,7 +381,7 @@ where
       | some ns => html%{<span class="number">{sectionNumberString ns}</span>{" "}}
 
 /--
-Renders a manual's title page using the supplied heading's level, anchor, and contents.
+Renders a manual's title page using the supplied heading's level, {lit}`id` attribute, and contents.
 -/
 public def titlePage (heading : Heading) (authors : List String) (authorshipNote : Option String)
     (intro : Html) : Html := html%{

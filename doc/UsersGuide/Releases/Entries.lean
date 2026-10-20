@@ -17,6 +17,7 @@ public import UsersGuide.Releases.Entries.ExtensionDescriptorVisibility
 public import UsersGuide.Releases.Entries.ExtraStep
 public import UsersGuide.Releases.Entries.FoldingRanges
 public import UsersGuide.Releases.Entries.FullPageSearch
+public import UsersGuide.Releases.Entries.HeadingIds
 public import UsersGuide.Releases.Entries.InlineLeanInfoview
 public import UsersGuide.Releases.Entries.LeanHtml
 public import UsersGuide.Releases.Entries.LegacyInlineRoles
@@ -28,7 +29,6 @@ public import UsersGuide.Releases.Entries.MethodInMultiVerso
 public import UsersGuide.Releases.Entries.ReleaseNotesChapter
 public import UsersGuide.Releases.Entries.RoleDiagnostics
 public import UsersGuide.Releases.Entries.SearchPriority
-public import UsersGuide.Releases.Entries.SectionAnchors
 public import UsersGuide.Releases.Entries.TestFramework
 public import UsersGuide.Releases.Entries.TestWidget
 public import UsersGuide.Releases.Entries.UpstreamParser

@@ -10,11 +10,11 @@ public meta import Verso
 public meta import VersoManual
 import Errata
 
-namespace Verso.Integration.SectionAnchors
+namespace Verso.Integration.HeadingIds
 
 open Lean Verso Genre Manual
 
-#docs (Manual) doc "Section Anchors" :=
+#docs (Manual) doc "Heading IDs" :=
 :::::::
 %%%
 tag := "manual-root"
@@ -42,7 +42,7 @@ This chapter gets an automatically generated tag.
 :::::::
 
 /-- Every exported section target must occur exactly once, on a heading in its declared page. -/
-private def checkAnchors (mode : Mode) (htmlDepth : Nat := 1) : IO Unit := IO.FS.withTempDir fun destination => do
+private def checkHeadingIds (mode : Mode) (htmlDepth : Nat := 1) : IO Unit := IO.FS.withTempDir fun destination => do
   let cfg : RenderConfig := { destination, htmlDepth, features := {} }
   let (traverse, emit, directory) := match mode with
     | .single => (traverseHtmlSingle, emitHtmlSingle, "html-single")
@@ -53,7 +53,7 @@ private def checkAnchors (mode : Mode) (htmlDepth : Nat := 1) : IO Unit := IO.FS
     emitXrefsJson site state
     (emit cfg part state).run extension_impls% |>.run logger
   unless exitCode == 0 do
-    throw <| IO.userError "Section anchor document generation logged errors"
+    throw <| IO.userError "Heading ID document generation logged errors"
   let xrefs ← IO.ofExcept <| Json.parse (← IO.FS.readFile (site / "xref.json"))
   let sections ← IO.ofExcept <| xrefs.getObjVal? "Verso.Genre.Manual.section"
   let contents ← IO.ofExcept <| sections.getObjVal? "contents"
@@ -74,16 +74,16 @@ private def checkAnchors (mode : Mode) (htmlDepth : Nat := 1) : IO Unit := IO.FS
     let count := (html.splitOn s!" id=\"{id}\"").length - 1
     unless count == 1 do
       throw <| IO.userError s!"{tag}: expected exactly one id=\"{id}\" in {address}, got {count}"
-    unless (List.range 6).any (fun n => (html.splitOn s!"<h{n + 1} id=\"{id}\">").length == 2) do
+    unless (0...6).iter.any (fun n => (html.splitOn s!"<h{n + 1} id=\"{id}\">").length == 2) do
       throw <| IO.userError s!"{tag}: expected id=\"{id}\" on a heading in {address}"
 
 /-- Single-page manual headings contain every exported section target exactly once. -/
 @[test]
-def singlePageSectionAnchors : Errata.Test := do
-  checkAnchors .single
+def singlePageHeadingIds : Errata.Test := do
+  checkHeadingIds .single
 
-/-- Multi-page manual headings retain their anchors at each splitting depth. -/
+/-- Multi-page manual headings retain their {lit}`id` attributes at each splitting depth. -/
 @[test]
-def multiPageSectionAnchors : Errata.Test := do
+def multiPageHeadingIds : Errata.Test := do
   for depth in [0, 1, 2] do
-    checkAnchors .multi depth
+    checkHeadingIds .multi depth
