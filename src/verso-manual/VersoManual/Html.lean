@@ -380,9 +380,13 @@ where
       | none => html%{<span class="unnumbered"></span>}
       | some ns => html%{<span class="number">{sectionNumberString ns}</span>{" "}}
 
-public def titlePage (title : Html) (authors : List String) (authorshipNote : Option String) (intro : Html) : Html := html%{
+/--
+Renders a manual's title page using the supplied heading's level, {lit}`id` attribute, and contents.
+-/
+public def titlePage (heading : Heading) (authors : List String) (authorshipNote : Option String)
+    (intro : Html) : Html := html%{
   <div class="titlepage">
-    <h1>{title}</h1>
+    {heading.toHtml}
     <div class="authors">
       {authors.toArray.map (html%{<span class="author">{Coe.coe ·}</span>})}
       {if let some note := authorshipNote then html%{<p class="note">{note}</p>} else .empty }
