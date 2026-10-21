@@ -550,70 +550,39 @@ input_file leanToolchain where
   text := true
   path := "lean-toolchain"
 
+@[default_target]
 lean_lib UsersGuide where
   srcDir := "doc"
   leanOptions := #[⟨`weak.linter.verso.manual.headerTags, true⟩]
   needs := #[leanToolchain]
 
+-- A demo site that shows how to generate websites with Verso.
 @[default_target]
-lean_exe usersguide where
-  root := `UsersGuideMain
-  supportInterpreter := true
-
--- A demo site that shows how to generate websites with Verso
 lean_lib DemoSite where
   srcDir := "test-projects/website"
   roots := #[`DemoSite]
 
+-- An example of a textbook project built in Verso.
 @[default_target]
-lean_exe demosite where
-  srcDir := "test-projects/website"
-  root := `DemoSiteMain
-  supportInterpreter := true
-
--- An example of a textbook project built in Verso
 lean_lib DemoTextbook where
   srcDir := "test-projects/textbook"
   roots := #[`DemoTextbook]
 
+-- An example of a package documentation project built in Verso.
 @[default_target]
-lean_exe demotextbook where
-  srcDir := "test-projects/textbook"
-  root := `DemoTextbookMain
-  supportInterpreter := true
-
--- An example of a package documentation project built in Verso
 lean_lib PackageManual where
   srcDir := "test-projects/package-manual"
   roots := #[`PackageManual]
 
-@[default_target]
-lean_exe packagedocs where
-  srcDir := "test-projects/package-manual"
-  root := `PackageManualMain
-  supportInterpreter := true
-
--- An example of a minimal nontrivial custom genre
+-- An example of a minimal nontrivial custom genre.
 @[default_target]
 lean_lib SimplePage where
   srcDir := "test-projects/custom-genre"
   roots := #[`SimplePage]
 
 @[default_target]
-lean_exe simplepage where
-  srcDir := "test-projects/custom-genre"
-  root := `SimplePageMain
-  supportInterpreter := true
-
-@[default_target]
 lean_lib TutorialExample where
   srcDir := "test-projects/tutorial-test"
-
-@[default_target]
-lean_exe «tutorial-example» where
-  srcDir := "test-projects/tutorial-test"
-  root := `TutorialExampleMain
-  supportInterpreter := true
 
 private def leanOptionArgs (m : Module) : Array String := Id.run do
   let opts := Module.leanOptions m
