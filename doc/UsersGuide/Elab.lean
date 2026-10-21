@@ -69,7 +69,7 @@ The `main` function typically also takes configuration parameters both in the co
 
 Tip: for projects with large dependencies such as Mathlib, compiling the document to a native executable can take a long time.
 It is often faster to run the `main` function through the Lean interpreter instead.
-To do so, invoke `lake lean Main.lean --run Main.lean` in your shell, where `Main.lean` is the file in which the genre's `main` function is called with your document as an argument.
+To do so, invoke `lake lean Main.lean -- --run Main.lean` in your shell, where `Main.lean` is the file in which the genre's `main` function is called with your document as an argument.
 Future updates to the Verso build process may make this the default.
 
 # Traversal
