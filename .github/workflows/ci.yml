@@ -413,3 +413,76 @@ jobs:
               env:
                   NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
                   NETLIFY_SITE_ID: "8a89abd8-095b-4496-a9c1-381d2d5629ec" # TODO: if a tag, push to a different site for hosting under lean-lang.org
+
+    # Keep PDF generation, browser tests, and publishing in the Linux job above.
+    # These jobs check native builds and the test suite on the other supported platforms.
+    portability:
+        name: Build and test (${{ matrix.os }})
+        runs-on: ${{ matrix.os }}
+        permissions:
+            contents: read
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [macos-latest, windows-latest]
+        defaults:
+            run:
+                shell: bash
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Install elan
+              run: |
+                  curl -sSfL https://raw.githubusercontent.com/leanprover/elan/v4.2.4/elan-init.sh | sh -s -- -y --default-toolchain none
+                  if [ "$RUNNER_OS" = Windows ]; then
+                      cygpath -w "$HOME/.elan/bin" >> "$GITHUB_PATH"
+                  else
+                      echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+                  fi
+
+            - name: Install subproject toolchains
+              run: |
+                  find . -name lean-toolchain -type f -not -path './.*' | while read -r f; do
+                      elan toolchain install "$(cat "$f")"
+                  done
+
+            - name: Lean version
+              run: lean --version
+
+            - name: Cache .lake
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: .lake
+                  key:
+                      portability-${{ runner.os }}-${{ runner.arch }}-${{
+                      hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}-${{
+                      github.sha }}
+                  restore-keys: |
+                      portability-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}-
+
+            - name: Build the website examples subproject
+              working-directory: test-projects/website-examples
+              run: lake build
+
+            - name: Build the project
+              run: lake build
+
+            - name: Run tests
+              run:
+                  lake test -- --test-options --verbose --wfail --junit=errata-report.xml
+                  --markdown=errata-summary.md
+
+            - name: Add test results to the job summary
+              if: always()
+              run: |
+                  if [ -f errata-summary.md ]; then cat errata-summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+            - name: Upload the raw test reports
+              if: always()
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: errata-test-reports-${{ runner.os }}-${{ runner.arch }}
+                  path: |
+                      errata-report.xml
+                      errata-summary.md
+                  if-no-files-found: ignore
