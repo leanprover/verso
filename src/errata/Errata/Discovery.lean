@@ -86,7 +86,7 @@ private meta def commandAround (pos : String.Pos.Raw) : AttrM (Option Lean.Synta
   let mut found : Option Lean.Syntax.Range := none
   for back in [0:min commandSearchLines line] do
     let lineStart := fileMap.ofPosition ⟨line - back, 0⟩
-    let (cmdStx, _, messages) := Parser.parseCommand inputCtx pmctx { pos := lineStart } {}
+    let (cmdStx, _, messages) := Parser.parseCommand inputCtx pmctx { pos := lineStart, leadingStartPos? := none } {}
     if messages.hasErrors then continue
     let some range := cmdStx.getRange? | continue
     unless range.start ≤ pos && pos < range.stop do continue

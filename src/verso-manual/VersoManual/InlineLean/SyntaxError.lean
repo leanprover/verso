@@ -146,7 +146,8 @@ meta def syntaxError : CodeBlockExpanderOf SyntaxErrorConfig
       (detail? := some "Syntax error")
 
     let s := str.getVersoCodeBlock
-    match runParserCategory' (← getEnv) (← getOptions) config.category s with
+    let errorFn := SyntaxUtils.runParserCategory.toSyntaxErrors
+    match (← SyntaxUtils.runParserCategoryGen (errorFn := errorFn) config.category s) with
     | .ok stx =>
       throwErrorAt str m!"Expected a syntax error for category {config.category}, but got {indentD stx}"
     | .error es =>

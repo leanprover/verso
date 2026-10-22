@@ -178,32 +178,6 @@ public def strLitInputContext [Monad m] [MonadFileMap m] [MonadError m] (str : S
   let ictx := Parser.mkInputContext text.source fileName (endPos := endPos) (endPos_valid := by grind)
   return (ictx, startPos)
 
-/--
-Given a string literal, constructs a Lean string that can be parsed by the Lean parser, yielding
-correct source positions for items in the string literal.
--/
-public def parserInputString [Monad m] [MonadFileMap m] [Literal k]
-    (str : TSyntax k) :
-    m String := do
-  let text ← getFileMap
-  let preString := (0 : String.Pos.Raw).extract text.source (str.raw.getPos?.getD 0)
-  let mut code := ""
-  let mut iter := preString.startPos
-  while h : iter ≠ preString.endPos do
-    let c := iter.get h
-    iter := iter.next h
-    if c == '\n' then
-      code := code.push '\n'
-    else
-      for _ in [0:c.utf8Size] do
-        code := code.push ' '
-  let strOriginal? : Option String := do
-    let ⟨start, stop⟩ ← str.raw.getRange?
-    start.extract text.source stop
-  code := code ++ strOriginal?.getD (Literal.decode str)
-  return code
-
-
 public structure SyntaxError where
   pos : Position
   endPos : Position
@@ -451,48 +425,62 @@ public def parseMarkupStrLit [Monad m] [MonadFileMap m] [MonadEnv m] [MonadError
     let blamePos := mapPos (((st.allErrors[0]?).map (·.1)).getD ⟨0⟩)
     throwErrorAt (Syntax.atom (.synthetic blamePos blamePos) "") msg
 
-open Lean.Parser in
-/--
-Runs a parser category, returning any errors encountered as a list of position-string pairs.
+-- Default from upstream
+public def runParserCategory.toErrorMsg (ictx : InputContext) (s : ParserState) :=
+  s.toErrorMsg ictx
+
+-- Unused
+public def runParserCategory.toErrorMsgList (ictx : InputContext) (s : ParserState) : List (Position × String) := Id.run do
+  let mut errs := []
+  for (pos, _stk, err) in s.allErrors do
+    let pos := ictx.fileMap.toPosition pos
+    errs := (pos, toString err) :: errs
+  errs.reverse
+
+-- Used in Manual's syntaxError block
+public def runParserCategory.toSyntaxErrors (ictx : InputContext) (s : ParserState) : Array SyntaxError :=
+    s.allErrors.map fun (pos, stk, e) => (mkSyntaxError ictx pos stk e)
+
+/-- Runs a parser category, returning any errors encountered. It takes
+and optional `fileName` as callers in VersoManual/Docstring like to
+override it.
 -/
-public def runParserCategory
-    (env : Environment) (opts : Lean.Options) (catName : Name)
-    (input : String) (fileName : String := "<example>") :
-    Except (List (Position × String)) Syntax :=
+public def runParserCategoryGen [Monad m] [MonadEnv m] [MonadLog m] [MonadOptions m]
+  (errorFn : InputContext → ParserState → ε)
+  (catName : Name) (input : String) (fileName : Option String := none) : m (Except ε Syntax) := do
+  let fileName ← fileName.getDM getFileName
+  let env ← getEnv
+  let options ← getOptions
   let p := andthenFn whitespace (categoryParserFnImpl catName)
   let ictx := mkInputContext input fileName
-  let s := p.run ictx { env, options := opts } (getTokenTable env) (mkParserState input)
-  if !s.allErrors.isEmpty then
-    Except.error (toErrorMsg ictx s)
+  let s := p.run ictx { env, options } (getTokenTable env) (mkParserState input)
+  pure $ if !s.allErrors.isEmpty then
+    Except.error (errorFn ictx s)
   else if ictx.atEnd s.pos then
     Except.ok s.stxStack.back
   else
-    Except.error (toErrorMsg ictx (s.mkError "end of input"))
-where
-  toErrorMsg (ctx : InputContext) (s : ParserState) : List (Position × String) := Id.run do
-    let mut errs := []
-    for (pos, _stk, err) in s.allErrors do
-      let pos := ctx.fileMap.toPosition pos
-      errs := (pos, toString err) :: errs
-    errs.reverse
+    Except.error (errorFn ictx (s.mkError "end of input"))
 
-open Lean.Parser in
+public def runParserCategoryString [Monad m] [MonadEnv m] [MonadLog m] [MonadOptions m]
+  (catName : Name) (input : String) (fileName : Option String := none) : m (Except String Syntax) :=
+  runParserCategoryGen runParserCategory.toErrorMsg catName input fileName
+
 /--
-Runs a parser category, returning any errors encountered as `SyntaxError`s, with the source spans
-computed the way Lean does.
+Runs a syntax category on a span of the original source. The span excludes any enclosing
+markup delimiters. Use `runParserCategoryString` for decoded Lean string literals instead.
 -/
-public def runParserCategory' (env : Environment) (opts : Lean.Options) (catName : Name) (input : String) (fileName : String := "<example>") : Except (Array SyntaxError) Syntax :=
-    let p := andthenFn whitespace (categoryParserFnImpl catName)
-    let ictx := mkInputContext input fileName
-    let s := p.run ictx { env, options := opts } (getTokenTable env) (mkParserState input)
-    if !s.allErrors.isEmpty then
-      Except.error <| toSyntaxErrors ictx s
-    else if ictx.atEnd s.pos then
-      Except.ok s.stxStack.back
-    else
-      Except.error (toSyntaxErrors ictx (s.mkError "end of input"))
-where
-  toSyntaxErrors (ictx : InputContext) (s : ParserState) : Array SyntaxError :=
-    s.allErrors.map fun (pos, stk, e) => (mkSyntaxError ictx pos stk e)
+public def runParserCategory [Monad m] [MonadEnv m] [MonadLog m] [MonadOptions m] [MonadError m]
+    (catName : Name) (input : Syntax) : m (Except String Syntax) := do
+  let (ictx, pos) ← strLitInputContext input (← getFileName)
+  let env ← getEnv
+  let p := andthenFn whitespace (categoryParserFnImpl catName)
+  let s := p.run ictx { env, options := ← getOptions } (getTokenTable env)
+    { mkParserState ictx.inputString with pos }
+  return if !s.allErrors.isEmpty then
+    .error (s.toErrorMsg ictx)
+  else if ictx.atEnd s.pos then
+    .ok s.stxStack.back
+  else
+    .error ((s.mkError "end of input").toErrorMsg ictx)
 
 end Verso.SyntaxUtils
