@@ -1196,7 +1196,7 @@ meta def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : Do
     let cctx : Command.Context := { fileName := ← getFileName, fileMap := FileMap.ofString str, snap? := none, cancelTk? := none}
 
     let mut cmdState : Command.State := {env := ← getEnv, maxRecDepth := ← MonadRecDepth.getMaxRecDepth, scopes := [{header := ""}]}
-    let mut pstate := { pos := 0, recovering := false, hasLeading := false}
+    let mut pstate := { pos := 0, recovering := false, leadingStartPos? := none}
     let mut cmds := #[]
 
     repeat
