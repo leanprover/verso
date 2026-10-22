@@ -422,33 +422,11 @@ meta instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [Mon
       .flag `showProofStates true "Show proof states in rendered page?"
 
 
--- `Parser.parseHeader` always starts at zero, so this caller still needs padding.
-private meta def parserInputString [Monad m] [MonadFileMap m]
-    (str : Lean.Doc.VersoCodeBlock) :
-    m String := do
-  let text ← getFileMap
-  let preString := (0 : String.Pos.Raw).extract text.source (str.raw.getPos?.getD 0)
-  let mut code := ""
-  let mut iter := preString.startPos
-  while h : iter ≠ preString.endPos do
-    let c := iter.get h
-    iter := iter.next h
-    if c == '\n' then
-      code := code.push '\n'
-    else
-      for _ in [0:c.utf8Size] do
-        code := code.push ' '
-  let strOriginal? : Option String := do
-    let ⟨start, stop⟩ ← str.raw.getRange?
-    start.extract text.source stop
-  code := code ++ strOriginal?.getD str.getVersoCodeBlock
-  return code
-
 @[code_block]
 meta def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
   | config , str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanInit") <| do
-    let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
-    let (header, _state, msgs) ← Parser.parseHeader context
+    let (context, startPos) ← strLitInputContext str.raw (← getFileName)
+    let (header, _state, msgs) ← Parser.parseHeader context startPos
     if !header.raw[0].isNone then
       throwErrorAt header "Modules not yet supported here"
     for imp in header.raw[2].getArgs do
@@ -489,7 +467,7 @@ meta def lean : CodeBlockExpanderOf LeanBlockConfig
     -- Process with empty messages to avoid duplicate output
     let s ←
       withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Elaborating commands") <|
-      IO.processCommands context { pos := startPos, hasLeading := false } { commandState with messages.unreported := {} }
+      IO.processCommands context { pos := startPos, leadingStartPos? := none } { commandState with messages.unreported := {} }
     for t in s.commandState.infoState.trees do
       pushInfoTree t
 
