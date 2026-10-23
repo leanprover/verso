@@ -242,6 +242,10 @@ nav.top a:hover {
   color: var(--color-accent);
   text-decoration: none;
 }
+
+div.subtitle {
+  color: grey;
+}
 "#
 
 def primary : Template := do
@@ -307,6 +311,10 @@ def post : Template := do
        | none => Html.empty
        | some md => html%{
         <div class="metadata">
+          { match md.subtitle with
+            | some subtitle => html%{<div class="subtitle">{subtitle}</div>}
+            | none => Html.empty
+          }
           <div class="authors">
             {(md : Post.PartMetadata).authors.map (html%{<span class="author">{Html.text ·}</span>}) |>.toArray}
           </div>
@@ -355,6 +363,10 @@ def archiveEntry : Template := do
             <div class="authors">
               {(md : Post.PartMetadata).authors.map (html%{<span class="author">{Html.text ·}</span>}) |>.toArray}
             </div>
+            { match md.subtitle with
+              | some subtitle => html%{<div class="subtitle">{subtitle}</div>}
+              | none => Html.empty
+            }
             <div class="date">
               {md.date.toIso8601String}
             </div>
