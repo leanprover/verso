@@ -66,15 +66,9 @@ find test-projects -name "lake-manifest.json" -not -path "$ROOT_MANIFEST" | grep
         # Projects that depend on Verso as a path dependency inherit its
         # `module` status and need the modulized SubVerso rev. Other
         # projects need the de-modulized rev.
-        # The directory containing this manifest's project
-        project_dir=$(dirname "$manifest_file")
-
         if jq -e '.packages[] | select(.name == "verso" and .type == "path")' "$manifest_file" > /dev/null 2>&1; then
             TARGET_REV="$SUBVERSO_REV"
             echo "  Uses Verso path dependency → modulized rev"
-            # Keep toolchain in sync with root
-            cp lean-toolchain "$project_dir/lean-toolchain"
-            echo "  Copied lean-toolchain to $project_dir/"
         else
             TARGET_REV="$SUBVERSO_NOMODULE_REV"
             echo "  Standalone project → de-modulized rev"
@@ -97,3 +91,32 @@ find test-projects -name "lake-manifest.json" -not -path "$ROOT_MANIFEST" | grep
 done
 
 echo "All manifests processed successfully"
+
+# Projects listed in root-toolchain-projects.txt build against Verso's source and
+# must track the root toolchain. The list covers them whether or not they keep a
+# lake-manifest.json.
+PROJECT_LIST="test-projects/root-toolchain-projects.txt"
+mapfile -t ROOT_TOOLCHAIN_PROJECTS < <(grep -vE '^[[:space:]]*(#|$)' "$PROJECT_LIST")
+
+# An unreadable list would otherwise leave the array empty and sync nothing.
+if [ "${#ROOT_TOOLCHAIN_PROJECTS[@]}" -eq 0 ]; then
+    echo "Error: no projects listed in $PROJECT_LIST"
+    exit 1
+fi
+
+for name in "${ROOT_TOOLCHAIN_PROJECTS[@]}"; do
+    case "$name" in
+        */* | . | ..)
+            echo "Error: $PROJECT_LIST must list bare directory names, got '$name'"
+            exit 1
+            ;;
+    esac
+
+    target="test-projects/$name/lean-toolchain"
+    if [ -L "$target" ]; then
+        echo "Refusing to write through symlink: $target"
+        exit 1
+    fi
+    cp lean-toolchain "$target"
+    echo "Copied lean-toolchain to test-projects/$name/"
+done

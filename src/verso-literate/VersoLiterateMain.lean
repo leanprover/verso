@@ -643,7 +643,8 @@ unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (m
     let (headerStx, parserState, msgs) ← Parser.parseHeader ictx
     let imports := headerToImports headerStx
     enableInitializersExecution
-    let env ← importModules (extraImports.map ({module := ·}) ++ imports) {} (loadExts := true) (arts := importArts)
+    let level := if HeaderSyntax.isModule headerStx then .server else .private
+    let env ← importModules (extraImports.map ({module := ·}) ++ imports) {} (loadExts := true) (level := level) (arts := importArts)
     -- Rewrite `weak.` options based on the definitions discovered during imports
     let leanOptions ← Lean.Language.Lean.reparseOptions leanOptions
     let pctx : Frontend.Context := {inputCtx := ictx}
