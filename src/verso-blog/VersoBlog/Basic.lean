@@ -324,8 +324,8 @@ structure Post.Meta where
   authors : List String
   /-- Subtitle of the post -/
   subtitle: Option String := none
-  /-- Path to logo of the post -/
-  logo: Option String := none
+  /-- Path to the feature image of the post -/
+  featureImage: Option String := none
   /-- The categories in which to include the post -/
   categories : List Post.Category := []
   /-- If `true`, the post is not rendered by default -/
