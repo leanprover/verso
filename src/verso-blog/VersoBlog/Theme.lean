@@ -242,10 +242,6 @@ nav.top a:hover {
   color: var(--color-accent);
   text-decoration: none;
 }
-
-div.subtitle {
-  color: grey;
-}
 "#
 
 def primary : Template := do

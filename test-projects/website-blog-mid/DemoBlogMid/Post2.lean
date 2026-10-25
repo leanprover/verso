@@ -2,11 +2,11 @@ import VersoBlog
 
 open Verso Genre Blog
 
-#doc (Post) "Post2" =>
+#doc (Post) "Second Post with Something to Say" =>
 
 %%%
 date := {year := 2022, month := 10, day := 5}
-subtitle := "post2"
+subtitle := "I have a lot to say, so stay tuned"
 logo := "B.svg"
 authors := []
 %%%

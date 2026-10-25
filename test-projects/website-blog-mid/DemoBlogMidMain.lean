@@ -166,21 +166,45 @@ ul.post-list {
   margin: 0px;
 }
 
-.post-list img {
-  margin: 0 10px 10px 0;
-  padding: 0px;
-}
-
-.post-list li {
+.post-list-item {
   display: flex;
-  align-items:top;
-  padding-bottom: 40px;
+  flex-flow: row;
+  justify-content: space-between;
+  align-items: center;
+  grid-auto-columns: 1fr;
+  gap: 0px;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto;
+  padding-bottom: 20px;
 }
 
-.post-list img {
-  vertical-align: top;
+.post-list-item-img {
+  height: 100%;
+  max-width: none;
+  align-self: auto;
+  order: 0;
+  flex: 0 1 auto;
+  text-align: left;
+}
+
+.post-list-item-desc {
   max-width: 50%;
-  height: 150px;
+  display: block;
+  padding-left: 0px;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.post-list-item-desc-date {
+  color: grey;
+  font-size: small;
+}
+
+.post-list-item-desc-title {
+  font-size: big;
+}
+
+.post-list-item-desc-subtitle {
 }
 "#
 
@@ -274,8 +298,8 @@ def post : Template := do
   let title ← param "title"
   pure html%{
     { match (← param? "metadata") with
-    | none => html%{<h1>{title}</h1>}
-    | some md => html%{
+      | none => html%{<h1>{title}</h1>}
+      | some md => html%{
         <small>{(md : Post.PartMetadata).date.toIso8601String}</small>
         <h1 class="post">{title}</h1>
       }
@@ -314,33 +338,26 @@ def archiveEntry : Template := do
     else post.postName'
   return html%{
     <li>
-      { match post.contents.metadata with
-          | none => Html.empty
-          | some md =>
-              match md.logo with
-              | Option.none => Html.empty
-              | Option.some imgpath =>
-                html%{<img src={"./static/" ++ imgpath}/>}
-      }
-      <div>
-        { match post.contents.metadata with
-          | none => Html.empty
-          | some md => html%{
-              <small>{md.date.toIso8601String}</small>
-            }
-        }
-        <br/>
-        <a href={target} class="title">
-          <span class="name"><big>{post.contents.titleString}</big></span>
-        </a>
-        <br/>
-        { match post.contents.metadata with
-          | none => Html.empty
-          | some md =>
-              match md.subtitle with
-              | Option.some subtitle => html%{<div>{subtitle}</div>}
-              | _ => Html.empty
-        }
+      <div class="post-list-item">
+        <div class="post-list-item-desc">
+          { match post.contents.metadata with
+            | none => Html.empty
+            | some md => html%{<div class="post-list-item-desc-date">{md.date.toIso8601String}</div>}
+          }
+          <a href={target} class="title">
+            <div class="post-list-item-desc-title">{post.contents.titleString}</div>
+          </a>
+          { match post.contents.metadata >>= (·.subtitle) with
+            | Option.some subtitle => html%{<div class="post-list-item-desc-subtitle">{subtitle}</div>}
+            | _ => Html.empty
+          }
+        </div>
+        <div class="post-list-item-img">
+          { match post.contents.metadata >>= (·.logo) with
+            | Option.some imgpath => html%{<img src={"./static/" ++ imgpath}/>}
+            | _ => Html.empty
+          }
+        </div>
       </div>
     </li>
   }
