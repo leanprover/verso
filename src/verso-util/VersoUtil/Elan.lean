@@ -79,8 +79,9 @@ $ elan run --install <toolchain> <cmd>
 
 The function returns an {name}`IO.Process.SpawnArgs` object that resets environment variables appropriately and calls the given {lean}`cmd` via `elan run`.
 
-It is commonly the case in Verso contexts is that, if we're running these commands, there's some artifact that we want to ensure is present.
-Passing {name}`restoreArtifacts` defaults the {manual section "lake-config-toml"}[{lit}`LAKE_RESTORE_ARTIFACTS` environment variable] to {lean}`"true"`, which ensures that those artifacts will be present.
+In Verso, these commands are typically run in with the expectation that they will cause a compilation artifact to be placed in the `.lake` directory.
+Passing {name}`restoreArtifacts` defaults the {manual section "lake-config-toml"}[{lit}`LAKE_RESTORE_ARTIFACTS` environment variable] to {lean}`"true"`; this is necessary to ensure that commands like `lake build` actually put those artifacts into place in the build directory.
+Otherwise, Lake redirects callers to its cache without copying the artifacts to the build directory.
 
 The optional {name}`env` argument allows for further environment modifications, which will overwrite the default changes.
 -/
