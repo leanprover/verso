@@ -82,9 +82,9 @@ release candidate.
 Adaptation to upcoming Lean versions happens in
 [`downstream-lean4`](https://github.com/leanprover/downstream-lean4),
 which builds Verso together with other Lean packages against Lean
-nightlies. Its automation maintains a _bump branch_ in this
-repository that contains the changes needed to make Verso build with
-the indicated Lean version. `main` is repeatedly merged into the bump
+nightlies. Its automation maintains a _bump branch_ in this repository
+that contains the changes needed to make Verso build with the
+indicated Lean version. `main` is repeatedly merged into the bump
 branch. When a release candidate for the corresponding version is
 created, the bump branch is squash-merged onto `main` during the
 update. The
