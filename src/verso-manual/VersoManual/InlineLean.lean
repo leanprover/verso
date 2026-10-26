@@ -238,7 +238,7 @@ needs to run, so that its warnings are accurately recorded. But the linter also 
 document, at which time it can inspect the info trees left behind by the embedded Lean and generate
 spurious warnings. Turning it off before saving info trees works around this issue.
 -/
-private meta partial def disableUnusedVarLinterInInfoTree : InfoTree → InfoTree
+public meta partial def disableUnusedVarLinterInInfoTree : InfoTree → InfoTree
   | .context (.commandCtx ci) child =>
     .context (.commandCtx { ci with options := Lean.Linter.linter.unusedVariables.set ci.options false })
       (disableUnusedVarLinterInInfoTree child)
