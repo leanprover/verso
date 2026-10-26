@@ -7,7 +7,7 @@ open Verso Genre Blog
 %%%
 date := {year := 2022, month := 10, day := 5}
 subtitle := "welcome"
-featureImage := "A.svg"
+featuredImage := "A.svg"
 authors := []
 %%%
 

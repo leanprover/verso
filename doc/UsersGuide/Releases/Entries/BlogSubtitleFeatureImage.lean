@@ -10,7 +10,8 @@ release_note
   tag := "feat-blog-subtitle-feature-image"
   prs := [1047]
 
-#doc (Manual) "Blog new Subtitle and Feature Image metadata fields" =>
+#doc (Manual) "Subtitle and Feature Image Metadata Fields in Blog" =>
 
-Added an optional subtitle and feature image field in a blog's metadata.
-This allows users to create a blog theme that show cases feature images and subtitles in their posts list.
+Added optional subtitle and feature image fields in a blog post's metadata.
+A feature image is a large image that's given prominent placement for a post.
+Blog themes can now showcase these images on the post list in addition to in the post itself.

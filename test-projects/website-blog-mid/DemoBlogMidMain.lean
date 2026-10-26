@@ -353,7 +353,7 @@ def archiveEntry : Template := do
           }
         </div>
         <div class="post-list-item-img">
-          { match post.contents.metadata >>= (·.featureImage) with
+          { match post.contents.metadata >>= (·.featuredImage) with
             | Option.some imgpath => html%{<img src={"./static/" ++ imgpath}/>}
             | _ => Html.empty
           }

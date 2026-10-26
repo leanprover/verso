@@ -7,7 +7,7 @@ open Verso Genre Blog
 %%%
 date := {year := 2022, month := 10, day := 5}
 subtitle := "I have a lot to say, so stay tuned"
-featureImage := "B.svg"
+featuredImage := "B.svg"
 authors := []
 %%%
 
