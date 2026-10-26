@@ -841,7 +841,7 @@ where
     get := fun
       | .name x =>
         try
-          let resolved ← liftM (runWithOpenDecls (runWithVariables fun _ => realizeGlobalConstNoOverloadWithInfo x))
+          let resolved ← liftM (runWithOpenDecls (realizeGlobalConstNoOverloadWithInfo x))
           return some resolved
         catch
           | .error ref e => throwErrorAt ref e
@@ -869,7 +869,7 @@ meta def name : RoleExpanderOf NameConfig
 
     try
       let resolvedName ←
-        runWithOpenDecls <| runWithVariables fun _ =>
+        runWithOpenDecls <|
           withInfoTreeContext (mkInfoTree := pure ∘ InfoTree.node (.ofCommandInfo {elaborator := `Manual.Meta.name, stx := identStx})) do
             realizeGlobalConstNoOverloadWithInfo identStx
 
