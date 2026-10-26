@@ -79,8 +79,8 @@ $ elan run --install <toolchain> <cmd>
 
 The function returns an {name}`IO.Process.SpawnArgs` object that resets environment variables appropriately and calls the given {lean}`cmd` via `elan run`.
 
-In Verso, these commands are typically run in with the expectation that they will cause a compilation artifact to be placed in the `.lake` directory.
-Passing {name}`restoreArtifacts` defaults the {manual section "lake-config-toml"}[{lit}`LAKE_RESTORE_ARTIFACTS` environment variable] to {lean}`"true"`; this is necessary to ensure that commands like `lake build` actually put those artifacts into place in the build directory.
+In Verso, these commands are typically run in with the expectation that they will cause a compilation artifact to be placed in the {lit}`.lake` directory.
+Passing {name}`restoreArtifacts` defaults the {manual section "lake-config-toml"}[{lit}`LAKE_RESTORE_ARTIFACTS` environment variable] to {lean}`"true"`; this is necessary to ensure that commands like {lit}`lake build` actually put those artifacts into place in the build directory.
 Otherwise, Lake redirects callers to its cache without copying the artifacts to the build directory.
 
 The optional {name}`env` argument allows for further environment modifications, which will overwrite the default changes.
@@ -113,7 +113,13 @@ $ cd projectDir
 $ elan run --install <toolchain> foo bar
 ```
 
-The function manipulates environment variables (see {name}`getSpawnArgsForToolchain`.
+In order for {lit}`elan run` to work for a different toolchain, a number of environment variables need to be modified, and this function sets these up appropriately.
+
+In Verso, these commands are typically run in with the expectation that they will cause a compilation artifact to be placed in the {lit}`.lake` directory.
+Passing {name}`restoreArtifacts` defaults the {manual section "lake-config-toml"}[{lit}`LAKE_RESTORE_ARTIFACTS` environment variable] to {lean}`"true"`; this is necessary to ensure that commands like {lit}`lake build` actually put those artifacts into place in the build directory.
+Otherwise, Lake redirects callers to its cache without copying the artifacts to the build directory.
+
+The optional {name}`env` argument allows for further environment modifications, which will overwrite the default changes.
 
 The exit code is checked; if it is nonzero, and writes to stderr and throws an error.
 -/
