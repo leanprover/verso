@@ -584,6 +584,14 @@ lean_lib SimplePage where
 lean_lib TutorialExample where
   srcDir := "test-projects/tutorial-test"
 
+/-- `lake run versoMain File.lean ARGS...` is shorthand for `lake lean File.lean -- --run File.lean ARGS...`.
+This uses the IR interpreter to evaluate the `main` function in `File.lean`. -/
+script versoMain (args) do
+  let file :: rest := args
+    | IO.eprintln "usage: lake run versoMain FILE.lean [ARGS...]"
+      return 1
+  (← getWorkspace).evalLeanFile file (#["--run", file] ++ rest.toArray)
+
 private def leanOptionArgs (m : Module) : Array String := Id.run do
   let opts := Module.leanOptions m
   let vals := Lean.LeanOptions.values opts

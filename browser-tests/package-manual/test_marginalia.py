@@ -2,8 +2,8 @@
 
 Build the package-manual example with::
 
-    lake lean test-projects/package-manual/PackageManualMain.lean -- \
-      --run test-projects/package-manual/PackageManualMain.lean --output _out/package-manual
+    lake run versoMain test-projects/package-manual/PackageManualMain.lean \
+      --output _out/package-manual
 
 and run these tests with
 ``--site-dir _out/package-manual/html-multi``.

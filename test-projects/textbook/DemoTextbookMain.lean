@@ -20,7 +20,7 @@ open DemoTextbook
 open Lean Elab Term Command in
 #eval show CommandElabM Unit from do
   let here := (← liftTermElabM (readThe Lean.Core.Context)).fileName
-  -- When run through `lake lean DemoTextbookMain.lean -- --run DemoTextbookMain.lean`,
+  -- When run through `lake run versoMain DemoTextbookMain.lean`,
   -- `fileName` is relative.
   let here ← IO.FS.realPath here
   elabCommand (← `(private def $(mkIdent `mainFileName) : System.FilePath := $(quote here)))

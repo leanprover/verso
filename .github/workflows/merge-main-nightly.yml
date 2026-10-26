@@ -57,11 +57,11 @@ jobs:
 
             - name: Generate the test website
               run: |
-                  lake lean test-projects/website/DemoSiteMain.lean -- --run test-projects/website/DemoSiteMain.lean --output _out/test-projects/demosite
+                  lake run versoMain test-projects/website/DemoSiteMain.lean --output _out/test-projects/demosite
 
             - name: Generate the example genre's document
               run: |
-                  lake lean test-projects/custom-genre/SimplePageMain.lean -- --run test-projects/custom-genre/SimplePageMain.lean
+                  lake run versoMain test-projects/custom-genre/SimplePageMain.lean
 
             - name: Install PDF Dependencies
               uses: ./.github/actions/install-texlive
