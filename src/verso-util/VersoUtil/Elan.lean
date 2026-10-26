@@ -84,10 +84,10 @@ public def getSpawnArgsForToolchain (projectDir : System.FilePath) (toolchain : 
     (env : Array (String × EnvOverride) := #[])
     : IO.Process.SpawnArgs :=
   let filteredLakeVars := (elanVars restoreArtifacts).filter (fun (envVar, _) => env.all (·.1 != envVar))
-  let filteredEnv := env.filterMap (fun (envVar, action) => match action with
-    | .inherit => none
-    | .unset => some (envVar, none)
-    | .set v => some (envVar, some v))
+  let filteredEnv := env.filterMap fun
+    | (_, .inherit) => none
+    | (envVar, .unset) => some (envVar, none)
+    | (envVar, .set v) => some (envVar, some v))
   {
     cmd := "elan"
     args := #["run", "--install", toolchain] ++ cmd
