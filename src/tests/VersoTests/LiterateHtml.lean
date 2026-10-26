@@ -307,16 +307,16 @@ The doc comment on a `#guard_msgs` command is not documentation. Instead, it is 
 the expected messages from the wrapped command. It must not be attributed to the declaration in that
 command as a second docstring.
 -/
-private def testGuardMsgsDocstring (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+private def testGuardMsgsDocstring (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
   let html ← IO.FS.readFile (htmlDir / "LitConfig" / "GuardMsgs" / "index.html")
   let docstring := "A theorem whose proof is left open."
   let occurrences := (html.splitOn docstring).length - 1
-  unless occurrences == 1 do
-    throw <| IO.userError s!"Expected the docstring of `guarded` once in the HTML, found it {occurrences} times. \
+  assertTrue (occurrences == 1)
+    s!"Expected the docstring of `guarded` once in the HTML, found it {occurrences} times. \
       The expected-messages comment of `#guard_msgs` was attributed to `guarded` as a docstring."
-  unless hasSubstring html "declaration uses" do
-    throw <| IO.userError "The expected-messages comment of `#guard_msgs` is missing from the HTML."
+  assertContains "declaration uses" html
+    "The expected-messages comment of `#guard_msgs` is missing from the HTML."
 
 /-- Excluded modules produce no HTML output and are absent from the navbar. -/
 private def testExclude (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
