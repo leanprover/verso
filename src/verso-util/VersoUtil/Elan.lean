@@ -77,7 +77,7 @@ $ cd projectDir
 $ elan run --install <toolchain> <cmd>
 ```
 
-The function returns an {name}`IO.Process.SpawnArgs` object that resets environment variables appropriately and calls the given {lean}`cmd` via `elan run`.
+The function returns an {name}`IO.Process.SpawnArgs` object that resets environment variables appropriately and calls the given {lean}`cmd` via {lit}`elan run`.
 
 In Verso, these commands are typically run in with the expectation that they will cause a compilation artifact to be placed in the {lit}`.lake` directory.
 Passing {name}`restoreArtifacts` defaults the {manual section "lake-config-toml"}[{lit}`LAKE_RESTORE_ARTIFACTS` environment variable] to {lean}`"true"`; this is necessary to ensure that commands like {lit}`lake build` actually put those artifacts into place in the build directory.
@@ -94,7 +94,7 @@ public def getSpawnArgsForToolchain (projectDir : System.FilePath) (toolchain : 
   let filteredEnv := env.filterMap fun
     | (_, .inherit) => none
     | (envVar, .unset) => some (envVar, none)
-    | (envVar, .set v) => some (envVar, some v))
+    | (envVar, .set v) => some (envVar, some v)
   {
     cmd := "elan"
     args := #["run", "--install", toolchain] ++ cmd
