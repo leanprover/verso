@@ -61,7 +61,7 @@ def loadModuleContent' (projectDir : StrLit) (mod : String) (suppressNamespaces 
   let runCmd (trace : MessageData) (cmd : Array String) (restoreArtifacts : Bool) : m Unit :=
     withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure <| trace.trace {cls := `command} #[m!"{" ".intercalate cmd.toList}"]) do
       let _ ← Verso.Elan.runCmdWithToolchain projectDir toolchain cmd restoreArtifacts
-        (env := #[("SUBVERSO_SUPPRESS_NAMESPACES", .set (" ".intercalate suppressNamespaces))])
+        (env := #[("SUBVERSO_SUPPRESS_NAMESPACES", .some (" ".intercalate suppressNamespaces))])
 
   let toolchainFile ← IO.FS.Handle.mk (projectDir / "lean-toolchain") .read
   -- Lake tends to get in trouble if used concurrently, so build the Lean code with a lock.

@@ -9,18 +9,6 @@ namespace Verso.Elan
 set_option doc.verso true
 
 /--
-Modifies a default set of changes to an environment.
--/
-public inductive EnvOverride : Type where
-  | /-- Remove the default modification that would otherwise have been added -/
-    inherit : EnvOverride
-  | /-- Unset the environment variable -/
-    unset : EnvOverride
-  | /-- Set the environment variable to {lit}`"dev"` -/
-    set : String → EnvOverride
-
-
-/--
 Environment variables that we want to clear to call {lit}`elan` with a different toolchain.
 
 We will be generally assuming that, if these variables were set, they were set by an outer invocation of Lake, and we'd like to undo that.
@@ -88,18 +76,14 @@ The optional {name}`env` argument allows for further environment modifications, 
 public def getSpawnArgsForToolchain (projectDir : System.FilePath) (toolchain : String)
     (cmd : Array String)
     (restoreArtifacts : Bool := false)
-    (env : Array (String × EnvOverride) := #[])
+    (env : Array (String × Option String) := #[])
     : IO.Process.SpawnArgs :=
   let filteredLakeVars := (elanVars restoreArtifacts).filter (fun (envVar, _) => env.all (·.1 != envVar))
-  let filteredEnv := env.filterMap fun
-    | (_, .inherit) => none
-    | (envVar, .unset) => some (envVar, none)
-    | (envVar, .set v) => some (envVar, some v)
   {
     cmd := "elan"
     args := #["run", "--install", toolchain] ++ cmd
     cwd := projectDir
-    env := filteredLakeVars ++ filteredEnv,
+    env := filteredLakeVars ++ env,
   }
 
 
@@ -127,7 +111,7 @@ Setting {name}`errorsToStderr` to {lean}`false` changes this behavior: nothing i
 public def runCmdWithToolchain (projectDir : System.FilePath) (toolchain : String)
     (cmd : Array String)
     (restoreArtifacts : Bool := false)
-    (env : Array (String × EnvOverride) := #[])
+    (env : Array (String × Option String) := #[])
     (errorsToStderr : Bool := true) : IO IO.Process.Output := do
   let res ← IO.Process.output
     (getSpawnArgsForToolchain projectDir toolchain cmd restoreArtifacts env)
