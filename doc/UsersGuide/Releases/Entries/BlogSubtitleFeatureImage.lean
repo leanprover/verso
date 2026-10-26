@@ -20,5 +20,5 @@ Blog themes can now showcase these images on the post list in addition to in the
 To migrate posts to include a feature image and/or subtitle:
 
 * Add a field `subtitle` to your post's metadata, for example: `subtitle := "an explanation using Lean"`.
-* Add a field `featuredImage` to your post's metadata, for example: `featuredImage := "mypicture.png"`. The value should be a path to an image in your static files or some path to an image.
+* Add a field `featuredImage` with a path to an image to your post's metadata, for example: `featuredImage := "./static/mypicture.png"`.
 :::
