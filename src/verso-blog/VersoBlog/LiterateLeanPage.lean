@@ -33,17 +33,17 @@ open Verso.Doc.Concrete (stringToInlines)
 
 namespace Verso.Genre.Blog.Literate
 
-open System in
+open System Elan in
 meta def loadModuleContent
     (leanProject : FilePath) (mod : String)
     (overrideToolchain : Option String := none) : IO (Array ModuleItem) := do
 
   let projectDir := ((← IO.currentDir) / leanProject).normalize
-  let toolchain ← Elan.getProjectToolchain projectDir (overrideToolchain := overrideToolchain)
+  let toolchain ← getProjectToolchain projectDir (overrideToolchain := overrideToolchain)
 
-  discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "build", s!"+{mod}"] (restoreArtifacts := true)
+  discard <| runCmdWithToolchain projectDir toolchain #["lake", "build", s!"+{mod}"] (restoreArtifacts := true)
   IO.FS.withTempFile fun h f => do
-    discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "exe", "subverso-extract-mod", mod, f.toString]
+    discard <| runCmdWithToolchain projectDir toolchain #["lake", "exe", "subverso-extract-mod", mod, f.toString]
     h.rewind
 
     let .ok json := Json.parse (← h.readToEnd)
@@ -56,21 +56,21 @@ meta def loadModuleContent
 structure Helper where
   highlight (term : String) (type? : Option String) : IO Highlighted
 
-open System in
+open System Elan in
 meta def Helper.fromModule
     (leanProject : FilePath) (mod : String)
     (overrideToolchain : Option String := none) : IO Helper := do
 
   let projectDir := ((← IO.currentDir) / leanProject).normalize
-  let toolchain ← Elan.getProjectToolchain projectDir (overrideToolchain := overrideToolchain)
+  let toolchain ← getProjectToolchain projectDir (overrideToolchain := overrideToolchain)
 
-  discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "build", "subverso-helper"]
-  discard <| Elan.runCmdWithToolchain projectDir toolchain #["lake", "build", s!"+{mod}"] (restoreArtifacts := true)
+  discard <| runCmdWithToolchain projectDir toolchain #["lake", "build", "subverso-helper"]
+  discard <| runCmdWithToolchain projectDir toolchain #["lake", "build", s!"+{mod}"] (restoreArtifacts := true)
 
   let cmd := #["lake", "env", "subverso-helper", mod]
   let hl ← do
     let (procIn, proc) ← do
-      let proc ← IO.Process.spawn {Elan.getSpawnArgsForToolchain projectDir toolchain cmd with
+      let proc ← IO.Process.spawn {getSpawnArgsForToolchain projectDir toolchain cmd with
         stdin := .piped
         stdout := .piped
         stderr := .inherit

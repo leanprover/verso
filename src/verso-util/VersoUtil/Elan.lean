@@ -10,29 +10,36 @@ set_option doc.verso true
 
 /--
 Modifies a default set of changes to an environment.
-
- - {lean (type := "EnvOverride")}`.inherit` is an instruction to remove the default modification that would otherwise have been added
- - {lean (type := "EnvOverride")}`.unset` is an instruction to unset the environment variable
- - {lean (type := "EnvOverride")}`.set "dev"` is an instruction to set the environment variable to {lit}`"dev"`.
 -/
 public inductive EnvOverride : Type where
-  | inherit : EnvOverride
-  | unset : EnvOverride
-  | set : String → EnvOverride
+  | /-- Remove the default modification that would otherwise have been added -/
+    inherit : EnvOverride
+  | /-- Unset the environment variable -/
+    unset : EnvOverride
+  | /-- Set the environment variable to {lit}`"dev"` -/
+    set : String → EnvOverride
 
 
 /--
 Environment variables that we want to clear to call {lit}`elan` with a different toolchain.
 
 We will be generally assuming that, if these variables were set, they were set by an outer invocation of Lake, and we'd like to undo that.
-
-Clearing out {lit}`DYLD_LIBRARY_PATH` and {lit}`LD_LIBRARY_PATH` are critical so that when we invoke Elan with a different toolchain, it doesn't look for the wrong shared libraries.
 -/
 def elanClearVars :=
   #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
     "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
-    "LEAN", "LEAN_GITHASH",
-    "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
+    "LEAN",
+    "ELAN_TOOLCHAIN",
+    /-
+    If `LEAN_GITHASH` is not in place, the wrong value gets embedded in oleans and we end up with
+    lots of spurious rebuilds and slow behavior
+    -/
+    "LEAN_GITHASH",
+    /-
+    Clearing out `DYLD_LIBRARY_PATH` and `LD_LIBRARY_PATH` are critical so that when we invoke Elan
+    with a different toolchain, it doesn't look for the wrong shared libraries.
+    -/
+    "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
 
 /--
 Lake's artifact cache will prevent certain artifacts from being built if they already exist in the cache.
@@ -47,8 +54,7 @@ def elanVars : (restoreArtifacts : Bool) → Array (String × Option String)
 
 
 /--
-Validate that a directory has the shape of a lean project,
-return the toolchain (from {lit}`lean-toolchain` or from the override)
+Validates that a directory has the shape of a lean project, and returns the toolchain (from {lit}`lean-toolchain` or from the override)
 -/
 public def getProjectToolchain (projectDir : System.FilePath) (overrideToolchain : Option String := none) : IO String := do
   let lakefileLean := projectDir / "lakefile.lean"
