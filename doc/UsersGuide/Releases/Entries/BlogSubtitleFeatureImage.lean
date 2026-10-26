@@ -15,3 +15,10 @@ release_note
 Added optional subtitle and feature image fields in a blog post's metadata.
 A feature image is a large image that's given prominent placement for a post.
 Blog themes can now showcase these images on the post list in addition to in the post itself.
+
+:::paragraph
+To migrate posts to include a feature image and/or subtitle:
+
+* Add a field `subtitle` to your post's metadata, for example: `subtitle := "an explanation using Lean"`.
+* Add a field `featuredImage` to your post's metadata, for example: `featuredImage := "mypicture.png"`. The value should be a path to an image in your static files or some path to an image.
+:::
