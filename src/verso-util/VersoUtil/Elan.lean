@@ -121,7 +121,8 @@ Otherwise, Lake redirects callers to its cache without copying the artifacts to 
 
 The optional {name}`env` argument allows for further environment modifications, which will overwrite the default changes.
 
-The exit code is checked; if it is nonzero, and writes to stderr and throws an error.
+The exit code is checked; if it is nonzero, the function adds information about the failed call stderr, and then throws an error containing just the command's output.
+Setting {name}`errorsToStderr` to {lean}`false` changes this behavior: nothing is printed to stderr, and all the information about the failure is present in the thrown error.
 -/
 public def runCmdWithToolchain (projectDir : System.FilePath) (toolchain : String)
     (cmd : Array String)
