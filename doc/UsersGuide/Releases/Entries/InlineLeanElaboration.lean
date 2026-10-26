@@ -13,7 +13,7 @@ release_note
   version := ⟨4, 36, 0⟩
   breaking := false
   tag := "inline-lean-elaboration"
-  prs := []
+  prs := [1062]
 
 #doc (Manual) "New Helpers for Elaborating Inline Lean Code" =>
 
