@@ -77,7 +77,7 @@ $ cd projectDir
 $ elan run --install <toolchain> <cmd>
 ```
 
-The resulting spawn arguments manipulate environment variables to allow {lit}`elan` to be invoked with a different toolchain.
+The function returns an {name}`IO.Process.SpawnArgs` object that resets environment variables appropriately and calls the given {lean}`cmd` via `elan run`.
 
 It is commonly the case in Verso contexts is that, if we're running these commands, there's some artifact that we want to ensure is present.
 Passing {name}`restoreArtifacts` defaults the {manual section "lake-config-toml"}[{lit}`LAKE_RESTORE_ARTIFACTS` environment variable] to {lean}`"true"`, which ensures that those artifacts will be present.
