@@ -19,10 +19,10 @@ public import Verso.Output.Html.AttributeName
 public import Verso.Output.Html.Comments
 
 /- Deprecated imports temporarily kept to implement deprecated syntax (2026-09-16). -/
-public meta import Verso.Output.Html.AttributeName
-public meta import Verso.Output.Html.Comments
+public meta import Verso.Output.Html.AttributeName -- deprecated_module: ignore
+public meta import Verso.Output.Html.Comments -- deprecated_module: ignore
 public meta import Verso.Output.Html.Tags
-import Verso.Output.Html.Tags
+import Verso.Output.Html.Tags -- deprecated_module: ignore
 
 /-! ## Additions to the Lean namespace -/
 
