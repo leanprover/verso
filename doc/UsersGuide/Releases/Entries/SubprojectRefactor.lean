@@ -20,4 +20,4 @@ release_note
 There are more than a half-dozen places where Verso tools need
 to invoke `elan run --install <toolchain> <...cmd>` in the context of a specific project, where the `cmd` is some relevant command (usually a lake invocation).
 
-These invocations relay on some of Lake's environment variables being overridden, because otherwise the Lake and Lean subprocesses in the build may inheret settings that do not properly apply to them. All these invocations now rely on a standard set of helpers that consistently invoke them correctly.
+These invocations relay on some of Lake's environment variables being overridden, because otherwise the Lake and Lean subprocesses in the build may inherit settings that do not properly apply to them. All these invocations now rely on a standard set of helpers that consistently invoke them correctly.
