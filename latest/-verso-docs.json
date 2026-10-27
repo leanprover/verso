@@ -98,79 +98,88 @@
  "<code>Doc.Block g → g.TraverseContext → g.TraverseContext</code><span class=\"sep\"></span><code class=\"docstring\">How to modify the context while traversing a given block.\n\nIt is also used during HTML generation.\n</code>",
  "46":
  "<code>Verso.Doc.TraverseBlock.mk {g : Doc.Genre} (inBlock : Doc.Block g → g.TraverseContext → g.TraverseContext) :\n  Doc.TraverseBlock g</code>",
- "454":
+ "459":
  "<code>Verso.Genre.Manual.PartMetadata.searchPriority (self : PartMetadata) : Fin 100</code>",
- "453":
+ "458":
  "<code>Verso.reportWarning {m : Type → Type} [Verso.MonadBuildLog m] (text : String) (loc : Option Verso.SourceLoc := none) :\n  m Unit</code>",
- "452":
+ "457":
  "<code>Verso.reportError {m : Type → Type} [Verso.MonadBuildLog m] (text : String) (loc : Option Verso.SourceLoc := none) :\n  m Unit</code>",
- "451": "<code>Verso.Severity.warning : Verso.Severity</code>",
- "450": "<code>Verso.Severity.error : Verso.Severity</code>",
+ "456": "<code>Verso.Severity.warning : Verso.Severity</code>",
+ "455": "<code>Verso.Severity.error : Verso.Severity</code>",
+ "454": "<code>Verso.Severity : Type</code>",
+ "453": "<code>Verso.MonadBuildLog (m : Type → Type) : Type</code>",
+ "452": "<code>Verso.Genre.Manual.ExtraStep : Type</code>",
+ "451":
+ "<code>Verso.Doc.Elab.DocElabM.addFootnoteRef (labelStx : Lean.Doc.VersoRefName) : Verso.Doc.Elab.DocElabM (Lean.TSyntax `term)</code>",
+ "450":
+ "<code>Verso.Doc.Elab.PartElabM.addFootnoteDef (labelStx : Lean.Doc.VersoRefName) (content : Array (Lean.TSyntax `term))\n  (contentUses : Array (String × Lean.Syntax) := #[]) : Verso.Doc.Elab.PartElabM Unit</code>",
  "45":
  "<code>Doc.Part g → g.TraverseContext → g.TraverseContext</code><span class=\"sep\"></span><code class=\"docstring\">How to modify the context while traversing the contents of a given part. This is applied after\n`part` and `genrePart` have rewritten the text, if applicable.\n\nIt is also used during HTML generation.\n</code>",
- "449": "<code>Verso.Severity : Type</code>",
- "448": "<code>Verso.MonadBuildLog (m : Type → Type) : Type</code>",
- "447": "<code>Verso.Genre.Manual.ExtraStep : Type</code>",
- "446":
- "<code>Verso.Doc.Elab.DocElabM.addFootnoteRef (labelStx : Lean.Doc.VersoRefName) : Verso.Doc.Elab.DocElabM (Lean.TSyntax `term)</code>",
- "445":
- "<code>Verso.Doc.Elab.PartElabM.addFootnoteDef (labelStx : Lean.Doc.VersoRefName) (content : Array (Lean.TSyntax `term))\n  (contentUses : Array (String × Lean.Syntax) := #[]) : Verso.Doc.Elab.PartElabM Unit</code>",
- "444":
+ "449":
  "<code>Verso.Doc.Elab.DocElabM.addLinkRef (labelStx : Lean.Doc.VersoRefName) : Verso.Doc.Elab.DocElabM (Lean.TSyntax `term)</code>",
- "443":
+ "448":
  "<code>Verso.Doc.Elab.PartElabM.addLinkDef (labelStx : Lean.Doc.VersoRefName) (url : String) : Verso.Doc.Elab.PartElabM Unit</code>",
- "442": "<code>Verso.Doc.Elab.DocDef (α : Type) : Type</code>",
- "441": "<code>Verso.Doc.Elab.DocRefInfo : Type</code>",
- "440":
+ "447": "<code>Verso.Doc.Elab.DocDef (α : Type) : Type</code>",
+ "446": "<code>Verso.Doc.Elab.DocRefInfo : Type</code>",
+ "445":
  "<code>Verso.Code.External.anchorInfo : Verso.Doc.Elab.CodeBlockExpander</code>",
+ "444":
+ "<code>Verso.Code.External.anchorName : Verso.Doc.Elab.RoleExpander</code>",
+ "443":
+ "<code>Verso.Code.External.anchorTerm : Verso.Doc.Elab.RoleExpander</code>",
+ "442":
+ "<code>Verso.Code.External.anchor : Verso.Doc.Elab.CodeBlockExpander</code>",
+ "441":
+ "<code>verso.exampleModule</code><span class=\"sep\"></span><code class=\"docstring\">The default module to load examples from</code>",
+ "440":
+ "<code>verso.exampleProject</code><span class=\"sep\"></span><code class=\"docstring\">The directory in which to search for example code</code>",
  "44":
  "<code>Verso.Doc.TraversePart.mk {g : Doc.Genre} (inPart : Doc.Part g → g.TraverseContext → g.TraverseContext) :\n  Doc.TraversePart g</code>",
  "439":
- "<code>Verso.Code.External.anchorName : Verso.Doc.Elab.RoleExpander</code>",
- "438":
- "<code>Verso.Code.External.anchorTerm : Verso.Doc.Elab.RoleExpander</code>",
- "437":
- "<code>Verso.Code.External.anchor : Verso.Doc.Elab.CodeBlockExpander</code>",
- "436":
- "<code>verso.exampleModule</code><span class=\"sep\"></span><code class=\"docstring\">The default module to load examples from</code>",
- "435":
- "<code>verso.exampleProject</code><span class=\"sep\"></span><code class=\"docstring\">The directory in which to search for example code</code>",
- "434":
  "<code>Verso.Doc.DocReconstruction (genre : Verso.Doc.Genre) : Type</code>",
- "433": "<code>Verso.Genre.Manual : Verso.Doc.Genre</code>",
- "432":
+ "438":
  "<code>Verso.Doc.onlyName {m : Type → Type} [Monad m] [Lean.MonadError m] (inlines : Array VersoInline) : m Lean.Ident</code>",
- "431":
+ "437":
  "<code>Verso.Doc.onlyCode? {m : Type → Type} [Monad m] [Lean.MonadError m] [Lean.MonadLog m] [Lean.AddMessageContext m]\n  [Lean.MonadOptions m] (inlines : Array VersoInline) : m (Option Lean.Doc.VersoCode)</code>",
- "430":
+ "436":
  "<code>Lean.Doc.onlyCode {m : Type → Type} [Monad m] [Lean.MonadError m] (xs : Lean.TSyntaxArray `Lean.Doc.Parser.inline) :\n  m Lean.Doc.VersoCode</code>",
+ "435":
+ "<code>Verso.Literal.encode {k : Lean.SyntaxNodeKinds} [self : Literal k] (src : Syntax) (value : String) : Lean.TSyntax k</code>",
+ "434":
+ "<code>Verso.Literal.decode {k : Lean.SyntaxNodeKinds} [self : Literal k] (stx : Lean.TSyntax k) : String</code>",
+ "433": "<code>Verso.Literal (k : Lean.SyntaxNodeKinds) : Type</code>",
+ "432": "<code>Lean.Syntax.StrLit : Type</code>",
+ "431": "<code>Lean.Doc.VersoText : Type</code>",
+ "430": "<code>Lean.Doc.VersoCodeBlock : Type</code>",
  "43":
  "<code>Verso.Doc.Genre.Inline (self : Doc.Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Additional inline-level values for documents written in the genre.\n</code>",
- "429":
- "<code>Verso.Literal.encode {k : Lean.SyntaxNodeKinds} [self : Literal k] (src : Syntax) (value : String) : Lean.TSyntax k</code>",
+ "429": "<code>Verso.Doc.Elab.CodeBlockExpander : Type</code>",
  "428":
- "<code>Verso.Literal.decode {k : Lean.SyntaxNodeKinds} [self : Literal k] (stx : Lean.TSyntax k) : String</code>",
- "427": "<code>Verso.Literal (k : Lean.SyntaxNodeKinds) : Type</code>",
- "426": "<code>Lean.Syntax.StrLit : Type</code>",
- "425": "<code>Lean.Doc.VersoText : Type</code>",
- "424": "<code>Lean.Doc.VersoCodeBlock : Type</code>",
- "423": "<code>Verso.Doc.Elab.CodeBlockExpander : Type</code>",
- "422":
  "<code>Lean.Doc.BlockView.of (stx : Lean.TSyntax `Lean.Doc.Parser.block) : Option BlockView</code>",
- "421":
+ "427":
  "<code>Lean.Doc.InlineView.of (stx : Lean.TSyntax `Lean.Doc.Parser.inline) : Option InlineView</code>",
- "420": "<code>Lean.Doc.VersoBlock : Type</code>",
+ "426": "<code>Lean.Doc.VersoBlock : Type</code>",
+ "425": "<code>Verso.Doc.Elab.DirectiveExpander : Type</code>",
+ "424": "<code>Lean.Doc.VersoInline : Type</code>",
+ "423": "<code>Array.{u} (α : Type u) : Type u</code>",
+ "422": "<code>Verso.Doc.Elab.RoleExpander : Type</code>",
+ "421": "<code>Lean.Doc.BlockView : Type</code>",
+ "420": "<code>Verso.Doc.Elab.BlockExpander : Type</code>",
  "42":
  "<code>[MonadReader g.TraverseContext m] →\n  [MonadState g.TraverseState m] → g.Inline → Array (Doc.Inline g) → m (Option (Doc.Inline g))</code><span class=\"sep\"></span><code class=\"docstring\">The traversal of genre-specific inline values. If it returns `none`, then no rewrite is performed.\n</code>",
- "419": "<code>Verso.Doc.Elab.DirectiveExpander : Type</code>",
- "418": "<code>Lean.Doc.VersoInline : Type</code>",
- "417": "<code>Array.{u} (α : Type u) : Type u</code>",
- "416": "<code>Verso.Doc.Elab.RoleExpander : Type</code>",
- "415": "<code>Lean.Doc.BlockView : Type</code>",
- "414": "<code>Verso.Doc.Elab.BlockExpander : Type</code>",
- "413": "<code>Lean.Doc.InlineView : Type</code>",
- "412": "<code>Verso.Doc.Elab.InlineExpander : Type</code>",
- "411": "<code>Lean.Syntax : Type</code>",
+ "419": "<code>Lean.Doc.InlineView : Type</code>",
+ "418": "<code>Verso.Doc.Elab.InlineExpander : Type</code>",
+ "417": "<code>Lean.Syntax : Type</code>",
+ "416":
+ "<code>Verso.Genre.Manual.partHeading (state : TraverseState) (ctxt : TraverseContext) (id : Option InternalId) (level : Nat)\n  (title : Lean.Html) (showNumber showPermalink : Bool := true) : Heading</code>",
+ "415": "<code>Verso.Genre.Manual.Heading : Type</code>",
+ "414":
+ "<code>Verso.Genre.Manual.Html.titlePage (heading : Heading) (authors : List String) (authorshipNote : Option String)\n  (intro : Lean.Html) : Lean.Html</code>",
+ "413":
+ "<code>Verso.Genre.Manual.InlineLean.withInlineLeanInfoTree {m : Type → Type} {α : Type} [Monad m] [Lean.Elab.MonadInfoTree m]\n  [MonadFinally m] [Lean.MonadEnv m] [Lean.MonadFileMap m] [Lean.MonadMCtx m] [Lean.MonadResolveName m]\n  [Lean.MonadOptions m] [Lean.MonadNameGenerator m] (elaborator : Lean.Name) (stx : Lean.Syntax) (act : m α) :\n  m (α × Lean.Elab.InfoTree)</code>",
+ "412":
+ "<code>Verso.Genre.Manual.InlineLean.elabInlineLean {α : Type} (elaborator : Lean.Name) (stx : Lean.Syntax)\n  (act : Array Lean.Expr → Lean.Elab.TermElabM α) : Lean.Elab.TermElabM (α × Lean.Elab.InfoTree)</code>",
+ "411": "<code>Verso.Genre.Manual : Verso.Doc.Genre</code>",
  "410":
  "<code>Verso.Genre.Manual.diagram : Elab.CodeBlockExpanderOf DiagramConfig</code><span class=\"sep\"></span><code class=\"docstring\">Renders an Illuminate diagram as a block of SVG, with an InfoView widget for interactive\npreview.\n\nThe source of the code block is elaborated and evaluated as a term of type\n`Illuminate.Diagram Illuminate.SVG`; the result is rendered to an SVG string and embedded in\nthe output. HTML output inlines the SVG; LaTeX output writes the SVG next to `main.tex` and\nincludes it via `\\includesvg{...}`.\n\n````\n```diagram (cssWidth := \"20em\") (texWidth := \"20em\")\nIlluminate.Diagram.rect 30 20\n```\n````\n\nThe available arguments are:\n\n* `cssWidth := \"&lt;length&gt;\"` — a CSS length used in HTML output.\n* `cssScale := &lt;number&gt;` — instead of `cssWidth`, a scale factor multiplied by the diagram's\n  natural viewBox width and emitted as an `em` value. Useful for keeping line widths\n  consistent across multiple diagrams. Mutually exclusive with `cssWidth`.\n* `texWidth := \"&lt;length&gt;\"` — a valid LaTeX length used in PDF output.\n* `+inline` — layout hint that omits standalone framing when the diagram is being composed\n  into a larger layout (e.g. inside the `row` directive).\n\nIf neither `cssWidth` nor `cssScale` is supplied, HTML output uses `100%`. If `texWidth` is\nomitted, LaTeX output uses `\\textwidth`.\n\n**LaTeX build requirements.** The `\\includesvg` macro needs the `svg` LaTeX package (added\nautomatically to the preamble), the `inkscape` binary, and `lualatex -shell-escape`. Without\nthose, the document compiles to HTML but the PDF build will fail when it reaches a diagram.</code>",
  "41":
@@ -401,7 +410,7 @@
  "300":
  "<code>Verso.Multi.InternalId : Type</code><span class=\"sep\"></span><code class=\"docstring\">An internal identifier assigned to a part during traversal. Users don't get to have influence\nover these IDs, so they can be used to ensure uniqueness of tags.\n\nEven though the constructor is private, there is a JSON serialization that can be used to undermine\nthe uniqueness of internal IDs. Please don't do that - your program may break unpredictably.</code>",
  "30":
- "<code>MonadState.{u, v} (σ : outParam (Type u)) (m : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">State monads provide a value of a given type (the _state_) that can be retrieved or replaced.\nInstances may implement these operations by passing state values around, by using a mutable\nreference cell (e.g. `ST.Ref σ`), or in other ways.\n\nIn this class, `σ` is an `outParam`, which means that it is inferred from `m`. `MonadStateOf σ`\nprovides the same operations, but allows `σ` to influence instance synthesis.\n\nThe mutable state of a state monad is visible between multiple `do`-blocks or functions, unlike\n[local mutable state](https://lean-lang.org/doc/reference/4.36.0-rc1/find/?domain=Verso.Genre.Manual.section&amp;name=do-notation-let-mut) in `do`-notation.</code>",
+ "<code>MonadState.{u, v} (σ : outParam (Type u)) (m : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">State monads provide a value of a given type (the _state_) that can be retrieved or replaced.\nInstances may implement these operations by passing state values around, by using a mutable\nreference cell (e.g. `ST.Ref σ`), or in other ways.\n\nIn this class, `σ` is an `outParam`, which means that it is inferred from `m`. `MonadStateOf σ`\nprovides the same operations, but allows `σ` to influence instance synthesis.\n\nThe mutable state of a state monad is visible between multiple `do`-blocks or functions, unlike\n[local mutable state](https://lean-lang.org/doc/reference/4.36.0-rc2/find/?domain=Verso.Genre.Manual.section&amp;name=do-notation-let-mut) in `do`-notation.</code>",
  "3":
  "<code>Verso.Doc.Genre.mk (PartMetadata Block Inline TraverseContext TraverseState : Type) : Doc.Genre</code>",
  "299":
@@ -726,7 +735,7 @@
  "<code>Verso.Doc.Part.metadata {genre : Doc.Genre} : Doc.Part genre → Option genre.PartMetadata</code><span class=\"sep\"></span><code class=\"docstring\">Genre-specific metadata</code>",
  "129": "<code>Html → m Html</code>",
  "128":
- "<code>Monad.{u, v} (m : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">[Monads](https://en.wikipedia.org/wiki/Monad_(functional_programming)) are an abstraction of\nsequential control flow and side effects used in functional programming. Monads allow both\nsequencing of effects and data-dependent effects: the values that result from an early step may\ninfluence the effects carried out in a later step.\n\nThe `Monad` API may be used directly. However, it is most commonly accessed through\n[`do`-notation](https://lean-lang.org/doc/reference/4.36.0-rc1/find/?domain=Verso.Genre.Manual.section&amp;name=do-notation).\n\nMost `Monad` instances provide implementations of `pure` and `bind`, and use default implementations\nfor the other methods inherited from `Applicative`. Monads should satisfy certain laws, but\ninstances are not required to prove this. An instance of `LawfulMonad` expresses that a given\nmonad's operations are lawful.</code>",
+ "<code>Monad.{u, v} (m : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">[Monads](https://en.wikipedia.org/wiki/Monad_(functional_programming)) are an abstraction of\nsequential control flow and side effects used in functional programming. Monads allow both\nsequencing of effects and data-dependent effects: the values that result from an early step may\ninfluence the effects carried out in a later step.\n\nThe `Monad` API may be used directly. However, it is most commonly accessed through\n[`do`-notation](https://lean-lang.org/doc/reference/4.36.0-rc2/find/?domain=Verso.Genre.Manual.section&amp;name=do-notation).\n\nMost `Monad` instances provide implementations of `pure` and `bind`, and use default implementations\nfor the other methods inherited from `Applicative`. Monads should satisfy certain laws, but\ninstances are not required to prove this. An instance of `LawfulMonad` expresses that a given\nmonad's operations are lawful.</code>",
  "127": "<code>Type → Type u_1</code>",
  "126":
  "<code>Lean.Html.rewritePostM.{u_1} {m : Type → Type u_1} [Monad m] (fn : Html → m Html) : Html → m Html</code><span class=\"sep\"></span><code class=\"docstring\">Rewrites the forest by using `fn` to transform every node.\nTraversal proceeds in post-order:\n`fn` receives `element` and `seq` nodes with already-rewritten children. </code>",
@@ -771,7 +780,7 @@
  "106":
  "<code>Functor.{u, v} (f : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">A functor in the sense used in functional programming, which means a function `f : Type u → Type v`\nhas a way of mapping a function over its contents. This `map` operator is written `&lt;$&gt;`, and\noverloaded via `Functor` instances.\n\nThis `map` function should respect identity and function composition. In other words, for all terms\n`v : f α`, it should be the case that:\n\n * `id &lt;$&gt; v = v`\n\n * For all functions `h : β → γ` and `g : α → β`, `(h ∘ g) &lt;$&gt; v = h &lt;$&gt; g &lt;$&gt; v`\n\nWhile all `Functor` instances should live up to these requirements, they are not required to _prove_\nthat they do. Proofs may be required or provided via the `LawfulFunctor` class.\n\nAssuming that instances are lawful, this definition corresponds to the category-theoretic notion of\n[functor](https://en.wikipedia.org/wiki/Functor) in the special case where the category is the\ncategory of types and functions between them.</code>",
  "105":
- "<code>Applicative.{u, v} (f : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">An [applicative functor](https://lean-lang.org/doc/reference/4.36.0-rc1/find/?domain=Verso.Genre.Manual.section&amp;name=monads-and-do) is more powerful than a `Functor`, but\nless powerful than a `Monad`.\n\nApplicative functors capture sequencing of effects with the `&lt;*&gt;` operator, overloaded as `seq`, but\nnot data-dependent effects. The results of earlier computations cannot be used to control later\neffects.\n\nApplicative functors should satisfy four laws. Instances of `Applicative` are not required to prove\nthat they satisfy these laws, which are part of the `LawfulApplicative` class.</code>",
+ "<code>Applicative.{u, v} (f : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">An [applicative functor](https://lean-lang.org/doc/reference/4.36.0-rc2/find/?domain=Verso.Genre.Manual.section&amp;name=monads-and-do) is more powerful than a `Functor`, but\nless powerful than a `Monad`.\n\nApplicative functors capture sequencing of effects with the `&lt;*&gt;` operator, overloaded as `seq`, but\nnot data-dependent effects. The results of earlier computations cannot be used to control later\neffects.\n\nApplicative functors should satisfy four laws. Instances of `Applicative` are not required to prove\nthat they satisfy these laws, which are part of the `LawfulApplicative` class.</code>",
  "104":
  "<code>ArgParse.ValDesc m α</code><span class=\"sep\"></span><code class=\"docstring\">A canonical way to convert a Verso argument into a given type.</code>",
  "103":

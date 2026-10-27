@@ -62,7 +62,7 @@
         "number": "1"},
        {"title": "Adaptation to Lean's Rewritten Verso Parser",
         "shortTitle": null,
-        "number": "2"}]},
+        "number": "3"}]},
      "address": "/releases/"}],
    "traversal":
    [{"id": "traversal",
@@ -600,6 +600,25 @@
        {"title": "Manuals and Books", "shortTitle": null, "number": "7"},
        {"title": "Tags and References", "shortTitle": null, "number": "1"}]},
      "address": "/Manuals-and-Books/"}],
+   "manual-heading-ids":
+   [{"id": "manual-heading-ids",
+     "data":
+     {"title": "Section IDs on Manual Headings",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 25,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0 (in development)",
+        "shortTitle": null,
+        "number": "1"},
+       {"title": "Section IDs on Manual Headings",
+        "shortTitle": null,
+        "number": "1"}]},
+     "address": "/releases/"}],
    "manual":
    [{"id": "manual",
      "data":
@@ -992,7 +1011,7 @@
         "number": "1"},
        {"title": "Use Lean's HTML Type and Syntax",
         "shortTitle": null,
-        "number": "1"}]},
+        "number": "2"}]},
      "address": "/releases/"}],
    "inline-syntax":
    [{"id": "inline-syntax",
@@ -2643,6 +2662,22 @@
        {"title": "Release Notes", "shortTitle": null, "number": null},
        {"title": "Verso 4.35.0", "shortTitle": null, "number": "2"}]},
      "address": "/releases/"}],
+   "manual-heading-ids":
+   [{"id": "--release-note-manual-heading-ids",
+     "data":
+     {"version": "4.36.0",
+      "title": "Section IDs on Manual Headings",
+      "searchPriority": 25,
+      "prs": [983],
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0 (in development)",
+        "shortTitle": null,
+        "number": "1"}]},
+     "address": "/releases/"}],
    "literate429":
    [{"id": "--release-note-literate429",
      "data":
@@ -2728,6 +2763,22 @@
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
        {"title": "Verso 4.28.0", "shortTitle": null, "number": "9"}]},
+     "address": "/releases/"}],
+   "inline-lean-elaboration":
+   [{"id": "inline-lean-elaboration",
+     "data":
+     {"version": "4.36.0",
+      "title": "New Helpers for Elaborating Inline Lean Code",
+      "searchPriority": 25,
+      "prs": [1062],
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0 (in development)",
+        "shortTitle": null,
+        "number": "1"}]},
      "address": "/releases/"}],
    "folding-ranges":
    [{"id": "folding-ranges",
