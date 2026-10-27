@@ -19,7 +19,7 @@ release_note
 
 Verso now provides a Lake script `versoMain` that runs the `main` function of a Lean file.
 This can be used to build Verso documents in the Lean interpreter instead of compiling them to native executables.
-Use `lake run versoMain MyDoc.lean ARGS...` to build your document, instead of adding a `lake_exe main_doc` to the Lakefile and running `lake exe my_doc`.
+Use `lake run versoMain MyDoc.lean ARGS...` to build your document, instead of adding a `lake_exe my_doc` to the Lakefile and running `lake exe my_doc`.
 This avoids linking the native executable, which can be slow for projects with large dependencies such as mathlib.
 Speedups around 10%-30% are observed for rebuilding documents after an edit, depending on the degree of native compilation overhead.
 
