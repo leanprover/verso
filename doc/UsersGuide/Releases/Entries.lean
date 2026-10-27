@@ -33,3 +33,4 @@ public import UsersGuide.Releases.Entries.TestFramework
 public import UsersGuide.Releases.Entries.TestWidget
 public import UsersGuide.Releases.Entries.UpstreamParser
 public import UsersGuide.Releases.Entries.VersionedReleaseNotes
+public import UsersGuide.Releases.Entries.VersoMainInterpret
