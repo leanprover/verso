@@ -295,6 +295,13 @@ jobs:
                   grep -qF '<a href="blog/">blog</a> genre' _out/demosite/about/index.html
                   grep -qF '<base href=".././"/>' _out/demosite/about/index.html
 
+            - name: Generate the demo blog mid and make sure the images work
+              run: |
+                  lake exe demoblogmid --output _out/demoblogmid
+                  # Fail if the generated post page doesn't have the expected images
+                  grep -qF '<img src="./static/A.svg"' _out/demoblogmid/post/index.html
+                  grep -qF '<img src="./static/B.svg"' _out/demoblogmid/post/index.html
+
             # uv and Playwright are installed before `lake test` above.
             - name: Cache literate-config test project
               uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

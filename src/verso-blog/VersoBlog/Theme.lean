@@ -307,6 +307,14 @@ def post : Template := do
        | none => Html.empty
        | some md => html%{
         <div class="metadata">
+          { match md.featuredImage with
+            | some imgpath => html%{<div class="featuredImage"><img src={imgpath}/></div>}
+            | none => Html.empty
+          }
+          { match md.subtitle with
+            | some subtitle => html%{<div class="subtitle">{subtitle}</div>}
+            | none => Html.empty
+          }
           <div class="authors">
             {(md : Post.PartMetadata).authors.map (html%{<span class="author">{Html.text ·}</span>}) |>.toArray}
           </div>
@@ -352,9 +360,17 @@ def archiveEntry : Template := do
          | none => Html.empty
          | some md => html%{
           <div class="metadata">
+            { match md.featuredImage with
+              | some imgpath => html%{<div class="featuredImage"><img src={imgpath}/></div>}
+              | none => Html.empty
+            }
             <div class="authors">
               {(md : Post.PartMetadata).authors.map (html%{<span class="author">{Html.text ·}</span>}) |>.toArray}
             </div>
+            { match md.subtitle with
+              | some subtitle => html%{<div class="subtitle">{subtitle}</div>}
+              | none => Html.empty
+            }
             <div class="date">
               {md.date.toIso8601String}
             </div>

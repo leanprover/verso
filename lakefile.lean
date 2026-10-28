@@ -615,6 +615,17 @@ lean_exe «tutorial-example» where
   root := `TutorialExampleMain
   supportInterpreter := true
 
+-- A demo blog that shows how to generate blogs with Verso
+lean_lib DemoBlogMid where
+  srcDir := "test-projects/website-blog-mid"
+  roots := #[`DemoBlogMid]
+
+@[default_target]
+lean_exe demoblogmid where
+  srcDir := "test-projects/website-blog-mid"
+  root := `DemoBlogMidMain
+  supportInterpreter := true
+
 private def leanOptionArgs (m : Module) : Array String := Id.run do
   let opts := Module.leanOptions m
   let vals := Lean.LeanOptions.values opts
