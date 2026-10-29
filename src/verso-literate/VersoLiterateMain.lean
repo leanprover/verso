@@ -201,8 +201,7 @@ where
   identMatch (stx1 stx2 : Syntax) : Bool :=
     let stx1 := normIdent stx1
     let stx2 := normIdent stx2
-    stx1 == stx2 ||
-      (stx1.getPos?.isSome && stx1.getPos? == stx2.getPos? && stx1.getTailPos? == stx2.getTailPos?)
+    stx1 == stx2 || stx1.hasSameRange stx2
 
   normIdent (stx : Syntax) : Syntax :=
     if stx.getKind == ``declId then stx[0] else stx

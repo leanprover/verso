@@ -319,21 +319,43 @@ private def testGuardMsgsDocstring (data : TestData) : Test := withTestDir data 
     "The expected-messages comment of `#guard_msgs` is missing from the HTML."
 
 /--
-A structure or class with a dotted name (`structure A.B.C`) keeps its own docstring. It must not be
-replaced by the docstring of its first documented field.
+Declarations with dotted names (`structure A.B.C`) keep their own docstrings, as do their fields and
+constructors.
+
+Each docstring appears once. The code that follows it (up to the next docstring) contains the
+declaration that the docstring is for. The docstrings of the declarations use Verso roles, which
+remain as source text when a docstring isn't associated with its declaration.
 -/
-private def testDottedStructureDocstrings (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
+private def testDottedNameDocstrings (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
   let html ← IO.FS.readFile (htmlDir / "LitConfig" / "DottedNames" / "index.html")
-  for docstring in [
-      "A point whose name has a namespace prefix.",
-      "The horizontal coordinate of the point.",
-      "A class whose name has a namespace prefix.",
-      "Every element is equal to itself."] do
-    let occurrences := (html.splitOn docstring).length - 1
-    assertTrue (occurrences == 1)
-      s!"Expected the docstring \"{docstring}\" once in the HTML, found it {occurrences} times. \
-        The docstring of a structure with a dotted name was attributed to one of its fields."
+  assertNotContains "{name}" html
+    "A docstring with a Verso role is rendered from its source text."
+  for (docstring, decl) in [
+      ("A point whose name has a namespace prefix.", "Dotted.Geometry.Point"),
+      ("The horizontal coordinate of the point.", "Dotted.Geometry.Point.x"),
+      ("The vertical coordinate of the point.", "Dotted.Geometry.Point.y"),
+      ("A class whose name has a namespace prefix.", "Dotted.Algebra.IsReflexive"),
+      ("Every element is equal to itself.", "Dotted.Algebra.IsReflexive.refl"),
+      ("A structure whose first field has no docstring.", "Dotted.Geometry.Segment"),
+      ("Builds a segment from its endpoints.", "Dotted.Geometry.Segment.mk"),
+      ("The end of the segment.", "Dotted.Geometry.Segment.stop"),
+      ("An inductive type whose name has a namespace prefix.", "Dotted.Color"),
+      ("The color red.", "Dotted.Color.red"),
+      ("The color green.", "Dotted.Color.green"),
+      ("A class inductive whose name has a namespace prefix.", "Dotted.Algebra.Decision"),
+      ("The proposition is false.", "Dotted.Algebra.Decision.no"),
+      ("The proposition is true.", "Dotted.Algebra.Decision.yes"),
+      ("A structure with a dotted name inside a namespace.", "Dotted.Inner.Pair"),
+      ("The first component of the pair.", "Dotted.Inner.Pair.fst")] do
+    match html.splitOn docstring with
+    | [_, after] =>
+      let code := after.splitOn "class=\"verso-text" |>.head!
+      let anchor := "___".intercalate (decl.splitOn ".")
+      assertContains s!"id=\"{anchor}\"" code
+        s!"The docstring \"{docstring}\" is not followed by the declaration of `{decl}`."
+    | parts =>
+      fail s!"Expected the docstring \"{docstring}\" once in the HTML, found it {parts.length - 1} times."
 
 /-- Excluded modules produce no HTML output and are absent from the navbar. -/
 private def testExclude (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
@@ -1239,7 +1261,7 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("custom literate handlers", testCustomLiterateHandlers data),
   ("docstring code block messages", testDocstringCodeBlockMessages data),
   ("guard_msgs docstring", testGuardMsgsDocstring data),
-  ("dotted structure docstrings", testDottedStructureDocstrings data),
+  ("dotted name docstrings", testDottedNameDocstrings data),
   ("unknown extension fallback", testUnknownExtensionFallback)
 ]
 
