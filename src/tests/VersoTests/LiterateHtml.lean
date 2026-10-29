@@ -318,6 +318,23 @@ private def testGuardMsgsDocstring (data : TestData) : Test := withTestDir data 
   assertContains "declaration uses" html
     "The expected-messages comment of `#guard_msgs` is missing from the HTML."
 
+/--
+A structure or class with a dotted name (`structure A.B.C`) keeps its own docstring. It must not be
+replaced by the docstring of its first documented field.
+-/
+private def testDottedStructureDocstrings (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let html ← IO.FS.readFile (htmlDir / "LitConfig" / "DottedNames" / "index.html")
+  for docstring in [
+      "A point whose name has a namespace prefix.",
+      "The horizontal coordinate of the point.",
+      "A class whose name has a namespace prefix.",
+      "Every element is equal to itself."] do
+    let occurrences := (html.splitOn docstring).length - 1
+    assertTrue (occurrences == 1)
+      s!"Expected the docstring \"{docstring}\" once in the HTML, found it {occurrences} times. \
+        The docstring of a structure with a dotted name was attributed to one of its fields."
+
 /-- Excluded modules produce no HTML output and are absent from the navbar. -/
 private def testExclude (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
   IO.FS.writeFile tomlFile "exclude = [\"LitConfig.NoDocstrings\"]\n"
@@ -1222,6 +1239,7 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("custom literate handlers", testCustomLiterateHandlers data),
   ("docstring code block messages", testDocstringCodeBlockMessages data),
   ("guard_msgs docstring", testGuardMsgsDocstring data),
+  ("dotted structure docstrings", testDottedStructureDocstrings data),
   ("unknown extension fallback", testUnknownExtensionFallback)
 ]
 
@@ -1229,7 +1247,7 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
 @[test]
 def literateHtml : Test := do
   let projectDir := "test-projects/literate-config"
-  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings", "LitConfig.Builtins", "LitConfig.UserExt", "LitConfig.GuardMsgs"]
+  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings", "LitConfig.Builtins", "LitConfig.UserExt", "LitConfig.GuardMsgs", "LitConfig.DottedNames"]
 
   -- First verify test project toolchain matches root toolchain
   let rootToolchain := (← IO.FS.readFile "lean-toolchain").trimAscii
