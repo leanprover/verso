@@ -1238,20 +1238,7 @@ def literateHtml : Test := do
     failHere s!"test-projects/literate-config/lean-toolchain ({testToolchain}) does not match root lean-toolchain ({rootToolchain})"
 
   -- Next, ensure test project manifest is up to date
-  let lakeVars :=
-    #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
-      "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
-      "LEAN_GITHASH",
-      "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
-  let updateResult ← IO.Process.output {
-    cmd := "elan"
-    args := #["run", "--install", rootToolchain.trimAscii.toString, "lake", "update", "verso"]
-    cwd := projectDir
-    env := lakeVars.map (·, none)
-  }
-  unless updateResult.exitCode == 0 do
-    failHere s!"lake update verso failed with exit code {updateResult.exitCode}"
-      (detail? := some updateResult.stderr)
+  discard <| Verso.Elan.runCmdWithToolchain projectDir rootToolchain.trimAscii.toString #["lake", "update", "verso"]
 
   -- Build shared test data (JSON) in a persistent temp dir
   IO.FS.withTempDir fun sharedTmpDir => do
@@ -1338,20 +1325,7 @@ def literateHtmlMultiRoot : Test := do
   unless rootToolchain == testToolchain do
     failHere s!"{projectDir}/lean-toolchain ({testToolchain}) does not match root lean-toolchain ({rootToolchain})"
 
-  let lakeVars :=
-    #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
-      "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
-      "LEAN_GITHASH",
-      "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
-  let updateResult ← IO.Process.output {
-    cmd := "elan"
-    args := #["run", "--install", rootToolchain.trimAscii.toString, "lake", "update", "verso"]
-    cwd := projectDir
-    env := lakeVars.map (·, none)
-  }
-  unless updateResult.exitCode == 0 do
-    failHere s!"lake update verso failed with exit code {updateResult.exitCode}"
-      (detail? := some updateResult.stderr)
+  discard <| Verso.Elan.runCmdWithToolchain projectDir rootToolchain.trimAscii.toString #["lake", "update", "verso"]
 
   IO.FS.withTempDir fun sharedTmpDir => do
     let jsonDir := sharedTmpDir / "json"
