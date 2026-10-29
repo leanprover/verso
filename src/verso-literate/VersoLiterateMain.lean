@@ -146,7 +146,12 @@ def findHighestM [Monad m] (stx : Syntax) (fn : Syntax → Option α) : m (Array
 Finds the definition sites of each constant in an info tree, and replaces each docstring with a
 reference to the definition for later substitution.
 -/
-def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax := do
+partial def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax := do
+  -- `#guard_msgs` takes the messages it expects as a doc comment, but it's not really
+  -- documentation. It must not be attached to the declaration in the command that `#guard_msgs`
+  -- wraps.
+  if stx.isOfKind ``Lean.guardMsgsCmd then
+    return stx.setArg 4 (← findDocstringDefs stx[4] t)
   -- Find the definition sites of all constants in this info tree
   let defSites := t.deepestNodes fun _ i _ =>
     match i with
@@ -191,8 +196,12 @@ def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax := do
     else pure none
   return stx
 where
+  -- For `structure A.B.C`, the binder's syntax is `C` with the source range of `A.B.C`, so the
+  -- identifiers are also compared by their source range.
   identMatch (stx1 stx2 : Syntax) : Bool :=
-    normIdent stx1 == normIdent stx2
+    let stx1 := normIdent stx1
+    let stx2 := normIdent stx2
+    stx1 == stx2 || stx1.hasSameRange stx2
 
   normIdent (stx : Syntax) : Syntax :=
     if stx.getKind == ``declId then stx[0] else stx

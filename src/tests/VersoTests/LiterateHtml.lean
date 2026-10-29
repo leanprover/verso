@@ -302,6 +302,61 @@ private def testUnknownExtensionFallback : Test := do
   assertContains "THIS IS THE FALLBACK" html
     "HTML missing 'THIS IS THE FALLBACK' marker. The conversion's fallback children were not rendered."
 
+/--
+The doc comment on a `#guard_msgs` command is not documentation. Instead, it is a specification of
+the expected messages from the wrapped command. It must not be attributed to the declaration in that
+command as a second docstring.
+-/
+private def testGuardMsgsDocstring (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let html ← IO.FS.readFile (htmlDir / "LitConfig" / "GuardMsgs" / "index.html")
+  let docstring := "A theorem whose proof is left open."
+  let occurrences := (html.splitOn docstring).length - 1
+  assertTrue (occurrences == 1)
+    s!"Expected the docstring of `guarded` once in the HTML, found it {occurrences} times. \
+      The expected-messages comment of `#guard_msgs` was attributed to `guarded` as a docstring."
+  assertContains "declaration uses" html
+    "The expected-messages comment of `#guard_msgs` is missing from the HTML."
+
+/--
+Declarations with dotted names (`structure A.B.C`) keep their own docstrings, as do their fields and
+constructors.
+
+Each docstring appears once. The code that follows it (up to the next docstring) contains the
+declaration that the docstring is for. The docstrings of the declarations use Verso roles, which
+remain as source text when a docstring isn't associated with its declaration.
+-/
+private def testDottedNameDocstrings (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let html ← IO.FS.readFile (htmlDir / "LitConfig" / "DottedNames" / "index.html")
+  assertNotContains "{name}" html
+    "A docstring with a Verso role is rendered from its source text."
+  for (docstring, decl) in [
+      ("A point whose name has a namespace prefix.", "Dotted.Geometry.Point"),
+      ("The horizontal coordinate of the point.", "Dotted.Geometry.Point.x"),
+      ("The vertical coordinate of the point.", "Dotted.Geometry.Point.y"),
+      ("A class whose name has a namespace prefix.", "Dotted.Algebra.IsReflexive"),
+      ("Every element is equal to itself.", "Dotted.Algebra.IsReflexive.refl"),
+      ("A structure whose first field has no docstring.", "Dotted.Geometry.Segment"),
+      ("Builds a segment from its endpoints.", "Dotted.Geometry.Segment.mk"),
+      ("The end of the segment.", "Dotted.Geometry.Segment.stop"),
+      ("An inductive type whose name has a namespace prefix.", "Dotted.Color"),
+      ("The color red.", "Dotted.Color.red"),
+      ("The color green.", "Dotted.Color.green"),
+      ("A class inductive whose name has a namespace prefix.", "Dotted.Algebra.Decision"),
+      ("The proposition is false.", "Dotted.Algebra.Decision.no"),
+      ("The proposition is true.", "Dotted.Algebra.Decision.yes"),
+      ("A structure with a dotted name inside a namespace.", "Dotted.Inner.Pair"),
+      ("The first component of the pair.", "Dotted.Inner.Pair.fst")] do
+    match html.splitOn docstring with
+    | [_, after] =>
+      let code := after.splitOn "class=\"verso-text" |>.head!
+      let anchor := "___".intercalate (decl.splitOn ".")
+      assertContains s!"id=\"{anchor}\"" code
+        s!"The docstring \"{docstring}\" is not followed by the declaration of `{decl}`."
+    | parts =>
+      fail s!"Expected the docstring \"{docstring}\" once in the HTML, found it {parts.length - 1} times."
+
 /-- Excluded modules produce no HTML output and are absent from the navbar. -/
 private def testExclude (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
   IO.FS.writeFile tomlFile "exclude = [\"LitConfig.NoDocstrings\"]\n"
@@ -1205,6 +1260,8 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("all built-in doc roles", testAllBuiltinDocRoles data),
   ("custom literate handlers", testCustomLiterateHandlers data),
   ("docstring code block messages", testDocstringCodeBlockMessages data),
+  ("guard_msgs docstring", testGuardMsgsDocstring data),
+  ("dotted name docstrings", testDottedNameDocstrings data),
   ("unknown extension fallback", testUnknownExtensionFallback)
 ]
 
@@ -1212,7 +1269,7 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
 @[test]
 def literateHtml : Test := do
   let projectDir := "test-projects/literate-config"
-  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings", "LitConfig.Builtins", "LitConfig.UserExt"]
+  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings", "LitConfig.Builtins", "LitConfig.UserExt", "LitConfig.GuardMsgs", "LitConfig.DottedNames"]
 
   -- First verify test project toolchain matches root toolchain
   let rootToolchain := (← IO.FS.readFile "lean-toolchain").trimAscii
@@ -1221,20 +1278,7 @@ def literateHtml : Test := do
     failHere s!"test-projects/literate-config/lean-toolchain ({testToolchain}) does not match root lean-toolchain ({rootToolchain})"
 
   -- Next, ensure test project manifest is up to date
-  let lakeVars :=
-    #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
-      "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
-      "LEAN_GITHASH",
-      "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
-  let updateResult ← IO.Process.output {
-    cmd := "elan"
-    args := #["run", "--install", rootToolchain.trimAscii.toString, "lake", "update", "verso"]
-    cwd := projectDir
-    env := lakeVars.map (·, none)
-  }
-  unless updateResult.exitCode == 0 do
-    failHere s!"lake update verso failed with exit code {updateResult.exitCode}"
-      (detail? := some updateResult.stderr)
+  discard <| Verso.Elan.runCmdWithToolchain projectDir rootToolchain.trimAscii.toString #["lake", "update", "verso"]
 
   -- Build shared test data (JSON) in a persistent temp dir
   IO.FS.withTempDir fun sharedTmpDir => do
@@ -1321,20 +1365,7 @@ def literateHtmlMultiRoot : Test := do
   unless rootToolchain == testToolchain do
     failHere s!"{projectDir}/lean-toolchain ({testToolchain}) does not match root lean-toolchain ({rootToolchain})"
 
-  let lakeVars :=
-    #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
-      "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
-      "LEAN_GITHASH",
-      "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
-  let updateResult ← IO.Process.output {
-    cmd := "elan"
-    args := #["run", "--install", rootToolchain.trimAscii.toString, "lake", "update", "verso"]
-    cwd := projectDir
-    env := lakeVars.map (·, none)
-  }
-  unless updateResult.exitCode == 0 do
-    failHere s!"lake update verso failed with exit code {updateResult.exitCode}"
-      (detail? := some updateResult.stderr)
+  discard <| Verso.Elan.runCmdWithToolchain projectDir rootToolchain.trimAscii.toString #["lake", "update", "verso"]
 
   IO.FS.withTempDir fun sharedTmpDir => do
     let jsonDir := sharedTmpDir / "json"

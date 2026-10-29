@@ -3,6 +3,8 @@ import LitConfig.NoDocstrings
 import LitConfig.Builtins
 import LitConfig.UserExt
 import LitConfig.Gallery
+import LitConfig.GuardMsgs
+import LitConfig.DottedNames
 import Verso
 
 /-!

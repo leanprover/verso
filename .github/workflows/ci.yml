@@ -3,7 +3,7 @@ on:
         branches:
             - master
             - main
-            - nightly-testing
+            - "bump/**"
     pull_request:
     merge_group:
 
@@ -114,7 +114,14 @@ jobs:
             # requests, and gives the reason. A pull request is squashed into a commit whose
             # message is its description, so the description is read here and the commit
             # messages on merge_group and push runs.
+            #
+            # A bump branch reports the next version of Verso, while the entries that `main`
+            # merges into it describe the version that `main` is preparing, so pushes to bump
+            # branches are not checked.
             - name: Check the release notes
+              if: >-
+                  !(github.event_name == 'push'
+                    && startsWith(github.ref_name, 'bump/v4.'))
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   REPO: ${{ github.repository }}

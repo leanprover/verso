@@ -1,0 +1,171 @@
+/-
+Copyright (c) 2026 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: Rob Simmons
+-/
+module
+
+namespace Verso.Elan
+set_option doc.verso true
+
+/--
+Environment variables that should be cleared before calling {lit}`elan` with a different toolchain.
+
+This is correct under the assumption that they were set by an outer Lake process to communicate
+settings with its subprocesses. These settings are specific to the toolchain and must be undone so
+the inner Lake call doesn't inherit them.
+-/
+def elanClearVars :=
+  #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
+    "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
+    "LEAN",
+    "ELAN_TOOLCHAIN",
+    /-
+    If `LEAN_GITHASH` is inherited, the wrong value gets embedded in oleans, resulting in lots of
+    spurious rebuilds and slow behavior
+    -/
+    "LEAN_GITHASH",
+    /-
+    Clearing out `DYLD_LIBRARY_PATH` and `LD_LIBRARY_PATH` is critical so that invocations of Elan
+    with a different toolchain don't find the wrong versions of shared libraries.
+    -/
+    "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
+
+/--
+Computes environment variables to be used when running Elan subprocesses for other toolchain versions.
+
+Lake's artifact cache will prevent certain artifacts from being built if they already exist in the
+cache.
+
+If the purpose of a command is to put artifacts in the build directory where later steps can find
+them, then {lit}`"LAKE_RESTORE_ARTIFACTS"` must be set.  Setting this environment variable causes
+Lake to copy any cached artifacts to the build directory.  See the
+{manual section "lake-config-toml"}[documentation for {lit}`restoreAllArtifacts`] for details.
+-/
+def elanVars (restoreArtifacts : Bool) : Array (String × Option String) :=
+  let vars := elanClearVars.map (·, none)
+  if restoreArtifacts then
+    vars.push ("LAKE_RESTORE_ARTIFACTS", some "true")
+  else
+    vars
+
+/--
+Validates that a directory has the shape of a Lean project, and returns the toolchain (from
+{lit}`lean-toolchain` or from the provided override in {name}`overrideToolchain`).
+
+An error is thrown if:
+ * there is no {lit}`lakefile.toml` or {lit}`lakefile.lean` present, or
+ * there is no toolchain file and {name}`overrideToolchain` is {name}`none`.
+-/
+public def getProjectToolchain (projectDir : System.FilePath) (overrideToolchain : Option String := none) : IO String := do
+  let lakefileLean := projectDir / "lakefile.lean"
+  let lakefileToml := projectDir / "lakefile.toml"
+  if !(← lakefileLean.pathExists) && !(← lakefileToml.pathExists) then
+    throw <| .userError s!"Neither {lakefileLean} nor {lakefileToml} exist, couldn't load project"
+  match overrideToolchain with
+    | none =>
+      let toolchainFile := projectDir / "lean-toolchain"
+      if !(← toolchainFile.pathExists) then
+        throw <| .userError s!"File {toolchainFile} doesn't exist, couldn't load project"
+      return (← IO.FS.readFile toolchainFile).trimAscii.copy
+    | some override => return override
+
+/--
+Constructs arguments for spawning a process that approximates executing the following:
+
+```
+$ cd projectDir
+$ elan run --install <toolchain> <cmd>
+```
+
+The function returns an {name}`IO.Process.SpawnArgs` object that resets environment variables
+appropriately and calls the given {lean}`cmd` via {lit}`elan run`.
+
+In Verso, these commands are typically run in with the expectation that they will cause a
+compilation artifact to be placed in the {lit}`.lake` directory. Passing {name}`restoreArtifacts`
+defaults the {manual section "lake-config-toml"}[{lit}`LAKE_RESTORE_ARTIFACTS` environment variable]
+to {lean}`"true"`; this is necessary to ensure that commands like {lit}`lake build` actually put
+those artifacts into place in the build directory. Otherwise, Lake redirects callers to its cache
+without copying the artifacts to the build directory.
+
+The optional {name}`env` argument allows for further environment modifications, which will overwrite
+the default changes.
+-/
+public def getSpawnArgsForToolchain (projectDir : System.FilePath) (toolchain : String)
+    (cmd : Array String)
+    (restoreArtifacts : Bool := false)
+    (env : Array (String × Option String) := #[])
+    : IO.Process.SpawnArgs :=
+  let filteredLakeVars := (elanVars restoreArtifacts).filter (fun (envVar, _) => env.all (·.1 != envVar))
+  {
+    cmd := "elan"
+    args := #["run", "--install", toolchain] ++ cmd
+    cwd := projectDir
+    env := filteredLakeVars ++ env,
+  }
+
+
+/--
+Executes a command in an environment set up for Lake, specifying the project and toolchain.
+
+Invoking {lean}`runCmdWithToolchain projectDir toolchain #["foo", "bar"]` approximates executing the
+following:
+
+```
+$ cd projectDir
+$ elan run --install <toolchain> foo bar
+```
+
+In order for {lit}`elan run` to work for a different toolchain, a number of environment variables
+need to be modified, and this function sets these up appropriately.
+
+In Verso, these commands are typically run with the expectation that they will cause a
+compilation artifact to be placed in the {lit}`.lake` directory. Passing {name}`restoreArtifacts`
+defaults the {manual section "lake-config-toml"}[{lit}`LAKE_RESTORE_ARTIFACTS` environment variable]
+to {lean}`"true"`; this is necessary to ensure that commands like {lit}`lake build` actually put
+those artifacts into place in the build directory. Otherwise, Lake redirects callers to its cache
+without copying the artifacts to the build directory.
+
+The optional {name}`env` argument allows for further environment modifications, which will overwrite
+the default changes.
+
+If the command exits with exit code {lit}`0`, then its output is returned.
+
+If the command exits with a nonzero exit code, an error is thrown. By default, this function also
+prints a detailed failure report to {lit}`stderr` that includes the project directory, toolchain,
+failing command, exit code, and the command's output. In this case, the thrown exception only
+includes the command's {lit}`stdout` and {lit}`stderr`. If {name}`errorsToStderr` is {name}`false`,
+then no error report is printed to {lit}`stderr` and the thrown error includes all the information.
+-/
+public def runCmdWithToolchain (projectDir : System.FilePath) (toolchain : String)
+    (cmd : Array String)
+    (restoreArtifacts : Bool := false)
+    (env : Array (String × Option String) := #[])
+    (errorsToStderr : Bool := true) : IO IO.Process.Output := do
+  let res ← IO.Process.output
+    (getSpawnArgsForToolchain projectDir toolchain cmd restoreArtifacts env)
+  if res.exitCode != 0 then
+    let errorDetails : String :=
+      "Failure while executing a command on a lean project." ++
+        "\nProject directory: " ++ projectDir.toString ++
+        "\nToolchain: " ++ toolchain ++
+        "\nCommand: " ++ toString (repr cmd) ++
+        "\nExit code: " ++ toString res.exitCode ++
+        "\nstdout: " ++ res.stdout ++
+        "\nstderr: " ++ res.stderr
+
+    if errorsToStderr then
+      IO.eprintln errorDetails
+
+      throw <| .userError <|
+        "Build process failed." ++
+        decorateOut "stdout" res.stdout ++
+        decorateOut "stderr" res.stderr
+    else
+      throw <| .userError errorDetails
+
+  return res
+
+where
+  decorateOut (name : String) (out : String) : String :=
+    if out.isEmpty then "" else s!"\n{name}:\n{out}\n"

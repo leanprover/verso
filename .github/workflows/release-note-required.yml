@@ -11,6 +11,16 @@ permissions:
 jobs:
     check-release-note:
         name: "Check the PR has a release note"
+        # Pull requests from downstream-lean4 into a bump branch are adaptations to a new
+        # Lean nightly. These minor adaptations will be squash-merged at the next release,
+        # so a release note would disappear anyway even if they deserved a release notes
+        # entry.
+        #
+        # The author is checked rather than the actor, because an `edited` event's actor
+        # is whoever changed the description.
+        if: >-
+            !(github.event.pull_request.user.login == 'downstream-lean4[bot]'
+              && startsWith(github.event.pull_request.base.ref, 'bump/v4.'))
         runs-on: ubuntu-latest
         steps:
             # A release note entry names the pull requests that made its change in `prs`. This

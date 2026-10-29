@@ -52,11 +52,13 @@ jobs:
                         extractText(tokens[0].tokens);
                       }
 
-                      // Replace PR body with plain-text summary and release notes link
+                      // Replace PR body with plain-text summary, release notes link, and the
+                      // `No-Changelog:` line that skips the release note checks
                       const releasesUrl = packageUrl ? packageUrl + '/releases' : '';
-                      const newBody = releasesUrl
+                      const noChangelog = 'No-Changelog: dependency update by Dependabot';
+                      const newBody = (releasesUrl
                         ? plainText + '\n\n' + releasesUrl
-                        : plainText;
+                        : plainText) + '\n\n' + noChangelog;
                       await github.rest.pulls.update({
                         owner, repo, pull_number: prNumber,
                         body: newBody
