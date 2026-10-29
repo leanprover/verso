@@ -238,7 +238,7 @@ needs to run, so that its warnings are accurately recorded. But the linter also 
 document, at which time it can inspect the info trees left behind by the embedded Lean and generate
 spurious warnings. Turning it off before saving info trees works around this issue.
 -/
-private meta partial def disableUnusedVarLinterInInfoTree : InfoTree → InfoTree
+public meta partial def disableUnusedVarLinterInInfoTree : InfoTree → InfoTree
   | .context (.commandCtx ci) child =>
     .context (.commandCtx { ci with options := Lean.Linter.linter.unusedVariables.set ci.options false })
       (disableUnusedVarLinterInInfoTree child)
@@ -247,6 +247,48 @@ private meta partial def disableUnusedVarLinterInInfoTree : InfoTree → InfoTre
   | .node info children =>
     .node info (children.map disableUnusedVarLinterInInfoTree)
   | .hole id => .hole id
+
+/--
+Runs `act` and collects the info trees that it produces into a single tree.
+
+This function is a lower-level building block used by elaborators that are aleady in the saved scope
+of the document's Lean code. Term elaborators should call `elabInlineLean` instead to correctly
+establish the scope.
+
+The unused variable linter is disabled in this saved tree because Lean code is linted when it is
+elaborated, and the linter would otherwise report binders from the inline code when linting the
+surrounding Verso command, leading to spurious warnings.
+
+The resulting info tree is pushed onto the trees that were present when `act` started. It is also
+returned so it can be used for highlighting.
+-/
+meta def withInlineLeanInfoTree [Monad m] [MonadInfoTree m] [MonadFinally m] [MonadEnv m] [MonadFileMap m]
+    [MonadMCtx m] [MonadResolveName m] [MonadOptions m] [MonadNameGenerator m]
+    (elaborator : Name) (stx : Syntax) (act : m α) : m (α × InfoTree) := do
+  let saved ← getResetInfoTrees
+  MonadFinally.tryFinally' act fun _ => do
+    let ctx := PartialContextInfo.commandCtx {
+      env := ← getEnv, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace := ← getCurrNamespace,
+      openDecls := ← getOpenDecls, options := ← getOptions, ngen := ← getNGen
+    }
+    let tree := disableUnusedVarLinterInInfoTree <|
+      .context ctx (.node (.ofCommandInfo { elaborator, stx }) (← getInfoState).trees)
+    modifyInfoState fun s => { s with trees := saved.push tree }
+    pure tree
+
+/--
+Runs `act` to elaborate inline Lean code in the saved scope that the document's Lean code has
+established.  The resulting info trees are saved as one tree with appropriate options, associated
+with `elaborator` and `stx`.
+
+This is the main entry point to be used when elaborating inline terms and goals. It ensures that the
+current namespace and open declarations are in effect, that the saved tree's context records them,
+and that the section variables are elaborated at the right time and passed to `act`. The tree is
+pushed onto the document's info trees and is also returned so it can be used for highlighting.
+-/
+meta def elabInlineLean (elaborator : Name) (stx : Syntax) (act : Array Expr → TermElabM α) :
+    TermElabM (α × InfoTree) :=
+  runWithOpenDecls <| withInlineLeanInfoTree elaborator stx <| runWithVariables act
 
 meta def elabCommands [Literal k] (config : LeanBlockConfig) (str : TSyntax k)
     (toHighlightedLeanContent :
@@ -407,36 +449,27 @@ meta def leanTerm : CodeBlockExpanderOf LeanInlineConfig
     let stx ← parseStrLitAsCategory `term str
     let (newMsgs, tree) ← do
       let initMsgs ← Core.getMessageLog
-      let origTrees ← getResetInfoTrees
       try
         Core.resetMessageLog
 
-        let tree' ← runWithOpenDecls <| runWithVariables fun _vars => do
-          let expectedType ← config.type.mapM fun (s : StrLit) => do
-            match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
-            | .error e => throwErrorAt stx e
-            | .ok stx => withEnableInfoTree false do
-              let t ← leveller <| Elab.Term.elabType stx
-              Term.synthesizeSyntheticMVarsNoPostponing
-              let t ← instantiateMVars t
-              if t.hasExprMVar || t.hasLevelMVar then
-                throwErrorAt s "Type contains metavariables: {t}"
-              pure t
+        let ((), tree') ← elabInlineLean `Manual.leanTerm str fun _vars => do
+            let expectedType ← config.type.mapM fun (s : StrLit) => do
+              match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
+              | .error e => throwErrorAt stx e
+              | .ok stx => withEnableInfoTree false do
+                let t ← leveller <| Elab.Term.elabType stx
+                Term.synthesizeSyntheticMVarsNoPostponing
+                let t ← instantiateMVars t
+                if t.hasExprMVar || t.hasLevelMVar then
+                  throwErrorAt s "Type contains metavariables: {t}"
+                pure t
 
-          let e ← Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
-          Term.synthesizeSyntheticMVarsNoPostponing
-          let _ ← Term.levelMVarToParam (← instantiateMVars e)
-
-          let ctx := PartialContextInfo.commandCtx {
-            env := ← getEnv, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace := ← getCurrNamespace,
-            openDecls := ← getOpenDecls, options := ← getOptions, ngen := ← getNGen
-          }
-          let innerTrees ← getResetInfoTrees
-          pure <| InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.leanTerm, str⟩) innerTrees)
+            let e ← Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
+            Term.synthesizeSyntheticMVarsNoPostponing
+            let _ ← Term.levelMVarToParam (← instantiateMVars e)
         pure (← Core.getMessageLog, tree')
       finally
         Core.setMessageLog initMsgs
-        for t in origTrees do pushInfoTree t
 
     if let some name := config.name then
       let msgs ← newMsgs.toList.mapM fun (msg : Message) => do
@@ -445,8 +478,6 @@ meta def leanTerm : CodeBlockExpanderOf LeanInlineConfig
         pure { msg with contents := .append #[.text head, msg.contents] }
 
       saveOutputs name msgs
-
-    pushInfoTree (disableUnusedVarLinterInInfoTree tree)
 
     if config.error then
       if newMsgs.hasErrors then
@@ -484,39 +515,32 @@ meta def leanInline : RoleExpanderOf LeanInlineConfig
     let stx ← parseStrLitAsCategory `term term
     let (newMsgs, type, tree) ← do
       let initMsgs ← Core.getMessageLog
-      let origTrees ← getResetInfoTrees
       try
         Core.resetMessageLog
-        let (tree', t) ← runWithOpenDecls <| runWithVariables fun _ => do
+        let (t, tree') ← elabInlineLean `Manual.leanInline arg fun _ => do
 
-          let expectedType ← config.type.mapM fun (s : StrLit) => do
-            match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
-            | .error e => throwErrorAt term e
-            | .ok stx => withEnableInfoTree false do
-              let t ← leveller <| Elab.Term.elabType stx
-              Term.synthesizeSyntheticMVarsNoPostponing
-              let t ← instantiateMVars t
-              if t.hasExprMVar || t.hasLevelMVar then
-                throwErrorAt s "Type contains metavariables: {t}"
-              pure t
+            let expectedType ← config.type.mapM fun (s : StrLit) => do
+              match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
+              | .error e => throwErrorAt term e
+              | .ok stx => withEnableInfoTree false do
+                let t ← leveller <| Elab.Term.elabType stx
+                Term.synthesizeSyntheticMVarsNoPostponing
+                let t ← instantiateMVars t
+                if t.hasExprMVar || t.hasLevelMVar then
+                  throwErrorAt s "Type contains metavariables: {t}"
+                pure t
 
-          let e ← leveller <| Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
-          Term.synthesizeSyntheticMVarsNoPostponing
-          let e ← Term.levelMVarToParam (← instantiateMVars e)
-          let t ← Meta.inferType e >>= instantiateMVars >>= (Meta.ppExpr ·)
-          let t := Std.Format.group <| (← Meta.ppExpr e) ++ (" :" ++ .line) ++ t
+            let e ← leveller <| Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
+            Term.synthesizeSyntheticMVarsNoPostponing
+            let e ← Term.levelMVarToParam (← instantiateMVars e)
+            let t ← Meta.inferType e >>= instantiateMVars >>= (Meta.ppExpr ·)
+            let t := Std.Format.group <| (← Meta.ppExpr e) ++ (" :" ++ .line) ++ t
 
-          Term.synthesizeSyntheticMVarsNoPostponing
-          let ctx := PartialContextInfo.commandCtx {
-            env := ← getEnv, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace := ← getCurrNamespace,
-            openDecls := ← getOpenDecls, options := ← getOptions, ngen := ← getNGen
-          }
-          let innerTrees ← getResetInfoTrees
-          pure <| (InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.leanInline, arg⟩) innerTrees), t)
+            Term.synthesizeSyntheticMVarsNoPostponing
+            pure t
         pure (← Core.getMessageLog, t, tree')
       finally
         Core.setMessageLog initMsgs
-        for t in origTrees do pushInfoTree t
 
     if let some name := config.name then
 
@@ -526,8 +550,6 @@ meta def leanInline : RoleExpanderOf LeanInlineConfig
         pure { msg with contents := .append #[.text head, msg.contents] }
 
       saveOutputs name msgs
-
-    pushInfoTree (disableUnusedVarLinterInInfoTree tree)
 
     if let some v := RoleView.of ⟨← getRef⟩ then
       Hover.addCustomHover (mkNullNode #[v.braceOpen, v.braceClose]) type
@@ -567,26 +589,18 @@ meta def inst : RoleExpanderOf LeanBlockConfig
 
     let (newMsgs, tree) ← do
       let initMsgs ← Core.getMessageLog
-      let origTrees ← getResetInfoTrees
       try
         Core.resetMessageLog
-        let tree' ← runWithOpenDecls <| runWithVariables fun _ => do
-          let e ← Elab.Term.elabTerm (catchExPostpone := true) stx none
-          Term.synthesizeSyntheticMVarsNoPostponing
-          let _ ← Term.levelMVarToParam (← instantiateMVars e)
-          Term.synthesizeSyntheticMVarsNoPostponing
-          -- TODO this is the only difference from the normal inline Lean. Abstract the commonalities out!
-          discard <| Meta.synthInstance e
-          let ctx := PartialContextInfo.commandCtx {
-            env := ← getEnv, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace := ← getCurrNamespace,
-            openDecls := ← getOpenDecls, options := ← getOptions, ngen := ← getNGen
-          }
-          let innerTrees ← getResetInfoTrees
-          pure <| InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.inst, arg⟩) innerTrees)
+        let ((), tree') ← elabInlineLean `Manual.inst arg fun _ => do
+            let e ← Elab.Term.elabTerm (catchExPostpone := true) stx none
+            Term.synthesizeSyntheticMVarsNoPostponing
+            let _ ← Term.levelMVarToParam (← instantiateMVars e)
+            Term.synthesizeSyntheticMVarsNoPostponing
+            -- TODO this is the only difference from the normal inline Lean. Abstract the commonalities out!
+            discard <| Meta.synthInstance e
         pure (← Core.getMessageLog, tree')
       finally
         Core.setMessageLog initMsgs
-        for t in origTrees do pushInfoTree t
 
     if let some name := config.name then
       let msgs ← newMsgs.toList.mapM fun (msg : Message) => do
@@ -595,8 +609,6 @@ meta def inst : RoleExpanderOf LeanBlockConfig
         pure { msg with contents := .append #[.text head, msg.contents] }
 
       saveOutputs name msgs
-
-    pushInfoTree (disableUnusedVarLinterInInfoTree tree)
 
     reportMessages config.error term newMsgs
 
@@ -841,7 +853,7 @@ where
     get := fun
       | .name x =>
         try
-          let resolved ← liftM (runWithOpenDecls (runWithVariables fun _ => realizeGlobalConstNoOverloadWithInfo x))
+          let resolved ← liftM (runWithOpenDecls (realizeGlobalConstNoOverloadWithInfo x))
           return some resolved
         catch
           | .error ref e => throwErrorAt ref e
@@ -869,7 +881,7 @@ meta def name : RoleExpanderOf NameConfig
 
     try
       let resolvedName ←
-        runWithOpenDecls <| runWithVariables fun _ =>
+        runWithOpenDecls <|
           withInfoTreeContext (mkInfoTree := pure ∘ InfoTree.node (.ofCommandInfo {elaborator := `Manual.Meta.name, stx := identStx})) do
             realizeGlobalConstNoOverloadWithInfo identStx
 
