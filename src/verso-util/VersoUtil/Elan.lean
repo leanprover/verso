@@ -9,9 +9,11 @@ namespace Verso.Elan
 set_option doc.verso true
 
 /--
-Environment variables that we want to clear to call {lit}`elan` with a different toolchain.
+Environment variables that should be cleared before calling {lit}`elan` with a different toolchain.
 
-We will be generally assuming that, if these variables were set, they were set by an outer invocation of Lake, and we'd like to undo that.
+This is correct under the assumption that they were set by an outer Lake process to communicate
+settings with its subprocesses. These settings are specific to the toolchain and must be undone so
+the inner Lake call doesn't inherit them.
 -/
 def elanClearVars :=
   #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
@@ -19,30 +21,41 @@ def elanClearVars :=
     "LEAN",
     "ELAN_TOOLCHAIN",
     /-
-    If `LEAN_GITHASH` is not in place, the wrong value gets embedded in oleans and we end up with
-    lots of spurious rebuilds and slow behavior
+    If `LEAN_GITHASH` is inherited, the wrong value gets embedded in oleans, resulting in lots of
+    spurious rebuilds and slow behavior
     -/
     "LEAN_GITHASH",
     /-
-    Clearing out `DYLD_LIBRARY_PATH` and `LD_LIBRARY_PATH` are critical so that when we invoke Elan
-    with a different toolchain, it doesn't look for the wrong shared libraries.
+    Clearing out `DYLD_LIBRARY_PATH` and `LD_LIBRARY_PATH` is critical so that invocations of Elan
+    with a different toolchain don't find the wrong versions of shared libraries.
     -/
     "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
 
 /--
-Lake's artifact cache will prevent certain artifacts from being built if they already exist in the cache.
+Computes environment variables to be used when running Elan subprocesses for other toolchain versions.
 
-If the purpose of a command is to put artifacts in the build directory where later steps can find them, then {lit}`"LAKE_RESTORE_ARTIFACTS"` must be set.
-Setting this environment variable causes Lake to copy any cached artifacts to the build directory.
-See the {manual section "lake-config-toml"}[documentation for {lit}`restoreAllArtifacts`] for details.
+Lake's artifact cache will prevent certain artifacts from being built if they already exist in the
+cache.
+
+If the purpose of a command is to put artifacts in the build directory where later steps can find
+them, then {lit}`"LAKE_RESTORE_ARTIFACTS"` must be set.  Setting this environment variable causes
+Lake to copy any cached artifacts to the build directory.  See the
+{manual section "lake-config-toml"}[documentation for {lit}`restoreAllArtifacts`] for details.
 -/
-def elanVars : (restoreArtifacts : Bool) → Array (String × Option String)
-  | false => elanClearVars.map (·, none)
-  | true => elanClearVars.map (·, none) ++ #[("LAKE_RESTORE_ARTIFACTS", some "true")]
-
+def elanVars (restoreArtifacts : Bool) : Array (String × Option String) :=
+  let vars := elanClearVars.map (·, none)
+  if restoreArtifacts then
+    vars.push ("LAKE_RESTORE_ARTIFACTS", some "true")
+  else
+    vars
 
 /--
-Validates that a directory has the shape of a lean project, and returns the toolchain (from {lit}`lean-toolchain` or from the override)
+Validates that a directory has the shape of a Lean project, and returns the toolchain (from
+{lit}`lean-toolchain` or from the provided override in {name}`overrideToolchain`).
+
+An error is thrown if:
+ * there is no {lit}`lakefile.toml` or {lit}`lakefile.lean` present, or
+ * there is no toolchain file and {name}`overrideToolchain` is {name}`none`.
 -/
 public def getProjectToolchain (projectDir : System.FilePath) (overrideToolchain : Option String := none) : IO String := do
   let lakefileLean := projectDir / "lakefile.lean"
@@ -58,20 +71,25 @@ public def getProjectToolchain (projectDir : System.FilePath) (overrideToolchain
     | some override => return override
 
 /--
-Appropriately constructs arguments for spawning a process that approximates executing the following:
+Constructs arguments for spawning a process that approximates executing the following:
 
 ```
 $ cd projectDir
 $ elan run --install <toolchain> <cmd>
 ```
 
-The function returns an {name}`IO.Process.SpawnArgs` object that resets environment variables appropriately and calls the given {lean}`cmd` via {lit}`elan run`.
+The function returns an {name}`IO.Process.SpawnArgs` object that resets environment variables
+appropriately and calls the given {lean}`cmd` via {lit}`elan run`.
 
-In Verso, these commands are typically run in with the expectation that they will cause a compilation artifact to be placed in the {lit}`.lake` directory.
-Passing {name}`restoreArtifacts` defaults the {manual section "lake-config-toml"}[{lit}`LAKE_RESTORE_ARTIFACTS` environment variable] to {lean}`"true"`; this is necessary to ensure that commands like {lit}`lake build` actually put those artifacts into place in the build directory.
-Otherwise, Lake redirects callers to its cache without copying the artifacts to the build directory.
+In Verso, these commands are typically run in with the expectation that they will cause a
+compilation artifact to be placed in the {lit}`.lake` directory. Passing {name}`restoreArtifacts`
+defaults the {manual section "lake-config-toml"}[{lit}`LAKE_RESTORE_ARTIFACTS` environment variable]
+to {lean}`"true"`; this is necessary to ensure that commands like {lit}`lake build` actually put
+those artifacts into place in the build directory. Otherwise, Lake redirects callers to its cache
+without copying the artifacts to the build directory.
 
-The optional {name}`env` argument allows for further environment modifications, which will overwrite the default changes.
+The optional {name}`env` argument allows for further environment modifications, which will overwrite
+the default changes.
 -/
 public def getSpawnArgsForToolchain (projectDir : System.FilePath) (toolchain : String)
     (cmd : Array String)
@@ -90,23 +108,34 @@ public def getSpawnArgsForToolchain (projectDir : System.FilePath) (toolchain : 
 /--
 Executes a command in an environment set up for Lake, specifying the project and toolchain.
 
-Invoking {lean}`runCmdWithToolchain projectDir toolchain #["foo", "bar"]` approximates executing the following:
+Invoking {lean}`runCmdWithToolchain projectDir toolchain #["foo", "bar"]` approximates executing the
+following:
 
 ```
 $ cd projectDir
 $ elan run --install <toolchain> foo bar
 ```
 
-In order for {lit}`elan run` to work for a different toolchain, a number of environment variables need to be modified, and this function sets these up appropriately.
+In order for {lit}`elan run` to work for a different toolchain, a number of environment variables
+need to be modified, and this function sets these up appropriately.
 
-In Verso, these commands are typically run in with the expectation that they will cause a compilation artifact to be placed in the {lit}`.lake` directory.
-Passing {name}`restoreArtifacts` defaults the {manual section "lake-config-toml"}[{lit}`LAKE_RESTORE_ARTIFACTS` environment variable] to {lean}`"true"`; this is necessary to ensure that commands like {lit}`lake build` actually put those artifacts into place in the build directory.
-Otherwise, Lake redirects callers to its cache without copying the artifacts to the build directory.
+In Verso, these commands are typically run with the expectation that they will cause a
+compilation artifact to be placed in the {lit}`.lake` directory. Passing {name}`restoreArtifacts`
+defaults the {manual section "lake-config-toml"}[{lit}`LAKE_RESTORE_ARTIFACTS` environment variable]
+to {lean}`"true"`; this is necessary to ensure that commands like {lit}`lake build` actually put
+those artifacts into place in the build directory. Otherwise, Lake redirects callers to its cache
+without copying the artifacts to the build directory.
 
-The optional {name}`env` argument allows for further environment modifications, which will overwrite the default changes.
+The optional {name}`env` argument allows for further environment modifications, which will overwrite
+the default changes.
 
-The exit code is checked; if it is nonzero, the function adds information about the failed call stderr, and then throws an error containing just the command's output.
-Setting {name}`errorsToStderr` to {lean}`false` changes this behavior: nothing is printed to stderr, and all the information about the failure is present in the thrown error.
+If the command exits with exit code {lit}`0`, then its output is returned.
+
+If the command exits with a nonzero exit code, an error is thrown. By default, this function also
+prints a detailed failure report to {lit}`stderr` that includes the project directory, toolchain,
+failing command, exit code, and the command's output. In this case, the thrown exception only
+includes the command's {lit}`stdout` and {lit}`stderr`. If {name}`errorsToStderr` is {name}`false`,
+then no error report is printed to {lit}`stderr` and the thrown error includes all the information.
 -/
 public def runCmdWithToolchain (projectDir : System.FilePath) (toolchain : String)
     (cmd : Array String)
