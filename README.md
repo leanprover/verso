@@ -67,8 +67,8 @@ and for writing long-form technical documentation, such as the
 ## Branches and Tags
 
 The workflow described in this section helps Verso development work
-well with the automation surrounding Lean releases. These procedures make it easier
-to coordinate PRs across many repositories.
+well with the automation surrounding Lean releases. These procedures
+make it easier to coordinate PRs across many repositories.
 
 When a Lean release is created, a corresponding tag for the compatible
 version of Verso is also created. For example, the `v4.19.0` tag
@@ -81,11 +81,12 @@ release candidate.
 Adaptation to upcoming Lean versions happens in
 [`downstream-lean4`](https://github.com/leanprover/downstream-lean4),
 which builds Verso together with other Lean packages against Lean
-nightlies. Its automation maintains a _bump branch_ in this repository,
-named `bump/v4.X.0`, that holds the changes that make Verso build with
-Lean 4.X.0. `main` is repeatedly merged into the bump branch. When the
-first release candidate of Lean 4.X.0 is created, the bump branch is
-squash-merged onto `main` together with the toolchain update. The
+nightlies. Its automation maintains a _bump branch_ in this
+repository, named `bump/v4.X.0`, that holds the changes that make
+Verso build with Lean 4.X.0. `main` is repeatedly merged into the bump
+branch. When the first release candidate of Lean 4.X.0 is created, the
+bump branch is squash-merged onto `main` together with the toolchain
+update. The
 [`downstream-lean4` README](https://github.com/leanprover/downstream-lean4#readme)
 describes the process, including how adaptations reach package
 repositories, in detail.
