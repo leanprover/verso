@@ -67,27 +67,33 @@ and for writing long-form technical documentation, such as the
 ## Branches and Tags
 
 The workflow described in this section helps Verso development work
-well with the automation surrounding Lean releases. Please follow it!
-In the past, the `main` branch tracked upstream Lean closely, but
-these procedures make it easier to coordinate PRs across many
-repositories.
+well with the automation surrounding Lean releases. These procedures
+make it easier to coordinate PRs across many repositories.
 
 When a Lean release is created, a corresponding tag for the compatible
 version of Verso is also created. For example, the `v4.19.0` tag
 should be used for projects that are built in Lean 4.19.0.
 
-The two most important branches are `main` and `nightly-testing`. The
-`main` branch of this repository is intended to work with releases or
-release candidates of Lean, while `nightly-testing` tracks Lean
-nightlies. When a Lean release candidate is created, `nightly-testing`
-is made to work with it, and then its commits are rebased onto `main`.
-When the corresponding release is created, the toolchain file on
-`main` is updated and the tag is created. To the extent possible,
-development occurs on `main`; it is regularly merged into
-`nightly-testing`.
+Development occurs on `main`, which targets the latest release or
+release candidate of Lean. In practice, `main` almost always targets a
+release candidate.
 
-When a Lean release occurs, the adaptation changes are squash-merged
-into `main` before the tag is created.
+Adaptation to upcoming Lean versions happens in
+[`downstream-lean4`](https://github.com/leanprover/downstream-lean4),
+which builds Verso together with other Lean packages against Lean
+nightlies. Its automation maintains a _bump branch_ in this
+repository, named `bump/v4.X.0`, that holds the changes that make
+Verso build with Lean 4.X.0. `main` is repeatedly merged into the bump
+branch. When the first release candidate of Lean 4.X.0 is created, the
+bump branch is squash-merged onto `main` together with the toolchain
+update. The
+[`downstream-lean4` README](https://github.com/leanprover/downstream-lean4#readme)
+describes the process, including how adaptations reach package
+repositories, in detail.
+
+Unless you're developing a feature that depends on the latest Lean
+nightlies, please target `main` with your pull requests. If your
+feature relies on nightlies, please target the latest bump branch.
 
 ## Contributions
 
