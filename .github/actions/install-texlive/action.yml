@@ -32,6 +32,7 @@ runs:
                   sourcecodepro
                   sourcesans
                   sourceserif
+                  stix2-otf
                   fvextra
                   upquote
                   lineno

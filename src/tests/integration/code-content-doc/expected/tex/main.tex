@@ -1,6 +1,13 @@
 
 \documentclass[oneside]{memoir}
 
+% Lean code and prose use many mathematical symbols (such as ⦂, ⟶, and ↠) that the
+% text fonts below lack. The main, sans, and mono fonts fall back to STIX Two Math
+% for these glyphs.
+\usepackage{fontspec}
+\directlua{luaotfload.add_fallback("versofallback", {"STIXTwoMath-Regular.otf:mode=node;"})}
+\defaultfontfeatures[\rmfamily,\sffamily,\ttfamily]{RawFeature={fallback=versofallback}}
+
 \usepackage{sourcecodepro}
 \usepackage{sourcesanspro}
 \usepackage{sourceserifpro}
@@ -154,7 +161,7 @@ Here is some with a variety of interesting Unicode, including characters where U
 \textbf{def} Set (\textit{α} : Type u) : Type u := \textit{α} → Prop
 
 \textbf{instance} : EmptyCollection (Set \textit{α}) \textbf{where}
-  emptyCollection := \textbf{fun} _ => False
+  emptyCollection := \textbf{fun} \symbol{95} => False
 
 \textbf{instance} : Union (Set \textit{α}) \textbf{where}
   union \textit{a} \textit{b} := \textbf{fun} \textit{x} => \textit{a} \textit{x} ∨ \textit{b} \textit{x}
@@ -176,39 +183,39 @@ Here is some with a variety of interesting Unicode, including characters where U
   Subset \textit{a} \textit{b} := ∀ \textit{x}, \textit{x} ∈ \textit{a} → \textit{x} ∈ \textit{b}
 
 @[\textbf{simp}, \textbf{grind} .]
-\textbf{theorem} Set.subset_refl \symbol{123}\textit{a} : Set \textit{α}\symbol{125} : \textit{a} ⊆ \textit{a} := \textbf{by}
+\textbf{theorem} Set.subset\symbol{95}refl \symbol{123}\textit{a} : Set \textit{α}\symbol{125} : \textit{a} ⊆ \textit{a} := \textbf{by}
   \textbf{simp} [(· ⊆ ·)]
 
 @[\textbf{grind} ←]
-\textbf{theorem} Set.subset_union \symbol{123}\textit{a} \textit{b} \textit{c} : Set \textit{α}\symbol{125} :
+\textbf{theorem} Set.subset\symbol{95}union \symbol{123}\textit{a} \textit{b} \textit{c} : Set \textit{α}\symbol{125} :
     \textit{a} ⊆ \textit{b} → \textit{a} ⊆ \textit{b} ∪ \textit{c} := \textbf{by}
   \textbf{simp} [(· ⊆ ·), (· ∪ ·), (· ∈ ·)]
   \textbf{intro} \textit{h}
-  \textbf{solve_by_elim}
+  \textbf{solve\symbol{95}by\symbol{95}elim}
 
 \textbf{def} Set.powerset (\textit{a} : Set \textit{α}) : Set (Set \textit{α}) :=
   \textbf{fun} (\textit{x} : Set \textit{α}) => \textit{x} ⊆ \textit{a}
 
 \textbf{notation} "𝒫 " \textit{x} => Set.powerset \textit{x}
 
-\textbf{theorem} Set.powerset_empty_nonempty :
+\textbf{theorem} Set.powerset\symbol{95}empty\symbol{95}nonempty :
     ∃ (\textit{a} : Set \textit{α}), \textit{a} ∈ 𝒫 \symbol{123}\symbol{125} := \textbf{by}
   \textbf{constructor}
   \textbf{case} w => \textbf{exact} \symbol{123}\symbol{125}
   \textbf{simp} [(· ∈ ·), powerset]
 
 @[\infoDecorate{\textbf{grind?} →}]
-\textbf{theorem} Set.powerset_empty_unique (\textit{x} \textit{y} : Set \textit{α}) :
+\textbf{theorem} Set.powerset\symbol{95}empty\symbol{95}unique (\textit{x} \textit{y} : Set \textit{α}) :
     \textit{x} ∈ (𝒫 \symbol{123}\symbol{125}) → \textit{y} ∈ (𝒫 \symbol{123}\symbol{125}) → \textit{x} = \textit{y} := \textbf{by}
   \textbf{intro} \textit{hx} \textit{hy}
   \textbf{ext} \textit{x'}
-  \textbf{exact} (iff_false_right (\textit{hy} \textit{x'})).mpr (\textit{hx} \textit{x'})
+  \textbf{exact} (iff\symbol{95}false\symbol{95}right (\textit{hy} \textit{x'})).mpr (\textit{hx} \textit{x'})
 
 \end{LeanVerbatim}
 
 And now some inline code:
 \begin{itemize}
-\item \LeanVerb|∀\textit{x} \textit{y} : Set _, \textit{x} ∈ ((𝒫 \textit{x}) ∪ (𝒫 \textit{y}))|
+\item \LeanVerb|∀\textit{x} \textit{y} : Set \symbol{95}, \textit{x} ∈ ((𝒫 \textit{x}) ∪ (𝒫 \textit{y}))|
 \item \LeanVerb|true \symbol{124}\symbol{124} false|
 \item \LeanVerb|False → True|
 
