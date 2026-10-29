@@ -214,11 +214,11 @@ jobs:
 
             - name: Generate the test website
               run: |
-                  lake exe demosite --output _out/test-projects/demosite
+                  lake run versoMain test-projects/website/DemoSiteMain.lean --output _out/test-projects/demosite
 
             - name: Generate the test genre's document
               run: |
-                  lake exe simplepage
+                  lake run versoMain test-projects/custom-genre/SimplePageMain.lean
 
             - name: Generate some source HTML
               run: |
@@ -234,7 +234,7 @@ jobs:
 
             - name: Generate the test tutorial site
               run: |
-                  lake exe tutorial-example
+                  lake run versoMain test-projects/tutorial-test/TutorialExampleMain.lean
 
             - name: Check internal links on the test tutorial site
               run: |
@@ -297,7 +297,7 @@ jobs:
 
             - name: Generate the demo site and make sure page_link works
               run: |
-                  lake exe demosite --output _out/demosite
+                  lake run versoMain test-projects/website/DemoSiteMain.lean --output _out/demosite
                   # Fail if the generated about page doesn't have the expected base tag and blog link
                   grep -qF '<a href="blog/">blog</a> genre' _out/demosite/about/index.html
                   grep -qF '<base href=".././"/>' _out/demosite/about/index.html
@@ -359,7 +359,7 @@ jobs:
 
             - name: Build the package-manual site for browser tests
               run: |
-                  lake exe packagedocs --output _out/package-manual
+                  lake run versoMain test-projects/package-manual/PackageManualMain.lean --output _out/package-manual
 
             - name: Run package-manual browser tests
               run: |
