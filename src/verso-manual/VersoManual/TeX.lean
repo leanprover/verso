@@ -11,6 +11,13 @@ public def preamble (title : String) (authors : List String) (date : String) (pa
 r##"
 \documentclass["## ++ (if twoside then "twoside" else "oneside") ++ r##"]{memoir}
 
+% Lean code and prose use many mathematical symbols (such as ⦂, ⟶, and ↠) that the
+% text fonts below lack. The main, sans, and mono fonts fall back to STIX Two Math
+% for these glyphs.
+\usepackage{fontspec}
+\directlua{luaotfload.add_fallback("versofallback", {"STIXTwoMath-Regular.otf:mode=node;"})}
+\defaultfontfeatures[\rmfamily,\sffamily,\ttfamily]{RawFeature={fallback=versofallback}}
+
 \usepackage{sourcecodepro}
 \usepackage{sourcesanspro}
 \usepackage{sourceserifpro}
