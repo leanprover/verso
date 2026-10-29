@@ -196,8 +196,12 @@ partial def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax :
     else pure none
   return stx
 where
+  -- For `structure A.B.C`, the binder's syntax is `C` with the source range of `A.B.C`, so the
+  -- identifiers are also compared by their source range.
   identMatch (stx1 stx2 : Syntax) : Bool :=
-    normIdent stx1 == normIdent stx2
+    let stx1 := normIdent stx1
+    let stx2 := normIdent stx2
+    stx1 == stx2 || stx1.hasSameRange stx2
 
   normIdent (stx : Syntax) : Syntax :=
     if stx.getKind == ``declId then stx[0] else stx
