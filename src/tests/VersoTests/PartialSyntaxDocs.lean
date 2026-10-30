@@ -3,6 +3,7 @@ Copyright (c) 2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+import Errata
 import Verso
 
 /-!
@@ -14,10 +15,16 @@ The part of a block before its parse error is elaborated as in a valid block. An
 that the parse error cut short is elaborated with the parts it has. If that elaboration fails, it is
 `Inline.empty` or `Block.empty`. A header with a parse error starts a part at its level, with the
 part of its title before the error. A metadata block or an include has no effect while it has a
-parse error.
+parse error. When a block's parser fails after it has read whole blocks, error recovery gives a null
+node whose children are these blocks and `Syntax.missing`. Each of these blocks is elaborated in
+order as a block with a parse error. In a block with a parse error, a node that no elaborator
+accepts results in `Inline.empty` or `Block.empty`.
 
-Each test elaborates a short document with `#elab_doc`. It prints the messages of the elaboration,
-then whether the document is defined and whether it depends on `sorryAx`, then the document.
+Most tests elaborate a short document with `#elab_doc`. It prints the messages of the elaboration,
+then whether the document is defined and whether it depends on `sorryAx`, then the document. No
+parser gives some of the null nodes under test. For these, `elabNullDoc` builds the syntax of a
+`#docs` command with its first blocks in a null node, and prints the first line of each message and
+the document.
 
 In prior versions of the error recovery, a block with a parse error was `sorry` in the document. The
 document then depended on `sorryAx`.
@@ -57,6 +64,18 @@ unsafe def evalDocUnsafe (env : Environment) (opts : Options) (name : Name) :
 opaque evalDoc (env : Environment) (opts : Options) (name : Name) : Except String (Part TestGenre)
 
 /--
+Formats each message as its line, column and text. With `firstLines`, only the first line of each
+message's text is kept.
+-/
+def formatMessages (messages : MessageLog) (firstLines : Bool := false) : IO (Array String) := do
+  let mut out := #[]
+  for m in messages.toList do
+    let text := (← m.data.toString).trimAscii
+    let text := if firstLines then text.takeWhile (· != '\n') else text
+    out := out.push s!"{m.pos.line}:{m.pos.column}: {text}"
+  return out
+
+/--
 Elaborates the given string as the body of a `#doc (TestGenre) "Notes" =>` command, as a separate
 file in the current environment. Logs the messages, whether the document is defined and whether it
 depends on `sorryAx`. When the document is free of `sorryAx`, also logs the document.
@@ -66,9 +85,7 @@ elab "#elab_doc " body:str : command => do
   let inputCtx := Parser.mkInputContext input "<doc>"
   let commandState : Command.State := { env := (← getEnv), maxRecDepth := (← get).maxRecDepth }
   let s ← IO.processCommands inputCtx {} commandState
-  let mut out := #[]
-  for m in s.commandState.messages.toList do
-    out := out.push s!"{m.pos.line}:{m.pos.column}: {(← m.data.toString).trimAscii}"
+  let mut out ← formatMessages s.commandState.messages
   let env := s.commandState.env
   let name := docName (← getMainModule)
   if env.contains name then
@@ -81,6 +98,47 @@ elab "#elab_doc " body:str : command => do
   else
     out := out.push "not defined"
   logInfo ("\n".intercalate out.toList)
+
+/--
+Elaborates the given string as the body of a `#docs (TestGenre) nullDoc "Notes"` command. The first
+`count` top-level blocks, each transformed by `edit`, and then `Syntax.missing` are put in one null
+node. `recoverPartialBlock` gives syntax of this shape when a top-level block's parser leaves these
+trees. Logs the first line of each message of the elaboration, then the document.
+-/
+def elabNullDoc (body : String) (count : Nat) (edit : Syntax → Syntax := id) : CommandElabM Unit := do
+  let input := "#docs (TestGenre) nullDoc \"Notes\" :=\n:::::::\n" ++ body ++ ":::::::\n"
+  let stx ← match Parser.runParserCategory (← getEnv) `command input "<doc>" with
+    | .ok stx => pure stx
+    | .error e => throwError e
+  let some i := stx.getArgs.findIdx? (·.isOfKind nullKind)
+    | throwError "The command has no document body: {stx}"
+  let blocks := stx[i].getArgs
+  let recovered := mkNullNode ((blocks.take count).map edit |>.push .missing)
+  let stx := stx.setArg i (mkNullNode (#[recovered] ++ blocks.drop count))
+  let priorMessages := (← get).messages
+  modify ({ · with messages := {} })
+  let (messages, doc) ←
+    withReader ({ · with fileMap := .ofString input, fileName := "<doc>" }) <|
+    withScope (fun sc => { sc with opts := sc.opts.setBool `pp.rawOnError true }) <|
+    withoutModifyingEnv do
+      elabCommand stx
+      pure ((← get).messages, evalDoc (← getEnv) (← getOptions) ((← getCurrNamespace) ++ `nullDoc))
+  modify ({ · with messages := priorMessages })
+  let mut out ← formatMessages messages (firstLines := true)
+  match doc with
+  | .ok part => out := out.push s!"{repr part}"
+  | .error e => out := out.push s!"evaluation failed: {e}"
+  logInfo ("\n".intercalate out.toList)
+
+/--
+Replaces each unordered list by its first list item. A list item outside a list is a fragment of a
+block, which no elaborator accepts.
+-/
+def firstItems (stx : Syntax) : Syntax :=
+  stx.rewriteBottomUp fun
+    | list@(.node _ ``Lean.Doc.Parser.Block.ul _) =>
+      (list.find? (·.isOfKind ``Lean.Doc.Parser.ListItem.item)).getD list
+    | other => other
 
 /-! # Partial blocks -/
 
@@ -101,7 +159,7 @@ Verso.Doc.Part.mk
         Verso.Doc.Inline.emph #[], Verso.Doc.Inline.linebreak "\n"]]
   #[]
 -/
-#guard_msgs in
+#test_msgs in
 #elab_doc "We went to the park.
 
 We walked to the lake and saw {hig}[a heron] and {hig
@@ -125,7 +183,7 @@ Verso.Doc.Part.mk
                             Verso.Doc.Inline.linebreak "\n"]] }]]
   #[]
 -/
-#guard_msgs in
+#test_msgs in
 #elab_doc "* We saw a heron.
 
 * We saw a {hig
@@ -151,7 +209,7 @@ Verso.Doc.Part.mk
             (Verso.Doc.Inline.linebreak "\n")]]]
   #[]
 -/
-#guard_msgs in
+#test_msgs in
 #elab_doc "We went to the park.[^walk]
 
 [^walk]: We walked to the lake and saw {hig
@@ -179,7 +237,7 @@ Verso.Doc.Part.mk
       #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After.", Verso.Doc.Inline.linebreak "\n"]]
       #[]]
 -/
-#guard_msgs in
+#test_msgs in
 #elab_doc "Before.
 
 # Head *bold
@@ -201,7 +259,7 @@ Verso.Doc.Part.mk
   #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After.", Verso.Doc.Inline.linebreak "\n"]]
   #[]
 -/
-#guard_msgs in
+#test_msgs in
 #elab_doc "%%%
 a := 1
 b.
@@ -225,7 +283,7 @@ Verso.Doc.Part.mk
   #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After.", Verso.Doc.Inline.linebreak "\n"]]
   #[]
 -/
-#guard_msgs in
+#test_msgs in
 #elab_doc "%%%
 a := 1
 b := (
@@ -252,11 +310,156 @@ Verso.Doc.Part.mk
   #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "Before."]]
   #[]
 -/
-#guard_msgs in
+#test_msgs in
 #elab_doc "Before.
 
 %%%
 a := 1
+"
+
+/-! # Blocks whose parser fails after their end -/
+
+/-
+This test checks that a header whose parser fails after it has read the header opens its part. The
+document has the part `Head`, and the paragraph after the header is in that part. The part's title
+is `Head ` followed by `Inline.empty`. The role `{hig}` has its name and arguments and no content,
+so the parser fails at the end of the line. Error recovery gives a null node whose children are the
+header and `Syntax.missing`. In prior versions of Verso, the null node was an empty block,
+`Block.concat #[]`, and the document had no part `Head`.
+-/
+/--
+info: 8:0: unexpected newline; expected '![', '$$', '$', '*', '[', '[^', '_', '`' or '{'
+defined, depends on sorryAx: false
+Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Notes"]
+  "Notes"
+  none
+  #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "We went to the park."]]
+  #[Verso.Doc.Part.mk
+      #[Verso.Doc.Inline.text "Head ", Verso.Doc.Inline.concat #[]]
+      "Head "
+      none
+      #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "We saw a heron.", Verso.Doc.Inline.linebreak "\n"]]
+      #[]]
+-/
+#test_msgs in
+#elab_doc "We went to the park.
+
+# Head {hig}
+
+We saw a heron.
+"
+
+/-
+This test checks that a paragraph whose parser fails after it has read the paragraph is in the
+document. The document has the paragraph with the text `We saw ` followed by `Inline.empty`. The
+role `{hig}` has its name and arguments and no content, so error recovery gives a null node whose
+children are the paragraph and `Syntax.missing`. In prior versions of Verso, the null node was an
+empty block, `Block.concat #[]`, and the paragraph was not in the document.
+-/
+/--
+info: 8:0: unexpected newline; expected '![', '$$', '$', '*', '[', '[^', '_', '`' or '{'
+defined, depends on sorryAx: false
+Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Notes"]
+  "Notes"
+  none
+  #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "We went to the park."],
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "We saw ", Verso.Doc.Inline.concat #[]],
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "We saw a heron.", Verso.Doc.Inline.linebreak "\n"]]
+  #[]
+-/
+#test_msgs in
+#elab_doc "We went to the park.
+
+We saw {hig}
+
+We saw a heron.
+"
+
+/-
+This test checks that a metadata block whose parser fails after the closing `%%%` is elaborated as
+a metadata block with a parse error. The document has no metadata, and its only block is the
+paragraph after the metadata block. The text after the closing `%%%` gives the parse error, so error
+recovery gives a null node whose children are the whole metadata block and `Syntax.missing`. In
+prior versions of Verso, the null node was an empty block, `Block.concat #[]`, before the paragraph.
+-/
+/--
+info: 8:0: '
+'; expected expected end of file
+defined, depends on sorryAx: false
+Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Notes"]
+  "Notes"
+  none
+  #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After.", Verso.Doc.Inline.linebreak "\n"]]
+  #[]
+-/
+#test_msgs in
+#elab_doc "%%%
+b := 2
+%%% b
+
+After.
+"
+
+/-
+This test checks that the blocks in a null node are elaborated in order. The paragraph `Before.` is
+in the root part, and the header opens the part `Head`. The part `Head` contains the paragraph after
+the null node. The null node's children are a paragraph, a header and `Syntax.missing`.
+`recoverPartialBlock` gives syntax of this shape when a top-level block's parser leaves several
+trees. No parser gives this syntax, so the test builds it. In prior versions of Verso, the null node
+was one empty block, `Block.concat #[]`, and the document had no part `Head`.
+-/
+/--
+info: Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Notes"]
+  "Notes"
+  none
+  #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "Before."]]
+  #[Verso.Doc.Part.mk
+      #[Verso.Doc.Inline.text "Head"]
+      "Head"
+      none
+      #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After."]]
+      #[]]
+-/
+#test_msgs in
+run_cmd elabNullDoc (count := 2) "Before.
+
+# Head
+
+After.
+"
+
+/-
+This test checks that, in a block that is partial syntax, a node that no elaborator accepts results
+in an empty block and the rest of the block is in the document. The document has the blockquote with
+`Block.concat #[]` in place of the list item, followed by the paragraph in the blockquote. The
+message `unexpected syntax` is logged for the list item. The null node's children are a blockquote
+and `Syntax.missing`. In the blockquote, a list item outside a list stands in place of the list,
+and no elaborator accepts it. `recoverPartialBlock` gives syntax of this shape when a top-level
+block's parser leaves one tree without `Syntax.missing`. No parser gives a list item outside a list,
+so the test builds this syntax. In prior versions of Verso, the null node was one empty block, and
+the paragraph in the blockquote was not in the document.
+-/
+/--
+info: 3:2: unexpected syntax
+Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Notes"]
+  "Notes"
+  none
+  #[Verso.Doc.Block.blockquote
+      #[(Verso.Doc.Block.concat #[]), (Verso.Doc.Block.para #[Verso.Doc.Inline.text "We saw an egret."])],
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "After."]]
+  #[]
+-/
+#test_msgs in
+run_cmd elabNullDoc (count := 1) (edit := firstItems) "> * We saw a heron.
+
+  We saw an egret.
+
+After.
 "
 
 end Verso.PartialSyntaxDocsTest
