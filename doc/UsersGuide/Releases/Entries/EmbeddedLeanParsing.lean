@@ -13,7 +13,7 @@ release_note
   version := ⟨4, 37, 0⟩
   breaking := true
   tag := "embedded-lean-parsing"
-  prs := [750]
+  prs := [750, 1077]
 
 #doc (Manual) "Parsing Embedded Lean from Source Spans" =>
 
