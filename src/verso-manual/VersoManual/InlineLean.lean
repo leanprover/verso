@@ -35,7 +35,7 @@ open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets Expect
 open Lean Elab
 open SubVerso.Highlighting
 
-open Verso.SyntaxUtils (runParserCategory' SyntaxError parseStrLitAsCategory strLitInputContext)
+open Verso.SyntaxUtils (SyntaxError parseStrLitAsCategory strLitInputContext)
 
 open Lean.Doc (CodeView RoleView)
 open Lean.Elab.Tactic.GuardMsgs
@@ -318,7 +318,7 @@ meta def elabCommands [Literal k] (config : LeanBlockConfig) (str : TSyntax k)
     let cctx : Command.Context := { fileName := ← getFileName, fileMap := text, snap? := none, cancelTk? := none}
 
     let mut cmdState : Command.State := { env := ← getEnv, maxRecDepth := ← MonadRecDepth.getMaxRecDepth, scopes := origScopes }
-    let mut pstate := { pos := startPos, recovering := false, hasLeading := false }
+    let mut pstate := { pos := startPos, recovering := false, leadingStartPos? := none }
     let mut cmds := #[]
     let mut cmdTrees : Array (Option Lean.Elab.InfoTree) := #[]
 
@@ -454,7 +454,7 @@ meta def leanTerm : CodeBlockExpanderOf LeanInlineConfig
 
         let ((), tree') ← elabInlineLean `Manual.leanTerm str fun _vars => do
             let expectedType ← config.type.mapM fun (s : StrLit) => do
-              match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
+              match (← SyntaxUtils.runParserCategoryString `term s.getString) with
               | .error e => throwErrorAt stx e
               | .ok stx => withEnableInfoTree false do
                 let t ← leveller <| Elab.Term.elabType stx
@@ -520,7 +520,7 @@ meta def leanInline : RoleExpanderOf LeanInlineConfig
         let (t, tree') ← elabInlineLean `Manual.leanInline arg fun _ => do
 
             let expectedType ← config.type.mapM fun (s : StrLit) => do
-              match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
+              match (← SyntaxUtils.runParserCategoryString `term s.getString) with
               | .error e => throwErrorAt term e
               | .ok stx => withEnableInfoTree false do
                 let t ← leveller <| Elab.Term.elabType stx
