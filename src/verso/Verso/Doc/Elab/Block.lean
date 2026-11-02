@@ -44,7 +44,7 @@ public partial def elabBlock (block : VersoBlock) : DocElabM (TSyntax `term) :=
           elabBlock ⟨stxNew⟩
     | none =>
       let some view := BlockView.of ⟨stx⟩
-        | throwUnexpected stx
+        | elabUnexpected stx ``Verso.Doc.Block.empty
       decorateClosing view
       let exp ← blockExpandersFor kind
       for e in exp do
@@ -56,6 +56,6 @@ public partial def elabBlock (block : VersoBlock) : DocElabM (TSyntax `term) :=
             if id == unsupportedSyntaxExceptionId then continue
             else throw ex
           | ex => throw ex
-      throwUnexpected block
+      elabUnexpected block ``Verso.Doc.Block.empty
   | _ =>
-    throwUnexpected block
+    elabUnexpected block ``Verso.Doc.Block.empty

@@ -57,8 +57,7 @@ If `p` left multiple items on the stack, or if it left one tree without `Syntax.
 is a null node that contains these items. The node ends with `.missing` if none of the items
 contains one. If `p` left no tree, the result is `Syntax.missing`.
 
-A null node elaborates as an empty block. The block's content before the error appears in the
-document only when `p` left one tree that includes `Syntax.missing`.
+Each tree in a null node elaborates in order as a top-level block that is partial syntax.
 -/
 public def recoverPartialBlock (p : ParserFn) : ParserFn :=
   recoverFn p fun rctx =>
