@@ -1103,7 +1103,7 @@ meta def isMetadataField : Lean.TSyntax ``Lean.Parser.Term.structInstField → B
   | _ => false
 
 meta def isDecodeField : Lean.TSyntax ``Lean.Parser.Term.structInstField → Bool
-  | `(Lean.Parser.Term.structInstField|decode := $_) => true
+  | `(Lean.Parser.Term.structInstField|decode $_:structInstFieldBinder* := $_) => true
   | `(Lean.Parser.Term.structInstField|decode) => true
   | _ => false
 
