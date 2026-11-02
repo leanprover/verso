@@ -17,8 +17,10 @@ A featured image is a large image that's given prominent placement for a post.
 Blog themes can now showcase these images on the post list in addition to in the post itself.
 
 :::paragraph
-To migrate posts to include a feature image and/or subtitle:
+These fields are both optional, which means migration of old posts is optional.
+The unset fields will simply not be displayed.
+If you would like your old posts to be migrated to include a featured image and subtitle, then:
 
 * Add a field `subtitle` to your post's metadata, for example: `subtitle := "an explanation using Lean"`.
-* Add a field `featuredImage` with a path to an image to your post's metadata, for example: `featuredImage := "./static/mypicture.png"`.
+* Add a field `featuredImage` with a path to an image to your post's metadata, for example: `featuredImage := "static/post-images/mypicture.png"`.
 :::
