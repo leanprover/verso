@@ -20,13 +20,12 @@ open Verso.Output
 namespace Verso.Genre.Manual
 
 block_extension Block.row (alignItems : String) where
+  metadata := String
   data := Json.str alignItems
   traverse _ _ _ := pure none
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ blockHtml _ data content => do
-      let .str ai := data
-        | reportError "Expected string JSON for row" *> pure .empty
+    some <| fun ai _ blockHtml _ content => do
       let style := s!"display: flex; flex-wrap: wrap; align-items: {ai}; gap: 1em;"
       pure html%{
         <div class="verso-row" style={style}>
@@ -34,7 +33,7 @@ block_extension Block.row (alignItems : String) where
         </div>
       }
   toTeX :=
-    some <| fun _ go _ _ content => do
+    some <| fun _ _ go _ content => do
       let rendered ← content.mapM go
       pure <| .seq <| rendered.toList.intersperse (.raw "\\quad ") |>.toArray
 

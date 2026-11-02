@@ -29,9 +29,10 @@ namespace Verso.Genre.Manual.InlineLean
 
 
 block_extension Block.syntaxError via withHighlighting where
+  metadata := String × Array SyntaxError
   traverse _ _ _ := pure none
   toTeX :=
-    some <| fun _ go _ _ content => do
+    some <| fun _ _ go _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   extraCss := [
@@ -79,12 +80,7 @@ block_extension Block.syntaxError via withHighlighting where
   ]
   toHtml :=
     open Verso.Output Html in
-    some <| fun _ _ _ data _ => do
-      match FromJson.fromJson? data with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
-        pure .empty
-      | .ok (str, (msgs : (Array SyntaxError))) =>
+    some <| fun (str, msgs) _ _ _ _ => do
         let mut pos : String.Pos.Raw := ⟨0⟩
         let mut out : Array Html := #[]
         let mut line : Array Html := #[]

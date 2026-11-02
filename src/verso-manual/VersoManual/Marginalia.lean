@@ -309,23 +309,24 @@ def Marginalia.TeX (content : TeX) : TeX :=
   \TeX{ \footnote{ \Lean{ content } } }
 
 inline_extension Inline.margin (idSlug : String) where
+  metadata := String
   data := ToJson.toJson idSlug
-  traverse id data _ := do
+  traverse idSlug' id _ := do
     let path ← (·.path) <$> read
-    let hint := s!"--marginalia-{(FromJson.fromJson? data (α := String)).toOption.getD ""}"
+    let hint := s!"--marginalia-{idSlug'}"
     let _ ← Verso.Genre.Manual.externalTag id path hint
     pure none
   toTeX :=
   open Verso.Output.TeX in
-  some <| fun goI _ _ content => do
+  some <| fun _metadata goI _ content => do
     pure <| Marginalia.TeX (← content.mapM goI)
   extraCss := [Marginalia.css]
   extraJs := [Marginalia.js]
   toHtml :=
     open Verso.Output.Html Doc.Html.HtmlT in
-    some <| fun goI id inl content  => do
+    some <| fun _metadata goI id content  => do
       let some link := (← state).externalTags[id]?
-        | panic! s!"Untagged marginalia with data {inl}"
+        | panic! s!"Untagged marginalia with ID {id}"
       pure <| Marginalia.html (← content.mapM goI) link.htmlId.toString
 
 namespace Marginalia

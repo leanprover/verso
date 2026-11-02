@@ -34,11 +34,11 @@ inline_extension Inline.draft where
     else
       pure (some <| .concat #[])
   toTeX :=
-    some <| fun go _ _ content => do
+    some <| fun _ go _ content => do
       content.mapM go
   toHtml :=
     open Verso.Output.Html in
-    some <| fun go _ _ content => do
+    some <| fun _ go _ content => do
       content.mapM go
 
 block_extension Block.draft where
@@ -48,11 +48,11 @@ block_extension Block.draft where
     else
       pure (some <| .concat #[])
   toTeX :=
-    some <| fun _ goB _ _ content => do
+    some <| fun _ _ goB _ content => do
       content.mapM goB
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ goB _ _ content => do
+    some <| fun _ _ goB _ content => do
       content.mapM goB
 
 /-- Hide draft-only content when in not in draft mode -/

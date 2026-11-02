@@ -27,21 +27,17 @@ open Lean Elab
 namespace Verso.Genre.Manual.InlineLean
 
 block_extension Block.signature via withHighlighting where
+  metadata := Highlighted
   traverse _ _ _ := do
     pure none
   toTeX :=
-    some <| fun _ go _ _ content => do
+    some <| fun _ _ go _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ _ _ data _ => do
-      match FromJson.fromJson? data with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code while rendering HTML signature: " ++ err ++ "\n" ++ toString data
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        hl.blockHtml (g := Manual) "examples"
+    some <| fun hl _ _ _ _ => do
+      hl.blockHtml (g := Manual) "examples"
 
 
 declare_syntax_cat signature_spec

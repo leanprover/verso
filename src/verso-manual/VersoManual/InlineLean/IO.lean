@@ -192,40 +192,35 @@ where
 end
 
 block_extension Block.exampleLeanFile (filename : String) where
+  metadata := String
+  decode := fun data =>
+    match data with
+    | .str filename => pure filename
+    | _ => .error s!"Failed to deserialize filename from {data.compress} (expected a string)"
   data := .str filename
   traverse _ _ _ := pure none
   toTeX :=
   open Verso.Output.TeX in
-  some <| fun _ goB _ data blocks => do
-    let .str filename := data
-      | reportError "Failed to deserialize filename from {data.compress} (expected a string)"
-        return .empty
+  some <| fun filename _ goB _ blocks => do
     let descr := \TeX{\texttt{\Lean{"File: " ++ filename} } }
     pure <| .seq #[.raw "\\begin{FileVerbatim}[label={", descr, .raw "}]\n",
     (← blocks.mapM goB), .raw "\n\\end{FileVerbatim}\n" ]
 
   extraCss := [exampleFileCss]
   toHtml := open Verso.Output Html in
-    some <| fun _ goB _ data blocks => do
-      let .str filename := data
-        | reportError "Failed to deserialize filename from {data.compress} (expected a string)"
-          return .empty
+    some <| fun filename _ goB _ blocks => do
       let descr := html%{<code>{filename}</code>}
       return exampleFileHtmlWrapper descr (← blocks.mapM goB)
 
 @[block_extension Block.exampleFile]
-def Block.exampleFile.descr : BlockDescr := withHighlighting {
+def Block.exampleFile.descr : RegisteredBlockDescr := ⟨FileType, withHighlighting {
+  decode := FromJson.fromJson?
   traverse _ _ _ := pure none
 
   toTeX :=
     open Verso.Output.TeX in
     open Verso.Doc.TeX in
-    some <| fun _ _ _ data blocks => do
-      match FromJson.fromJson? (α := FileType) data with
-      | .error err =>
-        IO.println <| "Couldn't deserialize file metadata while rendering TeX: " ++ err
-        pure .empty
-      | .ok type =>
+    some <| fun type _ _ _ blocks => do
         let str ←
           match blocks with
           | #[.code s] => pure s
@@ -247,12 +242,7 @@ def Block.exampleFile.descr : BlockDescr := withHighlighting {
   extraCss := [exampleFileCss]
   toHtml :=
     open Verso.Output Html in
-    some <| fun _ _ _ data blocks => do
-      match FromJson.fromJson? (α := FileType) data with
-      | .error err =>
-        reportError <| "Couldn't deserialize file metadata while rendering HTML: " ++ err
-        pure .empty
-      | .ok type =>
+    some <| fun type _ _ _ blocks => do
         let str ←
           match blocks with
           | #[.code s] => pure s
@@ -269,7 +259,7 @@ def Block.exampleFile.descr : BlockDescr := withHighlighting {
           | .other f => html%{File: <code>{f.toString}</code>}
 
         return exampleFileHtmlWrapper descr (exampleFileLines str)
-}
+}⟩
 
 
 namespace IOExample

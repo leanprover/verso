@@ -116,33 +116,30 @@ def unresolvedRefMessage (st : TraverseState) (domain : Option Name) (name : Str
     s!"No destination found for tag '{name}' in {domain}{suggestRefTargets candidates name}"
 
 inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (remote : Option String) (resolvedDestination : Option Link := none) where
+  metadata := RefInfo
   data := ToJson.toJson (RefInfo.mk canonicalName domain remote resolvedDestination)
-  traverse := fun _ info content => do
-    match FromJson.fromJson? (α := RefInfo) info with
-    | .error e =>
-      reportError e; pure none
-    | .ok { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
+  traverse := fun info _ content => do
+    match info with
+    | { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
       let domain := domain.getD sectionDomain
       match (← get).resolveDomainObject domain name with
       | .error _ => return none
       | .ok dest =>
         return some <| .other (Inline.ref name (some domain) none (some dest)) content
-    | .ok { canonicalName := name, domain := none, remote := some remote, resolvedDestination := none } =>
+    | { canonicalName := name, domain := none, remote := some remote, resolvedDestination := none } =>
       return some <| .other (Inline.ref name (some sectionDomain) (some remote) none) content
-    | .ok { resolvedDestination := some _, .. } | .ok { remote := some _, .. } =>
+    | { resolvedDestination := some _, .. } | { remote := some _, .. } =>
       pure none
   toTeX :=
     open Verso.Output.TeX in
     open Verso.Doc.TeX in
-    some <| fun go _ info content => do
-      match FromJson.fromJson? (α := RefInfo) info with
-      | .error e =>
-        reportError e; content.mapM go
-      | .ok { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
+    some <| fun info go _ content => do
+      match info with
+      | { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
         reportError (unresolvedRefMessage (← Doc.TeX.state) domain name); content.mapM go
-      | .ok { canonicalName := name, domain, remote := some remote, resolvedDestination := none } =>
+      | { canonicalName := name, domain, remote := some remote, resolvedDestination := none } =>
         reportError ("No destination found for remote '" ++ remote ++ "' tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
-      | .ok {resolvedDestination := some dest, remote, ..} =>
+      | {resolvedDestination := some dest, remote, ..} =>
         if remote.isSome then
           -- Inter-document links should be URLs
           pure <| makeLink dest.link (← content.mapM go)
@@ -153,13 +150,11 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
 
   toHtml :=
     open Verso.Output.Html in
-    some <| fun go _ info content => do
-      match FromJson.fromJson? (α := RefInfo) info with
-      | .error e =>
-        reportError e; content.mapM go
-      | .ok { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
+    some <| fun info go _ content => do
+      match info with
+      | { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
         reportError (unresolvedRefMessage (← Doc.Html.HtmlT.state) domain name); content.mapM go
-      | .ok { canonicalName := name, domain, remote := some remote, resolvedDestination := _ } =>
+      | { canonicalName := name, domain, remote := some remote, resolvedDestination := _ } =>
         let domain := domain |>.getD sectionDomain
         let remoteData ← readThe AllRemotes
         if let some r := remoteData[remote]? then
@@ -177,7 +172,7 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
         else reportError s!"Remote '{remote}' not found for tag '{name}' in domain '{domain}'"
         -- If any error was logged, just don't emit a link
         content.mapM go
-      | .ok {resolvedDestination := some dest, ..} =>
+      | {resolvedDestination := some dest, ..} =>
         pure html%{<a href={dest.link}>{← content.mapM go}</a>}
 
 section
@@ -217,12 +212,12 @@ meta def ref : RoleExpanderOf RoleArgs
 block_extension Block.paragraph where
   traverse := fun _ _ _ => pure none
   toTeX :=
-    some <| fun _ go _ _ content => do
+    some <| fun _ _ go _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ go _ _ content => do
+    some <| fun _ _ go _ content => do
       pure <| html%{<div class="paragraph">{← content.mapM go}</div>}
 
 /--
@@ -368,10 +363,10 @@ def traverse (text : Part Manual) (config : Config) : EmitM (Part Manual × Trav
     |>.setDomainTitle sectionDomain "Sections or chapters of the manual"
     |>.addQuickJumpMapper sectionDomain sectionDomainMapper
   for ⟨_, b⟩ in extensionImpls.blockDescrs do
-    if let some descr := b.get? BlockDescr then
+    if let some descr := b.get? RegisteredBlockDescr then
       state := descr.init state
   for ⟨_, i⟩ in extensionImpls.inlineDescrs do
-    if let some descr := i.get? InlineDescr then
+    if let some descr := i.get? RegisteredInlineDescr then
       state := descr.init state
   for i in [0:config.maxTraversals] do
     if config.verbose then
@@ -1079,6 +1074,7 @@ where
       SavedState.mk text' traverseState |>.save f
     | .resumeFrom f =>
       let {text, traverseState} ← SavedState.load f
+      let traverseState ← rebuildBoundCache text traverseState
       emit cfg text traverseState
       for step in extraSteps do
         step .single cfg.toConfig traverseState text

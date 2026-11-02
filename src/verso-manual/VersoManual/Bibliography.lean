@@ -359,12 +359,11 @@ private partial def cmpCite : Json → Json → Ordering
 
 
 inline_extension Inline.cite (citations : List Citable) (style : Style := .parenthetical) where
+  metadata := Json × Style
    -- The nested bit here _should_ be a no-op, but it's to avoid deserialization overhead during the traverse pass
   data := ToJson.toJson (ToJson.toJson citations, style)
-  traverse id data _ := do
-    match FromJson.fromJson? data with
-    | .error e => reportError s!"Failed to deserialize citation: {e}"; return none
-    | .ok (v : Json × Style) =>
+  traverse metadata id _ := do
+    let v := metadata
       let cited : Option (Except String (Array Json)) := (← get).get? `Manual.Bibliography
       match cited with
       | .none =>
@@ -384,10 +383,7 @@ inline_extension Inline.cite (citations : List Citable) (style : Style := .paren
       pure none -- TODO disambiguate years
   toTeX :=
     open Verso.Output.TeX in
-    some <| fun go _ data _content => do -- TODO repurpose "content" for e.g. "page 5"
-      match FromJson.fromJson? data with
-      | .error e => reportError s!"Failed to deserialize citation/style: {e}"; return .empty
-      | .ok (v : Json × Style) =>
+    some <| fun v go _ _content => do -- TODO repurpose "content" for e.g. "page 5"
         match FromJson.fromJson? v.1 with
         | .error e => reportError s!"Failed to deserialize citation: {e}"; return .empty
         | .ok (v' : List Citable) =>
@@ -396,15 +392,12 @@ inline_extension Inline.cite (citations : List Citable) (style : Style := .paren
   extraJs := [Marginalia.js]
   toHtml :=
     open Verso.Output.Html Doc.Html.HtmlT in
-    some <| fun go id data _content => do -- TODO repurpose "content" for e.g. "page 5"
-      match FromJson.fromJson? data with
-      | .error e => reportError s!"Failed to deserialize citation/style: {e}"; return .empty
-      | .ok (v : Json × Style) =>
+    some <| fun v go id _content => do -- TODO repurpose "content" for e.g. "page 5"
         match FromJson.fromJson? v.1 with
         | .error e => reportError s!"Failed to deserialize citation: {e}"; return .empty
         | .ok (v' : List Citable) => do
           let some link := (← state).externalTags[id]?
-            | panic! s!"Untagged citation with data {data}"
+            | panic! s!"Untagged citation with metadata {v.1}"
           Citable.inlineHtml go link.htmlId.toString v' v.2
 
 structure CiteConfig where

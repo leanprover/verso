@@ -53,10 +53,10 @@ public def highlightAssets : HtmlAssets where
   extraCssFiles := { tippyCss }
   licenseInfo := { tippy.js, popper.js }
 
-public instance : CanHighlightCode BlockDescr where
+public instance {Metadata : Type} : CanHighlightCode (BlockDescr Metadata) where
   addDependencies b :=
     { b with toHtmlAssets := b.toHtmlAssets.combine highlightAssets }
 
-public instance : CanHighlightCode InlineDescr where
+public instance {Metadata : Type} : CanHighlightCode (InlineDescr Metadata) where
   addDependencies i :=
     { i with toHtmlAssets := i.toHtmlAssets.combine highlightAssets }

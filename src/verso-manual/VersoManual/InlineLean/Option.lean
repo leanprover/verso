@@ -41,20 +41,16 @@ where
     .token ⟨.option name declName descr , name.toString⟩
 
 @[inline_extension Inline.option]
-def option.descr : InlineDescr := withHighlighting {
+def option.descr : RegisteredInlineDescr := ⟨Highlighted, withHighlighting {
+  decode := FromJson.fromJson?
   traverse _ _ _ := do
     pure none
   toTeX :=
-    some <| fun go _ _ content => do
+    some <| fun _ go _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ _ data _ => do
-      match FromJson.fromJson? data with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean option code while rendering HTML: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        hl.inlineHtml (g := Manual) "examples"
-}
+    some <| fun hl _ _ _ => do
+      hl.inlineHtml (g := Manual) "examples"
+}⟩

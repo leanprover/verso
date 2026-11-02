@@ -115,7 +115,10 @@ variable (impls : ExtensionImpls) (xref : TraverseState)
 partial def inlineItem (inl : Inline) (contents : Array (Doc.Inline Manual)) : m Unit := do
   if let some impl := impls.getInline? inl.name then
     if let some id := inl.id then
-    match impl.localContentItem id inl.data contents with
+    match impl.boundFor xref.boundCache inl.name inl.data with
+    | .error e => modify (·.logError s!"Error generating local ToC item for '{inl.name}': {e}")
+    | .ok bound =>
+    match bound.localContentItem id contents with
     | .error e => modify (·.logError s!"Error generating local ToC item for '{inl.name}': {e}")
     | .ok names =>
       if h : names.size > 0 then
@@ -134,7 +137,10 @@ partial def inlineContents (i : Doc.Inline Manual) : m Unit := do
 partial def blockItem (blk : Block) (contents : Array (Doc.Block Manual)) : m Unit := do
   if let some impl := impls.getBlock? blk.name then
     if let some id := blk.id then
-      match impl.localContentItem id blk.data contents with
+      match impl.boundFor xref.boundCache blk.name blk.data with
+      | .error e => modify (·.logError s!"Error generating local ToC item for '{blk.name}': {e}")
+      | .ok bound =>
+      match bound.localContentItem id contents with
       | .error e => modify (·.logError s!"Error generating local ToC item for '{blk.name}': {e}")
       | .ok names =>
         if h : names.size > 0 then
