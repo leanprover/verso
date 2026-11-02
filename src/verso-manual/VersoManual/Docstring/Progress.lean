@@ -113,9 +113,10 @@ public meta def progress : DirectiveExpanderOf Unit
     ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present') $(quote allTactics)) #[])
 
 @[block_extension Block.progress]
-public def progress.descr : BlockDescr where
+public def progress.descr : RegisteredBlockDescr := ⟨Array Name × Array Name × List (Name × String) × Array Name, {
+  decode := FromJson.fromJson?
   traverse _ _ _ := pure none
-  toHtml := some fun _ _ _ info _blocks => open Output.Html in do
+  toHtml := some fun metadata _ _ _ _blocks => open Output.Html in do
     let documented ← match ((← Doc.Html.HtmlT.state).get? `Verso.Genre.Manual.docstring).getD (pure <| .mkObj []) >>= Json.getObj? with
       | .error e =>
         reportError e
@@ -128,8 +129,7 @@ public def progress.descr : BlockDescr where
       ok := ok.insert x
 
 
-    let .ok ((namespaces : Array Name), (exceptions : Array Name), (present : List (Name × String)), (allTactics : Array Name)) := fromJson? info
-      | panic! "Can't deserialize progress bar state"
+    let (namespaces, exceptions, present, allTactics) := metadata
 
     let check : Lean.NameMap (List Name) := present.foldr (init := {}) fun (ns, names) z =>
       -- The filter is needed here because `"".splitOn " " = [""]`
@@ -194,3 +194,4 @@ public def progress.descr : BlockDescr where
       </dl>
     }
   toTeX := some (fun _ _ _ _ _ => pure <| Output.TeX.text "Unsupported")
+}⟩

@@ -140,17 +140,15 @@ The assigned tag is written back into the block, so that later traversal rounds 
 -/
 block_extension Block.entry
     (canonicalName : String) (info : EntryInfo) (assignedTag : Option Tag := none) where
+  metadata := String × EntryInfo × Option Tag
   data := ToJson.toJson (canonicalName, info, assignedTag)
   init st :=
     st.setDomainTitle entryDomain "Individual changes in a release"
       |>.addQuickJumpMapper entryDomain entryDomainMapper
-  traverse := fun id data contents => do
-    match FromJson.fromJson? data (α := String × EntryInfo × Option Tag) with
-    | .error e =>
-      reportError s!"Couldn't decode release note entry data: {e}"
-      return none
-    | .ok (_, _, some _) => return none
-    | .ok (canonicalName, info, Option.none) =>
+  traverse := fun metadata id contents => do
+    match metadata with
+    | (_, _, some _) => return none
+    | (canonicalName, info, Option.none) =>
       let some tag ← saveEntry id canonicalName info
         | return none
       return some <|
@@ -158,14 +156,14 @@ block_extension Block.entry
           {Block.entry canonicalName info (assignedTag := some tag) with id := some id} contents
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _goI goB id _data contents => do
+    some <| fun _ _goI goB id contents => do
       let some link := (← read).traverseState.externalTags[id]?
         | reportError "Release note entry without an assigned tag"
           return .seq (← contents.mapM goB)
       pure html%{<div id={link.htmlId.toString}>{← contents.mapM goB}</div>}
   toTeX :=
     open Verso.Output.TeX in
-    some <| fun _goI goB id _data contents => do
+    some <| fun _ _goI goB id contents => do
       let label? := (← Doc.TeX.state).externalTags[id]?.map (labelForTeX ·.htmlId)
       let marker : Verso.Output.TeX :=
         match label? with
@@ -179,17 +177,15 @@ permalink that readers share, so this carries no visible content of its own.
 -/
 block_extension Block.release
     (canonicalName : String) (info : ReleaseInfo) (assignedTag : Option Tag := none) where
+  metadata := String × ReleaseInfo × Option Tag
   data := ToJson.toJson (canonicalName, info, assignedTag)
   init st :=
     st.setDomainTitle versionDomain "Releases of Verso"
       |>.addQuickJumpMapper versionDomain versionDomainMapper
-  traverse := fun id data contents => do
-    match FromJson.fromJson? data (α := String × ReleaseInfo × Option Tag) with
-    | .error e =>
-      reportError s!"Couldn't decode release data: {e}"
-      return none
-    | .ok (_, _, some _) => return none
-    | .ok (canonicalName, info, Option.none) =>
+  traverse := fun metadata id contents => do
+    match metadata with
+    | (_, _, some _) => return none
+    | (canonicalName, info, Option.none) =>
       let some tag ← saveRelease id canonicalName info
         | return none
       return some <|
@@ -197,14 +193,14 @@ block_extension Block.release
           {Block.release canonicalName info (assignedTag := some tag) with id := some id} contents
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _goI _goB id _data _contents => do
+    some <| fun _ _goI _goB id _contents => do
       let some link := (← read).traverseState.externalTags[id]?
         | reportError "Release without an assigned tag"
           return .empty
       pure html%{<span id={link.htmlId.toString}></span>}
   toTeX :=
     open Verso.Output.TeX in
-    some <| fun _goI _goB id _data _contents => do
+    some <| fun _ _goI _goB id _contents => do
       let label? := (← Doc.TeX.state).externalTags[id]?.map (labelForTeX ·.htmlId)
       pure <|
         match label? with

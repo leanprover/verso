@@ -151,28 +151,25 @@ where
 
 public section
 @[inline_extension index]
-def index.descr : InlineDescr where
-  traverse id data contents := do
+def index.descr : RegisteredInlineDescr := ⟨Index.Entry, {
+  decode := FromJson.fromJson?
+  traverse entry id contents := do
     -- TODO use internal tags in the first round to respect users' assignments (cf part tag assignment)
     let path ← (·.path) <$> read
     let _ ← Verso.Genre.Manual.externalTag id path ("--index-" ++ Index.sortingKey (.concat contents))
-    match FromJson.fromJson? data with
-    | .error err =>
-      reportError err
-      return none
-    | .ok (entry : Index.Entry) =>
-      Index.addEntry id entry
-      pure none
+    Index.addEntry id entry
+    pure none
   toTeX :=
-    some <| fun go _id _ content => do
+    some <| fun _metadata go _id content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _go id inl _content => do
+    some <| fun _metadata _go id _content => do
       let some link := (← read).traverseState.externalTags.get? id
-        | panic! s!"Untagged index target with data {inl}"
+        | panic! s!"Untagged index target with ID {id}"
       return html%{<span id={link.htmlId.toString}></span>}
+}⟩
 
 def Inline.see : Inline where
   name := `Verso.Genre.Manual.see
@@ -222,26 +219,23 @@ public meta def seeAlsoRole : RoleExpanderOf SeeArgs
     ``(seeAlso #[$args,*] $(quote target) $(quote subterm) $(quote index))
 
 @[inline_extension see]
-def see.descr : InlineDescr where
-  traverse _id data _contents := do
-    match FromJson.fromJson? data with
-    | .error err =>
-      reportError err
-      return none
-    | .ok (see : Index.See) =>
-      let ist : Option (Except String Index) := (← get).get? indexState
-      match ist with
-      | some (.error err) => reportError err; return none
-      | some (.ok v) => modify (·.set indexState {v with see := v.see.binInsert (· < ·) see})
-      | none => modify (·.set indexState {entries := {}, see := #[see] : Index})
-      pure none
+def see.descr : RegisteredInlineDescr := ⟨Index.See, {
+  decode := FromJson.fromJson?
+  traverse see _id _contents := do
+    let ist : Option (Except String Index) := (← get).get? indexState
+    match ist with
+    | some (.error err) => reportError err; return none
+    | some (.ok v) => modify (·.set indexState {v with see := v.see.binInsert (· < ·) see})
+    | none => modify (·.set indexState {entries := {}, see := #[see] : Index})
+    pure none
   toTeX :=
     some <| fun _ _ _ _ => do
       pure <| .seq #[]
   toHtml :=
-    some <| fun _go _id _inl _content => pure .empty
+    some <| fun _metadata _go _id _content => pure .empty
+}⟩
 
-def seeAlso.descr : InlineDescr := see.descr
+def seeAlso.descr : RegisteredInlineDescr := see.descr
 
 def Block.theIndex : Block where
   name := `Verso.Genre.Manual.theIndex
@@ -424,17 +418,18 @@ def theIndex (index : Option String := none) : Doc.Block Manual :=
 
 
 @[block_extension theIndex]
-def theIndex.descr : BlockDescr where
+def theIndex.descr : RegisteredBlockDescr := ⟨Unit, {
+  decode := fun _ => pure ()
   traverse _ _ _ := do
     pure none
   toTeX :=
-    some <| fun _ go _ _ content => do
+    some <| fun _ _ go _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   extraCss := {indexCss}
   toHtml :=
     open Verso.Output.Html Doc.Html HtmlT in
-    some <| fun goI _goB _ _ _content => do
+    some <| fun _ goI _goB _ _content => do
       let ist : Option (Except String Index) := (← state).get? indexState
       match ist with
       | some (.error err) =>
@@ -464,6 +459,7 @@ def theIndex.descr : BlockDescr where
             {out}
           </div>
         }
+}⟩
 where
   indexCss : CSS := r###"
     main .theIndex {

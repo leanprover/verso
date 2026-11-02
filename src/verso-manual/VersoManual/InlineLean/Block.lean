@@ -26,40 +26,25 @@ namespace Verso.Genre.Manual.InlineLean
 block_extension Block.lean
     (hls : Highlighted) (file : Option System.FilePath := none) (range : Option Lsp.Range := none)
     via withHighlighting where
+  metadata := Highlighted × Array (Name × String) × Option System.FilePath × Option Lsp.Range
+  decode := fun data =>
+    match data with
+    | .arr #[hl, defined, file, range] => do
+      pure (← FromJson.fromJson? hl, ← FromJson.fromJson? defined, ← FromJson.fromJson? file, ← FromJson.fromJson? range)
+    | _ => .error "Expected four-element JSON for Lean code"
   init s := s.addQuickJumpMapper exampleDomain exampleDomainMapper
   data :=
     let defined := definedNames hls
     Json.arr #[ToJson.toJson hls, ToJson.toJson defined, ToJson.toJson file, ToJson.toJson range]
 
-  traverse id data _ := do
-    let .arr #[_, defined, _, _] := data
-      | reportError "Expected two-element JSON for Lean code" *> pure none
-    match FromJson.fromJson? defined with
-    | .error err =>
-      reportError <| "Couldn't deserialize Lean code while traversing block example: " ++ err
-      pure none
-    | .ok (defs : Array (Name × String)) =>
-      saveExampleDefs id defs
-      pure none
+  traverse metadata id _ := do
+    let (_, defs, _, _) := metadata
+    saveExampleDefs id defs
+    pure none
   toTeX :=
-    some <| fun _ _ _ data _ => do
-      let .arr #[hlJson, _ds, _, _] := data
-        | reportError "Expected four-element JSON for Lean code" *> pure .empty
-      match FromJson.fromJson? hlJson with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code block while rendering TeX: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        hl.toTeX (g := Manual) (m := ReaderT ExtensionImpls (BuildLogT IO))
+    some <| fun (hl, _, _, _) _ _ _ _ => do
+      hl.toTeX (g := Manual) (m := ReaderT ExtensionImpls (BuildLogT IO))
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ _ _ data _ => do
-      let .arr #[hlJson, _ds, _, _] := data
-        | reportError "Expected four-element JSON for Lean code" *> pure .empty
-      match FromJson.fromJson? hlJson with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-
-        hl.blockHtml (g := Manual) "examples"
+    some <| fun (hl, _, _, _) _ _ _ _ => do
+      hl.blockHtml (g := Manual) "examples"

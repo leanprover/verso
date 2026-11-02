@@ -154,12 +154,10 @@ end
 end
 
 block_extension MarkupExample (title : String) where
+  metadata := String
   data := title
   traverse _ _ _ := pure none
-  toHtml := some fun _goI goB _id data contents => open Verso.Output.Html in do
-    let .str title := data
-      | reportError s!"Expected a string, got {data.compress}"
-        return .empty
+  toHtml := some fun title _goI goB _id contents => open Verso.Output.Html in do
     let #[stx, parsed] := contents
       | reportError s!"Expected two blocks, got {contents.size}"
         return .empty
@@ -178,9 +176,7 @@ block_extension MarkupExample (title : String) where
         </div>
       </div>
     }
-  localContentItem _id data _contents := open Verso.Output.Html in do
-    let .str title := data
-      | throw s!"Expected a title string, got {data.compress}"
+  localContentItem title _id _contents := open Verso.Output.Html in do
     pure #[(title, title)]
   extraCss := [
 r#"
@@ -234,10 +230,7 @@ r#"
 }
 "#
   ]
-  toTeX := some fun _goI _goB _id data contents => open Verso.Output.TeX in open Verso.Doc.TeX in do
-    let .str title := data
-      | reportError s!"Expected title as string, got {data.compress}"
-        return \TeX{}
+  toTeX := some fun title _goI _goB _id contents => open Verso.Output.TeX in open Verso.Doc.TeX in do
     let #[.code stx, .code parsed] := contents
       | reportError s!"Expected two code blocks, got {contents.size}"
         return \TeX{}

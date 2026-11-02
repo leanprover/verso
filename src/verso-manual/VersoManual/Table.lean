@@ -54,25 +54,22 @@ structure TableConfig where
   alignment : Option TableConfig.Alignment := none
 
 block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String) (alignment : Option TableConfig.Alignment) (assignedTag : Option Tag := none) where
+  metadata := Nat × Bool × Option String × Option Tag × Option TableConfig.Alignment
   data := ToJson.toJson (columns, header, tag, assignedTag, alignment)
 
-  traverse id data contents := do
-    match FromJson.fromJson? data (α := Nat × Bool × Option String × Option Tag × Option TableConfig.Alignment) with
-    | .error e => reportError s!"Error deserializing table data: {e}"; pure none
-    | .ok (_, _, none, _) => pure none
-    | .ok (c, hdr, some x, none, align) =>
+  traverse metadata id contents := do
+    match metadata with
+    | (_, _, none, _) => pure none
+    | (c, hdr, some x, none, align) =>
       let path ← (·.path) <$> read
       let tag ← Verso.Genre.Manual.externalTag id path x
       pure <| some <| Block.other {Block.table c hdr (some x) (assignedTag := some tag) align with id := some id} contents
-    | .ok (_, _, some _, some _, _) => pure none
+    | (_, _, some _, some _, _) => pure none
 
-  toTeX := some <| fun _ goB _ data blocks =>
+  toTeX := some <| fun metadata _ goB _ blocks =>
       open Verso.Output.TeX in do
-      match FromJson.fromJson? data (α := Nat × Bool × Option String × Option Tag × Option TableConfig.Alignment) with
-      | .error e =>
-        IO.println s!"Error deserializing table data: {e}"
-        return .empty
-      | .ok (columns, header, _, _, _align) =>
+      match metadata with
+      | (columns, header, _, _, _align) =>
       if let #[.ul items] := blocks then
         let mut items := items
         let mut rows := #[]
@@ -98,12 +95,9 @@ block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String
   toHtml :=
     open Verso.Doc.Html in
     open Verso.Output.Html in
-    some <| fun _goI goB id data blocks => do
-      match FromJson.fromJson? data (α := Nat × Bool × Option String × Option Tag × Option TableConfig.Alignment) with
-      | .error e =>
-        reportError s!"Error deserializing table data: {e}"
-        return .empty
-      | .ok (columns, header, _, _, align) =>
+    some <| fun metadata _goI goB id blocks => do
+      match metadata with
+      | (columns, header, _, _, align) =>
       if let #[.ul items] := blocks then
         let xref ← HtmlT.state
         let attrs := xref.htmlId id

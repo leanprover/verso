@@ -30,182 +30,106 @@ open Verso.Code.External
 namespace Verso.Genre.Manual
 
 block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) via withHighlighting where
+  metadata := CodeConfig × Highlighted × Array (Name × String)
+  decode := fun data =>
+    match data with
+    | .arr #[cfg, hl, defined] => do
+      pure (← FromJson.fromJson? cfg, ← FromJson.fromJson? hl, ← FromJson.fromJson? defined)
+    | _ => .error s!"Expected array for Lean block, got {data.compress}"
   init st :=
     st.addQuickJumpMapper exampleDomain exampleDomainMapper
   data :=
     let defined := definedNames hls
     Json.arr #[ToJson.toJson cfg, ToJson.toJson hls, ToJson.toJson defined]
-  traverse id data _ := do
-    let .arr #[cfgJson, _hlJson, definesJson] := data
-      | reportError s!"Expected array for Lean block, got {data.compress}"; return none
-    match FromJson.fromJson? cfgJson with
-    | .error err =>
-      reportError <| "Failed to deserialize code config during traversal:" ++ err
-      return none
-    | .ok (cfg : CodeConfig) =>
-      if cfg.defSite.isEqSome false then return none
-      match FromJson.fromJson? definesJson with
-      | .error err =>
-        reportError <| "Failed to deserialize code config during traversal:" ++ err
-        return none
-      | .ok (defines : Array (Name × String)) =>
-        saveExampleDefs id defines
-        pure none
+  traverse metadata id _ := do
+    let (cfg, _, defines) := metadata
+    if cfg.defSite.isEqSome false then return none
+    saveExampleDefs id defines
+    pure none
   toTeX :=
-    some <| fun _ _go _ data _content => do
-      let .arr #[cfgJson, hlJson, _definesJson] := data
-        | IO.println "Expected four-element JSON for Lean code"
-          pure .empty
-      match FromJson.fromJson? hlJson with
-      | .error err =>
-        IO.println <| "Couldn't deserialize Lean code block while rendering TeX: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        match FromJson.fromJson? cfgJson with
-        | .error err =>
-          IO.println <| "Couldn't deserialize Lean code block config while rendering TeX: " ++ err
-          pure .empty
-        | .ok (_cfg : CodeConfig) =>
-          let i := hl.indentation
-          let hl := hl.deIndent i
-          hl.toTeX
+    some <| fun metadata _ _go _ _content => do
+      let (_, hl, _) := metadata
+      let i := hl.indentation
+      let hl := hl.deIndent i
+      hl.toTeX
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ _ _ data _ => do
-      let .arr #[cfgJson, hlJson, _definesJson] := data
-        | reportError "Expected four-element JSON for Lean code"
-          pure .empty
-      match FromJson.fromJson? hlJson with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        match FromJson.fromJson? cfgJson with
-        | .error err =>
-          reportError <| "Couldn't deserialize Lean code block config while rendering HTML: " ++ err
-          pure .empty
-        | .ok (cfg : CodeConfig) =>
-          let i := hl.indentation
-          let hl := hl.deIndent i
-          withReader ({ · with codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD true }) <|
-            hl.blockHtml (g := Manual) "examples"
+    some <| fun metadata _ _ _ _ => do
+      let (cfg, hl, _) := metadata
+      let i := hl.indentation
+      let hl := hl.deIndent i
+      withReader ({ · with codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD true }) <|
+        hl.blockHtml (g := Manual) "examples"
 
 inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) via withHighlighting where
+  metadata := CodeConfig × Highlighted × Array (Name × String)
+  decode := fun data =>
+    match data with
+    | .arr #[cfg, hl, defined] => do
+      pure (← FromJson.fromJson? cfg, ← FromJson.fromJson? hl, ← FromJson.fromJson? defined)
+    | _ => .error s!"Expected array for Lean block, got {data.compress}"
   data :=
     let defined := definedNames hls
     Json.arr #[ToJson.toJson cfg, ToJson.toJson hls, ToJson.toJson defined]
-  traverse id data _ := do
-    let .arr #[cfgJson, _hlJson, definesJson] := data
-      | reportError s!"Expected array for Lean block, got {data.compress}"; return none
-    match FromJson.fromJson? cfgJson with
-    | .error err =>
-      reportError <| "Failed to deserialize code config during traversal:" ++ err
-      return none
-    | .ok (cfg : CodeConfig) =>
-      unless cfg.defSite.isEqSome true do return none
-      match FromJson.fromJson? definesJson with
-      | .error err =>
-        reportError <| "Failed to deserialize code config during traversal:" ++ err
-        return none
-      | .ok (defines : Array (Name × String)) =>
-        saveExampleDefs id defines
-        pure none
+  traverse metadata id _ := do
+    let (cfg, _, defines) := metadata
+    unless cfg.defSite.isEqSome true do return none
+    saveExampleDefs id defines
+    pure none
   toTeX :=
-    some <| fun _ _ data _ => do
-      let .arr #[cfgJson, hlJson, _definesJson] := data
-        | IO.println "Expected four-element JSON for Lean code"
-          pure .empty
-      match FromJson.fromJson? hlJson with
-      | .error err =>
-        IO.println <| "Couldn't deserialize Lean code block while rendering TeX: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        match FromJson.fromJson? cfgJson with
-        | .error err =>
-          IO.println <| "Couldn't deserialize Lean code block config while rendering TeX: " ++ err
-          pure .empty
-        | .ok (_cfg : CodeConfig) =>
-          let i := hl.indentation
-          let hl := hl.deIndent i
-          hl.toTeX
+    some <| fun metadata _ _ _ => do
+      let (_, hl, _) := metadata
+      let i := hl.indentation
+      let hl := hl.deIndent i
+      hl.toTeX
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ _ data _ => do
-      let .arr #[cfgJson, hlJson, _] := data
-        | reportError "Expected four-element JSON for Lean code"
-          pure .empty
-      match FromJson.fromJson? hlJson with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        match FromJson.fromJson? cfgJson with
-        | .error err =>
-          reportError <| "Couldn't deserialize Lean code block config while rendering HTML: " ++ err
-          pure .empty
-        | .ok (cfg : CodeConfig) =>
-          let i := hl.indentation
-          let hl := hl.deIndent i
-          withReader
-            ({ · with
-              codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD false }) <|
-            hl.inlineHtml (g := Manual) "examples"
+    some <| fun metadata _ _ _ => do
+      let (cfg, hl, _) := metadata
+      let i := hl.indentation
+      let hl := hl.deIndent i
+      withReader
+        ({ · with
+          codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD false }) <|
+        hl.inlineHtml (g := Manual) "examples"
 
 block_extension Block.leanOutput
     (message : Highlighted.Message) (summarize : Bool := false) (expandTraces : List Name := [])
     via withHighlighting where
+  metadata := Highlighted.Message × Bool × List Name
   data := ToJson.toJson (message, summarize, expandTraces)
   traverse _ _ _ := do
     pure none
   toTeX :=
     open Verso.Output.TeX in
     open Verso.Doc.TeX in
-    some <| fun _ _ _ data _ => do
-      match FromJson.fromJson? data with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
-        pure .empty
-      | .ok ((msg, _summarize, _expandTraces) : Highlighted.Message × Bool × List Name) =>
-        msg.toTeX
+    some <| fun (msg, _summarize, _expandTraces) _ _ _ _ => do
+      msg.toTeX
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ _ _ data _ => do
-      match FromJson.fromJson? data with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
-        pure .empty
-      | .ok ((msg, summarize, expandTraces) : Highlighted.Message × Bool × List Name) =>
-        msg.blockHtml summarize expandTraces (g := Manual)
+    some <| fun (msg, summarize, expandTraces) _ _ _ _ => do
+      msg.blockHtml summarize expandTraces (g := Manual)
 
 
 inline_extension Inline.leanOutput
     (message : Highlighted.Message) (plain : Bool) (expandTraces : List Name)
     via withHighlighting where
+  metadata := Highlighted.Message × Bool × List Name
   data := ToJson.toJson (message, plain, expandTraces)
   traverse _ _ _ := do
     pure none
   toTeX :=
     open Verso.Output.TeX in
-    some <| fun _ _ data _ => do
-      match FromJson.fromJson? data with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code while rendering TeX: " ++ err
-        pure .empty
-      | .ok ((txt, plain, expandTraces) : Highlighted.Message × Bool × List Name) =>
-        if plain then
-          txt.toTeXInlinePlain expandTraces
-        else
-          txt.toTeX expandTraces
+    some <| fun (txt, plain, expandTraces) _ _ _ => do
+      if plain then
+        txt.toTeXInlinePlain expandTraces
+      else
+        txt.toTeX expandTraces
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ _ data _ => do
-      match FromJson.fromJson? data with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
-        pure .empty
-      | .ok ((txt, plain, expandTraces) : Highlighted.Message × Bool × List Name) =>
-        if plain then pure html%{<code>{txt.toString}</code>}
-        else txt.toHtml expandTraces (g := Manual)
+    some <| fun (txt, plain, expandTraces) _ _ _ => do
+      if plain then pure html%{<code>{txt.toString}</code>}
+      else txt.toHtml expandTraces (g := Manual)
 
 open Verso.Code.External
 

@@ -116,40 +116,38 @@ def technicalTermDomainMapper : DomainMapper := {
   : DomainMapper }.setFont { family := .text }
 
 @[inline_extension deftech]
-public def deftech.descr : InlineDescr where
+public def deftech.descr : RegisteredInlineDescr := ⟨String × String, {
+  decode := FromJson.fromJson?
   init st := st
     |>.setDomainTitle technicalTermDomain "Terminology"
     |>.setDomainDescription technicalTermDomain "Definitions of technical terms"
     |>.addQuickJumpMapper technicalTermDomain technicalTermDomainMapper
 
-  traverse id data _contents := do
+  traverse metadata id _contents := do
+    let (key, term) := metadata
     -- A round with internal tags is not needed here because users's don't get to pick IDs
     let path ← (·.path) <$> read
-    match FromJson.fromJson? data with
-    | .error err =>
-      reportError err
-      return none
-    | .ok ((key, term) : (String × String) ) =>
-      let termSlug := term.sluggify.toString
-      let _ ← Verso.Genre.Manual.externalTag id path s!"--tech-term-{termSlug}"
-      Glossary.addEntry id key
-      modify fun st =>
-        st
-          |>.saveDomainObject technicalTermDomain key id
-          |>.saveDomainObjectData technicalTermDomain key (json%{"term": $term})
+    let termSlug := term.sluggify.toString
+    let _ ← Verso.Genre.Manual.externalTag id path s!"--tech-term-{termSlug}"
+    Glossary.addEntry id key
+    modify fun st =>
+      st
+        |>.saveDomainObject technicalTermDomain key id
+        |>.saveDomainObjectData technicalTermDomain key (json%{"term": $term})
 
-      pure none
+    pure none
 
   toTeX :=
-    some <| fun go _id _ content => do
+    some <| fun _metadata go _id content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   toHtml :=
     open Verso.Output.Html Doc.Html.HtmlT in
-    some <| fun go id inl content => do
+    some <| fun _metadata go id content => do
       let some link := (← state).externalTags[id]?
-        | panic! s!"Untagged index target with data {inl}"
+        | panic! s!"Untagged index target with ID {id}"
       return html%{<span id={link.htmlId.toString} class="def-technical-term">{← content.mapM go}</span>}
+}⟩
 
 public def Inline.tech : Inline where
   name := `Verso.Genre.Manual.tech
@@ -198,20 +196,21 @@ private def techLink (addr : String) (content : Html) (remote? : Option String :
   html%{<a class="technical-term" href={addr} {...remoteAttr}>{content}</a>}
 
 @[inline_extension tech]
-public def tech.descr : InlineDescr where
-  traverse _id _data _contents := pure none
+public def tech.descr : RegisteredInlineDescr := ⟨String × Option Verso.SourceLoc × Json, {
+  decode := fun data =>
+    match data with
+    | .arr #[.str key, locJson, remote] =>
+      pure (key, (FromJson.fromJson? (α := Verso.SourceLoc) locJson).toOption, remote)
+    | _ => .error s!"Failed to decode glossary key and location from {data}"
+  traverse _metadata _id _contents := pure none
   toTeX :=
-    some <| fun go _id _ content => do
+    some <| fun _metadata go _id content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   toHtml :=
     open Verso.Output.Html in
     open Doc.Html in
-    some <| fun go _id info content => do
-      let Json.arr #[.str key, locJson, remote] := info
-        | reportError s!"Failed to decode glossary key and location from {info}"
-          content.mapM go
-      let loc : Option Verso.SourceLoc := (Lean.fromJson? (α := Verso.SourceLoc) locJson).toOption
+    some <| fun (key, loc, remote) go _id content => do
       let remote ←
         match remote with
         | .null => pure none
@@ -273,3 +272,4 @@ a.technical-term:hover {
 }
 "#
   ]
+}⟩

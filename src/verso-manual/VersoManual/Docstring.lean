@@ -573,23 +573,18 @@ where
 "
 
 @[block_extension Block.docstringSection]
-def docstringSection.descr : BlockDescr where
-  traverse id info _ := do
-    let .ok header := FromJson.fromJson? (α := String) info
-      | reportError "Failed to deserialize docstring section data while traversing"; return none
+def docstringSection.descr : RegisteredBlockDescr := ⟨String, {
+  decode := FromJson.fromJson?
+  traverse header id _ := do
     let path ← (·.path) <$> read
     let _ ← externalTag id path s!"docstring-section-{header}"
     pure none
-  toTeX := some fun _goI goB _id info contents =>
+  toTeX := some fun header _goI goB _id contents =>
     open Verso.Output.TeX in do
-    let .ok header := FromJson.fromJson? (α := String) info
-      | reportError "Failed to deserialize docstring section data while generating TeX"; return .empty
     pure \TeX{\par\noindent\textbf{\Lean{header}}\par " " \Lean{.seq (← contents.mapM goB)}}
-  toHtml := some fun _goI goB id info contents =>
+  toHtml := some fun header _goI goB id contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
-      let .ok header := FromJson.fromJson? (α := String) info
-        | do reportError "Failed to deserialize docstring section data while generating HTML"; pure Html.empty
       let xref : TraverseState ← HtmlT.state (genre := Manual)
       match xref.externalTags[id]? with
       | none =>
@@ -604,23 +599,22 @@ def docstringSection.descr : BlockDescr where
           header
           (.seq renderedContents))
 
+}⟩
+
 @[block_extension Block.internalSignature]
-def internalSignature.descr : BlockDescr where
+def internalSignature.descr : RegisteredBlockDescr := ⟨Highlighted × Option Highlighted, {
+  decode := FromJson.fromJson?
   traverse _ _ _ := pure none
-  toTeX := some fun _goI goB _id info contents =>
+  toTeX := some fun (name, signature) _goI goB _id contents =>
     open Verso.Output.TeX in do
-    let .ok (name, signature) := FromJson.fromJson? (α := Highlighted × Option Highlighted) info
-      | reportError "Failed to deserialize docstring section data while generating TeX"; return .empty
     let signatureTeX ← do
       if let some sig := signature then
         pure \TeX{ " : " \Lean{ (← sig.toTeX) } }
       else pure .empty
     pure \TeX{\par\noindent " " \Lean{← name.toTeX} \Lean{signatureTeX} \Lean{.seq (← contents.mapM goB)}}
-  toHtml := some fun _goI goB _id info contents =>
+  toHtml := some fun (name, signature) _goI goB _id contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
-      let .ok (name, signature) := FromJson.fromJson? (α := Highlighted × Option Highlighted) info
-        | do reportError "Failed to deserialize docstring section data while generating HTML"; pure .empty
       return html%{
         <section class="subdocs">
           <pre class="name-and-type hl lean">
@@ -637,19 +631,18 @@ def internalSignature.descr : BlockDescr where
 
 
 
+}⟩
+
 @[block_extension Block.inheritance]
-def inheritance.descr : BlockDescr where
+def inheritance.descr : RegisteredBlockDescr := ⟨Name × Array Block.Docstring.ParentInfo, {
+  decode := FromJson.fromJson?
   traverse _ _ _ := pure none
-  toTeX := some fun _goI goB _id info contents =>
+  toTeX := some fun (name, _parents) _goI goB _id contents =>
     open Verso.Output.TeX in do
-    let .ok (name, _parents) := FromJson.fromJson? (α := Name × Array Block.Docstring.ParentInfo) info
-      | reportError "Failed to deserialize docstring section data while generating TeX"; return .empty
     return \TeX{\Lean{s!"{name}"} \Lean{.seq (← contents.mapM goB)}}
-  toHtml := some fun _goI _goB _id info _contents =>
+  toHtml := some fun (name, parents) _goI _goB _id _contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
-      let .ok (name, parents) := FromJson.fromJson? (α := Name × Array Block.Docstring.ParentInfo) info
-        | do reportError "Failed to deserialize docstring structure inheritance data while generating HTML"; pure .empty
       if parents.isEmpty then pure .empty
       else pure html%{
           <ul class="extends">
@@ -664,14 +657,15 @@ def inheritance.descr : BlockDescr where
           </ul>
         }
 
+}⟩
+
 open Block.Docstring (Visibility) in
 @[block_extension Block.fieldSignature]
-def fieldSignature.descr : BlockDescr where
+def fieldSignature.descr : RegisteredBlockDescr := ⟨Visibility × Highlighted × Highlighted × Option Nat × Array Highlighted, {
+  decode := FromJson.fromJson?
   traverse _ _ _ := pure none
-  toTeX := some fun _goI goB _id info contents =>
+  toTeX := some fun (visibility, name, signature, inheritedFrom, parents) _goI goB _id contents =>
     open Verso.Output.TeX in do
-    let .ok (visibility, name, signature, inheritedFrom, parents) := FromJson.fromJson? (α := Visibility × Highlighted × Highlighted × Option Nat × Array Highlighted) info
-      | reportError "Failed to deserialize docstring section data while generating TeX"; return .empty
     let visibility : Verso.Output.TeX :=
       match visibility with
       | .public => .empty
@@ -683,11 +677,9 @@ def fieldSignature.descr : BlockDescr where
     | .none => ""
     | .some _ => .raw "Inherited from " ++ parentsTeX
     pure (desc ++ inheritedExtra)
-  toHtml := some fun _goI goB _id info contents =>
+  toHtml := some fun (visibility, name, signature, inheritedFrom, parents) _goI goB _id contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
-      let .ok (visibility, name, signature, inheritedFrom, parents) := FromJson.fromJson? (α := Visibility × Highlighted × Highlighted × Option Nat × Array Highlighted) info
-        | do reportError "Failed to deserialize docstring section data while generating HTML"; pure .empty
       let inheritedAttr : Array (String × String) :=
         inheritedFrom.map (fun i => #[("data-inherited-from", toString i)]) |>.getD #[]
       let visibility : Html :=
@@ -717,13 +709,14 @@ def fieldSignature.descr : BlockDescr where
         </section>
       }
 
+}⟩
+
 @[block_extension Block.constructorSignature]
-def constructorSignature.descr : BlockDescr where
+def constructorSignature.descr : RegisteredBlockDescr := ⟨Highlighted, {
+  decode := FromJson.fromJson?
   traverse _ _ _ := pure none
-  toTeX := some fun _goI goB _id info contents =>
+  toTeX := some fun signature _goI goB _id contents =>
     open Verso.Output.TeX in do
-      let .ok signature := FromJson.fromJson? (α := Highlighted) info
-        | reportError "Failed to deserialize docstring section data while generating TeX"; pure .empty
       let signat ← signature.toTeX
       pure \TeX{ \Lean{.raw "\\begin{list}{$|$}{\\leftmargin=1em\\topsep=0pt \\partopsep=0pt}\\item "}
                  \Lean{signat}
@@ -731,12 +724,9 @@ def constructorSignature.descr : BlockDescr where
                  \Lean{← contents.mapM goB}
                  \Lean{.raw "\\end{list}" } }
 
-  toHtml := some fun _goI goB _id info contents =>
+  toHtml := some fun signature _goI goB _id contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
-      let .ok signature := FromJson.fromJson? (α := Highlighted) info
-        | do reportError "Failed to deserialize docstring section data while generating HTML"; pure .empty
-
       return html%{
         <div class="constructor">
           <pre class="name-and-type hl lean">{← signature.toHtml (g := Manual)}</pre>
@@ -745,6 +735,8 @@ def constructorSignature.descr : BlockDescr where
           </div>
         </div>
       }
+
+}⟩
 
 open Verso.Output Html in
 def Signature.toHtml  : Signature → HighlightHtmlM Manual Html
@@ -805,7 +797,8 @@ def namedocsBox (id : InternalId) (xref : TraverseState) (label sig text : Html)
   }
 
 @[block_extension Block.docstring]
-def docstring.descr : BlockDescr := withHighlighting {
+def docstring.descr : RegisteredBlockDescr := ⟨Name × Block.Docstring.DeclType × Signature × Option String × Array Name, withHighlighting {
+  decode := FromJson.fromJson?
   init st := st
     |>.setDomainTitle docstringDomain "Lean constant reference"
     |>.setDomainDescription docstringDomain "Documentation for Lean constants"
@@ -814,10 +807,8 @@ def docstring.descr : BlockDescr := withHighlighting {
     |>.setDomainDescription suggestionDomain "Search suggestions for Lean constants"
     |>.addQuickJumpMapper suggestionDomain docSuggestionMapper
 
-  traverse id info _ := do
-    let .ok (name, declType, _signature, _customLabel, altNames) :=
-      FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
-      | do reportError "Failed to deserialize docstring data"; pure none
+  traverse metadata id _ := do
+    let (name, declType, _signature, _customLabel, altNames) := metadata
 
     match declType with
     | .structure true ctor? fields fieldInfos _parents _ancestors =>
@@ -865,11 +856,10 @@ def docstring.descr : BlockDescr := withHighlighting {
         })
 
     pure none
-  toHtml := some <| fun _goI goB id info contents =>
+  toHtml := some <| fun metadata _goI goB id contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
-      let .ok (name, declType, signature, customLabel, _) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
-        | do reportError "Failed to deserialize docstring data while generating HTML"; pure .empty
+      let (name, declType, signature, customLabel, _) := metadata
       let sig : Html ← signature.toHtml
 
       let label := customLabel.getD declType.label
@@ -879,16 +869,14 @@ def docstring.descr : BlockDescr := withHighlighting {
 
       return namedocsBox id (← state) label sig (← contents.mapM goB)
 
-  localContentItem := fun _id info _contents => open Verso.Output.Html in do
-    let  (name, _declType, _signature, _customLabel, _altNames) ←
-      FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
+  localContentItem := fun metadata _id _contents => open Verso.Output.Html in do
+    let (name, _declType, _signature, _customLabel, _altNames) := metadata
     let names := #[name.getString!, name.toString]
     pure <| names.map fun s => (s, html%{<code>{s}</code>})
 
-  toTeX := some <| fun _goI goB _id info contents =>
+  toTeX := some <| fun metadata _goI goB _id contents =>
     open Verso.Output.TeX in do
-      let .ok (name, declType, signature, customLabel, _) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
-        | reportError "Failed to deserialize docstring data while generating TeX"; return .empty
+      let (name, declType, signature, customLabel, _) := metadata
 
       let label := customLabel.getD declType.label
       if label == "" then
@@ -897,7 +885,7 @@ def docstring.descr : BlockDescr := withHighlighting {
                 \Lean{← contents.mapM (fun b => do pure <| seq #[← goB b, .paragraphBreak])} \end{docstringBox}}
 
   extraCss := [docstringStyle]
-}
+}⟩
 where
   saveRef
       (id : InternalId) (name : Name)
@@ -926,39 +914,31 @@ def Block.leanFromMarkdown (hls : Highlighted) : Block where
 
 
 @[inline_extension leanFromMarkdown]
-def leanFromMarkdown.inlinedescr : InlineDescr := withHighlighting {
+def leanFromMarkdown.inlinedescr : RegisteredInlineDescr := ⟨Highlighted, withHighlighting {
+  decode := FromJson.fromJson?
   traverse _id _data _ := pure none
-  toTeX := some <| fun go _ _ content => content.mapM go
+  toTeX := some <| fun _ go _ content => content.mapM go
   toHtml :=
     open Verso.Output Html in
     open Verso.Doc.Html in
-    some <| fun _ _ data _ => do
-      match FromJson.fromJson? (α := Highlighted) data with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        hl.inlineHtml (g := Manual) "docstring-examples"
-}
+    some <| fun hl _ _ _ => do
+      hl.inlineHtml (g := Manual) "docstring-examples"
+}⟩
 
 @[block_extension leanFromMarkdown]
-def leanFromMarkdown.blockdescr : BlockDescr := withHighlighting {
+def leanFromMarkdown.blockdescr : RegisteredBlockDescr := ⟨Highlighted, withHighlighting {
+  decode := FromJson.fromJson?
   traverse _id _data _ := pure none
   toTeX :=
-    some <| fun _goI goB _ _ content => do
+    some <| fun _ _goI goB _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← goB b, .raw "\n"]
   toHtml :=
     open Verso.Output Html in
     open Verso.Doc.Html in
-    some <| fun _ _ _ data _ => do
-      match FromJson.fromJson? (α := Highlighted) data with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        hl.blockHtml (g := Manual) "docstring-examples"
-}
+    some <| fun hl _ _ _ _ => do
+      hl.blockHtml (g := Manual) "docstring-examples"
+}⟩
 
 open Lean Elab Term in
 meta def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : String) (ignoreElabErrors := false) (identOnly := false) : DocElabM α := do
@@ -1602,14 +1582,14 @@ def optionDomainMapper : DomainMapper :=
 
 open Verso.Genre.Manual.Markdown in
 @[block_extension optionDocs]
-def optionDocs.descr : BlockDescr := withHighlighting {
+def optionDocs.descr : RegisteredBlockDescr := ⟨Name × Highlighted, withHighlighting {
+  decode := FromJson.fromJson?
   init st := st
     |>.setDomainTitle optionDomain "Compiler options"
     |>.addQuickJumpMapper optionDomain optionDomainMapper
 
-  traverse id info _ := do
-    let .ok (name, _defaultValue) := FromJson.fromJson? (α := Name × Highlighted) info
-      | do reportError "Failed to deserialize docstring data while traversing an option"; pure none
+  traverse metadata id _ := do
+    let (name, _defaultValue) := metadata
 
     let path ← (·.path) <$> read
     let _ ← Verso.Genre.Manual.externalTag id path name.toString
@@ -1620,26 +1600,25 @@ def optionDocs.descr : BlockDescr := withHighlighting {
     modify fun st => st.saveDomainObject optionDomain name.toString id
 
     pure none
-  toHtml := some <| fun _goI goB id info contents =>
+  toHtml := some <| fun metadata _goI goB id contents =>
     open Verso.Doc.Html in
     open Verso.Output Html in do
-      let .ok (name, defaultValue) := FromJson.fromJson? (α := Name × Highlighted) info
-        | do reportError "Failed to deserialize docstring data while generating HTML for an option"; pure .empty
+      let (name, defaultValue) := metadata
       let x : Html := Html.text <| Name.toString name
 
       return namedocsBox id (← HtmlT.state) "option" x html%{
         <p>Default value: <code class="hl lean inline">{← defaultValue.toHtml (g := Manual)}</code></p>
         {← contents.mapM goB}
       }
-  localContentItem := fun _id info _contents => open Verso.Output.Html in do
-    let (name, _defaultValue) ← FromJson.fromJson? (α := Name × Highlighted) info
+  localContentItem := fun metadata _id _contents => open Verso.Output.Html in do
+    let (name, _defaultValue) := metadata
     pure #[
       (name.toString, html%{<code>{name.toString}</code>}),
       (s!"{name.toString} (Option)", html%{<code>{name.toString}</code> (Option)})
     ]
-  toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
+  toTeX := some <| fun _ _goI goB _id contents => contents.mapM goB
   extraCss := [docstringStyle]
-}
+}⟩
 
 def Block.tactic (name : Lean.Elab.Tactic.Doc.TacticDoc) («show» : Option String) : Block where
   name := `Verso.Genre.Manual.tactic
@@ -1762,15 +1741,15 @@ def tacticDomainMapper : DomainMapper := {
 open Verso.Genre.Manual.Markdown in
 open Lean Elab Term Parser Tactic Doc in
 @[block_extension tactic]
-def tactic.descr : BlockDescr := withHighlighting {
+def tactic.descr : RegisteredBlockDescr := ⟨TacticDoc × Option String, withHighlighting {
+  decode := FromJson.fromJson?
   init st := st
     |>.setDomainTitle tacticDomain "Tactic Documentation"
     |>.setDomainDescription tacticDomain "Detailed descriptions of tactics"
     |>.addQuickJumpMapper tacticDomain tacticDomainMapper
 
-  traverse id info _ := do
-    let .ok (tactic, «show») := FromJson.fromJson? (α := TacticDoc × Option String) info
-      | do reportError "Failed to deserialize docstring data while traversing a tactic"; pure none
+  traverse metadata id _ := do
+    let (tactic, «show») := metadata
     let path ← (·.path) <$> read
     let _ ← Verso.Genre.Manual.externalTag id path <| show.getD tactic.userName
     Index.addEntry id {term := Doc.Inline.code <| show.getD tactic.userName}
@@ -1781,21 +1760,20 @@ def tactic.descr : BlockDescr := withHighlighting {
         |>.saveDomainObjectData tacticDomain tactic.internalName.toString (json%{"userName": $tactic.userName})
 
     pure none
-  toHtml := some <| fun _goI goB id info contents =>
+  toHtml := some <| fun metadata _goI goB id contents =>
     open Verso.Doc.Html in
     open Verso.Output Html in do
-      let .ok (tactic, «show») := FromJson.fromJson? (α := TacticDoc × Option String) info
-        | do reportError "Failed to deserialize tactic data while generating HTML for a tactic"; pure .empty
+      let (tactic, «show») := metadata
       let x : Highlighted := .token ⟨.keyword tactic.internalName none tactic.docString, show.getD tactic.userName⟩
 
       return namedocsBox id (← HtmlT.state) "tactic" (← x.toHtml (g := Manual)) (← contents.mapM goB)
-  localContentItem := fun _id info _contents => open Verso.Output.Html in do
-    let (tactic, «show») ← FromJson.fromJson? (α := TacticDoc × Option String) info
+  localContentItem := fun metadata _id _contents => open Verso.Output.Html in do
+    let (tactic, «show») := metadata
     let str := show.getD tactic.userName
     pure #[(str, html%{<code class="tactic-name">{str}</code>})]
-  toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
+  toTeX := some <| fun _ _goI goB _id contents => contents.mapM goB
   extraCss := [docstringStyle]
-}
+}⟩
 
 structure TacticInlineOptions where
   «show» : Option String
@@ -1831,24 +1809,20 @@ where
 
 
 @[inline_extension tacticInline]
-def tacticInline.descr : InlineDescr := withHighlighting {
+def tacticInline.descr : RegisteredInlineDescr := ⟨Highlighted, withHighlighting {
+  decode := FromJson.fromJson?
   traverse _ _ _ := do
     pure none
   toTeX :=
-    some <| fun go _ _ content => do
+    some <| fun _ go _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   extraCss := [docstringStyle]
   toHtml :=
     open Verso.Output.Html Verso.Doc.Html in
-    some <| fun _ _ data _ => do
-      match FromJson.fromJson? data with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean tactic code while rendering HTML: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        hl.inlineHtml (g := Manual) "examples"
-}
+    some <| fun hl _ _ _ => do
+      hl.inlineHtml (g := Manual) "examples"
+}⟩
 
 -- TODO implement a system upstream like the one for normal tactics
 def Block.conv (name : Name) («show» : String) (docs? : Option String) : Block where
@@ -1904,15 +1878,15 @@ def convDomainMapper : DomainMapper := {
 open Verso.Genre.Manual.Markdown in
 open Lean Elab Term Parser Tactic Doc in
 @[block_extension conv]
-def conv.descr : BlockDescr := withHighlighting {
+def conv.descr : RegisteredBlockDescr := ⟨Name × String × Option String, withHighlighting {
+  decode := FromJson.fromJson?
   init st := st
     |>.setDomainTitle convDomain "Conversion Tactics"
     |>.setDomainDescription convDomain "Tactics for performing targeted rewriting of subterms"
     |>.addQuickJumpMapper convDomain convDomainMapper
 
-  traverse id info _ := do
-    let .ok (name, «show», _docs?) := FromJson.fromJson? (α := Name × String × Option String) info
-      | do reportError "Failed to deserialize conv docstring data"; pure none
+  traverse metadata id _ := do
+    let (name, «show», _docs?) := metadata
     let path ← (·.path) <$> read
     let _ ← Verso.Genre.Manual.externalTag id path <| name.toString
     Index.addEntry id {term := Doc.Inline.code <| «show»}
@@ -1921,39 +1895,34 @@ def conv.descr : BlockDescr := withHighlighting {
     modify fun st => st.saveDomainObjectData convDomain name.toString (json%{"userName": $«show»})
 
     pure none
-  toHtml := some <| fun _goI goB id info contents =>
+  toHtml := some <| fun metadata _goI goB id contents =>
     open Verso.Doc.Html in
     open Verso.Output Html in do
-      let .ok (name, «show», docs?) := FromJson.fromJson? (α := Name × String × Option String) info
-        | do reportError "Failed to deserialize conv tactic data"; pure .empty
+      let (name, «show», docs?) := metadata
       let x : Highlighted := .token ⟨.keyword (some name) none docs?, «show»⟩
 
       return namedocsBox id (← HtmlT.state) "conv tactic" (← x.toHtml (g := Manual)) (← contents.mapM goB)
-  localContentItem := fun _id info _contents => open Verso.Output.Html in do
-    let (_name, «show», _docs?) ← FromJson.fromJson? (α := Name × String × Option String) info
+  localContentItem := fun metadata _id _contents => open Verso.Output.Html in do
+    let (_name, «show», _docs?) := metadata
     pure #[(«show», html%{<code class="tactic-name">{«show»}</code>})]
 
-  toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
+  toTeX := some <| fun _ _goI goB _id contents => contents.mapM goB
   extraCss := [docstringStyle]
-}
+}⟩
 
 inline_extension Inline.conv (hl : Highlighted) via withHighlighting where
+  metadata := Highlighted
   data := ToJson.toJson hl
   traverse _ _ _ := pure none
   toTeX :=
-    some <| fun go _ _ content => do
+    some <| fun _ go _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   extraCss := [docstringStyle]
   toHtml :=
     open Verso.Output.Html Verso.Doc.Html in
-    some <| fun _ _ data _ => do
-      match FromJson.fromJson? data with
-      | .error err =>
-        reportError <| "Couldn't deserialize conv tactic code while rendering HTML: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        hl.inlineHtml (g := Manual) "examples"
+    some <| fun hl _ _ _ => do
+      hl.inlineHtml (g := Manual) "examples"
 
 @[role_expander conv]
 meta def convInline : RoleExpander

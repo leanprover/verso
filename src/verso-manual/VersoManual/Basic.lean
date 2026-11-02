@@ -328,6 +328,19 @@ instance : Repr Contents where
           .line) ++
     .line ++ "}"
 
+/--
+Bound extension handlers for custom blocks and inlines, memoized by the
+extension name and its serialized metadata. The bound handlers capture the
+extension's own metadata type, which is erased behind `Dynamic` because the
+descriptor types are defined later in this file and mention `TraverseState`.
+-/
+structure BoundCache where
+  blocks : HashMap (Name × Json) Dynamic := {}
+  inlines : HashMap (Name × Json) Dynamic := {}
+
+instance : Repr BoundCache where
+  reprPrec _ _ := .text "<bound cache>"
+
 open Verso.Search in
 structure TraverseState extends HtmlAssets where
   tags : HashMap Tag InternalId := {}
@@ -347,6 +360,9 @@ structure TraverseState extends HtmlAssets where
   -/
   texPreambleItems : HashSet String := {}
   private contents : Contents := {}
+  /-- Memoized bound extension handlers, populated during traversal. This is
+  a cache, not document state: it is excluded from equality and serialization. -/
+  boundCache : BoundCache := {}
 deriving Repr
 
 def TraverseState.initialize (htmlAssets : HtmlAssets) : TraverseState :=
@@ -367,7 +383,7 @@ private def fromJsonMap (v : Json) (field : String) : Except String (HashMap α 
 
 instance : ToJson TraverseState where
   toJson st := private
-    let { tags, externalTags, domains, ids, features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, texPackages, texPreambleItems, contents } := st
+    let { tags, externalTags, domains, ids, features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, texPackages, texPreambleItems, contents, boundCache := _ } := st
     json%{
       "tags": $(jsonMap tags),
       "externalTags": $(jsonMap externalTags),
@@ -681,6 +697,38 @@ abbrev InlineToTeX (genre : Genre) (m) :=
   (Doc.Inline genre → TeX.TeXT genre m Output.TeX) →
     InternalId → Json → Array (Doc.Inline genre) → TeX.TeXT genre m Output.TeX
 
+/-- A block traversal handler whose extension metadata has already been bound. -/
+abbrev BoundBlockTraversal genre :=
+  InternalId → Array (Doc.Block genre) →
+  ReaderT TraverseContext (StateT TraverseState (BuildLogT IO)) (Option (Doc.Block genre))
+
+/-- A block HTML handler whose extension metadata has already been bound. -/
+abbrev BoundBlockToHtml (genre : Genre) (m) :=
+  (Doc.Inline genre → Html.HtmlT genre m Html) →
+  (Doc.Block genre → Html.HtmlT genre m Html) →
+  InternalId → Array (Doc.Block genre) → Html.HtmlT genre m Html
+
+/-- A block TeX handler whose extension metadata has already been bound. -/
+abbrev BoundBlockToTeX (genre : Genre) (m) :=
+  (Doc.Inline genre → TeX.TeXT genre m Output.TeX) →
+  (Doc.Block genre → TeX.TeXT genre m Output.TeX) →
+  InternalId → Array (Doc.Block genre) → TeX.TeXT genre m Output.TeX
+
+/-- An inline traversal handler whose extension metadata has already been bound. -/
+abbrev BoundInlineTraversal genre :=
+  InternalId → Array (Doc.Inline genre) →
+  ReaderT TraverseContext (StateT TraverseState (BuildLogT IO)) (Option (Doc.Inline genre))
+
+/-- An inline HTML handler whose extension metadata has already been bound. -/
+abbrev BoundInlineToHtml (genre : Genre) (m) :=
+  (Doc.Inline genre → Html.HtmlT genre m Html) →
+    InternalId → Array (Doc.Inline genre) → Html.HtmlT genre m Html
+
+/-- An inline TeX handler whose extension metadata has already been bound. -/
+abbrev BoundInlineToTeX (genre : Genre) (m) :=
+  (Doc.Inline genre → TeX.TeXT genre m Output.TeX) →
+    InternalId → Array (Doc.Inline genre) → TeX.TeXT genre m Output.TeX
+
 
 structure ExtensionImpls where
   private mk ::
@@ -747,26 +795,35 @@ def TraverseContext.inBlock (self : TraverseContext) (block : Lean.Doc.Block i M
 def TraverseContext.sectionNumber (self : TraverseContext) : Array (Option Numbering) :=
   self.headers.map (·.metadata |>.getD {} |>.assignedNumber)
 
-/-- Implementations of all the operations needed to use an inline element. -/
-structure InlineDescr extends HtmlAssets where
+/--
+Implementations of all the operations needed to use an inline element.
+
+The `Metadata` parameter is the inline extension's own representation of the
+contents of the {name (full := Inline.data)}`data` field. The framework only
+transports the serialized `Json`; `decode` turns it into `Metadata` once, and
+the remaining operations receive that value instead of the `Json`.
+-/
+structure InlineDescr (Metadata : Type) extends HtmlAssets where
+  /-- Decode this extension's metadata from its serialized form. -/
+  decode : Json → Except String Metadata := fun _ => .error "no metadata decoder provided"
   /-- All registered initializers are called in the state prior to the first traversal. -/
   init : TraverseState → TraverseState := id
 
   /--
-  Given the contents of the {name (full := Inline.data)}`data` field of the corresponding
-  {name}`Manual.Inline` and the contained inline elements, carry out the traversal pass.
+  Given this extension's decoded metadata and the contained inline elements, carry out the
+  traversal pass.
 
   In addition to updating the cross-reference state through the available monadic effects, a
   traversal may additionally replace the element with another one. This can be used to e.g. emit a
   cross-reference once the target becomes available in the state. To replace the element, return
   {name}`some`. To leave it as is, return {name}`none`.
   -/
-  traverse : InlineTraversal Manual
+  traverse : Metadata → BoundInlineTraversal Manual := fun _ _ _ => pure none
 
   /--
   How to generate HTML. If {name}`none`, generating HTML from a document that contains this inline will fail.
   -/
-  toHtml : Option (InlineToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))
+  toHtml : Option (Metadata → BoundInlineToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO)))) := none
 
   /--
   Should this inline be an entry in the page-local ToC? If so, how should it be represented?
@@ -778,38 +835,104 @@ structure InlineDescr extends HtmlAssets where
 
   The empty array means that the inline should not be included.
   -/
-  localContentItem : InternalId → Json → Array (Doc.Inline Manual) → Except String (Array (String × Html)) :=
+  localContentItem : Metadata → InternalId → Array (Doc.Inline Manual) → Except String (Array (String × Html)) :=
     fun _ _ _ => pure #[]
 
   /--
   How to generate TeX. If {name}`none`, generating TeX from a document that contains this inline
   will fail.
   -/
-  toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
+  toTeX : Option (Metadata → BoundInlineToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO))) := none
   /-- Required TeX {lit}`\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
   preamble : List String := {}
 
+instance : Inhabited (InlineDescr Metadata) := ⟨{}⟩
+
+/-- An inline extension whose metadata has been decoded and bound to its handlers. -/
+structure BoundInlineDescr extends HtmlAssets where
+  /-- How the traversal phase should process this inline -/
+  traverse : BoundInlineTraversal Manual := fun _ _ => pure none
+  /-- How to generate HTML, if supported -/
+  toHtml : Option (BoundInlineToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO)))) := none
+  /-- How this inline should be represented in the page-local ToC, if at all -/
+  localContentItem : InternalId → Array (Doc.Inline Manual) → Except String (Array (String × Html)) :=
+    fun _ _ => pure #[]
+  /-- How to generate TeX, if supported -/
+  toTeX : Option (BoundInlineToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO))) := none
+  /-- Required TeX {lit}`\usepackage` lines -/
+  usePackages : List String := {}
+  /-- Required items in the TeX preamble -/
+  preamble : List String := {}
 deriving TypeName
 
-instance : Inhabited InlineDescr := ⟨⟨default, id, default, default, default, default, default, default⟩⟩
+instance : Inhabited BoundInlineDescr := ⟨{}⟩
+
+/--
+An inline extension registered with the framework. The concrete `Metadata`
+type is known only to the extension; the framework sees it through `bind`.
+-/
+structure RegisteredInlineDescr where
+  /-- The extension's own metadata type -/
+  Metadata : Type
+  /-- The extension's descriptor, over its own metadata type -/
+  descr : InlineDescr Metadata
+deriving TypeName
+
+instance : Inhabited RegisteredInlineDescr := ⟨⟨Unit, {}⟩⟩
+
+/-- Decode `data` and bind it to the extension's handlers. -/
+def RegisteredInlineDescr.bind (r : RegisteredInlineDescr) (data : Json) :
+    Except String BoundInlineDescr :=
+  r.descr.decode data |>.map fun metadata => {
+    toHtmlAssets := r.descr.toHtmlAssets
+    traverse := r.descr.traverse metadata
+    toHtml := r.descr.toHtml.map (· metadata)
+    localContentItem := r.descr.localContentItem metadata
+    toTeX := r.descr.toTeX.map (· metadata)
+    usePackages := r.descr.usePackages
+    preamble := r.descr.preamble
+  }
+
+/-- The initializer registered for this extension. -/
+def RegisteredInlineDescr.init (r : RegisteredInlineDescr) : TraverseState → TraverseState :=
+  r.descr.init
+
+/-- Look up a previously bound inline extension in the cache, binding on a miss. -/
+def RegisteredInlineDescr.boundFor (r : RegisteredInlineDescr) (cache : BoundCache)
+    (name : Name) (data : Json) : Except String BoundInlineDescr :=
+  if let some dyn := cache.inlines[(name, data)]? then
+    if let some bound := dyn.get? BoundInlineDescr then .ok bound else r.bind data
+  else r.bind data
+
+/-- Record a bound inline extension in the cache. -/
+def BoundCache.insertInline (cache : BoundCache) (name : Name) (data : Json)
+    (bound : BoundInlineDescr) : BoundCache :=
+  { cache with inlines := cache.inlines.insert (name, data) (Dynamic.mk bound) }
 
 /--
 Implementations of all the operations needed to use a block.
+
+The `Metadata` parameter is the block extension's own representation of the
+contents of the {name (full := Block.data)}`data` field. The framework only
+transports the serialized `Json`; `decode` turns it into `Metadata` once, and
+the remaining operations receive that value instead of the `Json`.
 -/
-structure BlockDescr extends HtmlAssets where
+structure BlockDescr (Metadata : Type) extends HtmlAssets where
+  /-- Decode this extension's metadata from its serialized form. -/
+  decode : Json → Except String Metadata := fun _ => .error "no metadata decoder provided"
   /-- All registered initializers are called in the state prior to the first traversal. -/
   init : TraverseState → TraverseState := id
 
   /-- How the traversal phase should process this block -/
-  traverse : BlockTraversal Manual
+  traverse : Metadata → BoundBlockTraversal Manual := fun _ _ _ => pure none
 
   /--
   How to generate HTML. If {name}`none`, generating HTML from a document that contains this block
   will fail.
   -/
-  toHtml : Option (BlockToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))
+  toHtml : Option (Metadata → BoundBlockToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO)))) := none
 
   /--
   Should this block be an entry in the page-local ToC? If so, how should it be represented?
@@ -822,21 +945,81 @@ structure BlockDescr extends HtmlAssets where
 
   The empty array means that the block should not be included.
   -/
-  localContentItem : InternalId → Json → Array (Doc.Block Manual) → Except String (Array (String × Html)) :=
+  localContentItem : Metadata → InternalId → Array (Doc.Block Manual) → Except String (Array (String × Html)) :=
     fun _ _ _ => pure #[]
 
   /--
   How to generate TeX. If {name}`none`, generating TeX from a document that contains this block
   will fail.
   -/
-  toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
+  toTeX : Option (Metadata → BoundBlockToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO))) := none
+  /-- Required TeX {lit}`\usepackage` lines -/
+  usePackages : List String := {}
+  /-- Required items in the TeX preamble -/
+  preamble : List String := {}
+
+instance : Inhabited (BlockDescr Metadata) := ⟨{}⟩
+
+/-- A block extension whose metadata has been decoded and bound to its handlers. -/
+structure BoundBlockDescr extends HtmlAssets where
+  /-- How the traversal phase should process this block -/
+  traverse : BoundBlockTraversal Manual := fun _ _ => pure none
+  /-- How to generate HTML, if supported -/
+  toHtml : Option (BoundBlockToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO)))) := none
+  /-- How this block should be represented in the page-local ToC, if at all -/
+  localContentItem : InternalId → Array (Doc.Block Manual) → Except String (Array (String × Html)) :=
+    fun _ _ => pure #[]
+  /-- How to generate TeX, if supported -/
+  toTeX : Option (BoundBlockToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO))) := none
   /-- Required TeX {lit}`\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
   preamble : List String := {}
 deriving TypeName
 
-instance : Inhabited BlockDescr := ⟨⟨default, id, default, default, default, default, default, default⟩⟩
+instance : Inhabited BoundBlockDescr := ⟨{}⟩
+
+/--
+A block extension registered with the framework. The concrete `Metadata`
+type is known only to the extension; the framework sees it through `bind`.
+-/
+structure RegisteredBlockDescr where
+  /-- The extension's own metadata type -/
+  Metadata : Type
+  /-- The extension's descriptor, over its own metadata type -/
+  descr : BlockDescr Metadata
+deriving TypeName
+
+instance : Inhabited RegisteredBlockDescr := ⟨⟨Unit, {}⟩⟩
+
+/-- Decode `data` and bind it to the extension's handlers. -/
+def RegisteredBlockDescr.bind (r : RegisteredBlockDescr) (data : Json) :
+    Except String BoundBlockDescr :=
+  r.descr.decode data |>.map fun metadata => {
+    toHtmlAssets := r.descr.toHtmlAssets
+    traverse := r.descr.traverse metadata
+    toHtml := r.descr.toHtml.map (· metadata)
+    localContentItem := r.descr.localContentItem metadata
+    toTeX := r.descr.toTeX.map (· metadata)
+    usePackages := r.descr.usePackages
+    preamble := r.descr.preamble
+  }
+
+/-- The initializer registered for this extension. -/
+def RegisteredBlockDescr.init (r : RegisteredBlockDescr) : TraverseState → TraverseState :=
+  r.descr.init
+
+/-- Look up a previously bound block extension in the cache, binding on a miss. -/
+def RegisteredBlockDescr.boundFor (r : RegisteredBlockDescr) (cache : BoundCache)
+    (name : Name) (data : Json) : Except String BoundBlockDescr :=
+  if let some dyn := cache.blocks[(name, data)]? then
+    if let some bound := dyn.get? BoundBlockDescr then .ok bound else r.bind data
+  else r.bind data
+
+/-- Record a bound block extension in the cache. -/
+def BoundCache.insertBlock (cache : BoundCache) (name : Name) (data : Json)
+    (bound : BoundBlockDescr) : BoundCache :=
+  { cache with blocks := cache.blocks.insert (name, data) (Dynamic.mk bound) }
 
 syntax (name := inline_extension) "inline_extension" ident : attr
 syntax (name := block_extension) "block_extension" ident : attr
@@ -914,13 +1097,46 @@ meta def isDataField : Lean.TSyntax ``Lean.Parser.Term.structInstField → Bool
   | `(Lean.Parser.Term.structInstField|data) => true
   | _ => false
 
+meta def isMetadataField : Lean.TSyntax ``Lean.Parser.Term.structInstField → Bool
+  | `(Lean.Parser.Term.structInstField|metadata := $_) => true
+  | `(Lean.Parser.Term.structInstField|metadata) => true
+  | _ => false
+
+meta def isDecodeField : Lean.TSyntax ``Lean.Parser.Term.structInstField → Bool
+  | `(Lean.Parser.Term.structInstField|decode := $_) => true
+  | `(Lean.Parser.Term.structInstField|decode) => true
+  | _ => false
+
+meta def fieldMetadataType : Lean.TSyntax ``Lean.Parser.Term.structInstField → Option (Lean.TSyntax `term)
+  | `(Lean.Parser.Term.structInstField|metadata := $t) => some t
+  | _ => none
+
 open Lean Elab Command in
 elab_rules : command
   | `(block_extension $x $args* $[via $mixins,*]? where $contents;*) => do
-    let (data, nonData) := (contents : Array _).partition isDataField
+    let (metadataFields, contents) := (contents : Array _).partition isMetadataField
+    if metadataFields.size > 1 then
+      for f in metadataFields do
+        logErrorAt f "Multiple 'metadata' fields found"
+    let (data, nonData) := contents.partition isDataField
     if data.size > 1 then
       for x in data do
         logErrorAt x "Multiple 'data' fields found"
+    let mut metadataType : Term ← `(Unit)
+    let mut hasMetadata := false
+    if let some t := metadataFields[0]?.bind fieldMetadataType then
+      metadataType := t
+      hasMetadata := true
+    if !hasMetadata && !args.isEmpty then
+      logErrorAt x "Extensions with parameters must specify their metadata type with 'metadata := TYPE'"
+    let mut descrFields := nonData
+    unless descrFields.any isDecodeField do
+      let decodeField ←
+        if hasMetadata then
+          `(Lean.Parser.Term.structInstField| decode := FromJson.fromJson?)
+        else
+          `(Lean.Parser.Term.structInstField| decode := fun _ => pure ())
+      descrFields := descrFields.push decodeField
     let cmd1 ←
       `(command| def $x $args* : Block where $data;*)
     let innerDescrName := x.getId ++ `descr.inner |> mkIdentFrom x
@@ -930,11 +1146,11 @@ elab_rules : command
       mixins.foldlM (init := x) fun soFar mixin => `(($mixin $soFar))
     let cmd2 ←
       `(command|
-        private def $innerDescrName : BlockDescr where $nonData;*)
+        private def $innerDescrName : BlockDescr $metadataType where $descrFields;*)
     let cmd3 ←
       `(command|
         @[block_extension $x]
-        public def $descrName : BlockDescr := $(← applyMixins innerDescrName))
+        public def $descrName : RegisteredBlockDescr := ⟨$metadataType, $(← applyMixins innerDescrName)⟩)
     elabCommand cmd1
     elabCommand cmd2
     elabCommand cmd3
@@ -942,10 +1158,29 @@ elab_rules : command
 open Lean Elab Command in
 elab_rules : command
   | `(inline_extension $x $args* $[via $mixins,*]? where $contents;*) => do
-    let (data, nonData) := (contents : Array _).partition isDataField
+    let (metadataFields, contents) := (contents : Array _).partition isMetadataField
+    if metadataFields.size > 1 then
+      for f in metadataFields do
+        logErrorAt f "Multiple 'metadata' fields found"
+    let (data, nonData) := contents.partition isDataField
     if data.size > 1 then
       for x in data do
         logErrorAt x "Multiple 'data' fields found"
+    let mut metadataType : Term ← `(Unit)
+    let mut hasMetadata := false
+    if let some t := metadataFields[0]?.bind fieldMetadataType then
+      metadataType := t
+      hasMetadata := true
+    if !hasMetadata && !args.isEmpty then
+      logErrorAt x "Extensions with parameters must specify their metadata type with 'metadata := TYPE'"
+    let mut descrFields := nonData
+    unless descrFields.any isDecodeField do
+      let decodeField ←
+        if hasMetadata then
+          `(Lean.Parser.Term.structInstField| decode := FromJson.fromJson?)
+        else
+          `(Lean.Parser.Term.structInstField| decode := fun _ => pure ())
+      descrFields := descrFields.push decodeField
     let cmd1 ←
       `(command| def $x $args* : Inline where $data;*)
     let innerDescrName := x.getId ++ `descr.inner |> mkIdentFrom x
@@ -955,11 +1190,11 @@ elab_rules : command
       mixins.foldlM (init := x) fun soFar mixin => `(($mixin $soFar))
     let cmd2 ←
       `(command|
-        private def $innerDescrName : InlineDescr where $nonData;*)
+        private def $innerDescrName : InlineDescr $metadataType where $descrFields;*)
     let cmd3 ←
       `(command|
         @[inline_extension $x]
-        public def $descrName : InlineDescr := $(← applyMixins innerDescrName))
+        public def $descrName : RegisteredInlineDescr := ⟨$metadataType, $(← applyMixins innerDescrName)⟩)
     elabCommand cmd1
     elabCommand cmd2
     elabCommand cmd3
@@ -979,7 +1214,7 @@ scoped elab "inline_extensions%" : term => do
   for imported in inlineExtensionExt.toEnvExtension.getState env |>.importedEntries do
     for x in imported do
       exts := exts.push x
-  let stx ← `([$[($(← exts.mapM nameAndDef) : Name × InlineDescr)],*])
+  let stx ← `([$[($(← exts.mapM nameAndDef) : Name × RegisteredInlineDescr)],*])
   elabTerm stx none
 
 open Lean Elab Term in
@@ -991,7 +1226,7 @@ scoped elab "block_extensions%" : term => do
   for imported in blockExtensionExt.toEnvExtension.getState env |>.importedEntries do
     for x in imported do
       exts := exts.push x
-  let stx ← `([$[($(← exts.mapM nameAndDef) : Name × BlockDescr)],*])
+  let stx ← `([$[($(← exts.mapM nameAndDef) : Name × RegisteredBlockDescr)],*])
   elabTerm stx none
 
 def ExtensionImpls.empty : ExtensionImpls := ⟨{}, {}⟩
@@ -999,21 +1234,21 @@ def ExtensionImpls.empty : ExtensionImpls := ⟨{}, {}⟩
 instance : EmptyCollection ExtensionImpls where
   emptyCollection := .empty
 
-def ExtensionImpls.getInline? (impls : ExtensionImpls) (name : Name) : Option InlineDescr :=
-  impls.inlineDescrs.find? name |>.map (·.get? InlineDescr |>.get!)
+def ExtensionImpls.getInline? (impls : ExtensionImpls) (name : Name) : Option RegisteredInlineDescr :=
+  impls.inlineDescrs.find? name |>.map (·.get? RegisteredInlineDescr |>.get!)
 
-def ExtensionImpls.getBlock? (impls : ExtensionImpls) (name : Name) : Option BlockDescr :=
-  impls.blockDescrs.find? name |>.map (·.get? BlockDescr |>.get!)
+def ExtensionImpls.getBlock? (impls : ExtensionImpls) (name : Name) : Option RegisteredBlockDescr :=
+  impls.blockDescrs.find? name |>.map (·.get? RegisteredBlockDescr |>.get!)
 
-def ExtensionImpls.insertInline (impls : ExtensionImpls) (name : Name) (desc : InlineDescr) : ExtensionImpls :=
+def ExtensionImpls.insertInline (impls : ExtensionImpls) (name : Name) (desc : RegisteredInlineDescr) : ExtensionImpls :=
   {impls with
     inlineDescrs := impls.inlineDescrs.insert name (.mk desc)}
 
-def ExtensionImpls.insertBlock (impls : ExtensionImpls) (name : Name) (desc : BlockDescr) : ExtensionImpls :=
+def ExtensionImpls.insertBlock (impls : ExtensionImpls) (name : Name) (desc : RegisteredBlockDescr) : ExtensionImpls :=
   {impls with
     blockDescrs := impls.blockDescrs.insert name (.mk desc)}
 
-def ExtensionImpls.fromLists (inlineImpls : List (Name × InlineDescr)) (blockImpls : List (Name × BlockDescr)) : ExtensionImpls :=
+def ExtensionImpls.fromLists (inlineImpls : List (Name × RegisteredInlineDescr)) (blockImpls : List (Name × RegisteredBlockDescr)) : ExtensionImpls :=
   inlineImpls.foldl (fun out (n, impl) => out.insertInline n impl) <| blockImpls.foldl (fun out (n, impl) => out.insertBlock n impl) {}
 
 open Lean Elab Term in
@@ -1505,12 +1740,18 @@ instance : Traverse Manual TraverseM where
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getBlock? name then
           modify fun s => { s with
-            toHtmlAssets := s.toHtmlAssets.combine impl.toHtmlAssets
-            texPackages := s.texPackages.insertMany impl.usePackages
-            texPreambleItems := s.texPreambleItems.insertMany impl.preamble
+            toHtmlAssets := s.toHtmlAssets.combine impl.descr.toHtmlAssets
+            texPackages := s.texPackages.insertMany impl.descr.usePackages
+            texPreambleItems := s.texPreambleItems.insertMany impl.descr.preamble
           }
 
-          impl.traverse id data content
+          match impl.boundFor (← get).boundCache name data with
+          | .error e =>
+            reportError s!"Failed to deserialize metadata for block {name}: {e}"
+            pure none
+          | .ok bound =>
+            modify fun s => { s with boundCache := s.boundCache.insertBlock name data bound }
+            bound.traverse id content
         else
           reportError s!"No block traversal implementation found for {name}"
           pure none
@@ -1523,12 +1764,18 @@ instance : Traverse Manual TraverseM where
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getInline? name then
           modify fun s => { s with
-            toHtmlAssets := s.toHtmlAssets.combine impl.toHtmlAssets
-            texPackages := s.texPackages.insertMany impl.usePackages
-            texPreambleItems := s.texPreambleItems.insertMany impl.preamble
+            toHtmlAssets := s.toHtmlAssets.combine impl.descr.toHtmlAssets
+            texPackages := s.texPackages.insertMany impl.descr.usePackages
+            texPreambleItems := s.texPreambleItems.insertMany impl.descr.preamble
           }
 
-          impl.traverse id data content
+          match impl.boundFor (← get).boundCache name data with
+          | .error e =>
+            reportError s!"Failed to deserialize metadata for inline {name}: {e}"
+            pure none
+          | .ok bound =>
+            modify fun s => { s with boundCache := s.boundCache.insertInline name data bound }
+            bound.traverse id content
         else
           reportError s!"No inline traversal implementation found for {name}"
           pure none
@@ -1551,19 +1798,31 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)) where
       | panic! s!"Block {b.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getBlock? b.name
       | panic! s!"Unknown block {b.name} while rendering.\n\nKnown blocks: {(← readThe ExtensionImpls).blockDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
-    let some impl := descr.toTeX
-      | reportError s!"Block {b.name} doesn't support TeX"
-        return .empty
-    impl goI goB id b.data content
+    let st ← TeX.state
+    match descr.boundFor st.boundCache b.name b.data with
+    | .error e =>
+      reportError s!"Failed to deserialize metadata for block {b.name}: {e}"
+      return .empty
+    | .ok bound =>
+      let some impl := bound.toTeX
+        | reportError s!"Block {b.name} doesn't support TeX"
+          return .empty
+      impl goI goB id content
   inline go i content := do
     let some id := i.id
       | panic! s!"Inline {i.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getInline? i.name
       | panic! s!"Unknown inline {i.name} while rendering.\n\nKnown inlines: {(← readThe ExtensionImpls).inlineDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
-    let some impl := descr.toTeX
-      | reportError s!"Inline {i.name} doesn't support TeX"
-        return .empty
-    impl go id i.data content
+    let st ← TeX.state
+    match descr.boundFor st.boundCache i.name i.data with
+    | .error e =>
+      reportError s!"Failed to deserialize metadata for inline {i.name}: {e}"
+      return .empty
+    | .ok bound =>
+      let some impl := bound.toTeX
+        | reportError s!"Inline {i.name} doesn't support TeX"
+          return .empty
+      impl go id content
 
 
 def sectionHtml (ctxt : TraverseContext) : Html :=
@@ -1641,15 +1900,27 @@ instance : Html.GenreHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (Bu
       | panic! s!"Block {b.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getBlock? b.name
       | panic! s!"Unknown block {b.name} while rendering HTML.\n\nKnown blocks: {(← readThe ExtensionImpls).blockDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
-    let some impl := descr.toHtml
-      | panic! s!"Block {b.name} doesn't support HTML"
-    impl goI goB id b.data content
+    let st ← Verso.Doc.Html.HtmlT.state
+    match descr.boundFor st.boundCache b.name b.data with
+    | .error e =>
+      reportError s!"Failed to deserialize metadata for block {b.name}: {e}"
+      return .empty
+    | .ok bound =>
+      let some impl := bound.toHtml
+        | panic! s!"Block {b.name} doesn't support HTML"
+      impl goI goB id content
 
   inline go i content := do
     let some id := i.id
       | panic! s!"Inline {i.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getInline? i.name
       | panic! s!"Unknown inline {i.name} with data {i.data} while rendering HTML.\n\nKnown inlines: {(← readThe ExtensionImpls).inlineDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
-    let some impl := descr.toHtml
-      | panic! s!"Inline {i.name} doesn't support HTML"
-    impl go id i.data content
+    let st ← Verso.Doc.Html.HtmlT.state
+    match descr.boundFor st.boundCache i.name i.data with
+    | .error e =>
+      reportError s!"Failed to deserialize metadata for inline {i.name}: {e}"
+      return .empty
+    | .ok bound =>
+      let some impl := bound.toHtml
+        | panic! s!"Inline {i.name} doesn't support HTML"
+      impl go id content

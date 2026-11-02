@@ -75,6 +75,12 @@ end
 
 block_extension Block.diagram
     (svg : String) (cssWidth : String) (texWidth : String) (inline : Bool) where
+  metadata := String × String × String × Bool
+  decode := fun data =>
+    match data with
+    | .arr #[.str svg, .str cssWidth, .str texWidth, .bool inline] =>
+      pure (svg, cssWidth, texWidth, inline)
+    | _ => .error "Expected four-element JSON for diagram"
   data := Json.arr #[.str svg, .str cssWidth, .str texWidth, .bool inline]
   extraCss := [
     r#"
@@ -89,9 +95,7 @@ block_extension Block.diagram
   traverse _ _ _ := pure none
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ _ _ data _ => do
-      let .arr #[.str svgStr, .str css, .str _tex, .bool isInline] := data
-        | reportError "Expected four-element JSON for diagram" *> pure .empty
+    some <| fun (svgStr, css, _tex, isInline) _ _ _ _ => do
       let style :=
         ";".intercalate <|
           s!"width: {css}" ::
@@ -103,9 +107,7 @@ block_extension Block.diagram
       }
   usePackages := ["\\usepackage{svg}"]
   toTeX :=
-    some <| fun _ _ _ data _ => do
-      let .arr #[.str svgStr, .str _css, .str tex, .bool isInline] := data
-        | reportError "Expected four-element JSON for diagram" *> pure .empty
+    some <| fun (svgStr, _css, tex, isInline) _ _ _ _ => do
       let filename ← modifyGet fun s =>
         let fn := extraFileName s.extraFiles s!"diagram-{svgStr.hash}" "svg" svgStr
         (fn, { s with extraFiles := s.extraFiles.insert fn svgStr })

@@ -23,18 +23,16 @@ open Lean
 
 block_extension Block.literateDocstring where
   traverse _ _ _ _ := pure none
-  toHtml := some fun _goI goB _id _data contents => do
+  toHtml := some fun _ _goI goB _id contents => do
     pure html%{<div class="literate-docstring">{← contents.mapM goB}</div>}
-  toTeX := some fun _goI goB _id _data contents => do
+  toTeX := some fun _ _goI goB _id contents => do
     contents.mapM goB
 
 block_extension Block.literateDocstringPart (level : Nat) where
+  metadata := Nat
   data := level
   traverse _ _ _ _ := pure none
-  toHtml := some fun goI goB _id data contents => do
-    let .ok (level : Nat) := FromJson.fromJson? data
-      | reportError s!"Couldn't decode nesting level from {data.compress}"
-        pure .empty
+  toHtml := some fun level goI goB _id contents => do
     let title : Html ←
       if let some title := contents[0]? then
         if let .para xs := title then
@@ -52,11 +50,8 @@ block_extension Block.literateDocstringPart (level : Nat) where
         {← contents.mapM goB}
       </section>
     }
-  toTeX := some fun goI goB _id data contents =>
+  toTeX := some fun level goI goB _id contents =>
     open Verso.Output.TeX in do
-      let .ok (level : Nat) := FromJson.fromJson? data
-        | reportError s!"Couldn't decode nesting level from {data.compress}"
-          pure .empty
       let title : TeX ←
         if let some title := contents[0]? then
           if let .para xs := title then

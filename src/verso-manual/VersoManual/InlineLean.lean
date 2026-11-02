@@ -43,41 +43,27 @@ open Lean.Elab.Tactic.GuardMsgs
 namespace Verso.Genre.Manual.InlineLean
 
 inline_extension Inline.lean (hls : Highlighted) via withHighlighting where
+  metadata := Highlighted × Array (Name × String)
+  decode := fun data =>
+    match data with
+    | .arr #[hl, defined] => do
+      pure (← FromJson.fromJson? hl, ← FromJson.fromJson? defined)
+    | _ => .error "Expected two-element JSON for Lean code"
   data :=
     let defined := definedNames hls
     Json.arr #[ToJson.toJson hls, ToJson.toJson defined]
 
-  traverse id data _ := do
-    let .arr #[_, defined] := data
-      | reportError "Expected two-element JSON for Lean code" *> pure none
-    match FromJson.fromJson? defined with
-    | .error err =>
-      reportError <| "Couldn't deserialize Lean code while traversing inline example: " ++ err
-      pure none
-    | .ok (defs : Array (Name × String)) =>
-      saveExampleDefs id defs
-      pure none
+  traverse metadata id _ := do
+    let (_, defs) := metadata
+    saveExampleDefs id defs
+    pure none
   toTeX :=
-    some <| fun _ _ data _ => do
-      let .arr #[hlJson, _] := data
-        | reportError "Expected two-element JSON for Lean code" *> pure .empty
-      match FromJson.fromJson? hlJson with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        hl.toTeX (g := Manual) (m := ReaderT ExtensionImpls (BuildLogT IO))
+    some <| fun (hl, _) _ _ _ => do
+      hl.toTeX (g := Manual) (m := ReaderT ExtensionImpls (BuildLogT IO))
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ _ data _ => do
-      let .arr #[hlJson, _] := data
-        | reportError "Expected two-element JSON for Lean code" *> pure .empty
-      match FromJson.fromJson? hlJson with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        hl.inlineHtml (g := Manual) "examples"
+    some <| fun (hl, _) _ _ _ => do
+      hl.inlineHtml (g := Manual) "examples"
 
 
 section Config
@@ -651,26 +637,17 @@ private def getClass : MessageSeverity → String
   | .warning => "warning"
 
 block_extension Block.leanOutput via withHighlighting where
+  metadata := Highlighted.Message × Bool × List Name
   traverse _ _ _ := do
     pure none
   toTeX :=
     open Verso.Output.Html in
-    some <| fun _ _ _ data _ => do
-      match FromJson.fromJson? data with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean output while rendering TeX: " ++ err ++ "\n" ++ toString data
-        pure .empty
-      | .ok ((msg, _summarize, expandTraces) : Highlighted.Message × Bool × List Name) =>
-        msg.toTeX (expandTraces := expandTraces) (g := Manual)
+    some <| fun (msg, _summarize, expandTraces) _ _ _ _ => do
+      msg.toTeX (expandTraces := expandTraces) (g := Manual)
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ _ _ data _ => do
-      match FromJson.fromJson? data with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean output while rendering HTML: " ++ err ++ "\n" ++ toString data
-        pure .empty
-      | .ok ((msg, summarize, expandTraces) : Highlighted.Message × Bool × List Name) =>
-        msg.blockHtml summarize (expandTraces := expandTraces) (g := Manual)
+    some <| fun (msg, summarize, expandTraces) _ _ _ _ => do
+      msg.blockHtml summarize (expandTraces := expandTraces) (g := Manual)
 
 
 structure LeanOutputConfig where
@@ -825,18 +802,14 @@ where
 
 
 inline_extension Inline.name via withHighlighting where
+  metadata := Highlighted
   traverse _ _ _ := do
     pure none
-  toTeX := some <| fun go _ _ content => content.mapM go
+  toTeX := some <| fun _ go _ content => content.mapM go
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ _ data _ => do
-      match FromJson.fromJson? data with
-      | .error err =>
-        reportError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        hl.inlineHtml (g := Manual) "examples"
+    some <| fun hl _ _ _ => do
+      hl.inlineHtml (g := Manual) "examples"
 
 structure NameConfig where
   full : Option Name

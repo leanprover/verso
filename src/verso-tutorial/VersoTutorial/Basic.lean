@@ -172,8 +172,8 @@ def savePartXref (name : String) (id : InternalId) (part : Part Tutorial) : Manu
 
 block_extension Block.displayOnly where
   traverse _ _ _ _ := pure none
-  toHtml := some <| fun _ goB _ _ content => content.mapM goB
-  toTeX := some <| fun _ goB _ _ content => content.mapM goB
+  toHtml := some <| fun _ _ goB _ content => content.mapM goB
+  toTeX := some <| fun _ _ goB _ content => content.mapM goB
 
 /-- Indicates code that is to be displayed in tutorials, but not extracted or run. -/
 @[directive]
@@ -278,10 +278,10 @@ def traverse (logger : Verso.Logger IO) (tutorials : Tutorials) (config : Manual
     |>.setDomainTitle sectionDomain "Sections or chapters of the manual"
     |>.addQuickJumpMapper sectionDomain Manual.sectionDomainMapper
   for ⟨_, b⟩ in extensionImpls.blockDescrs do
-    if let some descr := b.get? BlockDescr then
+    if let some descr := b.get? RegisteredBlockDescr then
       state := descr.init state
   for ⟨_, i⟩ in extensionImpls.inlineDescrs do
-    if let some descr := i.get? InlineDescr then
+    if let some descr := i.get? RegisteredInlineDescr then
       state := descr.init state
   for i in [0:config.maxTraversals] do
     dbg_trace "traversal {i}"
