@@ -3,6 +3,6 @@ import VersoBlog
 open Verso.Genre.Blog Template
 open Verso Doc Output Html
 
-#doc (Page) "FrontPage" =>
+#doc (Page) "Front Page" =>
 
 Hey this is a blog

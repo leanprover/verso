@@ -12,8 +12,8 @@ release_note
 
 #doc (Manual) "Subtitle and Feature Image Metadata Fields in Blog" =>
 
-Added optional subtitle and feature image fields in a blog post's metadata.
-A feature image is a large image that's given prominent placement for a post.
+Added optional subtitle and featured image fields in a blog post's metadata.
+A featured image is a large image that's given prominent placement for a post.
 Blog themes can now showcase these images on the post list in addition to in the post itself.
 
 :::paragraph

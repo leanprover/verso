@@ -324,7 +324,7 @@ structure Post.Meta where
   authors : List String
   /-- Subtitle of the post -/
   subtitle: Option String := none
-  /-- Path to the feature image of the post -/
+  /-- Path to the featured image of the post -/
   featuredImage: Option String := none
   /-- The categories in which to include the post -/
   categories : List Post.Category := []

@@ -361,7 +361,7 @@ def archiveEntry : Template := do
          | some md => html%{
           <div class="metadata">
             { match md.featuredImage with
-              | some imgpath => html%{<div class="featuredImage"><img src={imgpath}/></div>}
+              | some imgpath => html%{<img class="featured-image" src={imgpath}/>}
               | none => Html.empty
             }
             <div class="authors">
