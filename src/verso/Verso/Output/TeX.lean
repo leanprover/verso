@@ -76,8 +76,20 @@ public partial def asString (doc : TeX) : String :=
   | .paragraphBreak => "\n\n"
   | .seq texs => String.join (texs.map (·.asString) |>.toList)
 where
-  escape s := s.replace "\\" "\\\\" |>.replace "{" "\\{" |>.replace "}" "\\}" |>.replace "^" "\\string^"
-    |>.replace "_" "\\_" |>.replace "%" "\\%" |>.replace "#" "\\#" --TODO make correct!
+  escape s := s.foldl (init := "") fun acc c =>
+    acc ++
+      match c with
+      | '\\' => "\\textbackslash{}"
+      | '{' => "\\{"
+      | '}' => "\\}"
+      | '$' => "\\$"
+      | '&' => "\\&"
+      | '#' => "\\#"
+      | '%' => "\\%"
+      | '_' => "\\_"
+      | '^' => "\\textasciicircum{}"
+      | '~' => "\\textasciitilde{}"
+      | c => c.toString
 
 public section
 declare_syntax_cat macro_name
