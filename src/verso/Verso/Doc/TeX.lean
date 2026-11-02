@@ -113,6 +113,9 @@ def replaceChars (s : String) (replace : Char → Option String) : String :=
 Escapes a single character in an appropriate way for uses of `\Verb` and
 `\begin{Verbatim}...\end{Verbatim}` (from package `fancyvrb`) with
 command characters `\`, `{`, and `}`.
+
+Every character that is special anywhere in LaTeX becomes a `\symbol` command, so
+the result is also valid inside `\texttt`.
 -/
 private def escapeCharForVerbatim (c : Char) : Option String :=
   match c with
@@ -120,7 +123,13 @@ private def escapeCharForVerbatim (c : Char) : Option String :=
   | '|' => some "\\symbol{124}"
   | '}' => some "\\symbol{125}"
   | '\\' => some "\\symbol{92}"
-  | '#' => some "\\symbol{35}" -- FIXME: this is really just a test
+  | '#' => some "\\symbol{35}"
+  | '$' => some "\\symbol{36}"
+  | '%' => some "\\symbol{37}"
+  | '&' => some "\\symbol{38}"
+  | '^' => some "\\symbol{94}"
+  | '_' => some "\\symbol{95}"
+  | '~' => some "\\symbol{126}"
   | _ => none
 
 /--
@@ -176,7 +185,7 @@ verbatim-like environment depending on whether we're in a fragile environment.
 -/
 public def verbatimInline [Monad m] [GenreTeX g m] (t : TeX) : TeXT g m Verso.Output.TeX := do
   if (← texContext).inFragile then
-    pure (.seq #[.raw "\\texttt{", t, .raw "}"]) -- TODO: better escaping for texttt
+    pure (.seq #[.raw "\\texttt{", t, .raw "}"])
   else
     pure (.seq #[.raw "\\LeanVerb|", t, .raw "|"])
 

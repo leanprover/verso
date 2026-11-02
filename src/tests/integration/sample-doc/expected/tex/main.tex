@@ -1,6 +1,13 @@
 
 \documentclass[oneside]{memoir}
 
+% Lean code and prose use many mathematical symbols (such as ⦂, ⟶, and ↠) that the
+% text fonts below lack. The main, sans, and mono fonts fall back to STIX Two Math
+% for these glyphs.
+\usepackage{fontspec}
+\directlua{luaotfload.add_fallback("versofallback", {"STIXTwoMath-Regular.otf:mode=node;"})}
+\defaultfontfeatures[\rmfamily,\sffamily,\ttfamily]{RawFeature={fallback=versofallback}}
+
 \usepackage{sourcecodepro}
 \usepackage{sourcesanspro}
 \usepackage{sourceserifpro}
@@ -144,7 +151,7 @@ title={#2},#1}
 
 \cleardoublepage
 \begin{docstringBox}{def}
-\LeanVerb|Verso.\allowbreak{}Integration.\allowbreak{}Sample\-Doc.\allowbreak{}sample_constant : Type|\tcblower This is a docstring.
+\LeanVerb|Verso.\allowbreak{}Integration.\allowbreak{}Sample\-Doc.\allowbreak{}sample\symbol{95}constant : Type|\tcblower This is a docstring.
 
 Here's some more text with a \LeanVerb|code inline| in it.
 Here's when a \LeanVerb|code inline|
