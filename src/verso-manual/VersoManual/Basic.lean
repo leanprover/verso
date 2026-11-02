@@ -1254,6 +1254,50 @@ def ExtensionImpls.fromLists (inlineImpls : List (Name × RegisteredInlineDescr)
 open Lean Elab Term in
 elab "extension_impls%" : term => do elabTerm (← ``(ExtensionImpls.fromLists inline_extensions% block_extensions%)) none
 
+/-- Rebuild the extension cache after loading a saved document, without invoking traversal handlers. -/
+partial def rebuildBoundCache (text : Doc.Part Manual) (state : TraverseState) :
+    ReaderT ExtensionImpls (BuildLogT IO) TraverseState := do
+  let (_, cache) ← part text |>.run {}
+  return { state with boundCache := cache }
+where
+  inline (i : Doc.Inline Manual) : StateT BoundCache (ReaderT ExtensionImpls (BuildLogT IO)) Unit := do
+    match i with
+    | .concat xs | .footnote _ xs | .link xs _ | .bold xs | .emph xs =>
+      xs.forM inline
+    | .other inl xs =>
+      unless (← get).inlines.contains (inl.name, inl.data) do
+        if let some impl := (← readThe ExtensionImpls).getInline? inl.name then
+          match impl.bind inl.data with
+          | .ok bound => modify (·.insertInline inl.name inl.data bound)
+          | .error e => reportError s!"Failed to deserialize metadata for inline {inl.name}: {e}"
+        else
+          reportError s!"No inline implementation found for {inl.name}"
+      xs.forM inline
+    | .image .. | .linebreak .. | .math .. | .code .. | .text .. => pure ()
+  block (b : Doc.Block Manual) : StateT BoundCache (ReaderT ExtensionImpls (BuildLogT IO)) Unit := do
+    match b with
+    | .para xs => xs.forM inline
+    | .code .. => pure ()
+    | .concat xs | .blockquote xs => xs.forM block
+    | .ul xs | .ol _ xs => xs.forM (·.contents.forM block)
+    | .dl xs =>
+      for x in xs do
+        x.term.forM inline
+        x.desc.forM block
+    | .other blk xs =>
+      unless (← get).blocks.contains (blk.name, blk.data) do
+        if let some impl := (← readThe ExtensionImpls).getBlock? blk.name then
+          match impl.bind blk.data with
+          | .ok bound => modify (·.insertBlock blk.name blk.data bound)
+          | .error e => reportError s!"Failed to deserialize metadata for block {blk.name}: {e}"
+        else
+          reportError s!"No block implementation found for {blk.name}"
+      xs.forM block
+  part (p : Doc.Part Manual) : StateT BoundCache (ReaderT ExtensionImpls (BuildLogT IO)) Unit := do
+    p.title.forM inline
+    p.content.forM block
+    p.subParts.forM part
+
 abbrev TraverseM := ReaderT ExtensionImpls (ReaderT Manual.TraverseContext (StateT Manual.TraverseState (BuildLogT IO)))
 
 def TraverseM.run

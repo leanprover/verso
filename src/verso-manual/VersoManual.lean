@@ -1074,6 +1074,7 @@ where
       SavedState.mk text' traverseState |>.save f
     | .resumeFrom f =>
       let {text, traverseState} ← SavedState.load f
+      let traverseState ← rebuildBoundCache text traverseState
       emit cfg text traverseState
       for step in extraSteps do
         step .single cfg.toConfig traverseState text
