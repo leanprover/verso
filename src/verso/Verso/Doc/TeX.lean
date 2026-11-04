@@ -26,6 +26,14 @@ public structure TeXContext where
   (specifically, one which cannot accommodate `\Verb`)
   -/
   inFragile : Bool := false
+  /--
+  True when each block is a single logical paragraph.
+
+  When this is {name}`true`, consecutive blocks are separated by paragraph breaks. When
+  {name}`false`, the blocks of a single logical paragraph are typeset together with no break after
+  each block.
+  -/
+  blocksAreParagraphs : Bool := true
 
 public structure OutputState where
   extraFiles : Std.HashMap String String := {}
@@ -72,6 +80,20 @@ public def header (name : TeX) (label : Option String) : TeXT g m TeX := do
 
 public def inFragile (act : TeXT g m α) : TeXT g m α :=
   withReader (fun (opts, st, st', tctx) => (opts, st, st', { tctx with inFragile := true })) act
+
+/--
+Renders a sequence of blocks that each constitute a paragraph.
+-/
+public def withBlocksAsParagraphs (act : TeXT g m α) : TeXT g m α :=
+  withReader (fun (opts, st, st', tctx) => (opts, st, st', { tctx with blocksAreParagraphs := true })) act
+
+/--
+Renders a sequence of blocks that are a single logical paragraph together.
+
+The blocks are typeset without intermediate paragraph breaks.
+-/
+public def withBlocksNotAsParagraphs (act : TeXT g m α) : TeXT g m α :=
+  withReader (fun (opts, st, st', tctx) => (opts, st, st', { tctx with blocksAreParagraphs := false })) act
 
 public def inHeader (act : TeXT g m α) : TeXT g m α :=
   withReader (fun (opts, st, st', tctx) => (bumpHeader opts, st, st', tctx)) act
@@ -214,20 +236,29 @@ public partial defmethod Inline.toTeX : Inline g → TeXT g m TeX
   | .concat inlines => inlines.mapM toTeX
   | .other container content => GenreTeX.inline Inline.toTeX container content
 
-public partial defmethod Block.toTeX : Block g → TeXT g m TeX
+public partial defmethod Block.toTeX (block : Block g) : TeXT g m TeX := do
+  match block with
+  | .concat items => TeX.seq <$> items.mapM Block.toTeX
+  | _ =>
+    let tex ← render block
+    if (← texContext).blocksAreParagraphs && !tex.isWhitespace then
+      pure <| .seq #[tex, .paragraphBreak]
+    else pure tex
+where
+  render : Block g → TeXT g m TeX
   | .para xs => do
     pure <| (← xs.mapM Inline.toTeX)
   | .blockquote bs => do
-    pure \TeX{\begin{quotation} \Lean{← bs.mapM Block.toTeX} \end{quotation}}
+    pure \TeX{\begin{quotation} \Lean{← withBlocksAsParagraphs <| bs.mapM Block.toTeX} \end{quotation}}
   | .ul items => do
-    pure \TeX{\begin{itemize} \Lean{← items.mapM fun li => do pure \TeX{\item " " \Lean{← li.contents.mapM Block.toTeX} s!"\n"}} \end{itemize} }
+    pure \TeX{\begin{itemize} \Lean{← items.mapM fun li => do pure \TeX{\item " " \Lean{← withBlocksAsParagraphs <| li.contents.mapM Block.toTeX}}} \end{itemize} }
   | .ol _start items => do -- TODO start numbering here
-    pure \TeX{\begin{enumerate} \Lean{← items.mapM fun li => do pure \TeX{\item " " \Lean{← li.contents.mapM Block.toTeX} s!"\n"}}\end{enumerate} }
+    pure \TeX{\begin{enumerate} \Lean{← items.mapM fun li => do pure \TeX{\item " " \Lean{← withBlocksAsParagraphs <| li.contents.mapM Block.toTeX}}}\end{enumerate} }
   | .dl items => do
     pure \TeX{\begin{description} \Lean{← items.mapM fun li => do
       -- Protect the item label with curly braces, avoiding an error if it includes a literal `]`
       let itemLabel : TeX := .seq (#[.raw "{"] ++ (← li.term.mapM Inline.toTeX) ++ #[.raw "}"])
-      pure \TeX{\item[\Lean{itemLabel}] " " \Lean{← li.desc.mapM Block.toTeX}}} \end{description} }
+      pure \TeX{\item[\Lean{itemLabel}] " " \Lean{← withBlocksAsParagraphs <| li.desc.mapM Block.toTeX}}} \end{description} }
   | .code content => do
     pure \TeX{\begin{verbatim} \Lean{.raw content} \end{verbatim}}
   | .concat items => TeX.seq <$> items.mapM Block.toTeX
@@ -240,7 +271,7 @@ public partial defmethod Part.toTeX (p : Part g) (label : Option String) : TeXT 
     pure \TeX{
       \Lean{← header (← inFragile <| p.title.mapM Inline.toTeX) label}
       "\n\n"
-      \Lean{← p.content.mapM (fun b => do pure <| TeX.seq #[← Block.toTeX b, .paragraphBreak])}
+      \Lean{← p.content.mapM Block.toTeX}
       "\n\n"
       \Lean{← inHeader <| p.subParts.mapM (Part.toTeX · none)}
     }

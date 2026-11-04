@@ -217,7 +217,7 @@ meta def ref : RoleExpanderOf RoleArgs
 block_extension Block.paragraph where
   traverse := fun _ _ _ => pure none
   toTeX :=
-    some <| fun _ go _ _ content => do
+    some <| fun _ go _ _ content => Verso.Doc.TeX.withBlocksNotAsParagraphs do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   toHtml :=
