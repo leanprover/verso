@@ -18,6 +18,7 @@ runs:
                   footmisc
                   environ
                   hyperref
+                  nameref
                   titlesec
                   tocloft
                   enumitem
