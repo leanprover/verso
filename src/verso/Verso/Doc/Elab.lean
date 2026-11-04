@@ -238,10 +238,24 @@ where
       let msg := m!"Block content found in a context where a header was expected."
       let note := MessageData.note m!"A document part (section/chapter/etc) consists of a header, followed by zero or more blocks, followed by zero or more sub-parts. This block occurs after a sub-part{which}, but outside of the sub-parts."
       throwErrorAt cmd "{msg}\n{note}"
-    let hygenicName := some <| mkIdent (← mkFreshUserName `docReconstInBlock)
-    let blk ← withTheReader DocElabContext ({ · with docReconstructionPlaceholder := hygenicName }) <|
-      elabBlock cmd
-    addBlock blk (blockInternalDocReconstructionPlaceholder := hygenicName)
+    elabAndAddBlock (elabBlock cmd)
+
+/--
+Elaborates the top-level block {name}`cmd` with {name}`partCommand`, using {name}`name` as the
+declaration name.
+
+Before calling this function, the caller must increment the block index counter with
+{name}`PartElabM.nextBlockDefinitionName`, which returns the block definition name to be used as
+{name}`name`. If the block's elaboration throws, the caller must preserve the document's elaboration
+state ({name}`PartElabM.State` and {name}`DocElabM.State`) from after the increment, so the block's
+index stays unused. The environment and the messages are not part of that state and may be rolled
+back.
+-/
+public meta def elabTopLevelBlock (name : Name) (cmd : VersoBlock) : PartElabM Unit := do
+  let saved := (← getThe PartElabM.State).nextBlockIndex
+  modifyThe PartElabM.State ({ · with nextBlockIndex := 0 })
+  withTheReader DocElabContext ({ · with declName := name }) <| partCommand cmd
+  modifyThe PartElabM.State ({ · with nextBlockIndex := saved })
 
 @[part_command Lean.Doc.Parser.Block.footnote_ref]
 public meta partial def _root_.Lean.Doc.Parser.Block.footnote_ref.command : PartCommand

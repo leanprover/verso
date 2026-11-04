@@ -141,12 +141,37 @@ public structure DocElabContext where
   {lit}`` `(fun $docReconstructionPlaceholder => $termContainingFreeVariable) ``.
   -/
   docReconstructionPlaceholder : Option Ident
+
+  /--
+  The root name used for the document and its generated block definitions.
+  -/
+  docConstName : Name
+
+  /--
+  {open DocElabContext}
+
+  The name of the declaration under which elaboration runs, which is used as a source of auxiliary
+  definition names.
+
+  While a top-level block is elaborated, it is the block definition name of that block, and
+  otherwise it is {name}`docConstName`. The names of the block definitions created while a top-level
+  block is elaborated are also assigned based on it.
+  -/
+  declName : Name := docConstName
 deriving Inhabited
 
-
-public def DocElabContext.fromGenreTerm (genreSyntax : Term) : TermElabM DocElabContext := do
+/--
+Elaborates the genre {name}`genreSyntax` and creates the context for elaborating the document whose
+constant name is {name}`docConstName`.
+-/
+public def DocElabContext.fromGenreTerm (genreSyntax : Term) (docConstName : Name) :
+    TermElabM DocElabContext := do
   let genre ← Term.elabTerm genreSyntax (some (.const ``Doc.Genre []))
-  return DocElabContext.mk genreSyntax genre .always (.some <| mkIdent (← mkFreshUserName `docReconst))
+  return {
+    genreSyntax, genre, refsAllowed := .always,
+    docReconstructionPlaceholder := some <| mkIdent (← mkFreshUserName `docReconst),
+    docConstName
+  }
 
 public structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
@@ -165,7 +190,17 @@ public structure PartElabM.State where
   footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
   /-- The footnote uses in each footnote's contents, by the footnote's label. -/
   footnoteUses : HashMap String (Array (String × Syntax)) := {}
-  deferredBlocks : Array (Name × Term) := #[]
+  /--
+  The block index counter, which is the index of the next block definition name that extends the
+  current parent name.
+
+  The names of block definitions are assigned based on the order of elaboration rather than the
+  structure of either the source document or the final document.
+
+  While a top-level block is elaborated, the parent name is the block's definition name. The counter
+  starts at 0 for the block, and its value from before the block is restored afterwards.
+  -/
+  nextBlockIndex : Nat := 0
   /--
   Whether the top-level block being elaborated contains {lean}`Syntax.missing`, which marks where
   its parser stopped at a parse error. Such a block is partial syntax.
@@ -199,7 +234,7 @@ public instance : MonadQuotation PartElabM := inferInstanceAs <| MonadQuotation 
 public instance : Monad PartElabM := inferInstanceAs <| Monad (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
 
 public instance : MonadLift TermElabM PartElabM where
-  monadLift act := private fun _ st st' => do return ((← Term.withDeclName (← currentDocName) act, st), st')
+  monadLift act := private fun ctx st st' => do return ((← Term.withDeclName ctx.declName act, st), st')
 
 public instance : MonadExceptOf Exception PartElabM := inferInstanceAs <| MonadExceptOf Exception (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
 
@@ -248,7 +283,7 @@ public instance [MonadWithReaderOf ρ TermElabM] : MonadWithReaderOf ρ DocElabM
   inferInstanceAs <| MonadWithReaderOf ρ (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
 
 public instance : MonadLift TermElabM DocElabM where
-  monadLift act := fun _ _ st' => do return (← Term.withDeclName (← currentDocName) act, st')
+  monadLift act := fun ctx _ st' => do return (← Term.withDeclName ctx.declName act, st')
 
 public instance : MonadLift IO DocElabM where
   monadLift act := fun _ _ st' => do return (← act, st')
@@ -326,31 +361,131 @@ public partial def PartElabM.closePartsUntil (outer : Nat) (endPos : String.Pos.
     | none => pure ()
 
 /--
-Adds a block (syntax denoting a {lit}`Block g`) to the elaboration state.
-
-The block becomes a function of document reconstruction data. The function's parameter is
-{name}`blockInternalDocReconstructionPlaceholder` if it is given, and otherwise the current
-{name}`DocElabContext`'s {name}`DocElabContext.docReconstructionPlaceholder`.
+The block definition name that consists of {name}`parent`, {lit}`block` and the index {name}`i`. The
+parent name {name}`parent` is a document's constant name or a block definition name.
 -/
-public def PartElabM.addBlock (block : TSyntax `term) (blockInternalDocReconstructionPlaceholder : Option Ident := .none)  : PartElabM Unit := do
-  -- The syntax denoting the top-level Part structure will refer to this block by name, passing it
-  -- the ident that holds the `DocReconstruction` object.
-  let name ← mkFreshUserName `block
+public def blockDefinitionName (parent : Name) (i : Nat) : Name :=
+  (parent ++ `block).num i
+
+/-- Increments the block index counter and returns its value before the increment. -/
+def PartElabM.incrementBlockIndex : PartElabM Nat := do
+  let index := (← getThe State).nextBlockIndex
+  modifyThe State ({ · with nextBlockIndex := index + 1 })
+  return index
+
+/--
+Increments the block index counter and returns the block definition name with the index before the
+increment.
+
+The name is the document's constant name followed by {lit}`block` and the index. The index is a
+number component, which can't be written in source. This function should be called outside the
+elaboration of top-level blocks, where the parent name is the document's constant name.
+
+Contexts in which the document's constant name is anonymous have no block definition names, because
+the block definitions of two such documents would collide. Asking for one is an error.
+-/
+public def PartElabM.nextBlockDefinitionName : PartElabM Name := do
+  let docConstName := (← read).docConstName
+  if docConstName.isAnonymous then
+    throwError "The document has no constant name, so its blocks' definitions can't be created. \
+      Give its `DocElabContext` a `docConstName`."
+  return blockDefinitionName docConstName (← incrementBlockIndex)
+
+/--
+Elaborates {name}`block`, a term of type {lit}`DocReconstruction g → Block g` for the genre
+{name}`genreSyntax`, and adds it to the environment as the compiled definition {name}`name`.
+
+The term is elaborated with {name}`name` as its declaration name, so the names of auxiliary
+definitions are assigned based on the block definition's name. An error without a position of its
+own is reported at {name}`block`. It is an error for {name}`block` to refer to local variables. The
+definition has the reducibility hint that Lean gives an ordinary {lit}`def`.
+-/
+def compileBlock (genreSyntax : Term) (name : Name) (block : Term) : TermElabM Unit :=
+  Term.withDeclName name <| withRef block <| withCurrHeartbeats do
+    let mut type ← Term.elabType (← ``(DocReconstruction $genreSyntax → Doc.Block $genreSyntax))
+    let mut blockExpr ← Term.elabTerm block (some type)
+
+    -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
+    type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
+
+    -- Replace any universe metavariables with universe variables; report errors
+    type ← Term.levelMVarToParam type
+    match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
+    | Except.error msg      => throwErrorAt block msg
+    | Except.ok levelParams =>
+      Term.synthesizeSyntheticMVarsNoPostponing
+      type ← instantiateMVars type
+      blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
+      let fvars := (collectFVars {} (← instantiateMVars blockExpr)).fvarIds
+      unless fvars.isEmpty do
+        let refs := MessageData.joinSep (fvars.map (m!"`{mkFVar ·}`")).toList ", "
+        throwError m!"Can't refer to a local variable here (reference to {refs})."
+      let decl := Declaration.defnDecl {
+        name,
+        levelParams,
+        type,
+        value := blockExpr,
+        hints := .regular (getMaxHeight (← getEnv) blockExpr + 1),
+        safety := .safe
+      }
+
+      -- This is possibly overly defensive (or ineffectual)
+      Term.ensureNoUnassignedMVars decl
+      withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile decl
+
+/--
+Creates and compiles the definition of {name}`block` as a function of {name}`param`, and adds the
+block to the current part.
+
+The definition's name is assigned based on the context's {name}`DocElabContext.declName`. If the
+document's constant name is a proper prefix of the declaration name, the declaration name is the
+parent name. In that case, the definition's name is the declaration name while the environment
+doesn't contain it yet. Once the environment contains it, the block index counter is incremented,
+and the definition's name is the block definition name that consists of the parent name,
+{lit}`block` and the counter's value before the increment. In all other cases, the definition's name
+comes from {name}`PartElabM.nextBlockDefinitionName`.
+-/
+def PartElabM.addBlockWithParameter (param : Ident) (block : Term) : PartElabM Unit := do
+  let ctx ← read
+  let .some docReconstructionPlaceholder := ctx.docReconstructionPlaceholder
+    | throwErrorAt block "No doc reconstruction placeholder available"
+  let name ←
+    if ctx.declName == ctx.docConstName || !ctx.docConstName.isPrefixOf ctx.declName then
+      nextBlockDefinitionName
+    else if !(← getEnv).contains ctx.declName then pure ctx.declName
+    else do pure (blockDefinitionName ctx.declName (← incrementBlockIndex))
+  compileBlock ⟨ctx.genreSyntax⟩ name (← `(fun $param => $block))
+
+  let blockRefSyntax ← ``($(mkCIdent name) $docReconstructionPlaceholder)
+  modifyThe PartElabM.State fun st =>
+    { st with partContext.blocks := st.partContext.blocks.push blockRefSyntax }
+
+/--
+{given -show}`g : Genre`
+
+Creates and compiles the definition of a block (syntax that denotes a {lean}`Block g`), and adds the
+block to the current part.
+
+The definition is a function from document reconstruction data to a {name}`Block`. Its name is
+assigned based on the context's {name}`DocElabContext.declName` and the block index counter.
+-/
+public def PartElabM.addBlock (block : Term) : PartElabM Unit := do
   let .some docReconstructionPlaceholder := (← read).docReconstructionPlaceholder
     | throwErrorAt block "No doc reconstruction placeholder available"
-  let blockRefSyntax ← ``($(mkIdent name) $docReconstructionPlaceholder)
+  addBlockWithParameter docReconstructionPlaceholder block
 
-  -- If the internal block includes a doc reconstruction placeholder, it should be different from
-  -- the one in the current `DocElabContext` to maintain good hygiene.
-  let blockDefSyntax ← match blockInternalDocReconstructionPlaceholder with
-    | .none => `(fun $docReconstructionPlaceholder => $block)
-    | .some name => `(fun $name => $block)
+/--
+Elaborates a block with {name}`elabBlock` and adds it to the current part as {name}`addBlock` does.
 
-  modifyThe PartElabM.State fun st =>
-    { st with
-      partContext.blocks := st.partContext.blocks.push blockRefSyntax
-      deferredBlocks := st.deferredBlocks.push (name, blockDefSyntax)
-    }
+The block is elaborated with a fresh document reconstruction placeholder, which differs from the
+context's placeholder and becomes the parameter of the block's definition.
+-/
+public def PartElabM.elabAndAddBlock (elabBlock : PartElabM Term) : PartElabM Unit := do
+  let placeholder := mkIdent (← mkFreshUserName `docReconstInBlock)
+  let block ←
+    withTheReader DocElabContext ({ · with docReconstructionPlaceholder := some placeholder })
+      elabBlock
+  addBlockWithParameter placeholder block
 
 public def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
   { st with partContext.priorParts := st.partContext.priorParts.push finished }
@@ -584,8 +719,8 @@ public opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
 in turning a parsed verso doc into syntax.
 
-It also reports the document's undefined and unused links and footnotes, and compiles the document's
-blocks.
+It also reports the document's undefined and unused links and footnotes. The term applies each of
+the document's block definitions to the reconstruction data.
 -/
 public def FinishedPart.toVersoDoc
     (genreSyntax : Term)
@@ -608,38 +743,6 @@ public def FinishedPart.toVersoDoc
         logAt stx msg severity
     else
       logAt stx msg severity
-
-  -- Add and compile blocks
-  for (name, block) in partElabState.deferredBlocks do
-    withRef block do
-    withCurrHeartbeats do -- reset the heartbeat count for each block addAndCompile
-
-      let mut type ← Term.elabType (← ``(DocReconstruction $genreSyntax → Doc.Block $genreSyntax))
-      let mut blockExpr ← Term.elabTerm block (some type)
-
-      -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
-      type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
-
-      -- Replace any universe metavariables with universe variables; report errors
-      type ← Term.levelMVarToParam type
-      match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
-      | Except.error msg      => throwErrorAt block msg
-      | Except.ok levelParams =>
-        Term.synthesizeSyntheticMVarsNoPostponing
-        type ← instantiateMVars type
-        blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
-        let decl := Declaration.defnDecl {
-          name,
-          levelParams,
-          type,
-          value := blockExpr,
-          hints := .abbrev,
-          safety := .safe
-        }
-
-        -- This is possibly overly defensive (or ineffectual)
-        Term.ensureNoUnassignedMVars decl
-        withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile decl
 
   -- Generate and return outermost syntax
   let finishedSyntax ← finished.toSyntax genreSyntax

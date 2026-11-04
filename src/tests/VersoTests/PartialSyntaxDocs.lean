@@ -215,6 +215,27 @@ Verso.Doc.Part.mk
 [^walk]: We walked to the lake and saw {hig
 "
 
+/-- A role that elaborates to an ill-typed inline. Only compiling the block finds the error. -/
+@[role]
+def illTyped : RoleExpanderOf Unit
+  | (), _ => ``(Verso.Doc.Inline.text (5 : Nat))
+
+/-
+A type error that only compiling a block finds isn't reported while the block has a parse error,
+even when a good paragraph follows, and the document is defined with `sorry` in that block.
+-/
+/--
+info: 6:55: unexpected newline; expected positional argument, named argument, flag, or '}' (use '\{' for a literal '{')
+defined, depends on sorryAx: true
+-/
+#test_msgs in
+#elab_doc "We went to the park.
+
+We saw a {illTyped}[] heron and then an unfinished {hig
+
+We walked home along the river.
+"
+
 /-! # Blocks that change the document's structure -/
 
 /-

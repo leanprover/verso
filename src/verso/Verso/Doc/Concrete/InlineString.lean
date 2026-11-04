@@ -30,9 +30,11 @@ elab_rules : term <= ty
   | `(inlines!%$tk$s) => do
     let inls ← stringToInlines s
     let gTerm ← `(term|_%$tk)
-    let g ← Meta.mkFreshExprMVar (some (.const ``Verso.Doc.Genre []))
-    let (tms, _) ← DocElabM.run
-      ⟨gTerm, g, .onlyIfDefined, .none⟩
+    let ctx := {
+      (← DocElabContext.fromGenreTerm gTerm (← currentDocName)) with
+      refsAllowed := .onlyIfDefined, docReconstructionPlaceholder := none
+    }
+    let (tms, _) ← DocElabM.run ctx
       { highlightDeduplicationTable := .none }
       (.init tk tk) <| inls.mapM (elabInline ⟨·⟩)
     elabTerm (← ``(Inline.concat #[ $[$tms],* ] )) ty
@@ -40,10 +42,12 @@ elab_rules : term <= ty
     elabTerm (← ``(Lean.Doc.Block.empty)) ty
   | `(blocks!%$tk$s) => do
     let inls ← stringToBlocks s
-    let g ← Meta.mkFreshExprMVar (some (.const ``Verso.Doc.Genre []))
     let gTerm ← `(term|_%$tk)
-    let (tms, _) ← DocElabM.run
-      ⟨gTerm, g, .onlyIfDefined, .none⟩
+    let ctx := {
+      (← DocElabContext.fromGenreTerm gTerm (← currentDocName)) with
+      refsAllowed := .onlyIfDefined, docReconstructionPlaceholder := none
+    }
+    let (tms, _) ← DocElabM.run ctx
       { highlightDeduplicationTable := .none }
       (.init tk tk) <| inls.mapM (elabBlock ⟨·⟩)
     elabTerm (← ``(Block.concat #[ $[$tms],* ] )) ty

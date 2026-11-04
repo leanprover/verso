@@ -348,7 +348,7 @@ meta def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : Li
   let items ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|
     loadLiteratePage path.getString mod.getId.toString
 
-  let ctx ← runTermElabM fun _ => DocElabContext.fromGenreTerm genre
+  let ctx ← DocElabContext.forDeclaration genre x
 
   let ((), docState, partState) ← liftTermElabM <| PartElabM.run ctx {} initState <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))

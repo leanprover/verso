@@ -19,7 +19,10 @@ stores this state.
 -/
 public meta structure DocElabEnvironment where
   genreSyntax : Term := ⟨.missing⟩
-  ctx : DocElabContext := ⟨.missing, mkConst ``Unit, .always, .none⟩
+  ctx : DocElabContext := {
+    genreSyntax := .missing, genre := mkConst ``Unit, refsAllowed := .always,
+    docReconstructionPlaceholder := none, docConstName := .anonymous
+  }
   docState : DocElabM.State := { highlightDeduplicationTable := some {} }
   partState : PartElabM.State := .init (.node .none nullKind #[]) (.node .none nullKind #[])
 deriving Inhabited
