@@ -278,7 +278,7 @@ Verso.Doc.Part.mk
       #[Verso.Doc.Inline.text "Head ", Verso.Doc.Inline.concat #[]]
       "Head "
       none
-      #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After.", Verso.Doc.Inline.linebreak "\n"]]
+      #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After."]]
       #[]]
 -/
 #test_msgs in
