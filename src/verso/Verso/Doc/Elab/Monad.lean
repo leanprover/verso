@@ -31,7 +31,8 @@ namespace Verso.Doc.Elab
 open Lean
 open Lean.Elab
 open Lean.Doc (BlockView BoldView CodeView EmphView FootnoteView HeaderView ImageView InlineView
-  LinebreakView LinkView RoleView TextView VersoBlock VersoCodeBlock VersoInline VersoRefName)
+  LinebreakView LinkView MathView RoleView TextView VersoBlock VersoCodeBlock VersoInline
+  VersoRefName)
 open Lean.Doc.Parser
 open Std (HashMap HashSet)
 open Verso.ArgParse (FromArgs SigDoc)
@@ -65,6 +66,14 @@ public meta def _root_.Lean.Doc.Parser.Inline.bold.inline_to_string : InlineToSt
 @[inline_to_string Lean.Doc.Parser.Inline.code]
 public meta def _root_.Lean.Doc.Parser.Inline.code.inline_to_string : InlineToString
   | _, stx => CodeView.of ⟨stx⟩ |>.map (·.getVersoCode)
+
+@[inline_to_string Lean.Doc.Parser.Inline.inline_math]
+public meta def _root_.Lean.Doc.Parser.Inline.inline_math.inline_to_string : InlineToString
+  | _, stx => MathView.of ⟨stx⟩ |>.map (·.getVersoCode)
+
+@[inline_to_string Lean.Doc.Parser.Inline.display_math]
+public meta def _root_.Lean.Doc.Parser.Inline.display_math.inline_to_string : InlineToString
+  | _, stx => MathView.of ⟨stx⟩ |>.map (·.getVersoCode)
 
 @[inline_to_string Lean.Doc.Parser.Inline.link]
 public meta def _root_.Lean.Doc.Parser.Inline.link.inline_to_string : InlineToString
