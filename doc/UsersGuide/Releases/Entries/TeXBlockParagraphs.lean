@@ -13,7 +13,7 @@ release_note
   version := ⟨4, 36, 0⟩
   breaking := false
   tag := "tex-block-paragraphs"
-  prs := []
+  prs := [1081]
 
 #doc (Manual) "Paragraph Breaks Between Blocks in TeX Output" =>
 
