@@ -11,12 +11,14 @@ import VersoTests.DocCommandInput
 These tests check the definitions that Verso creates for the blocks of a document.
 
 Top-level blocks that add content to a document get definitions of their own, which are functions
-from the document's reconstruction data to the blocks. Each definition is compiled right after its
-block is elaborated, so in {lit}`#doc` documents, errors in block definitions appear with their
-blocks. The language server reuses the elaboration of the top-level blocks before an edit, which
-works only if the names of block definitions don't depend on whether earlier blocks failed. Several
-documents, including several documents elaborated as terms in one declaration, must also coexist in
-one module without their definitions colliding.
+from the document's reconstruction data to the blocks. The contents of footnote definitions get
+definitions of their own as well, which are functions from the reconstruction data to the contents'
+inlines. Each definition is compiled right after its block is elaborated, so in {lit}`#doc`
+documents, errors in block definitions appear with their blocks. The language server reuses the
+elaboration of the top-level blocks before an edit, which works only if the names of block
+definitions don't depend on whether earlier blocks failed. Several documents, including several
+documents elaborated as terms in one declaration, must also coexist in one module without their
+definitions colliding.
 
 The tests compare names by relation: whether they are under a document's constant name (which is a
 prefix of them), whether they are distinct, and whether a failure changes them. Some of them
@@ -336,3 +338,121 @@ info: The environment has no new constants: true
   catch e =>
     logInfo e.toMessageData
   logInfo m!"The environment has no new constants: {count (← getEnv) == before}"
+
+/-- The message that {lit}`footnoteContentsMark%` logs when it is elaborated. -/
+def contentsMarkMessage : String := "The footnote's contents are elaborated."
+
+/--
+A term that logs {name}`contentsMarkMessage` when it is elaborated, and denotes an empty inline.
+-/
+elab "footnoteContentsMark%" : term <= expectedType => do
+  logInfo contentsMarkMessage
+  Term.elabTerm (← ``(Verso.Doc.Inline.concat #[])) expectedType
+
+/-- A role that elaborates to {lit}`footnoteContentsMark%`. -/
+@[role]
+def contentsMark : RoleExpanderOf Unit
+  | (), _ => ``(footnoteContentsMark%)
+
+/-- The number of rings that a tree grows in a year. -/
+def ringsPerYear : Nat := 1
+
+/--
+A role that elaborates to the text of {name}`ringsPerYear`. Its reference to the constant has the
+position of the role's first inline, so the constant's term information is at that position.
+-/
+@[role]
+def rings : RoleExpanderOf Unit
+  | (), inlines => do
+    let some ref := inlines[0]?.map (·.raw) | throwError "Expected contents"
+    let c := mkIdentFrom ref ``ringsPerYear (canonical := true)
+    ``(Verso.Doc.Inline.text (toString $c))
+
+/-- Whether {name}`tree` has term information for the constant {name}`name` at a source position. -/
+def hasTermInfoFor (name : Name) (tree : InfoTree) : Bool :=
+  tree.foldInfo (init := false) fun _ info found =>
+    found || match info with
+      | .ofTermInfo ti => ti.expr.isConstOf name && (ti.stx.getPos? (canonicalOnly := true)).isSome
+      | _ => false
+
+/-- A {lit}`#doc` document whose second top-level block is a footnote definition. -/
+def footnoteInput : String := "#doc (.none) \"Footnote contents\" =>
+
+Trees grow toward the light.[^note]
+
+[^note]: Leaves change color, and trees grow {Verso.Tests.BlockCompilation.rings}[rings] \
+  each year.{Verso.Tests.BlockCompilation.contentsMark}[]
+
+Mycelium spreads under the forest floor.
+"
+
+/-
+A footnote's contents are elaborated only in the footnote definition's own command (command 2),
+which also has their term information. They are compiled there as a definition under the document's
+constant name, a function from the document reconstruction data to inlines.
+-/
+
+/--
+info: Commands that elaborate the footnote's contents: [2]
+Commands with term information for the contents: [2]
+The document's constant name has a definition of the footnote's contents under it: true
+-/
+#test_msgs in
+#eval show CommandElabM Unit from do
+  let (env, snaps) ← elabModuleCommands footnoteInput
+  let mut marked := #[]
+  let mut informed := #[]
+  for h : i in [0:snaps.size] do
+    for msg in (commandMessages snaps[i]).toList do
+      if (← msg.data.toString) == contentsMarkMessage then
+        unless marked.contains i do marked := marked.push i
+      else logInfo m!"command {i}: {← showMessage msg}"
+    if (commandInfoTrees snaps[i]).any (hasTermInfoFor ``ringsPerYear) then
+      informed := informed.push i
+  let docName := docName (← getMainModule)
+  let contentsDefs ← liftTermElabM <| withEnv env do
+    let docReconst := mkApp (mkConst ``DocReconstruction) (mkConst ``Genre.none)
+    let inlines := mkApp (mkConst ``Array [0])
+      (mkApp (mkConst ``Verso.Doc.Inline) (mkConst ``Genre.none))
+    let type ← mkArrow docReconst inlines
+    (constantsUnder docName env).filterM fun n => hasType type n
+  logInfo m!"Commands that elaborate the footnote's contents: {marked}\n\
+    Commands with term information for the contents: {informed}\n\
+    The document's constant name has a definition of the footnote's contents under it: \
+    {!contentsDefs.isEmpty}"
+
+/-
+A footnote definition in a context whose document constant name is anonymous doesn't add any
+constants. The document's value has the footnote's contents at its use site, as in prior versions of
+Verso.
+-/
+
+/--
+info: The footnote definition doesn't define constants: true
+---
+info: #[Verso.Doc.Block.para
+    #[Verso.Doc.Inline.footnote "note" #[(Verso.Doc.Inline.text "Leaves change color in the fall.")]]]
+-/
+#test_msgs in
+#eval show Term.TermElabM Unit from do
+  let count (env : Environment) := env.constants.map₂.foldl (init := 0) fun n _ _ => n + 1
+  let ctx ← DocElabContext.fromGenreTerm (← `(Genre.none)) `unused
+  let ctx := { ctx with docConstName := .anonymous, declName := .anonymous }
+  let label := Lean.Doc.mkVersoRefNameFrom .missing "note"
+  let elabFootnote : PartElabM Unit := do
+    PartElabM.addFootnoteDef label
+      #[← ``(Verso.Doc.Inline.text "Leaves change color in the fall.")]
+    let use ← PartElabM.liftDocElabM <| DocElabM.addFootnoteRef label
+    let block ← ``(Verso.Doc.Block.para #[Verso.Doc.Inline.footnote "note" $use])
+    modifyThe PartElabM.State fun st =>
+      { st with partContext.blocks := st.partContext.blocks.push block }
+  let before := count (← getEnv)
+  let ((), docState, partState) ← PartElabM.run ctx {} (.init .missing .missing) elabFootnote
+  logInfo m!"The footnote definition doesn't define constants: {count (← getEnv) == before}"
+  let finished := partState.partContext.toPartFrame.close 0
+  let doc ← finished.toVersoDoc ⟨ctx.genreSyntax⟩ ctx docState partState
+  let type := mkApp (mkConst ``VersoDoc) (mkConst ``Genre.none)
+  let value ← Term.elabTermEnsuringType doc type
+  Term.synthesizeSyntheticMVarsNoPostponing
+  let doc ← unsafe Meta.evalExpr (VersoDoc Genre.none) type (← instantiateMVars value)
+  logInfo m!"{repr doc.toPart.content}"
