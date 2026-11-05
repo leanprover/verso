@@ -1,0 +1,80 @@
+{"version": 1,
+ "uri": "file:///src/tests/interactive/test-cases/compile_reuse.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 3,
+   "range":
+   {"start": {"line": 40, "character": 18},
+    "end": {"line": 40, "character": 26}},
+   "message": "Compiled while the file says: We met on Tuesday.",
+   "fullRange":
+   {"start": {"line": 40, "character": 18},
+    "end": {"line": 40, "character": 26}}},
+  {"source": "Lean 4",
+   "severity": 3,
+   "range":
+   {"start": {"line": 42, "character": 19},
+    "end": {"line": 42, "character": 27}},
+   "message": "Compiled while the file says: We met on Tuesday.",
+   "fullRange":
+   {"start": {"line": 42, "character": 19},
+    "end": {"line": 42, "character": 27}}},
+  {"source": "Lean 4",
+   "severity": 3,
+   "range":
+   {"start": {"line": 47, "character": 18},
+    "end": {"line": 47, "character": 26}},
+   "message": "Compiled while the file says: We met on Tuesday.",
+   "fullRange":
+   {"start": {"line": 47, "character": 18},
+    "end": {"line": 47, "character": 26}}},
+  {"source": "Lean 4",
+   "severity": 3,
+   "range":
+   {"start": {"line": 50, "character": 17},
+    "end": {"line": 50, "character": 25}},
+   "message": "Compiled while the file says: We met on Tuesday.",
+   "fullRange":
+   {"start": {"line": 50, "character": 17},
+    "end": {"line": 50, "character": 25}}}]}
+{"version": 2,
+ "uri": "file:///src/tests/interactive/test-cases/compile_reuse.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 3,
+   "range":
+   {"start": {"line": 40, "character": 18},
+    "end": {"line": 40, "character": 26}},
+   "message": "Compiled while the file says: We met on Tuesday.",
+   "fullRange":
+   {"start": {"line": 40, "character": 18},
+    "end": {"line": 40, "character": 26}}},
+  {"source": "Lean 4",
+   "severity": 3,
+   "range":
+   {"start": {"line": 42, "character": 19},
+    "end": {"line": 42, "character": 27}},
+   "message": "Compiled while the file says: We met on Tuesday.",
+   "fullRange":
+   {"start": {"line": 42, "character": 19},
+    "end": {"line": 42, "character": 27}}},
+  {"source": "Lean 4",
+   "severity": 3,
+   "range":
+   {"start": {"line": 47, "character": 18},
+    "end": {"line": 47, "character": 26}},
+   "message": "Compiled while the file says: We met on Thursday.",
+   "fullRange":
+   {"start": {"line": 47, "character": 18},
+    "end": {"line": 47, "character": 26}}},
+  {"source": "Lean 4",
+   "severity": 3,
+   "range":
+   {"start": {"line": 50, "character": 17},
+    "end": {"line": 50, "character": 25}},
+   "message": "Compiled while the file says: We met on Thursday.",
+   "fullRange":
+   {"start": {"line": 50, "character": 17},
+    "end": {"line": 50, "character": 25}}}]}

@@ -97,9 +97,13 @@ meta def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) (metad
   let titleSyntax := .node .none nullKind titleParts
   let initState : PartElabM.State := .init titleSyntax titleSyntax
 
-  let g ← elabTerm genre (some (.const ``Genre []))
+  let ctx := {
+    (← DocElabContext.fromGenreTerm ⟨genre⟩ (← currentDocName)) with
+    docReconstructionPlaceholder := none
+  }
+  let g := ctx.genre
 
-  let (titleTerm, _st) ← DocElabM.run ⟨genre, g, .always, .none⟩ {} initState <| do
+  let (titleTerm, _st) ← DocElabM.run ctx {} initState <| do
     titleParts.mapM (elabInline ⟨·⟩)
 
   let modJson ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|

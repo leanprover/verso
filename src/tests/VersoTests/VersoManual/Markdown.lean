@@ -29,6 +29,15 @@ def displayPartStructure (part : FinishedPart) (level : Nat := 1) : String := ma
        s!"{pref} {title}\n{partsStr}"
   | .included name => s!"included {name}\n"
 
+/--
+The context that the tests elaborate Markdown in. Its genre is `Manual`. The document's constant
+name is anonymous, because the tests add no blocks.
+-/
+def manualContext : DocElabContext := {
+  genreSyntax := Syntax.node .none identKind #[], genre := mkConst ``Manual,
+  refsAllowed := .always, docReconstructionPlaceholder := none, docConstName := .anonymous
+}
+
 open PartElabM in
 /--
 Parses a Markdown string, returning the displayed part structure.
@@ -41,7 +50,7 @@ def testAddPartFromMarkdown (input : String) : Elab.TermElabM String := do
     for block in parsed.blocks do
       levels ← addPartFromMarkdown block levels
     closePartsUntil 0 0
-  let (_, _, part) ← addParts.run ⟨Syntax.node .none identKind #[], mkConst ``Manual, .always, .none⟩ default default
+  let (_, _, part) ← addParts.run manualContext default default
   part.partContext.priorParts.toList.map displayPartStructure |> String.join |> pure
 
 /--
@@ -73,7 +82,7 @@ def markdownPartRangesValid (input : String) : Elab.TermElabM Bool := do
       for block in parsed.blocks do
         levels ← addPartFromMarkdown block levels
       closePartsUntil 0 (ref.getTailPos?.getD default)
-    let (_, _, part) ← addParts.run ⟨Syntax.node .none identKind #[], mkConst ``Manual, .always, .none⟩ default default
+    let (_, _, part) ← addParts.run manualContext default default
     return part.partContext.priorParts.all partRangesValid
 
 open PartElabM in
@@ -87,7 +96,7 @@ def closeMarkdownSectionAtRoot : Elab.TermElabM Unit := do
   let addParts : PartElabM Unit := do
     for block in parsed.blocks do
       discard <| addPartFromMarkdown block (currentHeaderLevels := [1])
-  discard <| addParts.run ⟨Syntax.node .none identKind #[], mkConst ``Manual, .always, .none⟩ default default
+  discard <| addParts.run manualContext default default
 
 /-- error: Failed to close verso part corresponding to markdown section: no parts left -/
 #test_msgs in
