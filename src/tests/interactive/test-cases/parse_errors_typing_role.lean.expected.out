@@ -29,8 +29,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 3,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -63,8 +62,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 4,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -97,8 +95,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 5,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -131,8 +128,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 6,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -163,8 +159,7 @@
  {"startLine": 41, "kind": "region", "endLine": 44},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 7,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -196,8 +191,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 8,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -229,8 +223,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 9,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -253,8 +246,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 10,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -286,8 +278,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 11,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -320,8 +311,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 12,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -354,8 +344,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 13,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -388,8 +377,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 14,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -421,8 +409,7 @@
  {"startLine": 41, "kind": "region", "endLine": 44},
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 15,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -454,8 +441,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 16,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -487,8 +473,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 17,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -511,8 +496,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 18,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -544,8 +528,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 19,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -578,8 +561,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 20,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -612,8 +594,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 21,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -646,8 +627,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 22,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -679,8 +659,7 @@
  {"startLine": 41, "kind": "region", "endLine": 44},
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 23,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -712,8 +691,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 24,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -745,8 +723,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 25,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -769,8 +746,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 26,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -802,8 +778,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 27,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -836,8 +811,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 28,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -870,8 +844,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 29,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -904,8 +877,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 30,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -938,8 +910,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 129},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 129}]
 {"version": 31,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -971,8 +942,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 32,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -1004,8 +974,7 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]
 {"version": 33,
  "uri":
  "file:///src/tests/interactive/test-cases/parse_errors_typing_role.lean",
@@ -1028,5 +997,4 @@
  {"startLine": 50, "kind": "region", "endLine": 74},
  {"startLine": 76, "kind": "region", "endLine": 100},
  {"startLine": 102, "kind": "region", "endLine": 126},
- {"startLine": 128, "kind": "region", "endLine": 154},
- {"startLine": 156, "kind": "region", "endLine": 157}]
+ {"startLine": 128, "kind": "region", "endLine": 154}]

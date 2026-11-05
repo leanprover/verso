@@ -156,7 +156,7 @@ Verso.Doc.Part.mk
     Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "We walked to the lake and saw ",
         Verso.Doc.Inline.emph #[(Verso.Doc.Inline.text "a heron")], Verso.Doc.Inline.text " and ",
-        Verso.Doc.Inline.emph #[], Verso.Doc.Inline.linebreak "\n"]]
+        Verso.Doc.Inline.emph #[]]]
   #[]
 -/
 #test_msgs in
@@ -178,9 +178,7 @@ Verso.Doc.Part.mk
   none
   #[Verso.Doc.Block.ul
       #[{ contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "We saw a heron."]] },
-        { contents := #[Verso.Doc.Block.para
-                          #[Verso.Doc.Inline.text "We saw a ", Verso.Doc.Inline.emph #[],
-                            Verso.Doc.Inline.linebreak "\n"]] }]]
+        { contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "We saw a ", Verso.Doc.Inline.emph #[]]] }]]
   #[]
 -/
 #test_msgs in
@@ -204,9 +202,7 @@ Verso.Doc.Part.mk
       #[Verso.Doc.Inline.text "We went to the park.",
         Verso.Doc.Inline.footnote
           "walk"
-          #[(Verso.Doc.Inline.text "We walked to the lake and saw "),
-            (Verso.Doc.Inline.emph #[]),
-            (Verso.Doc.Inline.linebreak "\n")]]]
+          #[(Verso.Doc.Inline.text "We walked to the lake and saw "), (Verso.Doc.Inline.emph #[])]]]
   #[]
 -/
 #test_msgs in
@@ -255,7 +251,7 @@ Verso.Doc.Part.mk
       #[Verso.Doc.Inline.text "Head ", Verso.Doc.Inline.concat #[]]
       "Head "
       none
-      #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After.", Verso.Doc.Inline.linebreak "\n"]]
+      #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After."]]
       #[]]
 -/
 #test_msgs in
@@ -304,7 +300,7 @@ Verso.Doc.Part.mk
   #[Verso.Doc.Inline.text "Notes"]
   "Notes"
   none
-  #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After.", Verso.Doc.Inline.linebreak "\n"]]
+  #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After."]]
   #[]
 -/
 #test_msgs in
@@ -328,7 +324,7 @@ Verso.Doc.Part.mk
   #[Verso.Doc.Inline.text "Notes"]
   "Notes"
   (some { a := 0, b := 2 })
-  #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After.", Verso.Doc.Inline.linebreak "\n"]]
+  #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After."]]
   #[]
 -/
 #test_msgs in
@@ -387,7 +383,7 @@ Verso.Doc.Part.mk
       #[Verso.Doc.Inline.text "Head ", Verso.Doc.Inline.concat #[]]
       "Head "
       none
-      #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "We saw a heron.", Verso.Doc.Inline.linebreak "\n"]]
+      #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "We saw a heron."]]
       #[]]
 -/
 #test_msgs in
@@ -414,7 +410,7 @@ Verso.Doc.Part.mk
   none
   #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "We went to the park."],
     Verso.Doc.Block.para #[Verso.Doc.Inline.text "We saw ", Verso.Doc.Inline.concat #[]],
-    Verso.Doc.Block.para #[Verso.Doc.Inline.text "We saw a heron.", Verso.Doc.Inline.linebreak "\n"]]
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "We saw a heron."]]
   #[]
 -/
 #test_msgs in
@@ -440,7 +436,7 @@ Verso.Doc.Part.mk
   #[Verso.Doc.Inline.text "Notes"]
   "Notes"
   none
-  #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After.", Verso.Doc.Inline.linebreak "\n"]]
+  #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After."]]
   #[]
 -/
 #test_msgs in
