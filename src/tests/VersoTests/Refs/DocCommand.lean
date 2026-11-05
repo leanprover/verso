@@ -93,8 +93,7 @@ info: Verso.Doc.Part.mk
                    "earlier"
                    #[(Verso.Doc.Inline.text "An earlier footnote with a "),
                      (Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "link")] "https://example.com/earlier"),
-                     (Verso.Doc.Inline.text ".")])],
-            Verso.Doc.Inline.linebreak "\n"]]
+                     (Verso.Doc.Inline.text ".")])]]]
       #[]]
 -/
 #test_msgs in
@@ -116,10 +115,7 @@ info: Verso.Doc.Part.mk
   none
   #[Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "A ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "link")] "https://example.com/third",
-        Verso.Doc.Inline.text ".",
-        Verso.Doc.Inline.footnote
-          "shared"
-          #[(Verso.Doc.Inline.text "The third footnote."), (Verso.Doc.Inline.linebreak "\n")]]]
+        Verso.Doc.Inline.text ".", Verso.Doc.Inline.footnote "shared" #[(Verso.Doc.Inline.text "The third footnote.")]]]
   #[]
 -/
 #test_msgs in
@@ -196,7 +192,7 @@ info: some
 /--
 info: some
   ["text \"A note about \"", "other Verso.Genre.Manual.InlineLean.Inline.lean (mentions Nat.succ: true)",
-    "text \", with a \"", "link \"https://example.com\"", "text \".\"", "other inline"]
+    "text \", with a \"", "link \"https://example.com\"", "text \".\""]
 -/
 #test_msgs in
 #eval (footnoteIn "note" (%doc VersoTests.Refs.ManualFootnote)).map summarize
@@ -366,7 +362,7 @@ info: Verso.Doc.Part.mk
   "Footnote error"
   none
   #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "Text.", Verso.Doc.Inline.footnote "f" #[]],
-    Verso.Doc.Block.para #[Verso.Doc.Inline.text "A later paragraph.", Verso.Doc.Inline.linebreak "\n"]]
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "A later paragraph."]]
   #[]
 -/
 #test_msgs in
@@ -425,7 +421,7 @@ info: Verso.Doc.Part.mk
         Verso.Doc.Inline.text "."],
     Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "Broken ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "u")] "",
-        Verso.Doc.Inline.text " then ", Verso.Doc.Inline.concat #[], Verso.Doc.Inline.linebreak "\n"]]
+        Verso.Doc.Inline.text " then ", Verso.Doc.Inline.concat #[]]]
   #[]
 -/
 #test_msgs in
@@ -447,8 +443,7 @@ info: Verso.Doc.Part.mk
   #[Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
         Verso.Doc.Inline.text "."],
-    Verso.Doc.Block.para
-      #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[], Verso.Doc.Inline.linebreak "\n"]]
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[]]]
   #[]
 -/
 #test_msgs in
@@ -472,8 +467,7 @@ info: Verso.Doc.Part.mk
       #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
         Verso.Doc.Inline.text "."],
     Verso.Doc.Block.para #[Verso.Doc.Inline.text "Second."],
-    Verso.Doc.Block.para
-      #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[], Verso.Doc.Inline.linebreak "\n"]]
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[]]]
   #[]
 -/
 #test_msgs in

@@ -303,11 +303,6 @@ public meta def elabDocTerm : TermElab := fun stx expectedType? => do
       elabAuxDoc (← exprToSyntax genre) title (← docTermBody.blocks body) endPos
   | _ => throwUnsupportedSyntax
 
-elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => do
-  findGenreTm genre
-  let endPos := (← getFileMap).source.rawEndPos
-  elabAuxDoc genre title (completeDocument.blocks text) endPos
-
 section
 open Lean.Doc.Parser
 
@@ -341,6 +336,30 @@ The Lean command parser automatically skips whitespace and comments, but Lean co
 -/
 meta initialize lastVersoEndPosExt : EnvExtension (Option String.Pos.Raw) ← registerEnvExtension (pure none)
 
+private meta def findIdxRev? {α} (p : α → Bool) (xs : Array α) : Option (Fin xs.size) := do
+  if h : xs.size = 0 then failure
+  else
+    let mut n : Fin xs.size := ⟨xs.size - 1, by grind⟩
+    repeat
+      if p xs[n] then return n
+      if n.val = 0 then
+        break
+      else
+        n := ⟨n.val - 1, by grind⟩
+    failure
+
+/-- Checks whether `stx` contains no atoms, no identifiers and no whitespace. -/
+private meta partial def isEmptySyntax : Syntax → Bool
+  | .missing => true
+  | .atom .. | .ident .. => false
+  | .node .none _ args | .node (.synthetic ..) _ args => args.all isEmptySyntax
+  | .node (.original leading _ trailing _) _ args =>
+    leading.startPos == leading.stopPos && trailing.startPos == trailing.stopPos &&
+      args.all isEmptySyntax
+
+private meta def lastNonEmptyIdx? (args : Array Syntax) : Option (Fin args.size) :=
+  findIdxRev? (not ∘ isEmptySyntax) args
+
 /--
 A version of `Lean.Syntax.updateTrailing` that converts `none` source info into `original` source info.
 
@@ -353,32 +372,13 @@ private meta partial def updateSyntaxTrailing (trailing : Substring.Raw) : Synta
   | .atom info val => .atom (updateInfoTrailing trailing info) val
   | .ident info rawVal val pre => .ident (updateInfoTrailing trailing info) rawVal val pre
   | n@(.node info k args) =>
-    if let some i := findIdxRev? (not ∘ empty) args then
+    if let some i := lastNonEmptyIdx? args then
      let last := updateSyntaxTrailing trailing args[i]
      let args := args.set i last;
      Syntax.node info k args
     else n
   | s => s
 where
-  findIdxRev? {α} (p : α → Bool) (xs : Array α) : Option (Fin xs.size) := do
-    if h : xs.size = 0 then failure
-    else
-      let mut n : Fin xs.size := ⟨xs.size - 1, by grind⟩
-      repeat
-        if p xs[n] then return n
-        if n.val = 0 then
-          break
-        else
-          n := ⟨n.val - 1, by grind⟩
-      failure
-
-  empty : Syntax → Bool
-  | .missing => true
-  | .atom .. | .ident .. => false
-  | .node .none _ args | .node (.synthetic ..) _ args => args.all empty
-  | .node (.original leading _ trailing _) _ args =>
-    leading.startPos == leading.stopPos && trailing.startPos == trailing.stopPos && args.all empty
-
   updateInfoTrailing (trailing : Substring.Raw) : SourceInfo → SourceInfo
     | .original leading pos _ endPos => .original leading pos trailing endPos
     | .none =>
@@ -401,6 +401,25 @@ private meta partial def getTailContext? (source : String) (stx : Syntax) : Opti
     | .synthetic _ endPos _ => pure (endPos, ⟨source, endPos, endPos⟩)
     | .original _ _ trailing endPos => pure (endPos, trailing)
 
+/--
+Removes the line break inline at the very end of `block`, if there is one.
+
+The parser gives blocks that end in a paragraph a final line break inline only when the input ends
+right after the line break. When a blank line follows, the line break is trailing whitespace. This
+workaround removes the line break element.
+-/
+private meta partial def dropFinalLinebreak (block : Syntax) : Syntax :=
+  withoutLast block |>.getD block
+where
+  withoutLast : Syntax → Option Syntax
+    | .node info k args => do
+      let i ← lastNonEmptyIdx? args
+      let last := args[i]
+      if last.isOfKind ``Lean.Doc.Parser.Inline.linebreak then
+        pure (.node info k (args.eraseIdx i))
+      else
+        pure (.node info k (args.set i (← withoutLast last)))
+    | _ => none
 
 /--
 Parses each top-level block as either an `addBlockCmd` or an `addLastBlockCmd`. (This is what
@@ -412,13 +431,11 @@ private meta def versoBlockCommandFn : ParserFn := fun c s =>
   let s := lastPos? |>.map s.setPos |>.getD s
   let s := blockCommandRecovery c s
   if s.hasError then s
+  else if c.atEnd s.pos then
+    let s := s.popSyntax.pushSyntax (dropFinalLinebreak s.stxStack.back)
+    (updateTrailing c s).mkNode ``addLastBlockCmd iniSz
   else
-    let s := updateTrailing c s
-    let i := s.pos
-    if c.atEnd i then
-      s.mkNode ``addLastBlockCmd iniSz
-    else
-      s.mkNode ``addBlockCmd iniSz
+    (updateTrailing c s).mkNode ``addBlockCmd iniSz
 where
   /--
   Updates the trailing whitespace information in the syntax at the top of the stack based on
@@ -431,6 +448,13 @@ where
       s.popSyntax.pushSyntax <| updateSyntaxTrailing tr top
     else
       s
+
+elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => do
+  findGenreTm genre
+  let endPos := (← getFileMap).source.rawEndPos
+  let blocks := completeDocument.blocks text
+  let blocks := blocks.modify (blocks.size - 1) (⟨dropFinalLinebreak ·.raw⟩)
+  elabAuxDoc genre title blocks endPos
 
 /--
 The original parser for the `command` category, which is restored while elaborating a Verso block so
