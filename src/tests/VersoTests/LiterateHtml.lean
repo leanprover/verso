@@ -357,6 +357,23 @@ private def testDottedNameDocstrings (data : TestData) : Test := withTestDir dat
     | parts =>
       fail s!"Expected the docstring \"{docstring}\" once in the HTML, found it {parts.length - 1} times."
 
+/--
+A declaration keeps its docstring when one of its attributes defines a further constant, and a doc
+comment inside an attribute belongs to the constant defined there, including in nested attributes.
+-/
+private def testAttrDocstrings (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let json ← IO.FS.readFile (jsonDir / "LitConfig" / "Core" / "AttrDocstrings.json")
+  for (decl, docstring) in [
+      ("first", "The docstring of the first declaration."),
+      ("second", "The docstring of the second declaration."),
+      ("secondAlias", "The docstring of the constant defined in the second attribute."),
+      ("third", "The docstring of the third declaration."),
+      ("thirdOuter", "The docstring of the outer constant."),
+      ("thirdInner", "The docstring of the inner constant.")] do
+    assertContains s!"\"AttrDocstrings.{decl}\",\{\"blocks\":[\{\"p\":[\{\"normal\":\"{docstring}\"" json
+      s!"The docstring \"{docstring}\" is not associated with `AttrDocstrings.{decl}`."
+
 /-- Excluded modules produce no HTML output and are absent from the navbar. -/
 private def testExclude (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
   IO.FS.writeFile tomlFile "exclude = [\"LitConfig.NoDocstrings\"]\n"
@@ -1262,6 +1279,7 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("docstring code block messages", testDocstringCodeBlockMessages data),
   ("guard_msgs docstring", testGuardMsgsDocstring data),
   ("dotted name docstrings", testDottedNameDocstrings data),
+  ("attribute docstrings", testAttrDocstrings data),
   ("unknown extension fallback", testUnknownExtensionFallback)
 ]
 
@@ -1269,7 +1287,7 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
 @[test]
 def literateHtml : Test := do
   let projectDir := "test-projects/literate-config"
-  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings", "LitConfig.Builtins", "LitConfig.UserExt", "LitConfig.GuardMsgs", "LitConfig.DottedNames"]
+  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings", "LitConfig.Builtins", "LitConfig.UserExt", "LitConfig.GuardMsgs", "LitConfig.DottedNames", "LitConfig.Core.AttrDefinedConstant", "LitConfig.Core.AttrDocstrings"]
 
   -- First verify test project toolchain matches root toolchain
   let rootToolchain := (← IO.FS.readFile "lean-toolchain").trimAscii

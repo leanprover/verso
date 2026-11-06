@@ -164,6 +164,11 @@ partial def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax :
     | _ => none
   let defSites ← defSites.filterM fun x => do
     return (← findInternalDocString? (← getEnv) x.1) |>.isSome
+  -- An attribute can define a further constant, as in `@[to_additive foo /-- ... -/] def bar`. The
+  -- declaration's modifiers hold `foo`'s definition site and `bar`'s doc comment, while `bar`'s
+  -- definition site lies outside them, so attributes are handled first and the definition sites
+  -- that they claim take no further part.
+  let (stx, defSites) ← (rewriteAttrComments stx).run defSites
   -- Now find the largest syntax object that contains just one of these definition sites and replace
   -- all doc comments with a placeholder token
   let stx ← stx.replaceM fun s => do
@@ -196,6 +201,21 @@ partial def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax :
     else pure none
   return stx
 where
+  -- Doc comments in an attribute instance belong to the only definition site in it that remains after
+  -- the nested instances have been handled, and the instance then claims that site. The state is the
+  -- definition sites not yet claimed.
+  rewriteAttrComments (stx : Syntax) : StateT (List (Name × Syntax)) TermElabM Syntax := do
+    let .node info kind args := stx | return stx
+    let new := Syntax.node info kind (← args.mapM rewriteAttrComments)
+    if kind != ``Lean.Parser.Term.attrInstance then return new
+    let some range := stx.getRange? | return new
+    let inside := (← get).filter fun (_, site) =>
+      site.getRange?.map (range.includes · true true) |>.getD false
+    let [(x, _)] := inside | return new
+    modify (·.filter (·.1 != x))
+    new.replaceM fun s => do
+      if s.isOfKind ``docComment then some <$> rewriteComment x s else pure none
+
   -- For `structure A.B.C`, the binder's syntax is `C` with the source range of `A.B.C`, so the
   -- identifiers are also compared by their source range.
   identMatch (stx1 stx2 : Syntax) : Bool :=
