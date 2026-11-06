@@ -64,7 +64,7 @@ meta def elabFromModuleDocs (x : Ident) (path : StrLit) (mod : Ident) (title : S
   let titleSyntax := .node .none nullKind titleParts
   let initState : PartElabM.State := .init titleSyntax titleSyntax
 
-  let ctx ← runTermElabM fun _ => DocElabContext.fromGenreTerm genre
+  let ctx ← DocElabContext.forDeclaration genre x
   let g := ctx.genre
 
   let (titleTerm, _st) ← liftTermElabM <| DocElabM.run ctx {} initState <| do

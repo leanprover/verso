@@ -894,7 +894,7 @@ def docstring.descr : BlockDescr := withHighlighting {
       if label == "" then
         reportError s!"Missing label for '{name}': supply one with 'label := \"LABEL\"'"
       pure \TeX{\begin{docstringBox}{\Lean{label}} \Lean{← signature.toTeX} \tcblower " "
-                \Lean{← contents.mapM (fun b => do pure <| seq #[← goB b, .paragraphBreak])} \end{docstringBox}}
+                \Lean{← contents.mapM goB} \end{docstringBox}}
 
   extraCss := [docstringStyle]
 }

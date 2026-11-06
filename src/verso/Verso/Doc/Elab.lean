@@ -195,29 +195,42 @@ public meta def _root_.Lean.Doc.Parser.Inline.inline_math.expand : InlineExpande
 public meta def _root_.Lean.Doc.Parser.Inline.display_math.expand : InlineExpander := mathExpand
 
 
-public meta def partCommand (cmd : VersoBlock) : PartElabM Unit :=
-  withTraceNode `Elab.Verso.part (fun _ => pure m!"Part modification {cmd}") <|
-  withRef cmd <| withFreshMacroScope <| do
+/--
+Elaborates a top-level block.
+
+Parser error recovery may result in a null node. The null node's first child marks where the block
+starts, and it isn't elaborated. The trees that the block's parser built before its parse error
+follow it, and each is elaborated in order as a top-level block that is partial syntax.
+-/
+public meta def partCommand (cmd : VersoBlock) : PartElabM Unit := do
   modifyThe PartElabM.State ({ · with blockHasMissing := cmd.raw.hasMissing })
-  match cmd.raw with
-  | stx@(.node _ kind _) =>
-    let some view := BlockView.of ⟨stx⟩
-      | fallback
-    let exp ← partCommandsFor kind
-    for e in exp do
-      try
-        withFreshMacroScope <| e view
-        return
-      catch
-        | ex@(.internal id) =>
-          if id == unsupportedSyntaxExceptionId then continue
-          else throw ex
-        | ex => throw ex
-    fallback
-  | _ =>
-    fallback
+  if cmd.raw.isOfKind nullKind then
+    for tree in cmd.raw.getArgs do
+      unless tree.isMissing || tree.isOfKind `Verso.Parser.recoveredBlockStart do
+        topLevelBlock ⟨tree⟩
+  else topLevelBlock cmd
 where
-  fallback : PartElabM Unit := do
+  topLevelBlock (cmd : VersoBlock) : PartElabM Unit :=
+    withTraceNode `Elab.Verso.part (fun _ => pure m!"Part modification {cmd}") <|
+    withRef cmd <| withFreshMacroScope <| do
+    match cmd.raw with
+    | stx@(.node _ kind _) =>
+      let some view := BlockView.of ⟨stx⟩
+        | fallback cmd
+      let exp ← partCommandsFor kind
+      for e in exp do
+        try
+          withFreshMacroScope <| e view
+          return
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then continue
+            else throw ex
+          | ex => throw ex
+      fallback cmd
+    | _ =>
+      fallback cmd
+  fallback (cmd : VersoBlock) : PartElabM Unit := do
     if (← getThe PartElabM.State).partContext.priorParts.size > 0 then
       let which := (← getThe PartElabM.State).partContext.priorParts.back?.map fun
         | .mk _ _ _ titleString .. => s!" (namely “{titleString}”)"
@@ -225,11 +238,33 @@ where
       let which := which.getD ""
       let msg := m!"Block content found in a context where a header was expected."
       let note := MessageData.note m!"A document part (section/chapter/etc) consists of a header, followed by zero or more blocks, followed by zero or more sub-parts. This block occurs after a sub-part{which}, but outside of the sub-parts."
-      throwErrorAt cmd "{msg}\n{note}"
-    let hygenicName := some <| mkIdent (← mkFreshUserName `docReconstInBlock)
-    let blk ← withTheReader DocElabContext ({ · with docReconstructionPlaceholder := hygenicName }) <|
-      elabBlock cmd
-    addBlock blk (blockInternalDocReconstructionPlaceholder := hygenicName)
+      logErrorAt cmd m!"{msg}\n{note}"
+      -- At this location, there's no syntactically available position for the block. Nonetheless,
+      -- it is elaborated for its messages and language server information. It is, however, neither
+      -- compiled nor added.
+      let placeholder := mkIdent (← mkFreshUserName `docReconstInBlock)
+      discard <|
+        withTheReader DocElabContext ({ · with docReconstructionPlaceholder := some placeholder })
+          (elabBlock cmd)
+      return
+    elabAndAddBlock (elabBlock cmd)
+
+/--
+Elaborates the top-level block {name}`cmd` with {name}`partCommand`, using {name}`name` as the
+declaration name.
+
+Before calling this function, the caller must increment the block index counter with
+{name}`PartElabM.nextBlockDefinitionName`, which returns the block definition name to be used as
+{name}`name`. If the block's elaboration throws, the caller must preserve the document's elaboration
+state ({name}`PartElabM.State` and {name}`DocElabM.State`) from after the increment, so the block's
+index stays unused. The environment and the messages are not part of that state and may be rolled
+back.
+-/
+public meta def elabTopLevelBlock (name : Name) (cmd : VersoBlock) : PartElabM Unit := do
+  let saved := (← getThe PartElabM.State).nextBlockIndex
+  modifyThe PartElabM.State ({ · with nextBlockIndex := 0 })
+  withTheReader DocElabContext ({ · with declName := name }) <| partCommand cmd
+  modifyThe PartElabM.State ({ · with nextBlockIndex := saved })
 
 @[part_command Lean.Doc.Parser.Block.footnote_ref]
 public meta partial def _root_.Lean.Doc.Parser.Block.footnote_ref.command : PartCommand
@@ -271,7 +306,13 @@ public meta partial def _root_.Lean.Doc.Parser.Block.header.command : PartComman
     let titleString := inlinesToString (← getEnv) (v.content.map (·.raw))
     let ambientLevel ← currentLevel
     let headerLevel := v.level + 1
-    if headerLevel > ambientLevel + 1 then throwErrorAt stx "Wrong header nesting - got {"".pushn '#' headerLevel} but expected at most {"#".pushn '#' ambientLevel}"
+    -- A header that is nested too deeply recovers by opening its part at the deepest level allowed
+    -- in its parent.
+    let headerLevel ←
+      if headerLevel > ambientLevel + 1 then
+        logErrorAt stx m!"Wrong header nesting - got {"".pushn '#' headerLevel} but expected at most {"#".pushn '#' ambientLevel}"
+        pure (ambientLevel + 1)
+      else pure headerLevel
     -- New subheader?
     if headerLevel == ambientLevel + 1 then
       -- Prelude is done!

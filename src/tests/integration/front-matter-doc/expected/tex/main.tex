@@ -1,6 +1,13 @@
 
 \documentclass[oneside]{memoir}
 
+% Lean code and prose use many mathematical symbols (such as ⦂, ⟶, and ↠) that the
+% text fonts below lack. The main, sans, and mono fonts fall back to STIX Two Math
+% for these glyphs.
+\usepackage{fontspec}
+\directlua{luaotfload.add_fallback("versofallback", {"STIXTwoMath-Regular.otf:mode=node;"})}
+\defaultfontfeatures[\rmfamily,\sffamily,\ttfamily]{RawFeature={fallback=versofallback}}
+
 \usepackage{sourcecodepro}
 \usepackage{sourcesanspro}
 \usepackage{sourceserifpro}
@@ -145,6 +152,8 @@ title={#2},#1}
 \cleardoublepage
 This is the introduction text that appears before any chapters.
 It should be part of the front matter.
+
+
 \chapter{Preface}\label{preface}
 
 This is an unnumbered preface section.

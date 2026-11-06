@@ -24,7 +24,7 @@ info: Verso.Doc.Part.mk
     Verso.Doc.Block.para #[Verso.Doc.Inline.text "This text is after the Lean comment that should be skipped."],
     Verso.Doc.Block.ul #[{ contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "abc"]] }],
     Verso.Doc.Block.para #[Verso.Doc.Inline.text "/- Also this text should be there -/"],
-    Verso.Doc.Block.para #[Verso.Doc.Inline.text "def", Verso.Doc.Inline.linebreak "\n"]]
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "def"]]
   #[]
 -/
 #test_msgs in
@@ -38,7 +38,7 @@ info: Verso.Doc.Part.mk
   #[Verso.Doc.Block.blockquote #[],
     Verso.Doc.Block.blockquote
       #[(Verso.Doc.Block.para #[Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "abc")] "http://example.com"])],
-    Verso.Doc.Block.blockquote #[(Verso.Doc.Block.para #[Verso.Doc.Inline.text "C", Verso.Doc.Inline.linebreak "\n"])]]
+    Verso.Doc.Block.blockquote #[(Verso.Doc.Block.para #[Verso.Doc.Inline.text "C"])]]
   #[]
 -/
 #test_msgs in

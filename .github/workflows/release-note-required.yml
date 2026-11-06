@@ -16,11 +16,17 @@ jobs:
         # so a release note would disappear anyway even if they deserved a release notes
         # entry.
         #
+        # Dependabot's pull requests get a `No-Changelog:` line from the workflow that
+        # rewrites their descriptions. That rewrite runs at the same time as this check and
+        # is made with the workflow token, so it doesn't start a new run of this check. A
+        # run that reads the description first would fail for good.
+        #
         # The author is checked rather than the actor, because an `edited` event's actor
         # is whoever changed the description.
         if: >-
             !(github.event.pull_request.user.login == 'downstream-lean4[bot]'
               && startsWith(github.event.pull_request.base.ref, 'bump/v4.'))
+            && github.event.pull_request.user.login != 'dependabot[bot]'
         runs-on: ubuntu-latest
         steps:
             # A release note entry names the pull requests that made its change in `prs`. This
