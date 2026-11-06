@@ -198,15 +198,16 @@ public meta def _root_.Lean.Doc.Parser.Inline.display_math.expand : InlineExpand
 /--
 Elaborates a top-level block.
 
-Parser error recovery may result in a null node. The null node contains the trees that the block's
-parser built before its parse error. Each tree is elaborated in order as a top-level block that is
-partial syntax.
+Parser error recovery may result in a null node. The null node's first child marks where the block
+starts, and it isn't elaborated. The trees that the block's parser built before its parse error
+follow it, and each is elaborated in order as a top-level block that is partial syntax.
 -/
 public meta def partCommand (cmd : VersoBlock) : PartElabM Unit := do
   modifyThe PartElabM.State ({ · with blockHasMissing := cmd.raw.hasMissing })
   if cmd.raw.isOfKind nullKind then
     for tree in cmd.raw.getArgs do
-      unless tree.isMissing do topLevelBlock ⟨tree⟩
+      unless tree.isMissing || tree.isOfKind `Verso.Parser.recoveredBlockStart do
+        topLevelBlock ⟨tree⟩
   else topLevelBlock cmd
 where
   topLevelBlock (cmd : VersoBlock) : PartElabM Unit :=

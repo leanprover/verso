@@ -48,40 +48,124 @@ where
 
 
 /--
+Returns the node that marks where a recovered block starts, at `pos`.
+
+The node's children are an atom without width at `pos` and `Syntax.missing`. The atom gives
+recovered blocks' syntax a position, even when their parser doesn't leave a tree. `Syntax.missing`
+makes every recovered block partial syntax.
+-/
+private def recoveredBlockStart (c : ParserContext) (pos : String.Pos.Raw) : Syntax :=
+  let here : Substring.Raw := ⟨c.inputString, pos, pos⟩
+  .node .none `Verso.Parser.recoveredBlockStart #[.atom (.original here pos here pos) "", .missing]
+
+/--
 Runs `p`. On a parse error, skips input until one or more complete blank lines have been skipped.
 
-After a parse error, exactly one tree is left on the stack: the partial syntax that `p` built before
-the error, which always includes a `Syntax.missing`.
+After a parse error, exactly one tree is left on the stack: a null node. Its first child, of kind
+`Verso.Parser.recoveredBlockStart`, marks where `p` started and contains `Syntax.missing`. The trees
+that `p` left on the stack follow.
 
-If `p` left multiple items on the stack, or if it left one tree without `Syntax.missing`, the result
-is a null node that contains these items. The node ends with `.missing` if none of the items
-contains one. If `p` left no tree, the result is `Syntax.missing`.
-
-Each tree in a null node elaborates in order as a top-level block that is partial syntax.
+The trees that `p` left are elaborated in order as top-level blocks that are partial syntax.
 -/
 public def recoverPartialBlock (p : ParserFn) : ParserFn :=
   recoverFn p fun rctx =>
     ignoreFn skipBlock >>
-    show ParserFn from fun _ s =>
-      let group (built : Array Syntax) :=
-        let built := if built.any (·.hasMissing) then built else built.push .missing
-        (s.shrinkStack rctx.initialSize).pushSyntax (mkNullNode built)
-      match s.stxStack.extract rctx.initialSize s.stxStack.size with
-      | #[] => s.pushSyntax .missing
-      | #[stx] => if stx.hasMissing then s else group #[stx]
-      | built => group built
+    show ParserFn from fun c s =>
+      let built := s.stxStack.extract rctx.initialSize s.stxStack.size
+      (s.shrinkStack rctx.initialSize).pushSyntax
+        (mkNullNode (#[recoveredBlockStart c rctx.initialPos] ++ built))
+
+private def findIdxRev? {α} (p : α → Bool) (xs : Array α) : Option (Fin xs.size) := do
+  if h : xs.size = 0 then failure
+  else
+    let mut n : Fin xs.size := ⟨xs.size - 1, by grind⟩
+    repeat
+      if p xs[n] then return n
+      if n.val = 0 then
+        break
+      else
+        n := ⟨n.val - 1, by grind⟩
+    failure
+
+/-- Checks whether `stx` contains no atoms, no identifiers and no whitespace. -/
+private partial def isEmptySyntax : Syntax → Bool
+  | .missing => true
+  | .atom .. | .ident .. => false
+  | .node .none _ args | .node (.synthetic ..) _ args => args.all isEmptySyntax
+  | .node (.original leading _ trailing _) _ args =>
+    leading.startPos == leading.stopPos && trailing.startPos == trailing.stopPos &&
+      args.all isEmptySyntax
+
+private def lastNonEmptyIdx? (args : Array Syntax) : Option (Fin args.size) :=
+  findIdxRev? (not ∘ isEmptySyntax) args
 
 /--
-Parses one top-level block of a document and the blank lines after it. On a parse error, it
-recovers with `recoverPartialBlock`. The block command parser `versoBlockCommandFn` uses it for each
-top-level block.
+Sets the trailing whitespace of the last token of `stx` to `trailing`.
 
-The block's final token takes the whitespace after it, so the next block starts at its own first
-token.
+At each node, the last child that isn't empty is the one that gets the whitespace, so a final
+`Syntax.missing` or a final node without tokens is skipped.
+-/
+private partial def updateSyntaxTrailing (trailing : Substring.Raw) : Syntax → Syntax
+  | .atom info val => .atom (info.updateTrailing trailing) val
+  | .ident info rawVal val pre => .ident (info.updateTrailing trailing) rawVal val pre
+  | n@(.node info k args) =>
+    if let some i := lastNonEmptyIdx? args then
+     let last := updateSyntaxTrailing trailing args[i]
+     let args := args.set i last;
+     Syntax.node info k args
+    else n
+  | s => s
+
+/--
+Removes the line break inline at the very end of `block`, if there is one.
+
+The parser adds a final line break inline to blocks that end in a paragraph only when the input ends
+right after said line break. When a blank line follows, the line break is trailing whitespace. This
+workaround removes the line break element, converting it back to trailing whitespace.
+-/
+public partial def dropFinalLinebreak (block : Syntax) : Syntax :=
+  withoutLast block |>.getD block
+where
+  withoutLast : Syntax → Option Syntax
+    | .node info k args => do
+      let i ← lastNonEmptyIdx? args
+      let last := args[i]
+      if last.isOfKind ``Lean.Doc.Parser.Inline.linebreak then
+        pure (.node info k (args.eraseIdx i))
+      else
+        pure (.node info k (args.set i (← withoutLast last)))
+    | _ => none
+
+/--
+Updates the trailing whitespace information in the syntax at the top of the stack based on
+subsequently consumed whitespace.
+-/
+private def updateTrailing : ParserFn := fun c s =>
+  let top := s.stxStack.back
+  let start? :=
+    match top.getTailInfo? with
+    | some (.original (trailing := trailing) ..) => some trailing.startPos
+    | some (.synthetic (endPos := endPos) ..) => some endPos
+    | _ => none
+  if let some start := start? then
+    s.popSyntax.pushSyntax <| updateSyntaxTrailing ⟨c.inputString, start, s.pos⟩ top
+  else
+    s
+
+private def dropFinalLinebreakAtInputEnd : ParserFn := fun c s =>
+  if c.atEnd s.pos then s.popSyntax.pushSyntax (dropFinalLinebreak s.stxStack.back) else s
+
+/--
+Parses one top-level block of a document, the blank lines after it and the indentation of the next
+line. On a parse error, it recovers with `recoverPartialBlock`. The block command parser
+`versoBlockCommandFn` uses it for each top-level block.
 -/
 public def blockCommandRecovery : ParserFn := fun c s =>
   let s := recoverPartialBlock (Lean.Doc.Parser.blockFn { recordTrailing := true }) c s
-  if s.hasError then s else ignoreFn (manyFn blankLine) c s
+  if s.hasError then s
+  else
+    (ignoreFn (manyFn blankLine >> takeWhileFn (· == ' ')) >> dropFinalLinebreakAtInputEnd >>
+      updateTrailing) c s
 
 
 end Verso.Parser
