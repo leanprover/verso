@@ -592,12 +592,19 @@ meta def inst : RoleExpanderOf LeanBlockConfig
       try
         Core.resetMessageLog
         let ((), tree') ← elabInlineLean `Manual.inst arg fun _ => do
-            let e ← Elab.Term.elabTerm (catchExPostpone := true) stx none
-            Term.synthesizeSyntheticMVarsNoPostponing
-            let _ ← Term.levelMVarToParam (← instantiateMVars e)
-            Term.synthesizeSyntheticMVarsNoPostponing
-            -- TODO this is the only difference from the normal inline Lean. Abstract the commonalities out!
-            discard <| Meta.synthInstance e
+            try
+              let e ← Elab.Term.elabTerm (catchExPostpone := true) stx none
+              Term.synthesizeSyntheticMVarsNoPostponing
+              let _ ← Term.levelMVarToParam (← instantiateMVars e)
+              Term.synthesizeSyntheticMVarsNoPostponing
+              -- TODO this is the only difference from the normal inline Lean. Abstract the commonalities out!
+              discard <| Meta.synthInstance e
+            catch ex =>
+              -- A failure joins the messages of the term, which are reported together below. An
+              -- abort signals that its error is already among them.
+              match ex with
+              | .error ref msg => logErrorAt ref msg
+              | .internal id _ => unless isAbortExceptionId id do throw ex
         pure (← Core.getMessageLog, tree')
       finally
         Core.setMessageLog initMsgs

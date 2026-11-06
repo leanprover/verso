@@ -196,3 +196,45 @@ b
 b
 ```
 :::::::
+
+-- The `inst` role accepts a class that has an instance.
+#test_msgs in
+#docs (Genre.Manual) instFound "Test" :=
+:::::::
+There is an instance of {inst}`ToString Nat`.
+:::::::
+
+-- The `inst` role reports the error in a term that fails to elaborate.
+/--
+error: Unknown identifier `NoSuchClass`
+---
+error: No error expected in code block, one occurred
+-/
+#test_msgs in
+#docs (Genre.Manual) instUnknownName "Test" :=
+:::::::
+There is no class named {inst}`NoSuchClass Nat`.
+:::::::
+
+-- The `inst` role reports a class that has no instance.
+/--
+error: failed to synthesize
+  ToString (Nat → Nat)
+
+Hint: Additional diagnostic information may be available using the `set_option diagnostics true` command.
+---
+error: No error expected in code block, one occurred
+-/
+#test_msgs in
+#docs (Genre.Manual) instNotFound "Test" :=
+:::::::
+There is no instance of {inst}`ToString (Nat → Nat)`.
+:::::::
+
+-- With `+error`, the `inst` role accepts both kinds of failure.
+#test_msgs in
+#docs (Genre.Manual) instExpectedError "Test" :=
+:::::::
+There is no instance of {inst +error}`ToString (Nat → Nat)`, and no class named
+{inst +error}`NoSuchClass Nat`.
+:::::::
