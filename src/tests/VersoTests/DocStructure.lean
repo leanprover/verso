@@ -202,6 +202,36 @@ def docTerm : Test :=
 
 end Verso.Tests.DocStructure
 
+namespace Verso.Tests.DocStructure.TitleStrings
+
+#docs (StructuralTesting) inlineMathTitle "Inline Math in a Title" :=
+:::::::
+# $`e^x`
+:::::::
+
+/-
+Headers whose titles are inline math have the math's text as their title strings, without the dollar
+sign and the backticks.
+-/
+/-- info: #["e^x"] -/
+#test_msgs in
+#eval inlineMathTitle.toPart.subParts.map (·.titleString)
+
+#docs (StructuralTesting) displayMathTitle "Display Math in a Title" :=
+:::::::
+# $$`\sum_i x_i`
+:::::::
+
+/-
+Headers whose titles are display math have the math's text as their title strings, without the
+dollar signs and the backticks.
+-/
+/-- info: #["\\sum_i x_i"] -/
+#test_msgs in
+#eval displayMathTitle.toPart.subParts.map (·.titleString)
+
+end Verso.Tests.DocStructure.TitleStrings
+
 namespace Verso.Tests.DocStructure.Errors
 
 /- Errors for badly structured parts. -/
