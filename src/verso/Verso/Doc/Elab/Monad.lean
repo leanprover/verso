@@ -187,7 +187,11 @@ deriving Inhabited
 public structure PartElabM.State where
   partContext : PartContext
   linkDefs : HashMap String (DocDef String) := {}
-  footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
+  /--
+  The footnote definitions, by label. The value of each is a term that denotes the footnote's
+  contents as a function from the document reconstruction data to inlines.
+  -/
+  footnoteDefs : HashMap String (DocDef Term) := {}
   /-- The footnote uses in each footnote's contents, by the footnote's label. -/
   footnoteUses : HashMap String (Array (String × Syntax)) := {}
   /--
@@ -392,18 +396,21 @@ public def PartElabM.nextBlockDefinitionName : PartElabM Name := do
   return blockDefinitionName docConstName (← incrementBlockIndex)
 
 /--
-Elaborates {name}`block`, a term of type {lit}`DocReconstruction g → Block g` for the genre
-{name}`genreSyntax`, and adds it to the environment as the compiled definition {name}`name`.
+Elaborates {name}`value` against the type {name}`typeSyntax`, and adds it to the environment as the
+compiled definition {name}`name`. Returns whether the definition was added.
+
+When {name}`skipIfErrors` is {lean}`true`, a value with elaboration errors is not added.
 
 The term is elaborated with {name}`name` as its declaration name, so the names of auxiliary
-definitions are assigned based on the block definition's name. An error without a position of its
-own is reported at {name}`block`. It is an error for {name}`block` to refer to local variables. The
+definitions are assigned based on the definition's name. An error without a position of its own is
+reported at {name}`value`. It is an error for {name}`value` to refer to local variables. The
 definition has the reducibility hint that Lean gives an ordinary {lit}`def`.
 -/
-def compileBlock (genreSyntax : Term) (name : Name) (block : Term) : TermElabM Unit :=
-  Term.withDeclName name <| withRef block <| withCurrHeartbeats do
-    let mut type ← Term.elabType (← ``(DocReconstruction $genreSyntax → Doc.Block $genreSyntax))
-    let mut blockExpr ← Term.elabTerm block (some type)
+def compileDefinition (typeSyntax : Term) (name : Name) (value : Term) (skipIfErrors := false) :
+    TermElabM Bool :=
+  Term.withDeclName name <| withRef value <| withCurrHeartbeats do
+    let mut type ← Term.elabType typeSyntax
+    let mut valueExpr ← Term.elabTerm value (some type)
 
     -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
     type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
@@ -411,12 +418,14 @@ def compileBlock (genreSyntax : Term) (name : Name) (block : Term) : TermElabM U
     -- Replace any universe metavariables with universe variables; report errors
     type ← Term.levelMVarToParam type
     match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
-    | Except.error msg      => throwErrorAt block msg
+    | Except.error msg      => throwErrorAt value msg
     | Except.ok levelParams =>
       Term.synthesizeSyntheticMVarsNoPostponing
       type ← instantiateMVars type
-      blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
-      let fvars := (collectFVars {} (← instantiateMVars blockExpr)).fvarIds
+      valueExpr ← Term.ensureHasType (some type) (← instantiateMVars valueExpr)
+      valueExpr ← instantiateMVars valueExpr
+      if skipIfErrors && valueExpr.hasSyntheticSorry then return false
+      let fvars := (collectFVars {} valueExpr).fvarIds
       unless fvars.isEmpty do
         let refs := MessageData.joinSep (fvars.map (m!"`{mkFVar ·}`")).toList ", "
         throwError m!"Can't refer to a local variable here (reference to {refs})."
@@ -424,36 +433,53 @@ def compileBlock (genreSyntax : Term) (name : Name) (block : Term) : TermElabM U
         name,
         levelParams,
         type,
-        value := blockExpr,
-        hints := .regular (getMaxHeight (← getEnv) blockExpr + 1),
+        value := valueExpr,
+        hints := .regular (getMaxHeight (← getEnv) valueExpr + 1),
         safety := .safe
       }
 
       -- This is possibly overly defensive (or ineffectual)
       Term.ensureNoUnassignedMVars decl
       withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile decl
+      return true
+
+/--
+Elaborates {name}`block`, a term of type {lit}`DocReconstruction g → Block g` for the genre
+{name}`genreSyntax`, and adds it to the environment as the compiled definition {name}`name`, as
+{name}`compileDefinition` does.
+-/
+def compileBlock (genreSyntax : Term) (name : Name) (block : Term) : TermElabM Unit :=
+  withRef block do
+    let type ← ``(DocReconstruction $genreSyntax → Doc.Block $genreSyntax)
+    discard <| compileDefinition type name block
+
+/--
+Returns the name of the next definition created for the document's blocks or for the contents of
+its footnotes.
+
+The name is assigned based on the context's {name}`DocElabContext.declName`. If the document's
+constant name is a proper prefix of the declaration name, the declaration name is the parent name.
+In that case, the name is the declaration name while the environment doesn't contain it yet. Once
+the environment contains it, the block index counter is incremented, and the name is the block
+definition name that consists of the parent name, {lit}`block` and the counter's value before the
+increment. In all other cases, the name comes from {name}`PartElabM.nextBlockDefinitionName`.
+-/
+def PartElabM.nextDefinitionName : PartElabM Name := do
+  let ctx ← read
+  if ctx.declName == ctx.docConstName || !ctx.docConstName.isPrefixOf ctx.declName then
+    nextBlockDefinitionName
+  else if !(← getEnv).contains ctx.declName then pure ctx.declName
+  else pure (blockDefinitionName ctx.declName (← incrementBlockIndex))
 
 /--
 Creates and compiles the definition of {name}`block` as a function of {name}`param`, and adds the
-block to the current part.
-
-The definition's name is assigned based on the context's {name}`DocElabContext.declName`. If the
-document's constant name is a proper prefix of the declaration name, the declaration name is the
-parent name. In that case, the definition's name is the declaration name while the environment
-doesn't contain it yet. Once the environment contains it, the block index counter is incremented,
-and the definition's name is the block definition name that consists of the parent name,
-{lit}`block` and the counter's value before the increment. In all other cases, the definition's name
-comes from {name}`PartElabM.nextBlockDefinitionName`.
+block to the current part. The definition's name comes from {name}`PartElabM.nextDefinitionName`.
 -/
 def PartElabM.addBlockWithParameter (param : Ident) (block : Term) : PartElabM Unit := do
   let ctx ← read
   let .some docReconstructionPlaceholder := ctx.docReconstructionPlaceholder
     | throwErrorAt block "No doc reconstruction placeholder available"
-  let name ←
-    if ctx.declName == ctx.docConstName || !ctx.docConstName.isPrefixOf ctx.declName then
-      nextBlockDefinitionName
-    else if !(← getEnv).contains ctx.declName then pure ctx.declName
-    else do pure (blockDefinitionName ctx.declName (← incrementBlockIndex))
+  let name ← nextDefinitionName
   compileBlock ⟨ctx.genreSyntax⟩ name (← `(fun $param => $block))
 
   let blockRefSyntax ← ``($(mkCIdent name) $docReconstructionPlaceholder)
@@ -556,32 +582,38 @@ public def DocElabM.addLinkRef (labelStx : VersoRefName) : DocElabM (TSyntax `te
   ``(DocReconstruction.linkUrl $docReconst $(quote label))
 
 /--
-Elaborates a footnote's contents to check them, and reports their errors. Returns {lean}`true` when
-the contents have no errors. The elaborated term is discarded, and the info tree is left unchanged.
+Elaborates a footnote's contents {name}`content` and reports their errors. Returns a term that
+denotes the contents as a function from the document reconstruction data to inlines.
 -/
-def PartElabM.checkFootnoteContents (content : Array (TSyntax `term)) : PartElabM Bool := do
+def PartElabM.elabFootnoteContents (content : Array (TSyntax `term)) : PartElabM Term := do
   let ctx ← readThe DocElabContext
   let .some docReconst := ctx.docReconstructionPlaceholder
     | throwError "No doc reconstruction placeholder available"
   let genre : Term := ⟨ctx.genreSyntax⟩
-  let stx ← ``(fun ($docReconst : DocReconstruction $genre) => (#[$content,*] : Array (Doc.Inline $genre)))
-  let act : TermElabM Bool := withEnableInfoTree false do
-    try
-      let e ← Term.elabTerm stx none
-      Term.synthesizeSyntheticMVarsNoPostponing
-      return !(← instantiateMVars e).hasSyntheticSorry
+  let stx ←
+    ``(fun ($docReconst : DocReconstruction $genre) => (#[$content,*] : Array (Doc.Inline $genre)))
+  let empty ← ``(fun (_ : DocReconstruction $genre) => (#[] : Array (Doc.Inline $genre)))
+  let orEmpty (act : TermElabM Term) : TermElabM Term := do
+    try act
     catch ex =>
       logException ex
-      return false
-  act
+      return empty
+  if ctx.docConstName.isAnonymous then
+    withEnableInfoTree false <| orEmpty do
+      let e ← Term.elabTerm stx none
+      Term.synthesizeSyntheticMVarsNoPostponing
+      return if (← instantiateMVars e).hasSyntheticSorry then empty else stx
+  else
+    let name ← nextDefinitionName
+    let type ← ``(DocReconstruction $genre → Array (Doc.Inline $genre))
+    orEmpty do
+      let compiled ← compileDefinition type name stx (skipIfErrors := true)
+      return if compiled then mkCIdent name else empty
 
 /--
 Records the definition of the footnote whose label is {name}`labelStx`, with the contents
 {name}`content`, which are terms that denote inlines. A second definition of the same label in one
 document is an error.
-
-The contents are checked here, so that their errors appear at the definition. Contents with errors
-are recorded as empty.
 
 {name}`contentUses` are the footnote uses in the contents, each paired with its label.
 -/
@@ -590,8 +622,7 @@ public def PartElabM.addFootnoteDef (labelStx : VersoRefName) (content : Array (
   let label := labelStx.getVersoRefName
   match (← getThe State).footnoteDefs[label]? with
   | none =>
-    let content := if ← checkFootnoteContents content then content else #[]
-    let d ← mkDocDef labelStx content
+    let d ← mkDocDef labelStx (← elabFootnoteContents content)
     modifyThe State fun st => { st with
       footnoteDefs := st.footnoteDefs.insert label d
       footnoteUses := st.footnoteUses.insert label contentUses
@@ -753,7 +784,7 @@ public def FinishedPart.toVersoDoc
     | .none => Json.mkObj []
     | .some table => Json.mkObj [("highlight", table.toExport.toJson)]
 
-  let body ← refTables genreSyntax docReconstructionPlaceholder partElabState finishedSyntax
+  let body ← refTables docReconstructionPlaceholder partElabState finishedSyntax
   ``(VersoDoc.mk (fun $docReconstructionPlaceholder => $body) $(quote reconstJson.compress))
 where
   /--
@@ -762,7 +793,7 @@ where
   Each footnote's contents can use the links. Footnotes are added in the order of
   {name}`footnoteOrder`, so each footnote comes after its footnote dependencies.
   -/
-  refTables (genreSyntax : Term) (docReconst : Ident) (partElabState : PartElabM.State) (body : Term) :
+  refTables (docReconst : Ident) (partElabState : PartElabM.State) (body : Term) :
       TermElabM Term := do
     if partElabState.linkDefs.isEmpty && partElabState.footnoteDefs.isEmpty then
       return body
@@ -770,9 +801,7 @@ where
       ``(($(quote label), $(quote d.val)))
     let footnotes ← (footnoteOrder partElabState).1.filterMapM fun label => do
       let some d := partElabState.footnoteDefs[label]? | return none
-      some <$> ``(($(quote label),
-          fun ($docReconst : DocReconstruction $genreSyntax) =>
-            (#[$(d.val),*] : Array (Doc.Inline $genreSyntax))))
+      some <$> ``(($(quote label), $(d.val)))
     let tables ← ``(DocReconstruction.withDefs $docReconst #[$links,*] #[$footnotes,*])
     `(let $docReconst := $tables
       $body)
