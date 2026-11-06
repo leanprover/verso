@@ -202,8 +202,8 @@ public structure PartElabM.State where
   -/
   nextBlockIndex : Nat := 0
   /--
-  Whether the top-level block being elaborated contains {lean}`Syntax.missing`, which marks where
-  its parser stopped at a parse error. Such a block is partial syntax.
+  Whether the top-level block being elaborated contains {lean}`Syntax.missing`, which marks a block
+  with a parse error. Such a block is partial syntax.
   -/
   blockHasMissing : Bool := false
 deriving Inhabited

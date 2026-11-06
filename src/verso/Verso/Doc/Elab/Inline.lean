@@ -19,7 +19,7 @@ open Verso.ArgParse (SigDoc)
 
 set_option backward.privateInPublic false
 
-/-- The message that reports that no elaborator accepts `stx`. -/
+/-- The message that reports that there is no elaborator for `stx`. -/
 def unexpectedSyntaxMessage (stx : Syntax) : MessageData :=
   m!"unexpected syntax{indentD stx}"
 
@@ -54,7 +54,7 @@ public def elabMissing (empty : Name) (type : Name) : DocElabM (TSyntax `term) :
   ``(sorryAx ($(mkCIdent type) _) (synthetic := true))
 
 /--
-Reports that no elaborator accepts `stx`.
+Reports that there is no elaborator for `stx`.
 
 In a top-level block that contains `Syntax.missing`, `stx` may be a node that the parser left
 unfinished. There, the error is logged at `stx` and the result is the constant `empty`. Elsewhere,

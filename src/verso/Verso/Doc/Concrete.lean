@@ -336,91 +336,6 @@ The Lean command parser automatically skips whitespace and comments, but Lean co
 -/
 meta initialize lastVersoEndPosExt : EnvExtension (Option String.Pos.Raw) ← registerEnvExtension (pure none)
 
-private meta def findIdxRev? {α} (p : α → Bool) (xs : Array α) : Option (Fin xs.size) := do
-  if h : xs.size = 0 then failure
-  else
-    let mut n : Fin xs.size := ⟨xs.size - 1, by grind⟩
-    repeat
-      if p xs[n] then return n
-      if n.val = 0 then
-        break
-      else
-        n := ⟨n.val - 1, by grind⟩
-    failure
-
-/-- Checks whether `stx` contains no atoms, no identifiers and no whitespace. -/
-private meta partial def isEmptySyntax : Syntax → Bool
-  | .missing => true
-  | .atom .. | .ident .. => false
-  | .node .none _ args | .node (.synthetic ..) _ args => args.all isEmptySyntax
-  | .node (.original leading _ trailing _) _ args =>
-    leading.startPos == leading.stopPos && trailing.startPos == trailing.stopPos &&
-      args.all isEmptySyntax
-
-private meta def lastNonEmptyIdx? (args : Array Syntax) : Option (Fin args.size) :=
-  findIdxRev? (not ∘ isEmptySyntax) args
-
-/--
-A version of `Lean.Syntax.updateTrailing` that converts `none` source info into `original` source info.
-
-This is a bit of a hack. Verso's parser concocts tokens that don't exist in the source document in order
-to make it easier to pattern match them with Lean quasiquotations, in a syntax that works in a Lean context.
-These tokens have `none` source info, which `Lean.Syntax.updateTrailing` leaves untouched. Here, though, we need
-them in order to communicate positions between command parses.
--/
-private meta partial def updateSyntaxTrailing (trailing : Substring.Raw) : Syntax → Syntax
-  | .atom info val => .atom (updateInfoTrailing trailing info) val
-  | .ident info rawVal val pre => .ident (updateInfoTrailing trailing info) rawVal val pre
-  | n@(.node info k args) =>
-    if let some i := lastNonEmptyIdx? args then
-     let last := updateSyntaxTrailing trailing args[i]
-     let args := args.set i last;
-     Syntax.node info k args
-    else n
-  | s => s
-where
-  updateInfoTrailing (trailing : Substring.Raw) : SourceInfo → SourceInfo
-    | .original leading pos _ endPos => .original leading pos trailing endPos
-    | .none =>
-      let pos := trailing.startPos
-      .original {trailing with startPos := pos, stopPos := pos} pos trailing pos
-    | info                                     => info
-
-
-private meta partial def getTailContext? (source : String) (stx : Syntax) : Option (String.Pos.Raw × Substring.Raw) :=
-  match stx with
-  | .missing => none
-  | .ident info .. | .atom info .. =>
-    match info with
-    | .none => none
-    | .synthetic _ endPos _ => pure (endPos, ⟨source, endPos, endPos⟩)
-    | .original _ _ trailing endPos => pure (endPos, trailing)
-  | .node info _k args =>
-    match info with
-    | .none => args.findSomeRev? (getTailContext? source)
-    | .synthetic _ endPos _ => pure (endPos, ⟨source, endPos, endPos⟩)
-    | .original _ _ trailing endPos => pure (endPos, trailing)
-
-/--
-Removes the line break inline at the very end of `block`, if there is one.
-
-The parser gives blocks that end in a paragraph a final line break inline only when the input ends
-right after the line break. When a blank line follows, the line break is trailing whitespace. This
-workaround removes the line break element.
--/
-private meta partial def dropFinalLinebreak (block : Syntax) : Syntax :=
-  withoutLast block |>.getD block
-where
-  withoutLast : Syntax → Option Syntax
-    | .node info k args => do
-      let i ← lastNonEmptyIdx? args
-      let last := args[i]
-      if last.isOfKind ``Lean.Doc.Parser.Inline.linebreak then
-        pure (.node info k (args.eraseIdx i))
-      else
-        pure (.node info k (args.set i (← withoutLast last)))
-    | _ => none
-
 /--
 Parses each top-level block as either an `addBlockCmd` or an `addLastBlockCmd`. (This is what
 Verso uses to replace the command parser.)
@@ -431,23 +346,8 @@ private meta def versoBlockCommandFn : ParserFn := fun c s =>
   let s := lastPos? |>.map s.setPos |>.getD s
   let s := blockCommandRecovery c s
   if s.hasError then s
-  else if c.atEnd s.pos then
-    let s := s.popSyntax.pushSyntax (dropFinalLinebreak s.stxStack.back)
-    (updateTrailing c s).mkNode ``addLastBlockCmd iniSz
-  else
-    (updateTrailing c s).mkNode ``addBlockCmd iniSz
-where
-  /--
-  Updates the trailing whitespace information in the syntax at the top of the stack based on
-  subsequently consumed whitespace.
-  -/
-  updateTrailing : ParserFn := fun c s =>
-    let top := s.stxStack.back
-    if let some ⟨_, tr⟩ := getTailContext? c.fileMap.source top then
-      let tr := { tr with stopPos := s.pos }
-      s.popSyntax.pushSyntax <| updateSyntaxTrailing tr top
-    else
-      s
+  else if c.atEnd s.pos then s.mkNode ``addLastBlockCmd iniSz
+  else s.mkNode ``addBlockCmd iniSz
 
 elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => do
   findGenreTm genre
@@ -526,9 +426,40 @@ private meta def finishDoc : Command.CommandElabM Unit:= do
   let ty ← ``(VersoDoc $versoEnv.genreSyntax)
   Command.elabCommand (← `(public def $n : $ty := $doc))
 
-syntax (name := replaceDoc) "#doc " "(" term ") " str " =>" : command
+end Verso.Doc.Concrete
+
+namespace Verso.Parser
+
+open Lean Parser
+
+/--
+Succeeds with a node without children at the end of the input, and fails elsewhere. It doesn't
+consume input.
+
+The `#doc` command's syntax ends with this node exactly when the document has no blocks.
+-/
+public meta def emptyDocument : Parser :=
+  withAntiquot (mkAntiquot "emptyDocument" `Verso.Parser.emptyDocument) {
+    fn := fun c s =>
+      if c.atEnd s.pos then s.mkNode `Verso.Parser.emptyDocument s.stackSize
+      else s.mkError "end of input"
+  }
+
+@[combinator_parenthesizer emptyDocument]
+def emptyDocument.parenthesizer := PrettyPrinter.Parenthesizer.visitArgs (pure ())
+
+@[combinator_formatter emptyDocument]
+def emptyDocument.formatter := PrettyPrinter.Formatter.visitArgs (pure ())
+
+end Verso.Parser
+
+namespace Verso.Doc.Concrete
+
+open Lean Verso Parser Doc Elab
+
+syntax (name := replaceDoc) "#doc " "(" term ") " str " =>" (emptyDocument)? : command
 elab_rules : command
-  | `(command|#doc ( $genreSyntax:term ) $title:str =>%$tok) => open Lean Parser Elab Command in do
+  | `(command|#doc ( $genreSyntax:term ) $title:str =>%$tok $[$empty]?) => open Lean Parser Elab Command in do
   startDoc genreSyntax title
 
   -- Sets up basic incremental evaluation of documents by replacing Lean's command-by-command parser
@@ -536,23 +467,17 @@ elab_rules : command
   modifyEnv fun env => originalCatParserExt.setState env (categoryParserFnExtension.getState env)
   replaceCategoryParser `command versoBlockCommandFn
 
-  if let some stopPos := tok.getTailPos? then
-    let txt ← getFileMap
-
+  if let some trailing := tok.getTrailing? then
     -- Edge case: if there's a Lean comment right after `#doc`, then the Lean command parser will skip
-    -- it. We need to tell the Verso parser to start parsing at the first block's first token, after
-    -- skipping blank lines and indentation only.
-    let mut pos := txt.source.pos! stopPos
-    while h : pos ≠ txt.source.endPos do
-      if pos.get h == ' ' || pos.get h == '\n' then
-        pos := pos.next h
-      else break
-    modifyEnv fun env => lastVersoEndPosExt.setState env (some pos.offset)
+    -- it as part of the whitespace after `=>`. We need to tell the Verso parser to start parsing at
+    -- the first block's first token, after skipping blank lines and indentation only.
+    let pos := (trailing.dropWhile fun c => c == ' ' || c == '\n').startPos
+    modifyEnv fun env => lastVersoEndPosExt.setState env (some pos)
 
-    -- Edge case: if there's no blocks after the =>, the replacement command parser won't get called,
-    -- so we detect that case and call finishDoc.
-    if stopPos.extract txt.source txt.source.rawEndPos |>.all Char.isWhitespace then
-      finishDoc
+  -- Edge case: if there are no blocks after the =>, the replacement command parser isn't called, so
+  -- this command finishes the document. Its syntax ends with `emptyDocument` exactly in this case.
+  if empty.isSome then
+    finishDoc
 
 open Command in
 /--
