@@ -267,6 +267,33 @@ After.
 "
 
 /-
+This test checks that math with a parse error in a header adds nothing to the part's title string,
+so the title string is the text before the math.
+-/
+/--
+info: 6:8: unexpected token '`'; expected '`'
+defined, depends on sorryAx: false
+Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Notes"]
+  "Notes"
+  none
+  #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "Before."]]
+  #[Verso.Doc.Part.mk
+      #[Verso.Doc.Inline.text "Head ", Verso.Doc.Inline.concat #[]]
+      "Head "
+      none
+      #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "After."]]
+      #[]]
+-/
+#test_msgs in
+#elab_doc "Before.
+
+# Head $`e^x
+
+After.
+"
+
+/-
 This test checks that a metadata block with a parse error sets no metadata. The document has no
 error other than the parse error.
 -/
