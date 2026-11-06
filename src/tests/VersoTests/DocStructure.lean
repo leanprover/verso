@@ -236,6 +236,12 @@ namespace Verso.Tests.DocStructure.Errors
 
 /- Errors for badly structured parts. -/
 
+/-
+As error recovery, headers with wrong nesting open parts at depth one greater than their parent.
+
+This implies that the text after recovery is in that part, with later headers nesting relative to it.
+-/
+
 /--
 error: Wrong header nesting - got ### but expected at most ##
 -/
@@ -247,7 +253,26 @@ error: Wrong header nesting - got ### but expected at most ##
 ### Too Deep
 
 Text.
+
+### Deeper
+
+Text in deeper.
 :::::::
+
+/--
+info: part "Wrong Nesting"
+  blocks: 0
+  part "One"
+    blocks: 0
+    part "Too Deep"
+      blocks: 1
+      - para: Text.
+      part "Deeper"
+        blocks: 1
+        - para: Text in deeper.
+-/
+#test_msgs in
+#eval IO.print (renderPart wrongNesting.toPart)
 
 /--
 error: Wrong header nesting - got ### but expected at most ##
@@ -349,11 +374,26 @@ tag := "second"
 %%%
 :::::::
 
+open Lean Verso.Doc.Elab in
+/-- A role that logs a message when it is elaborated. It elaborates to its contents. -/
+@[role]
+def logged : RoleExpanderOf Unit
+  | (), contents => do
+    logInfo "The role was elaborated."
+    ``(Verso.Doc.Inline.concat #[$(← contents.mapM elabInline),*])
+
+/-
+A block after a sub-part is reported and elaborated, so the message from the role in it appears. The
+block is not in the document: the root part has only the paragraph before the include.
+-/
+
 /--
 error: Block content found in a context where a header was expected.
 
 
 Note: A document part (section/chapter/etc) consists of a header, followed by zero or more blocks, followed by zero or more sub-parts. This block occurs after a sub-part (namely `VersoTests.DocStructure.Included`), but outside of the sub-parts.
+---
+info: The role was elaborated.
 -/
 #test_msgs in
 #docs (StructuralTesting) contentAfterInclude "Content After an Include" :=
@@ -362,8 +402,12 @@ Text.
 
 {include VersoTests.DocStructure.Included}
 
-More text.
+More text {logged}[about leaves].
 :::::::
+
+/-- info: 1 -/
+#test_msgs in
+#eval contentAfterInclude.toPart.content.size
 
 /--
 error: Block content found in a context where a header was expected.

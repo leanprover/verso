@@ -167,10 +167,16 @@ info: The document is defined: true
   logInfo ("\n".intercalate positions)
   logInfo m!"The document is defined: {env.contains (docName (← getMainModule))}"
 
-/-- A directive whose expander throws an error. -/
-@[directive]
-def failing : DirectiveExpanderOf Unit
-  | (), _ => throwError "The directive fails."
+/--
+A part command that throws an error for the directive {lit}`failing`, so that the directive's
+top-level block fails.
+-/
+@[part_command Lean.Doc.Parser.Block.directive]
+def failingDirective : PartCommand
+  | .directive v => do
+    unless v.name.getId == `failing do throwUnsupportedSyntax
+    throwError "The directive fails."
+  | _ => throwUnsupportedSyntax
 
 /-- A directive that elaborates to an empty paragraph. -/
 @[directive]
@@ -249,7 +255,7 @@ Definitions under the document's name: 5 of 6
 Each is the same as without the failure: true
 -/
 #test_msgs in
-#eval do compareWithSuccess failureInput (docName (← getMainModule)) ``failing
+#eval do compareWithSuccess failureInput (docName (← getMainModule)) `failing
 
 /-
 The same holds in a {lit}`#docs` document, whose blocks are all elaborated in one command.
@@ -263,7 +269,7 @@ Definitions under the document's name: 5 of 6
 Each is the same as without the failure: true
 -/
 #test_msgs in
-#eval compareWithSuccess failureDocsInput `failureDocs ``failing
+#eval compareWithSuccess failureDocsInput `failureDocs `failing
 
 /--
 A role that elaborates to the name of the declaration that its expander runs under. The text is in a
