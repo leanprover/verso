@@ -36,10 +36,6 @@ example := 34 * x
 
 /--
 error: Unknown identifier `z`
----
-error: Unknown identifier `z`
----
-error: No error expected in code block, one occurred
 -/
 #test_msgs in
 #docs (Genre.Manual) fail "Test" :=
@@ -70,7 +66,7 @@ info: (some (Verso.Genre.Manual.InlineLean.Inline.lean, [{"seq":
      {"tok":
       {"kind":
        {"operator":
-        {"occurrence": "«term_+_»-840",
+        {"occurrence": "«term_+_»-749",
          "name": ["term_+_"],
          "docs":
          "`a + b` computes the sum of `a` and `b`.\nThe meaning of this notation is type-dependent.\n\nConventions for notations in identifiers:\n\n * The recommended spelling of `+` in identifiers is `add`."}},
@@ -207,8 +203,6 @@ There is an instance of {inst}`ToString Nat`.
 -- The `inst` role reports the error in a term that fails to elaborate.
 /--
 error: Unknown identifier `NoSuchClass`
----
-error: No error expected in code block, one occurred
 -/
 #test_msgs in
 #docs (Genre.Manual) instUnknownName "Test" :=
@@ -222,13 +216,56 @@ error: failed to synthesize
   ToString (Nat → Nat)
 
 Hint: Additional diagnostic information may be available using the `set_option diagnostics true` command.
----
-error: No error expected in code block, one occurred
 -/
 #test_msgs in
 #docs (Genre.Manual) instNotFound "Test" :=
 :::::::
 There is no instance of {inst}`ToString (Nat → Nat)`.
+:::::::
+
+-- `leanTerm` blocks report each error once, like a `lean` block.
+/--
+error: Unknown identifier `z`
+-/
+#test_msgs in
+#docs (Genre.Manual) leanTermFail "Test" :=
+:::::::
+```leanTerm
+z + 1
+```
+:::::::
+
+-- With `+error`, a `leanTerm` block accepts an error and records it under the provided name.
+#test_msgs in
+#docs (Genre.Manual) leanTermExpectedError "Test" :=
+:::::::
+```leanTerm +error (name := noZ)
+z + 1
+```
+```leanOutput noZ
+Unknown identifier `z`
+```
+:::::::
+
+-- With `+error`, a `leanTerm` block without an error is reported.
+/--
+error: Error expected in code block, but none occurred
+-/
+#test_msgs in
+#docs (Genre.Manual) leanTermNoExpectedError "Test" :=
+:::::::
+```leanTerm +error
+1 + 1
+```
+:::::::
+
+-- A `leanTerm` block elaborates its term with the names in `universes`.
+#test_msgs in
+#docs (Genre.Manual) leanTermUniverses "Test" :=
+:::::::
+```leanTerm (universes := "u")
+Type u
+```
 :::::::
 
 -- With `+error`, the `inst` role accepts both kinds of failure.

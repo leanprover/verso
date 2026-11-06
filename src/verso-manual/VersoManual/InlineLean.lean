@@ -144,36 +144,46 @@ where
     | _ => false
 
 /--
-Report messages that result from elaboration of inline Lean.
+Reports the messages that result from elaborating Lean code in a document.
 
-Messages that don't require immediate attention are logged silently to reduce the amount of
-irrelevant output in build logs.
+Messages that don't require immediate attention are logged silently, which keeps them out of build
+logs.
 
-If `errorExpected` is `none`, then the messages are logged as-is, and errors are not silent. If it
-is `some false`, then the author expected no errors; in this case, messages are logged as in the
-`none` case and an additional error is thrown. If it is `some true`, then errors are downgraded to
-warnings and all messages are logged silently.
+If `errorExpected` is `false`, then errors are logged as they are and all other messages are logged
+silently.
+
+If `errorExpected` is `true`, then errors are downgraded to warnings and all messages are logged
+silently. Furthermore, an error is thrown at `blame` when the message log doesn't contain an error.
 -/
 meta def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
-    (errorExpected : Option Bool) (blame : Syntax) (messages : MessageLog) :
+    (errorExpected : Bool) (blame : Syntax) (messages : MessageLog) :
     m Unit := do
-  match errorExpected with
-  | none =>
-    for msg in messages.toArray do
-      logMessage {msg with
-        isSilent := msg.isSilent || msg.severity != .error
-      }
-  | some true =>
+  if errorExpected then
     if messages.hasErrors then
       for msg in messages.errorsToWarnings.toArray do
         logMessage {msg with isSilent := true}
     else
       throwErrorAt blame "Error expected in code block, but none occurred"
-  | some false =>
+  else
     for msg in messages.toArray do
       logMessage {msg with isSilent := msg.isSilent || msg.severity != .error}
-    if messages.hasErrors then
-      throwErrorAt blame "No error expected in code block, one occurred"
+
+/--
+Saves the messages of Lean code in a document under the code's name and reports them.
+
+The messages that are not silent are saved under `name?`, where `leanOutput` blocks find them. All
+messages are then reported as `reportMessages` describes.
+-/
+meta def saveAndReportMessages
+    (name? : Option Name) (errorExpected : Bool) (blame : Syntax) (messages : MessageLog) :
+    DocElabM Unit := do
+  if let some name := name? then
+    let msgs ← messages.toList.filter (!·.isSilent) |>.mapM fun (msg : Message) => do
+      let head := if msg.caption != "" then msg.caption ++ ":\n" else ""
+      let msg ← highlightMessage msg
+      pure { msg with contents := .append #[.text head, msg.contents] }
+    saveOutputs name msgs
+  reportMessages errorExpected blame messages
 
 def reconstructHighlight (docReconst : DocReconstruction g) (key : Export.Key) :=
   match docReconst.highlightDeduplication.toHighlighted key with
@@ -290,6 +300,87 @@ meta def elabInlineLean (elaborator : Name) (stx : Syntax) (act : Array Expr →
     TermElabM (α × InfoTree) :=
   runWithOpenDecls <| withInlineLeanInfoTree elaborator stx <| runWithVariables act
 
+/--
+Elaborates the term `stx` and applies `act` to the resulting expression, collecting the messages.
+
+The term is elaborated against the expected type `type?` when there is one, with the names in
+`universes?` as universe parameters. `act` runs in the context of the term, and only when
+elaboration succeeds (that is, when it does not log an error). If either elaboration or `act` throws
+an exception, it is caught and added to the message log.
+
+If elaboration and `act` both succeed, then the result of `act` is returned. This is paired with the
+info tree and message log produced during elaboration. The messages in the log are not added to the
+surrounding message log; callers should report them appropriately.
+-/
+private meta def elabTermCollectingMessages
+    (elaborator : Name) (ref : Syntax) (stx : Syntax) (type? universes? : Option StrLit)
+    (act : Expr → TermElabM α) :
+    TermElabM (Option α × InfoTree × MessageLog) := do
+  let leveller : TermElabM Expr → TermElabM Expr :=
+    if let some us := universes? then
+      let us :=
+        us.getString.splitOn " " |>.filterMap fun (s : String) =>
+          if s.isEmpty then none else some s.toName
+      Elab.Term.withLevelNames us
+    else id
+  let initMsgs ← Core.getMessageLog
+  try
+    Core.resetMessageLog
+    let (value?, tree) ← elabInlineLean elaborator ref fun _ => do
+      try
+        let expectedType ← type?.mapM fun (s : StrLit) => do
+          match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
+          | .error e => throwErrorAt s e
+          | .ok stx => withEnableInfoTree false do
+            let t ← leveller <| Elab.Term.elabType stx
+            Term.synthesizeSyntheticMVarsNoPostponing
+            let t ← instantiateMVars t
+            if t.hasExprMVar || t.hasLevelMVar then
+              throwErrorAt s "Type contains metavariables: {t}"
+            pure t
+        let e ← leveller <| Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
+        Term.synthesizeSyntheticMVarsNoPostponing
+        let e ← Term.levelMVarToParam (← instantiateMVars e)
+        Term.synthesizeSyntheticMVarsNoPostponing
+        if (← Core.getMessageLog).hasErrors then pure none
+        else some <$> act (← instantiateMVars e)
+      catch ex =>
+        -- An abort signals that its error is already logged.
+        match ex with
+        | .error ref msg => logErrorAt ref msg; pure none
+        | .internal id _ => if isAbortExceptionId id then pure none else throw ex
+    pure (value?, tree, ← Core.getMessageLog)
+  finally
+    Core.setMessageLog initMsgs
+
+/--
+Elaborates a Lean term in a document, reports its messages, and highlights it.
+
+The term is the contents of the code literal `term`. It is elaborated in the scope that the
+document's Lean code has established, against the expected type `type?` when there is one, with the
+names in `universes?` as universe parameters. If elaboration succeeds, then `act` is applied to the
+resulting expression in the same context.
+
+If elaboration or `act` throws an error, it is logged, and the resulting value is `none`. Otherwise,
+the value of `act` is returned. The highlighted term is always returned. Messages are saved and
+reported according to `config`, specifically its name field and error flag. The messages that are
+not silent are part of the highlighted term.
+
+-/
+meta def elabLeanTerm [Literal k]
+    (elaborator : Name) (config : LeanBlockConfig) (ref : Syntax) (term : TSyntax k)
+    (type? universes? : Option StrLit) (act : Expr → TermElabM α) :
+    DocElabM (Option α × Highlighted) :=
+  -- Async elab is turned off to make sure that info trees and messages are available when highlighting
+  withoutAsync do
+    let stx ← parseStrLitAsCategory `term term
+    let (value?, tree, messages) ←
+      elabTermCollectingMessages elaborator ref stx type? universes? act
+    saveAndReportMessages config.name config.error term messages
+    let shown := messages.toArray.filter (!·.isSilent)
+    let hls ← highlight stx shown (PersistentArray.empty.push tree)
+    pure (value?, hls)
+
 meta def elabCommands [Literal k] (config : LeanBlockConfig) (str : TSyntax k)
     (toHighlightedLeanContent :
       (shouldShow : Bool) → (hls : Highlighted) → (str : TSyntax k) → DocElabM Term)
@@ -383,16 +474,7 @@ meta def elabCommands [Literal k] (config : LeanBlockConfig) (str : TSyntax k)
       if !config.keep then
         setEnv origEnv
 
-      if let some name := config.name then
-        let nonSilentMsgs := cmdState.messages.toList.filter (!·.isSilent)
-        let msgs ← nonSilentMsgs.mapM fun (msg : Message) => do
-          let head := if msg.caption != "" then msg.caption ++ ":\n" else ""
-          let msg ← highlightMessage msg
-          pure { msg with contents := .append #[.text head, msg.contents] }
-
-        saveOutputs name msgs
-
-      reportMessages config.error str cmdState.messages
+      saveAndReportMessages config.name config.error str cmdState.messages
 
 where
   runCommand (act : Command.CommandElabM Unit) (stx : Syntax)
@@ -437,59 +519,10 @@ Elaborates the provided Lean term in the context of the current Verso module.
 -/
 @[code_block]
 meta def leanTerm : CodeBlockExpanderOf LeanInlineConfig
-  | config, str => withoutAsync <| do
-
-    let leveller :=
-      if let some us := config.universes then
-        let us :=
-          us.getString.splitOn " " |>.filterMap fun (s : String) =>
-            if s.isEmpty then none else some s.toName
-        Elab.Term.withLevelNames us
-      else id
-    let stx ← parseStrLitAsCategory `term str
-    let (newMsgs, tree) ← do
-      let initMsgs ← Core.getMessageLog
-      try
-        Core.resetMessageLog
-
-        let ((), tree') ← elabInlineLean `Manual.leanTerm str fun _vars => do
-            let expectedType ← config.type.mapM fun (s : StrLit) => do
-              match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
-              | .error e => throwErrorAt stx e
-              | .ok stx => withEnableInfoTree false do
-                let t ← leveller <| Elab.Term.elabType stx
-                Term.synthesizeSyntheticMVarsNoPostponing
-                let t ← instantiateMVars t
-                if t.hasExprMVar || t.hasLevelMVar then
-                  throwErrorAt s "Type contains metavariables: {t}"
-                pure t
-
-            let e ← Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
-            Term.synthesizeSyntheticMVarsNoPostponing
-            let _ ← Term.levelMVarToParam (← instantiateMVars e)
-        pure (← Core.getMessageLog, tree')
-      finally
-        Core.setMessageLog initMsgs
-
-    if let some name := config.name then
-      let msgs ← newMsgs.toList.mapM fun (msg : Message) => do
-        let head := if msg.caption != "" then msg.caption ++ ":\n" else ""
-        let msg ← highlightMessage msg
-        pure { msg with contents := .append #[.text head, msg.contents] }
-
-      saveOutputs name msgs
-
-    if config.error then
-      if newMsgs.hasErrors then
-        for msg in newMsgs.errorsToWarnings.toArray do
-          logMessage msg
-      else
-        throwErrorAt str "Error expected in code, but none occurred"
-    else
-      for msg in newMsgs.toArray do
-        logMessage msg
-
-    let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
+  | config, str => do
+    let (_, hls) ←
+      elabLeanTerm `Manual.leanTerm config.toLeanBlockConfig str str config.type config.universes
+        fun _ => pure ()
     toHighlightedLeanBlock config.show hls str
 
 /--
@@ -497,79 +530,22 @@ Elaborates the provided Lean term in the context of the current Verso module.
 -/
 @[role lean]
 meta def leanInline : RoleExpanderOf LeanInlineConfig
-  -- Async elab is turned off to make sure that info trees and messages are available when highlighting
-  | config, inlines => withoutAsync do
+  | config, inlines => do
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
     let some { content := term, .. } := CodeView.of arg
       | throwErrorAt arg "Expected code literal with the example name"
 
-    let leveller :=
-      if let some us := config.universes then
-        let us :=
-          us.getString.splitOn " " |>.filterMap fun (s : String) =>
-            if s.isEmpty then none else some s.toName
-        Elab.Term.withLevelNames us
-      else id
+    let (type?, hls) ←
+      elabLeanTerm `Manual.leanInline config.toLeanBlockConfig arg term config.type config.universes
+        fun e => do
+          let t ← Meta.inferType e >>= instantiateMVars >>= (Meta.ppExpr ·)
+          pure <| Std.Format.group <| (← Meta.ppExpr e) ++ (" :" ++ .line) ++ t
 
-    let stx ← parseStrLitAsCategory `term term
-    let (newMsgs, type, tree) ← do
-      let initMsgs ← Core.getMessageLog
-      try
-        Core.resetMessageLog
-        let (t, tree') ← elabInlineLean `Manual.leanInline arg fun _ => do
-
-            let expectedType ← config.type.mapM fun (s : StrLit) => do
-              match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
-              | .error e => throwErrorAt term e
-              | .ok stx => withEnableInfoTree false do
-                let t ← leveller <| Elab.Term.elabType stx
-                Term.synthesizeSyntheticMVarsNoPostponing
-                let t ← instantiateMVars t
-                if t.hasExprMVar || t.hasLevelMVar then
-                  throwErrorAt s "Type contains metavariables: {t}"
-                pure t
-
-            let e ← leveller <| Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
-            Term.synthesizeSyntheticMVarsNoPostponing
-            let e ← Term.levelMVarToParam (← instantiateMVars e)
-            let t ← Meta.inferType e >>= instantiateMVars >>= (Meta.ppExpr ·)
-            let t := Std.Format.group <| (← Meta.ppExpr e) ++ (" :" ++ .line) ++ t
-
-            Term.synthesizeSyntheticMVarsNoPostponing
-            pure t
-        pure (← Core.getMessageLog, t, tree')
-      finally
-        Core.setMessageLog initMsgs
-
-    if let some name := config.name then
-
-      let msgs ← newMsgs.toList.mapM fun (msg : Message) => do
-        let head := if msg.caption != "" then msg.caption ++ ":\n" else ""
-        let msg ← highlightMessage msg
-        pure { msg with contents := .append #[.text head, msg.contents] }
-
-      saveOutputs name msgs
-
-    if let some v := RoleView.of ⟨← getRef⟩ then
-      Hover.addCustomHover (mkNullNode #[v.braceOpen, v.braceClose]) type
-      Hover.addCustomHover v.name type
-
-    if config.error then
-      if newMsgs.hasErrors then
-        for msg in newMsgs.errorsToWarnings.toArray do
-          logMessage {msg with isSilent := true}
-      else
-        throwErrorAt term "Error expected in code block, but none occurred"
-    else
-      for msg in newMsgs.toArray do
-        logMessage {msg with
-          isSilent := msg.isSilent || msg.severity != .error
-        }
-
-    reportMessages config.error term newMsgs
-
-    let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
+    if let some type := type? then
+      if let some v := RoleView.of ⟨← getRef⟩ then
+        Hover.addCustomHover (mkNullNode #[v.braceOpen, v.braceClose]) type
+        Hover.addCustomHover v.name type
 
     toHighlightedLeanInline config.show hls term
 
@@ -579,47 +555,14 @@ Elaborates the provided term in the current Verso context, then ensures that it'
 -/
 @[role]
 meta def inst : RoleExpanderOf LeanBlockConfig
-  | config, inlines => withoutAsync <| do
+  | config, inlines => do
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
     let some { content := term, .. } := CodeView.of arg
       | throwErrorAt arg "Expected code literal with the example name"
 
-    let stx ← parseStrLitAsCategory `term term
-
-    let (newMsgs, tree) ← do
-      let initMsgs ← Core.getMessageLog
-      try
-        Core.resetMessageLog
-        let ((), tree') ← elabInlineLean `Manual.inst arg fun _ => do
-            try
-              let e ← Elab.Term.elabTerm (catchExPostpone := true) stx none
-              Term.synthesizeSyntheticMVarsNoPostponing
-              let _ ← Term.levelMVarToParam (← instantiateMVars e)
-              Term.synthesizeSyntheticMVarsNoPostponing
-              -- TODO this is the only difference from the normal inline Lean. Abstract the commonalities out!
-              discard <| Meta.synthInstance e
-            catch ex =>
-              -- A failure joins the messages of the term, which are reported together below. An
-              -- abort signals that its error is already among them.
-              match ex with
-              | .error ref msg => logErrorAt ref msg
-              | .internal id _ => unless isAbortExceptionId id do throw ex
-        pure (← Core.getMessageLog, tree')
-      finally
-        Core.setMessageLog initMsgs
-
-    if let some name := config.name then
-      let msgs ← newMsgs.toList.mapM fun (msg : Message) => do
-        let head := if msg.caption != "" then msg.caption ++ ":\n" else ""
-        let msg ← highlightMessage msg
-        pure { msg with contents := .append #[.text head, msg.contents] }
-
-      saveOutputs name msgs
-
-    reportMessages config.error term newMsgs
-
-    let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
+    let (_, hls) ←
+      elabLeanTerm `Manual.inst config arg term none none fun e => discard <| Meta.synthInstance e
 
     toHighlightedLeanInline config.show hls term
 
