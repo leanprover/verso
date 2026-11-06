@@ -19,6 +19,39 @@ namespace Verso.Doc.Concrete
 
 open Lean Verso Parser Doc Elab
 
+/--
+Ends the trailing whitespace of the token at the top of the stack before the first character that
+isn't a space or a line break.
+
+Callers apply it to the token that opens Verso text. The function moves the position back to the
+token's end before it reads spaces and line breaks, so that a Lean comment right after the token is
+parsed as Verso text, as it is anywhere else in Verso text.
+-/
+private meta def versoWhitespaceFn : ParserFn := fun c s =>
+  match s.stxStack.back with
+  | token@(.atom (.original _ _ trailing endPos) _) =>
+    let s := Lean.Doc.Parser.lineTailWsFn c (s.setPos endPos)
+    s.popSyntax.pushSyntax (token.updateTrailing { trailing with stopPos := s.pos })
+  | _ => s
+
+/--
+Parses the `=>` that opens the document of a `#doc` command or term. A Lean comment right after it
+is part of the document.
+-/
+public meta def docArrow : Parser where
+  info := (symbol " =>").info
+  fn := (symbol " =>").fn >> versoWhitespaceFn
+
+@[combinator_parenthesizer docArrow]
+def docArrow.parenthesizer :=
+  PrettyPrinter.Parenthesizer.tokenWithAntiquot.parenthesizer
+    (PrettyPrinter.Parenthesizer.symbolNoAntiquot.parenthesizer " =>")
+
+@[combinator_formatter docArrow]
+def docArrow.formatter :=
+  PrettyPrinter.Formatter.tokenWithAntiquot.formatter
+    (PrettyPrinter.Formatter.symbolNoAntiquot.formatter " =>")
+
 /-- The text of the delimiter that opened a document. -/
 private meta def openerText : Syntax → String
   | .node _ _ #[stx] => openerText stx
@@ -82,7 +115,7 @@ The contents reach to the closing delimiter, which is found before they are read
 ends where its input does and a stray character in it is reported where it occurs.
 -/
 public meta def document : Parser where
-  fn := atomicFn fun c s =>
+  fn := atomicFn <| andthenFn versoWhitespaceFn fun c s =>
     let openerStx := s.stxStack.back
     let opener := openerText openerStx
     if opener.isEmpty || opener.any (· ≠ ':') then
@@ -114,7 +147,7 @@ private meta def document.blocks (text : TSyntax ``document) : Array VersoBlock 
   text.raw.getArgs.map (⟨·⟩)
 
 public meta def termDocument : Parser where
-  fn := (atomicFn doc) >> whitespace
+  fn := atomicFn (versoWhitespaceFn >> doc) >> whitespace
 where
   doc : ParserFn := fun c s =>
     let opener := s.stxStack.back
@@ -349,7 +382,7 @@ private meta def versoBlockCommandFn : ParserFn := fun c s =>
   else if c.atEnd s.pos then s.mkNode ``addLastBlockCmd iniSz
   else s.mkNode ``addBlockCmd iniSz
 
-elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => do
+elab (name := docTerm') "#doc" "(" genre:term ")" title:str docArrow text:completeDocument eoi : term => do
   findGenreTm genre
   let endPos := (← getFileMap).source.rawEndPos
   let blocks := completeDocument.blocks text
@@ -457,7 +490,8 @@ namespace Verso.Doc.Concrete
 
 open Lean Verso Parser Doc Elab
 
-syntax (name := replaceDoc) "#doc " "(" term ") " str " =>" (emptyDocument)? : command
+syntax (name := replaceDoc) "#doc " "(" term ") " str docArrow (emptyDocument)? : command
+
 elab_rules : command
   | `(command|#doc ( $genreSyntax:term ) $title:str =>%$tok $[$empty]?) => open Lean Parser Elab Command in do
   startDoc genreSyntax title
@@ -467,12 +501,9 @@ elab_rules : command
   modifyEnv fun env => originalCatParserExt.setState env (categoryParserFnExtension.getState env)
   replaceCategoryParser `command versoBlockCommandFn
 
-  if let some trailing := tok.getTrailing? then
-    -- Edge case: if there's a Lean comment right after `#doc`, then the Lean command parser will skip
-    -- it as part of the whitespace after `=>`. We need to tell the Verso parser to start parsing at
-    -- the first block's first token, after skipping blank lines and indentation only.
-    let pos := (trailing.dropWhile fun c => c == ' ' || c == '\n').startPos
-    modifyEnv fun env => lastVersoEndPosExt.setState env (some pos)
+  -- The document's first block starts after the arrow's trailing whitespace.
+  if let some contentStart := tok.getTrailingTailPos? then
+    modifyEnv fun env => lastVersoEndPosExt.setState env (some contentStart)
 
   -- Edge case: if there are no blocks after the =>, the replacement command parser isn't called, so
   -- this command finishes the document. Its syntax ends with `emptyDocument` exactly in this case.
