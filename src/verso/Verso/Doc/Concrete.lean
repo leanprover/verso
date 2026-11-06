@@ -13,11 +13,22 @@ public import Verso.Doc.Elab
 public meta import Verso.Doc.Elab.Monad
 import Verso.Doc.Concrete.InlineString
 public import Verso.Doc.Concrete.Environment
+public meta import Verso.Doc.Concrete.BlockOutline
 import Verso.Doc.Lsp
 
 namespace Verso.Doc.Concrete
 
 open Lean Verso Parser Doc Elab
+
+/--
+Traces the block outline of each top-level block of a `#doc` command, as a JSON value. The value
+gives the local time at which the block is elaborated, in UTC when the local time zone is unknown,
+and whether the block's syntax contains `Syntax.missing`. It also gives each block syntax node's
+kind, source range, block size, a digest of its source text, and whether the node's syntax contains
+`Syntax.missing`. The block size of a block syntax node is the number of block syntax nodes in its
+syntax, including itself. List items and description list items count as blocks.
+-/
+initialize registerTraceClass `Elab.Verso.blocks
 
 /-- The text of the delimiter that opened a document. -/
 private meta def openerText : Syntax → String
@@ -503,6 +514,15 @@ private meta def startDoc (genreSyntax : Term) (title: StrLit) : Command.Command
     PartElabM.setTitle titleString (← titleParts.mapM (elabInline ⟨·⟩))
 
 private meta def runVersoBlock (block : VersoBlock) : Command.CommandElabM Unit := do
+  if ← isTracingEnabledFor `Elab.Verso.blocks then
+    -- The time in the message distinguishes a newly elaborated block's message from the unchanged
+    -- copy that the language server reports again for a reused command. The message is reported at
+    -- the range of the block's text, and at the block's syntax when that text has no range.
+    let msg ← BlockOutline.describeElaborated (← getFileMap) block
+    let ref := match BlockOutline.blockTextRange? block with
+      | some r => Syntax.atom (.synthetic r.start r.stop) ""
+      | none => block.raw
+    withRef ref do trace[Elab.Verso.blocks] msg
   let name ← runPartElabInEnv PartElabM.nextBlockDefinitionName
   runPartElabInEnv <| elabTopLevelBlock name block
 

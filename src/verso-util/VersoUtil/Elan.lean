@@ -104,6 +104,21 @@ public def getSpawnArgsForToolchain (projectDir : System.FilePath) (toolchain : 
     env := filteredLakeVars ++ env,
   }
 
+/--
+Returns the arguments for spawning {lit}`lake` with {name}`args` in the directory {name}`cwd`.
+
+The function is for running Lake in the workspace that the calling process was started in, with the
+toolchain that {lit}`lake` selects there. If {name}`cwd` is {name}`none`, Lake runs in the current
+directory. The environment variables that an outer Lake process sets for its subprocesses are
+cleared, so the spawned Lake doesn't inherit them. If {name}`restoreArtifacts` is {lean}`true`,
+{lit}`LAKE_RESTORE_ARTIFACTS` is set, so that Lake copies cached artifacts to the build directory.
+{name}`getSpawnArgsForToolchain` constructs the arguments for a command in another project with a
+given toolchain.
+-/
+public def getSpawnArgsForLake (args : Array String) (cwd : Option System.FilePath := none)
+    (restoreArtifacts : Bool := false) : IO.Process.SpawnArgs :=
+  { cmd := "lake", args, cwd, env := elanVars restoreArtifacts }
+
 
 /--
 Executes a command in an environment set up for Lake, specifying the project and toolchain.

@@ -144,6 +144,26 @@ lean_exe «verso-literate-plan» where
   srcDir := "src/verso-literate-plan"
   supportInterpreter := true
 
+-- The generator of documents and edit scripts and a client of the language server, which the tests
+-- and the reuse benchmark use.
+@[default_target]
+lean_lib VersoGen where
+  srcDir := "src/verso-gen"
+  roots := #[`VersoGen]
+
+-- The reuse benchmark, which replays edit scripts in the language server and reports the server's
+-- reuse. Its `record` command writes the reuse report of each edit script in `bench/reuse/corpus`
+-- to `bench/reuse/expected`. It runs from the repository root.
+lean_exe «verso-internal-reuse-bench» where
+  srcDir := "bench/reuse"
+  root := `InteractiveBench
+
+-- The tool that generates the reuse benchmark's edit scripts and writes their documents as Lean
+-- files.
+lean_exe «verso-internal-edit-scripts» where
+  srcDir := "bench/reuse"
+  root := `EditScripts
+
 -- All test code: Errata test modules, compile-time tests, fixtures, and generators. Submodules are
 -- globbed so each is built and every `@[test]` module is discoverable.
 @[default_target]

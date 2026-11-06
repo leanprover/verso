@@ -1,0 +1,17 @@
+document minimal-3-12
+  at a use: go to definition finds the definition; highlight the definition and all uses
+  semantic tokens: some outside the requested range
+document minimal-5-30
+  semantic tokens: some outside the requested range
+document minimal-7-20
+  at a use: go to definition finds the definition; highlight the definition and all uses
+  semantic tokens: some outside the requested range
+document manual-3-12
+  at a use: go to definition finds the definition; highlight the definition and all uses
+  semantic tokens: some outside the requested range
+document manual-5-30
+  at a use: go to definition finds the definition; highlight the definition and all uses
+  semantic tokens: some outside the requested range
+document manual-7-20
+  at a use: go to definition finds the definition; highlight the definition and all uses
+  semantic tokens: some outside the requested range
