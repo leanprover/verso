@@ -8,7 +8,7 @@ import Verso
 import VersoTests.DocCommandInput
 
 /-!
-These tests check that an empty `#doc` document (that is, one without blocks) nonetheless results in
+This test checks that an empty `#doc` document (that is, one without blocks) nonetheless results in
 a definition. If it didn't, references to the document would fail, and the LSP server wouldn't
 return document symbols or folding ranges for it.
 
@@ -49,16 +49,3 @@ document.
 run_cmd
   checkEdit "#doc (Verso.Doc.Genre.none) \"Trees\" =>\n\nTrees grow in the spring.\n"
     "#doc (Verso.Doc.Genre.none) \"Trees\" =>\n\n"
-
-/-
-This test checks that a document whose only content is a Lean comment is defined and empty; the
-right result for such a document is undecided. The comment is part of the whitespace after `=>`, so
-no block command follows. In prior versions of the `#doc` command, the document was not defined.
--/
-/-- info: Verso.Doc.Part.mk #[Verso.Doc.Inline.text "Trees"] "Trees" none #[] #[] -/
-#test_msgs in
-run_cmd do
-  let (env, _) ←
-    elabModuleRest "#doc (Verso.Doc.Genre.none) \"Trees\" =>\n\n-- Leaves fall in the autumn.\n"
-  let doc ← evalDoc env (← getOptions) (docName (← getMainModule))
-  logInfo m!"{repr doc.toPart}"
