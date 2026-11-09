@@ -10,6 +10,8 @@ public import UsersGuide.Releases.Entry
 open Verso.Genre Manual InlineLean UsersGuide.Releases
 open Verso.Code.External
 
+set_option linter.verso.manual.headerTags false
+
 release_note
   version := ⟨4, 35, 0⟩
   breaking := true
