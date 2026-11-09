@@ -68,7 +68,7 @@ def loadModuleContent' (projectDir : StrLit) (mod : String) (suppressNamespaces 
   toolchainFile.lock (exclusive := true)
   try
     runCmd m!"loadModuleContent': building extractor" #["lake", "build", "subverso-extract-mod"] false
-    runCmd m!"loadModuleContent': building highlighted example" #["lake", "build", "+" ++ mod ++ ":highlighted"] true
+    runCmd m!"loadModuleContent': building highlighted example" #["lake", "build", "+" ++ mod ++ ":highlighted"] false
   finally
     toolchainFile.unlock
 
