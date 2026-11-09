@@ -1,0 +1,104 @@
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/header_tag_title_action.lean"},
+ "range":
+ {"start": {"line": 11, "character": 28}, "end": {"line": 11, "character": 28}},
+ "context": {"diagnostics": []}}
+[{"title": "Add `tag := \"fallen-leaves\"`",
+  "kind": "quickfix",
+  "edit":
+  {"documentChanges":
+   [{"textDocument":
+     {"version": 1,
+      "uri":
+      "file:///src/tests/interactive/test-cases/header_tag_title_action.lean"},
+     "edits":
+     [{"range":
+       {"start": {"line": 12, "character": 0},
+        "end": {"line": 12, "character": 0}},
+       "newText": "%%%\ntag := \"fallen-leaves\"\n%%%\n\n"}]}]},
+  "data":
+  {"providerResultIndex": 0,
+   "providerName": "Verso.Genre.Manual.headerTagActions",
+   "params":
+   {"textDocument":
+    {"uri":
+     "file:///src/tests/interactive/test-cases/header_tag_title_action.lean"},
+    "range":
+    {"start": {"line": 11, "character": 28},
+     "end": {"line": 11, "character": 28}},
+    "context": {"diagnostics": []}}}},
+ {"title": "Add `tag := none`",
+  "kind": "quickfix",
+  "edit":
+  {"documentChanges":
+   [{"textDocument":
+     {"version": 1,
+      "uri":
+      "file:///src/tests/interactive/test-cases/header_tag_title_action.lean"},
+     "edits":
+     [{"range":
+       {"start": {"line": 12, "character": 0},
+        "end": {"line": 12, "character": 0}},
+       "newText": "%%%\ntag := none\n%%%\n\n"}]}]},
+  "data":
+  {"providerResultIndex": 1,
+   "providerName": "Verso.Genre.Manual.headerTagActions",
+   "params":
+   {"textDocument":
+    {"uri":
+     "file:///src/tests/interactive/test-cases/header_tag_title_action.lean"},
+    "range":
+    {"start": {"line": 11, "character": 28},
+     "end": {"line": 11, "character": 28}},
+    "context": {"diagnostics": []}}}}]
+Resolution of Add `tag := "fallen-leaves"`:
+{"title": "Add `tag := \"fallen-leaves\"`",
+ "kind": "quickfix",
+ "edit":
+ {"documentChanges":
+  [{"textDocument":
+    {"version": 1,
+     "uri":
+     "file:///src/tests/interactive/test-cases/header_tag_title_action.lean"},
+    "edits":
+    [{"range":
+      {"start": {"line": 12, "character": 0},
+       "end": {"line": 12, "character": 0}},
+      "newText": "%%%\ntag := \"fallen-leaves\"\n%%%\n\n"}]}]},
+ "data":
+ {"providerResultIndex": 0,
+  "providerName": "Verso.Genre.Manual.headerTagActions",
+  "params":
+  {"textDocument":
+   {"uri":
+    "file:///src/tests/interactive/test-cases/header_tag_title_action.lean"},
+   "range":
+   {"start": {"line": 11, "character": 28},
+    "end": {"line": 11, "character": 28}},
+   "context": {"diagnostics": []}}}}
+Resolution of Add `tag := none`:
+{"title": "Add `tag := none`",
+ "kind": "quickfix",
+ "edit":
+ {"documentChanges":
+  [{"textDocument":
+    {"version": 1,
+     "uri":
+     "file:///src/tests/interactive/test-cases/header_tag_title_action.lean"},
+    "edits":
+    [{"range":
+      {"start": {"line": 12, "character": 0},
+       "end": {"line": 12, "character": 0}},
+      "newText": "%%%\ntag := none\n%%%\n\n"}]}]},
+ "data":
+ {"providerResultIndex": 1,
+  "providerName": "Verso.Genre.Manual.headerTagActions",
+  "params":
+  {"textDocument":
+   {"uri":
+    "file:///src/tests/interactive/test-cases/header_tag_title_action.lean"},
+   "range":
+   {"start": {"line": 11, "character": 28},
+    "end": {"line": 11, "character": 28}},
+   "context": {"diagnostics": []}}}}

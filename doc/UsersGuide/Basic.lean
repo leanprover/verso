@@ -21,6 +21,7 @@ set_option pp.rawOnError true
 #doc (Manual) "Writing Documentation in Lean with Verso" =>
 
 %%%
+tag := "verso"
 shortTitle := "Documentation with Verso"
 authors := ["David Thrane Christiansen"]
 %%%

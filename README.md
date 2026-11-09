@@ -130,6 +130,8 @@ public import UsersGuide.Releases.Entry
 
 open Verso.Genre Manual InlineLean UsersGuide.Releases
 
+set_option linter.verso.manual.headerTags false
+
 release_note
   version := ⟨4, 34, 0⟩
   breaking := false
@@ -142,7 +144,8 @@ Added a development server for previewing generated HTML locally.
 ```
 
 Every entry module declares a `release_note` alongside its `#doc` to
-associate extra metadata with the description.
+associate extra metadata with the description. The entry's tag is
+given by `release_note`, so the header tag linter is switched off.
 
 The version should be the one currently under development. When
 `lean-toolchain` names a stable release, that release is already
