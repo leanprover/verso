@@ -75,15 +75,15 @@ which happens when the file worker that started it exits.
 unsafe def runImpl (args : List String) : IO UInt32 := do
   let usage : IO UInt32 := do
     IO.eprintln
-      "usage: errata-run-one <protocol-file> <module-json> <decl-json> <options-json> [seed] < pipe"
+      "usage: errata-run-one <protocol-file> <setup-file> <module-json> <decl-json> <options-json> [seed] < pipe"
     return 2
-  let (protocolPath, modStr, declStr, optionsStr, seed?) ←
+  let (protocolPath, setupPath, modStr, declStr, optionsStr, seed?) ←
     match args with
-    | [protocolPath, modStr, declStr, optionsStr] =>
-      pure (protocolPath, modStr, declStr, optionsStr, none)
-    | [protocolPath, modStr, declStr, optionsStr, seedStr] =>
+    | [protocolPath, setupPath, modStr, declStr, optionsStr] =>
+      pure (protocolPath, setupPath, modStr, declStr, optionsStr, none)
+    | [protocolPath, setupPath, modStr, declStr, optionsStr, seedStr] =>
       match seedStr.toNat? with
-      | some seed => pure (protocolPath, modStr, declStr, optionsStr, some seed)
+      | some seed => pure (protocolPath, setupPath, modStr, declStr, optionsStr, some seed)
       | none => return ← usage
     | _ => return ← usage
   let optionList ←
@@ -108,11 +108,14 @@ unsafe def runImpl (args : List String) : IO UInt32 := do
   -- The test's own output is captured by `runEntryOutcome` and forwarded as chunk lines. Anything
   -- else written to stdout, such as a subprocess's output, goes to the runner's real stdout.
   let out ← IO.FS.Handle.mk protocolPath .append
-  -- The search path includes the directories in `LEAN_PATH`.
+  -- The setup locates the imports from the workspace, which are in Lake's artifact cache when that
+  -- is enabled. The search path locates the toolchain's own modules.
+  let setup ← ModuleSetup.load setupPath
   initSearchPath (← findSysroot)
   enableInitializersExecution
   let env ← importModules
     #[{ module := targetModule, importAll := true }, { module := `Errata }] {} (loadExts := true)
+    (arts := setup.importArts)
   let coreCtx : Core.Context := { fileName := "<errata-run-one>", fileMap := default }
   let (entry, _) ← (evalTestEntry targetModule declName).toIO coreCtx { env }
   -- Mark when the test body starts, so the widget shows output offsets within the test itself,

@@ -433,37 +433,56 @@ private meta def runnerFailure (code : UInt32) : Runner.RunOutcome := {
 }
 
 /--
-Builds the module in {name}`source` and the runner, then runs the test and streams its output into
-{name}`state`. The runner imports the test's module's {lit}`.olean`, so it must first be built. The
-module and the declaration are encoded by {name}`nameToJson`, and the options are a JSON array of
-{name}`Runner.TestOption`s.
+Runs Lake with {name}`args` and returns its standard error, its standard output, and its exit code.
+Lake's own process group lets a cancel kill the compilers that it starts. The result is {name}`none`
+if the run was canceled as Lake started.
 -/
-private meta def buildAndRun (source : System.FilePath) (moduleJson declJson optionsJson : String)
+private meta def runLake (lake : String) (args : Array String) (state : RunState) :
+    IO (Option (String × String × UInt32)) := do
+  let build ← IO.Process.spawn {
+    stdin := .null, stdout := .piped, stderr := .piped, setsid := true
+    cmd := lake, args
+  }
+  unless ← setKill state build.kill do
+    let _ ← build.wait
+    return none
+  let errTask ← IO.asTask (prio := .dedicated) build.stderr.readToEnd
+  let out ← build.stdout.readToEnd
+  let err := (← IO.wait errTask).toOption.getD ""
+  let code ← build.wait
+  -- The build's process group id is free for reuse once `wait` returns, so a cancel must no longer
+  -- kill that group.
+  state.kill.set (pure ())
+  return some (err, out, code)
+
+/--
+Builds the runner and the test's module, then runs the test and streams its output into
+{name}`state`. The module and the declaration are encoded by {name}`nameToJson`, and the options are
+a JSON array of {name}`Runner.TestOption`s.
+-/
+private meta def buildAndRun (moduleJson : Json) (declJson optionsJson : String)
     (seed? : Option Nat) (state : RunState) : IO Unit := do
   -- The language server's Lake sets `LAKE` to its own path.
   let lake := (← IO.getEnv "LAKE").getD "lake"
-  let (buildErr, queryOut, buildCode) ← withBuildLock do
-    if ← state.finished.get then return ("", "", 0)
-    -- `lake query` builds the runner and the module, then prints the runner's path. Its own process
-    -- group lets a cancel kill the compilers that Lake starts. The runner reads the `.olean` files
-    -- of the module and its imports from the build directories on `LEAN_PATH`, so Lake needs to
-    -- actually restore the modules.
-    let build ← IO.Process.spawn {
-      stdin := .null, stdout := .piped, stderr := .piped, setsid := true
-      cmd := lake, args := #["query", "errata-run-one", source.toString]
-      env := #[("LAKE_RESTORE_ARTIFACTS", some "1")]
-    }
-    unless ← setKill state build.kill do
-      let _ ← build.wait
-      return ("", "", 0)
-    let errTask ← IO.asTask (prio := .dedicated) build.stderr.readToEnd
-    let queryOut ← build.stdout.readToEnd
-    let buildErr := (← IO.wait errTask).toOption.getD ""
-    let buildCode ← build.wait
-    -- The build's process group id is free for reuse once `wait` returns, so a cancel must no longer
-    -- kill that group.
-    state.kill.set (pure ())
-    return (buildErr, queryOut, buildCode)
+  let targetModule ← IO.ofExcept (nameOfJson? moduleJson)
+  -- The imports of a file that imports what the runner imports. A non-module file imports all of
+  -- each module, which includes the private parts that `import all` needs.
+  let header : ModuleHeader := {
+    imports := #[{ module := targetModule }, { module := `Errata }], isModule := false
+  }
+  let (buildErr, queryOut, setupOut, buildCode) ← withBuildLock do
+    if ← state.finished.get then return ("", "", "", 0)
+    -- `lake query` builds the runner and prints its path.
+    let some (queryErr, queryOut, queryCode) ← runLake lake #["query", "errata-run-one"] state
+      | return ("", "", "", 0)
+    if queryCode != 0 then return (queryErr, queryOut, "", queryCode)
+    if ← state.finished.get then return ("", "", "", 0)
+    -- `lake setup-file` builds the imports and prints where their artifacts are. The file name
+    -- doesn't name a file, so the header describes the imports instead.
+    let args := #["setup-file", "<errata-run-one>", (toJson header).compress]
+    let some (setupErr, setupOut, setupCode) ← runLake lake args state
+      | return ("", "", "", 0)
+    return (setupErr, queryOut, setupOut, setupCode)
   if ← state.finished.get then return
   if buildCode != 0 then
     finishWith state (buildFailure buildErr)
@@ -472,15 +491,15 @@ private meta def buildAndRun (source : System.FilePath) (moduleJson declJson opt
     | finishWith state (buildFailure "lake query did not report the runner's path")
       return
   -- The runner writes its protocol to a file of its own, where no other output can mix into it.
-  IO.FS.withTempFile fun _ protocolPath => do
+  IO.FS.withTempFile fun _ setupPath => IO.FS.withTempFile fun _ protocolPath => do
+    IO.FS.writeFile setupPath setupOut
     let protocol ← IO.FS.Handle.mk protocolPath .read
-    -- The runner finds the test's module through the `LEAN_PATH` that it inherits. It exits when its
-    -- standard input closes, which happens when this file worker exits. Its own process group lets a
-    -- cancel kill the processes that the test starts.
+    -- The runner exits when its standard input closes, which happens when this file worker exits.
+    -- Its own process group lets a cancel kill the processes that the test starts.
     let run ← IO.Process.spawn {
       stdin := .piped, stdout := .piped, stderr := .piped, setsid := true
       cmd := runnerPath
-      args := #[protocolPath.toString, moduleJson, declJson, optionsJson]
+      args := #[protocolPath.toString, setupPath.toString, moduleJson.compress, declJson, optionsJson]
         ++ (seed?.map (#[toString ·])).getD #[]
     }
     unless ← setKill state run.kill do
@@ -612,8 +631,6 @@ meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
       throw (.mk .invalidParams s!"the seed must be a natural number in decimal digits: {s}")
   let options := toJson req.options |>.compress
   let _ ← decodeDecl req.module
-  let some source := System.Uri.fileUriToPath? (← RequestM.readDoc).meta.uri
-    | throw (.mk .invalidParams "the test's document is not a file")
   unless ← bufferIsClean do
     throw (.mk .invalidParams "the file has unsaved changes; save it before running the test")
   -- The request includes the hash of the test's source from when the widget was shown. A hash
@@ -634,7 +651,7 @@ meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
   forgetOldRuns
   -- The task spends most of its time blocked on the build and the runner, so it has its own thread.
   let _ ← IO.asTask (prio := .dedicated) do
-    try buildAndRun source req.module.compress req.decl.compress options seed? state
+    try buildAndRun req.module req.decl.compress options seed? state
     catch e => finishWith state (launchFailure e)
   return RequestTask.pure ()
 
