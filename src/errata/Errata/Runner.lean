@@ -9,6 +9,9 @@ public import Errata.TestM
 public import Errata.IsTest
 public import Errata.Report
 public import Cli
+-- This line ensures that downstream clients get the cached olean correctly. Everything in the
+-- module is private, so this doesn't affect this module's interface.
+public import Errata.FS
 import all Errata.FS
 
 public section
