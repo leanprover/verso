@@ -1,0 +1,216 @@
+{"provenance":
+ {"generated":
+  {"seed": 1,
+   "params":
+   {"topLevelMix":
+    [["para", 10],
+     ["ul", 2],
+     ["ol", 1],
+     ["dl", 1],
+     ["blockquote", 1],
+     ["directive", 3],
+     ["command", 1]],
+    "topLevelBlocks": 12,
+    "referenceChance": 20,
+    "proofWeight": 0,
+    "parts": 3,
+    "partDepth": 2,
+    "paragraphLength": 3,
+    "nestedMix": [["para", 10], ["ul", 1], ["directive", 1]],
+    "metadataChance": 30,
+    "inlineChance": 30,
+    "directiveDepth": 2,
+    "codeBlockChance": 15},
+   "editChance": 10}},
+ "profile": "manual",
+ "edits":
+ [{"steps": 1,
+   "splitSeed": 627227942,
+   "split": "garbage",
+   "edit": {"sibling": {"edit": {"reparent": {"index": 0}}}}},
+  {"steps": 0,
+   "splitSeed": 408859595,
+   "split": "garbage",
+   "edit":
+   {"sibling":
+    {"edit":
+     {"insert":
+      {"node":
+       {"block":
+        {"block":
+         {"para":
+          {"content":
+           [{"text": {"str": "Donec dapibus"}},
+            {"link":
+             {"target": {"url": {"url": "https://example.com/vehicula"}},
+              "content": [{"text": {"str": "pellentesque rhoncus."}}]}},
+            {"text":
+             {"str":
+              "Varius ornare nisl dictum ultricies lacus ante neque at tincidunt diam."}},
+            {"text":
+             {"str":
+              "Blandit aliquam dignissim diam sagittis purus porta habitant."}}]}}}},
+       "index": 1}}}}},
+  {"steps": 5,
+   "splitSeed": 1015724094,
+   "split": "typing",
+   "edit": {"sibling": {"edit": {"reparent": {"index": 0}}}}},
+  {"steps": 1,
+   "splitSeed": 931741285,
+   "split": "typing",
+   "edit":
+   {"sibling":
+    {"edit":
+     {"wrap":
+      {"stop": 1,
+       "start": 0,
+       "container": {"part": {"title": "Ultricies massa"}}}}}}}],
+ "base":
+ {"title": "Lorem ipsum dolor sit",
+  "subParts":
+  [{"title": "At",
+    "subParts": [],
+    "metadata": [["shortTitle", "\"Tellus maecenas\""]],
+    "blocks":
+    [{"ol":
+      {"items":
+       [[{"para":
+          {"content":
+           [{"text":
+             {"str":
+              "Pellentesque purus integer mi erat congue praesent aenean."}}]}}]]}},
+     {"code":
+      {"name": "lean",
+       "lines":
+       ["example : 46 < 58 := by decide",
+        "",
+        "example : 50 < 81 := by decide",
+        "",
+        "def egestas_4b8d231d : Nat := 33"],
+       "args": "-show"}},
+     {"blockquote":
+      {"blocks":
+       [{"para":
+         {"content":
+          [{"text": {"str": "Pellentesque leo suspendisse libero laoreet."}},
+           {"text":
+            {"str":
+             "Vestibulum integer posuere nunc augue phasellus quisque."}}]}}]}},
+     {"ul":
+      {"items":
+       [[{"directive":
+          {"name": "paragraph",
+           "blocks":
+           [{"para":
+             {"content":
+              [{"text":
+                {"str": "Tristique congue pretium ultricies urna leo."}},
+               {"text":
+                {"str":
+                 "Orci rutrum proin etiam lectus porttitor suscipit praesent convallis."}}]}},
+            {"para":
+             {"content":
+              [{"text":
+                {"str":
+                 "Proin sollicitudin feugiat maecenas accumsan consequat felis hendrerit."}},
+               {"text":
+                {"str":
+                 "Ante ac phasellus pellentesque arcu lectus erat vel nam nunc nibh."}}]}},
+            {"para":
+             {"content":
+              [{"text":
+                {"str":
+                 "Est maecenas tincidunt metus iaculis fringilla faucibus etiam porttitor."}},
+               {"text":
+                {"str":
+                 "Suspendisse bibendum imperdiet luctus at nibh scelerisque."}}]}},
+            {"para":
+             {"content":
+              [{"text":
+                {"str":
+                 "Nibh aenean neque ultrices fusce felis finibus quisque ullamcorper phasellus faucibus."}},
+               {"text":
+                {"str":
+                 "Eget maecenas lacus consequat placerat hendrerit."}}]}}],
+           "args": ""}}]]}},
+     {"para":
+      {"content":
+       [{"text":
+         {"str":
+          "Eleifend eget quisque pulvinar congue blandit dictum enim accumsan purus."}}]}},
+     {"para":
+      {"content":
+       [{"text": {"str": "Metus a vestibulum"}},
+        {"role":
+         {"name": "name", "content": [{"code": {"str": "Nat"}}], "args": ""}},
+        {"text": {"str": "mauris"}},
+        {"text": {"str": "justo arcu massa ornare."}},
+        {"text": {"str": "Lacinia finibus eleifend ullamcorper ac."}}]}},
+     {"para":
+      {"content": [{"text": {"str": "Laoreet sollicitudin at tristique."}}]}}]},
+   {"title": "Proin lobortis bibendum praesent",
+    "subParts": [],
+    "metadata": [],
+    "blocks": []},
+   {"title": "Sodales donec",
+    "subParts": [],
+    "metadata": [["draft", "false"], ["shortTitle", "\"Eget\""]],
+    "blocks": []}],
+  "metadata": [["draft", "false"]],
+  "blocks":
+  [{"ol":
+    {"items":
+     [[{"code":
+        {"name": "lean",
+         "lines":
+         ["theorem amet_d86a26bf : 20 + 22 = 42 := by",
+          "  decide",
+          "",
+          "def consectetur_feeeb206 : Nat := 29",
+          "",
+          "example : 14 < 60 := by decide"],
+         "args": "-show"}}],
+      [{"code":
+        {"name": "lean",
+         "lines": ["def adipiscing_9e00ab84 : Nat := 18"],
+         "args": ""}},
+       {"ul":
+        {"items":
+         [[{"para":
+            {"content":
+             [{"text":
+               {"str": "Elit, sed do eiusmod tempor incididunt ut labore."}},
+              {"text": {"str": "Et"}},
+              {"role":
+               {"name": "draft",
+                "content": [{"text": {"str": "dolore magna"}}],
+                "args": ""}},
+              {"text": {"str": "aliqua. Ut."}},
+              {"text": {"str": "Ad minim veniam,"}},
+              {"link":
+               {"target": {"url": {"url": "https://example.com/ullamco"}},
+                "content":
+                [{"text": {"str": "quis nostrud exercitation."}}]}}]}}]]}}]]}},
+   {"code":
+    {"name": "lean", "lines": ["example : 22 < 34 := by decide"], "args": ""}},
+   {"para":
+    {"content":
+     [{"bold": {"content": [{"text": {"str": "Laboris"}}]}},
+      {"text": {"str": "nisi ut aliquip ex ea."}},
+      {"role":
+       {"name": "draft",
+        "content": [{"text": {"str": "Consequat. Duis aute"}}],
+        "args": ""}},
+      {"text": {"str": "irure dolor."}}]}},
+   {"para":
+    {"content":
+     [{"text":
+       {"str":
+        "Reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla."}},
+      {"text": {"str": "Pariatur. Excepteur sint occaecat cupidatat non."}},
+      {"text": {"str": "Proident, sunt in culpa qui."}}]}},
+   {"para":
+    {"content":
+     [{"text":
+       {"str":
+        "Officia deserunt mollit anim id est laborum. aliquam tincidunt imperdiet."}}]}}]}}

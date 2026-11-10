@@ -12,6 +12,7 @@ public import Verso.Code
 public import Verso.Doc
 public import Verso.Doc.ArgParse
 public import Verso.Doc.Concrete
+public import Verso.Doc.Concrete.ReuseMeasure
 public import Verso.Doc.Elab
 public import Verso.Doc.Elab.ExpanderAttribute
 public import Verso.Doc.Elab.InlineString

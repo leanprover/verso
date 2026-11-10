@@ -1,0 +1,312 @@
+{"provenance":
+ {"generated":
+  {"seed": 1,
+   "params":
+   {"topLevelMix":
+    [["para", 10],
+     ["ul", 2],
+     ["ol", 1],
+     ["dl", 1],
+     ["blockquote", 1],
+     ["directive", 3],
+     ["command", 1]],
+    "topLevelBlocks": 12,
+    "referenceChance": 20,
+    "proofWeight": 0,
+    "parts": 3,
+    "partDepth": 2,
+    "paragraphLength": 3,
+    "nestedMix": [["para", 10], ["ul", 1], ["directive", 1]],
+    "metadataChance": 30,
+    "inlineChance": 30,
+    "directiveDepth": 2,
+    "codeBlockChance": 15},
+   "editChance": 10}},
+ "profile": "minimal",
+ "edits":
+ [{"steps": 24,
+   "splitSeed": 340555834,
+   "split": "garbage",
+   "edit": {"inlines": {"edit": {"removeInline": {"index": 0}}}}},
+  {"steps": 2,
+   "splitSeed": 1058886809,
+   "split": "garbage",
+   "edit":
+   {"inlines":
+    {"edit":
+     {"editText":
+      {"text": "dictum pulvinar libero",
+       "start": 5,
+       "index": 0,
+       "count": 0}}}}},
+  {"steps": 4,
+   "splitSeed": 527450092,
+   "split": "garbage",
+   "edit": {"inlines": {"edit": {"removeInline": {"index": 3}}}}},
+  {"steps": 8,
+   "splitSeed": 892124519,
+   "split": "garbage",
+   "edit":
+   {"inlines":
+    {"edit":
+     {"insertInline":
+      {"inline": {"footnote": {"label": "quam-51855"}}, "index": 1}}}}},
+  {"steps": 3,
+   "splitSeed": 150615387,
+   "split": "garbage",
+   "edit":
+   {"sibling":
+    {"edit": {"wrap": {"stop": 1, "start": 0, "container": "blockquote"}}}}}],
+ "base":
+ {"title": "Lorem ipsum dolor sit",
+  "subParts":
+  [{"title": "Suscipit tellus maecenas",
+    "subParts":
+    [{"title": "Porttitor", "subParts": [], "metadata": [], "blocks": []}],
+    "metadata": [],
+    "blocks":
+    [{"dl":
+      {"items":
+       [[[{"text": {"str": "suscipit quam pellentesque"}}],
+         [{"para":
+           {"content":
+            [{"text":
+              {"str":
+               "Praesent aenean fusce massa nibh varius orci vel vivamus maecenas vehicula."}},
+             {"text":
+              {"str":
+               "Porta nisl nam egestas etiam aenean pellentesque erat lacus iaculis dictum proin."}}]}}]],
+        [[{"text": {"str": "leo suspendisse libero"}}],
+         [{"para":
+           {"content": [{"text": {"str": "Posuere nunc augue phasellus."}}]}},
+          {"directive":
+           {"name": "aside",
+            "blocks":
+            [{"para":
+              {"content":
+               [{"text":
+                 {"str":
+                  "Tincidunt vel varius tristique congue pretium ultricies."}},
+                {"emph": {"content": [{"text": {"str": "Aliquam"}}]}},
+                {"text":
+                 {"str": "etiam orci rutrum proin etiam lectus porttitor."}}]}},
+             {"code":
+              {"name": "plain",
+               "lines":
+               ["feugiat maecenas accumsan consequat",
+                "hendrerit ornare at ante ac phasellus pellentesque arcu",
+                "erat vel nam nunc nibh egestas semper tristique",
+                "placerat est maecenas tincidunt"],
+               "args": ""}},
+             {"para":
+              {"content":
+               [{"text":
+                 {"str":
+                  "Etiam porttitor mi ligula suspendisse bibendum imperdiet luctus at nibh scelerisque feugiat."}}]}}],
+            "args": "\"Semper\""}}]],
+        [[{"text": {"str": "viverra ultrices"}}],
+         [{"para":
+           {"content":
+            [{"text": {"str": "Felis finibus quisque ullamcorper phasellus."}},
+             {"text":
+              {"str":
+               "Interdum eget maecenas lacus consequat placerat hendrerit imperdiet massa"}},
+             {"link":
+              {"target": {"ref": {"label": "congue-57687"}},
+               "content": [{"text": {"str": "luctus"}}]}},
+             {"text": {"str": "mattis."}}]}}]]]}},
+     {"para":
+      {"content":
+       [{"text": {"str": "Sollicitudin lacinia purus metus a"}},
+        {"text": {"str": "vestibulum"}},
+        {"image": {"url": "https://example.com/ac.png", "alt": "bibendum"}},
+        {"text": {"str": "mauris justo arcu massa."}},
+        {"text": {"str": "Ligula diam lacinia finibus eleifend."}}]}},
+     {"para":
+      {"content":
+       [{"text":
+         {"str":
+          "Dignissim laoreet sollicitudin at tristique ullamcorper massa."}},
+        {"text": {"str": "Bibendum praesent leo"}},
+        {"role":
+         {"name": "highlight",
+          "content": [{"text": {"str": "lacus sodales"}}],
+          "args": ""}},
+        {"text": {"str": "donec fringilla massa vivamus leo sollicitudin."}}]}},
+     {"para":
+      {"content":
+       [{"text": {"str": "Est enim lacus eleifend ante augue metus risus."}},
+        {"text": {"str": "Volutpat egestas condimentum vitae tincidunt."}}]}},
+     {"footnoteDef":
+      {"label": "quam-51855",
+       "content":
+       [{"text":
+         {"str":
+          "Etiam suspendisse vestibulum pretium lectus ultricies massa."}}]}},
+     {"ul":
+      {"items":
+       [[{"code":
+          {"name": "plain",
+           "lines":
+           ["ante donec dapibus pellentesque rhoncus phasellus sollicitudin lectus"],
+           "args": ""}},
+         {"para":
+          {"content":
+           [{"text":
+             {"str":
+              "Varius ornare nisl dictum ultricies lacus ante neque at tincidunt diam."}},
+            {"text":
+             {"str":
+              "Blandit aliquam dignissim diam sagittis purus porta habitant."}}]}}],
+        [{"para":
+          {"content":
+           [{"text": {"str": "Ligula bibendum ullamcorper nisl fusce quam"}},
+            {"text": {"str": "hendrerit fermentum"}},
+            {"footnote": {"label": "quam-51855"}},
+            {"text": {"str": "mi auctor dictum."}},
+            {"text":
+             {"str":
+              "Vestibulum habitant consequat hendrerit eleifend integer."}},
+            {"text":
+             {"str":
+              "Sagittis etiam purus rhoncus ultricies hendrerit hendrerit eleifend sagittis."}}]}},
+         {"para":
+          {"content":
+           [{"text":
+             {"str": "Pretium lobortis faucibus ante pellentesque sodales."}},
+            {"text":
+             {"str":
+              "Suspendisse nisl blandit arcu at bibendum tristique fringilla lectus lacus."}},
+            {"text": {"str": "Quisque rutrum est lobortis."}}]}}],
+        [{"ul":
+          {"items":
+           [[{"para":
+              {"content":
+               [{"text": {"str": "Nisl fringilla nibh lectus nibh."}},
+                {"text":
+                 {"str": "Bibendum posuere iaculis enim tempus a integer"}},
+                {"text": {"str": "lobortis mauris suspendisse"}},
+                {"image":
+                 {"url": "https://example.com/fusce.png", "alt": "congue"}},
+                {"text": {"str": "phasellus eleifend."}}]}}],
+            [{"code":
+              {"name": "plain",
+               "lines": ["libero luctus cras at metus"],
+               "args": ""}},
+             {"para":
+              {"content":
+               [{"text":
+                 {"str":
+                  "Fusce sodales urna tempus pulvinar placerat praesent quisque cras."}},
+                {"emph":
+                 {"content": [{"text": {"str": "Hendrerit lacus eget"}}]}},
+                {"text": {"str": "volutpat semper augue mi at sollicitudin."}},
+                {"text":
+                 {"str":
+                  "Praesent eleifend integer quisque risus dapibus."}}]}}],
+            [{"para":
+              {"content":
+               [{"text": {"str": "Est dictum aliquam porttitor"}},
+                {"text": {"str": "feugiat"}},
+                {"image":
+                 {"url": "https://example.com/proin.png", "alt": "integer"}},
+                {"text": {"str": "diam est augue."}},
+                {"text":
+                 {"str": "Felis maecenas elementum egestas vestibulum massa"}},
+                {"bold": {"content": [{"text": {"str": "mi enim."}}]}},
+                {"text": {"str": "Auctor nam"}},
+                {"bold": {"content": [{"text": {"str": "nam"}}]}},
+                {"text":
+                 {"str":
+                  "convallis iaculis pharetra iaculis fusce integer est egestas."}}]}},
+             {"para":
+              {"content":
+               [{"text":
+                 {"str":
+                  "Suscipit proin ac vel nunc dictum at volutpat elementum pretium."}},
+                {"text":
+                 {"str":
+                  "Fermentum nisl suspendisse sollicitudin mattis."}}]}}]]}}]]}},
+     {"para":
+      {"content":
+       [{"text":
+         {"str":
+          "Ante feugiat eget ligula egestas fermentum integer justo arcu elementum blandit."}},
+        {"text": {"str": "Enim varius diam semper."}},
+        {"role":
+         {"name": "highlight",
+          "content": [{"text": {"str": "Bibendum"}}],
+          "args": ""}},
+        {"text":
+         {"str":
+          "ornare eleifend dignissim ante at sapien est libero ligula feugiat."}}]}}]},
+   {"title": "Leo",
+    "subParts": [],
+    "metadata":
+    [["shortTitle", "\"Tellus nam faucibus eleifend\""],
+     ["tag", "\"libero-49891\""]],
+    "blocks":
+    [{"linkDef":
+      {"url": "https://example.com/dictum", "label": "congue-57687"}}]}],
+  "metadata":
+  [["shortTitle", "\"Amet consectetur adipiscing\""],
+   ["tag", "\"elit-29927\""]],
+  "blocks":
+  [{"ol":
+    {"items":
+     [[{"code":
+        {"name": "plain",
+         "lines":
+         ["sed do eiusmod tempor incididunt", "ut labore et dolore magna"],
+         "args": ""}}],
+      [{"para":
+        {"content":
+         [{"text": {"str": "Aliqua. Ut"}},
+          {"link":
+           {"target": {"url": {"url": "https://example.com/quis"}},
+            "content": [{"text": {"str": "enim"}}]}},
+          {"text": {"str": "ad minim veniam."}}]}}]]}},
+   {"ul":
+    {"items":
+     [[{"ul":
+        {"items":
+         [[{"para":
+            {"content":
+             [{"text": {"str": "Nostrud exercitation ullamco"}},
+              {"role":
+               {"name": "term",
+                "content": [{"code": {"str": "irure"}}],
+                "args": ""}},
+              {"text": {"str": "laboris"}},
+              {"text":
+               {"str": "nisi ut aliquip ex ea commodo consequat. Duis."}},
+              {"text":
+               {"str":
+                "Dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla."}}]}}]]}}]]}},
+   {"code":
+    {"name": "plain",
+     "lines":
+     ["pariatur. Excepteur sint occaecat cupidatat non proident,",
+      "sunt in culpa qui officia deserunt mollit anim"],
+     "args": ""}},
+   {"dl":
+    {"items":
+     [[[{"text": {"str": "id"}}],
+       [{"para":
+         {"content":
+          [{"text": {"str": "Est laborum. quisque"}},
+           {"link":
+            {"target": {"url": {"url": "https://example.com/porta"}},
+             "content": [{"text": {"str": "feugiat"}}]}},
+           {"text":
+            {"str": "tristique nunc fusce orci vivamus nisl etiam."}}]}}]]]}},
+   {"para":
+    {"content":
+     [{"text":
+       {"str":
+        "Luctus est vitae risus lobortis hendrerit rutrum tempus pharetra integer nec faucibus."}}]}},
+   {"para":
+    {"content":
+     [{"text":
+       {"str":
+        "Aliquam tincidunt imperdiet fusce enim urna vel at ligula fringilla."}}]}}]}}

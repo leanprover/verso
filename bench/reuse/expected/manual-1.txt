@@ -1,0 +1,9 @@
+base: total 34 errors 0
+edit 1 reparent garbage
+  reused 1 (2.9%) reusable 9 (26.5%) total 34 boundary reuse stopped errors 0
+edit 2 insertSibling garbage
+  reused 1 (2.9%) reusable 7 (20.6%) total 34 boundary reuse stopped errors 0
+edit 3 reparent typing
+  reused 32 (91.4%) reusable 32 (91.4%) total 35 boundary reuse stopped errors 0
+edit 4 wrap typing
+  reused 32 (91.4%) reusable 32 (91.4%) total 35 boundary reuse stopped errors 0

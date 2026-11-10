@@ -1,0 +1,7 @@
+base: total 63 errors 0
+edit 1 wrapInlines typing
+  reused 26 (41.3%) reusable 31 (49.2%) total 63 boundary reuse stopped errors 0
+edit 2 insertSibling garbage
+  reused 26 (41.3%) reusable 32 (50.8%) total 63 boundary reuse stopped errors 0
+edit 3 insertSibling wholeHunks
+  reused 44 (68.8%) reusable 45 (70.3%) total 64 boundary reuse stopped errors 0

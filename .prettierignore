@@ -1,6 +1,10 @@
 **/lake-manifest.json
 .lake
 
+# Lean-generated JSON
+bench/reuse/**/*.json
+bench/corpus/**/*.json
+
 # build files
 _out
 browser-tests

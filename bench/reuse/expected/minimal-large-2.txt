@@ -1,0 +1,35 @@
+base: total 153 errors 0
+edit 1 insertSibling typing
+  reused 9 (5.9%) reusable 9 (5.9%) total 153 boundary reuse stopped errors 0
+edit 2 wrapInlines wholeHunks
+  reused 9 (5.8%) reusable 12 (7.8%) total 154 boundary reuse stopped errors 0
+edit 3 deleteSibling garbage
+  reused 19 (12.3%) reusable 19 (12.3%) total 154 boundary reuse stopped errors 0
+edit 4 deleteSibling typing
+  reused 28 (19.0%) reusable 28 (19.0%) total 147 boundary reuse stopped errors 0
+edit 5 insertSibling wholeHunks
+  reused 29 (20.0%) reusable 38 (26.2%) total 145 boundary reuse stopped errors 0
+edit 6 insertSibling typing
+  reused 50 (34.2%) reusable 50 (34.2%) total 146 boundary reuse stopped errors 0
+edit 7 wrapInlines garbage
+  reused 51 (34.7%) reusable 51 (34.7%) total 147 boundary reuse stopped errors 0
+edit 8 insertInline wholeHunks
+  reused 52 (35.4%) reusable 52 (35.4%) total 147 boundary reuse stopped errors 0
+edit 9 insertSibling garbage
+  reused 54 (36.7%) reusable 56 (38.1%) total 147 boundary reuse stopped errors 0
+edit 10 editText typing
+  reused 74 (49.7%) reusable 75 (50.3%) total 149 boundary reuse stopped errors 0
+edit 11 insertInline garbage
+  reused 80 (53.7%) reusable 80 (53.7%) total 149 boundary reuse stopped errors 0
+edit 12 wrap wholeHunks
+  reused 95 (63.8%) reusable 95 (63.8%) total 149 boundary reuse stopped errors 0
+edit 13 insertSibling wholeHunks
+  reused 101 (67.3%) reusable 101 (67.3%) total 150 boundary reuse stopped errors 0
+edit 14 deleteSibling garbage
+  reused 105 (69.5%) reusable 107 (70.9%) total 151 boundary reuse stopped errors 0
+edit 15 changeLines wholeHunks
+  reused 105 (70.0%) reusable 107 (71.3%) total 150 boundary reuse stopped errors 0
+edit 16 insertSibling wholeHunks
+  reused 142 (94.7%) reusable 142 (94.7%) total 150 boundary reuse stopped errors 0
+edit 17 editText wholeHunks
+  reused 142 (87.7%) reusable 143 (88.3%) total 162 boundary reuse stopped errors 0
