@@ -7,6 +7,9 @@ module
 
 public import Errata.TestM
 import Lean.Util.Diff
+-- This line ensures that downstream clients get the cached olean correctly. Everything in the
+-- module is private, so this doesn't affect this module's interface.
+public import Errata.FS
 import all Errata.FS
 
 public section
