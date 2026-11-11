@@ -67,7 +67,7 @@ def loadModuleContent' (projectDir : StrLit) (mod : String) (suppressNamespaces 
   -- Lake tends to get in trouble if used concurrently, so build the Lean code with a lock.
   toolchainFile.lock (exclusive := true)
   try
-    runCmd m!"loadModuleContent': building extractor" #["lake", "build", "subverso-extract-mod"] false
+    -- The highlighted facet builds its extractor dependency in the same Lake invocation.
     runCmd m!"loadModuleContent': building highlighted example" #["lake", "build", "+" ++ mod ++ ":highlighted"] false
   finally
     toolchainFile.unlock
