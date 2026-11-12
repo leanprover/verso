@@ -76,7 +76,7 @@ block_extension Block.licenseInfo where
     open Verso.Output.Html in
     some <| fun _ _ _ _ _ => do
       let headerLevel := (← read).traverseContext.headers.size + 1
-      let allLicenses := (← read).traverseState.licenseInfo.toArray
+      let allLicenses := (← read).traverseState.toHtmlAssets.allLicenseInfo.toArray
       let allLicenses := allLicenses.qsort (·.dependency.trimAscii.copy.toLower < ·.dependency.trimAscii.copy.toLower)
 
       return allLicenses.map (·.toHtml headerLevel)

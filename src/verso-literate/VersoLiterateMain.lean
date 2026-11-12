@@ -16,6 +16,7 @@ public import Lean.Server.References
 
 public import VersoLiterate
 public import Verso.SyntaxUtils
+import Verso.Output.Html.Markdown
 
 public section
 
@@ -25,6 +26,7 @@ open SubVerso Module
 open SubVerso.Highlighting (Highlighted highlight highlightMany)
 open VersoLiterate
 open Verso.Doc
+open Verso.Output.Html
 
 
 def helpText : String :=
@@ -408,7 +410,7 @@ where
           if let some doc := doc? then
             return #[.modDoc (← toModLit doc |>.run docMsgs)]
         else if stx[1].isOfKind ``commentBody then
-          if let some doc := MD4Lean.parse stx[1][0].getAtomVal then
+          if let some doc := Markdown.parse stx[1][0].getAtomVal then
             return #[.markdownModDoc doc]
 
     highlight' (Option.map (#[·]) res.info[0]? |>.getD #[]) stx true
@@ -423,7 +425,7 @@ where
         if let some v ← findInternalDocString? (← getEnv) declName then
           some <$> do match v with
           | .inl x =>
-            let some md := MD4Lean.parse x
+            let some md := Markdown.parse x
               | pure (Code.markdown i (some declName) ⟨#[.code #[] #[] none #["Failed to parse Markdown:\n", x]]⟩)
             pure (Code.markdown i (some declName) md)
           | .inr x =>
@@ -451,7 +453,7 @@ where
   parseDocComment (text : String) : Code :=
     let docText := (text.dropPrefix "/-- " |>.toString |>.dropSuffix " -/"
           |>.dropSuffix "\n-/" |>.dropSuffix "-/").trimAsciiEnd.toString
-    match MD4Lean.parse docText with
+    match Markdown.parse docText with
     | some md => .markdown 0 none md
     | none => .markdown 0 none ⟨#[.code #[] #[] none #[docText]]⟩
 
@@ -554,10 +556,6 @@ section ImageCollection
 private def isRelativeImagePath (url : String) : Bool :=
   !url.startsWith "/" && (url.splitOn "://").length <= 1
 
-/-- Converts an MD4Lean `AttrText` array to a plain string. -/
-private def attrTextToString (src : Array MD4Lean.AttrText) : String :=
-  String.join (src.map (fun | .normal s => s | .entity e => e | .nullchar => "") |>.toList)
-
 open MD4Lean in
 /-- Collects relative image paths from an MD4Lean document. -/
 private partial def collectMdImages (doc : Document) : Array String :=
@@ -576,7 +574,7 @@ where
 
   collectText : Text → Array String
     | .img src _title _alt =>
-      let s := attrTextToString src
+      let s := Markdown.attrText src
       if isRelativeImagePath s then #[s] else #[]
     | .a _ _ _ xs | .em xs | .strong xs | .del xs | .u xs | .wikiLink _ xs => collectTexts xs
     | .normal _ | .nullchar | .br _ | .softbr _ | .code _ | .entity _ | .latexMath _ | .latexMathDisplay _ => #[]

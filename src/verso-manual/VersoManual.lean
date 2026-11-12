@@ -343,12 +343,8 @@ def traverseMulti (depth : Nat) (path : Path) (part : Part Manual) : TraverseM (
         pure <| .mk (← title.mapM Manual.traverseInline) titleString «meta» content' subParts'
 
 open Verso.Output.Html in
-def TraverseState.ofConfig (config : HtmlConfig) : TraverseState := Id.run do
-  let mut st : TraverseState := .initialize config.toHtmlAssets
-  for f in config.features do
-    for li in f.licenseInfo do
-      st := st.addLicenseInfo li
-  return st
+def TraverseState.ofConfig (config : HtmlConfig) : TraverseState :=
+  .initialize config.toHtmlAssets
 
 /--
 The monad in which manuals are converted to an output format.
