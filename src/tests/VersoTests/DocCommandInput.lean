@@ -26,25 +26,42 @@ def showMessage (m : Message) : IO String := do
 
 /--
 Elaborates {lit}`input` as the rest of a module, in the current environment. Returns the resulting
-environment, and each command's messages rendered with the command's number.
+environment, and the snapshot of each command in order.
 -/
-def elabModuleRest (input : String) : CommandElabM (Environment × String) := do
+def elabModuleCommands (input : String) :
+    CommandElabM (Environment × Array Language.Lean.CommandParsedSnapshot) := do
   let inputCtx := Parser.mkInputContext input "Input.lean"
   let st ← IO.processCommandsIncrementally inputCtx {}
     (Command.mkState (← getEnv) {} (← getOptions)) none
-  let mut out := #[]
+  let mut snaps := #[]
   let mut snap := st.initialSnap
-  let mut i := 0
   repeat
-    let msgs := Language.toSnapshotTree snap.elabSnap |>.getAll
-      |>.map (·.diagnostics.msgLog) |>.foldl (· ++ ·) MessageLog.empty
-    for m in msgs.toArray do
-      out := out.push s!"command {i}: {← showMessage m}"
-    i := i + 1
+    snaps := snaps.push snap
     match snap.nextCmdSnap? with
     | some next => snap := next.task.get
     | none => break
-  return (st.commandState.env, "\n".intercalate out.toList)
+  return (st.commandState.env, snaps)
+
+/-- The messages of the command whose snapshot is {lit}`snap`. -/
+def commandMessages (snap : Language.Lean.CommandParsedSnapshot) : MessageLog :=
+  Language.toSnapshotTree snap.elabSnap |>.getAll
+    |>.map (·.diagnostics.msgLog) |>.foldl (· ++ ·) MessageLog.empty
+
+/-- The info trees of the command whose snapshot is {lit}`snap`. -/
+def commandInfoTrees (snap : Language.Lean.CommandParsedSnapshot) : Array InfoTree :=
+  Language.toSnapshotTree snap.elabSnap |>.getAll |>.filterMap (·.infoTree?)
+
+/--
+Elaborates {lit}`input` as the rest of a module, in the current environment. Returns the resulting
+environment, and each command's messages rendered with the command's number.
+-/
+def elabModuleRest (input : String) : CommandElabM (Environment × String) := do
+  let (env, snaps) ← elabModuleCommands input
+  let mut out := #[]
+  for h : i in [0:snaps.size] do
+    for m in (commandMessages snaps[i]).toArray do
+      out := out.push s!"command {i}: {← showMessage m}"
+  return (env, "\n".intercalate out.toList)
 
 unsafe def evalDocUnsafe (env : Environment) (opts : Options) (n : Name) : IO (VersoDoc Genre.none) :=
   IO.ofExcept <| env.evalConst (VersoDoc Genre.none) opts n

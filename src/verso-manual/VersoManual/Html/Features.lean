@@ -82,7 +82,7 @@ public def cssFilePaths : HtmlFeature → Array String
 Returns the JS file paths and whether they should be deferred, for page headers.
 -/
 public def jsFilePaths : HtmlFeature → Array (String × Bool)
-  | .KaTeX => #[("katex/katex.js", false), ("katex/math.js", false)]
+  | .KaTeX => #[("katex/katex.js", true), ("katex/math.js", true)]
   -- This is handled specially due to the need to generate the search index
   | .search => #[]
 
@@ -91,14 +91,7 @@ Writes the files for a feature to the destination directory.
 -/
 public def emitFiles : HtmlFeature → System.FilePath → IO Unit
   | .KaTeX, dir => do
-    IO.FS.createDirAll (dir / "katex")
-    IO.FS.writeFile (dir / "katex" / "katex.css") katex.css
-    IO.FS.writeFile (dir / "katex" / "katex.js") katex.js
-    IO.FS.writeFile (dir / "katex" / "math.js") math.js
-    for (name, contents) in katexFonts do
-      let path := dir / name
-      path.parent.forM IO.FS.createDirAll
-      IO.FS.writeBinFile path contents
+    writeKaTeX (dir / "katex")
   -- This is handled specially due to the need to generate the search index
   | .search, _ => pure ()
 
@@ -323,9 +316,22 @@ public structure HtmlAssets where
   extraCssFiles : HashSet CssFile := {}
   /-- Extra files to be placed in the Verso data directory -/
   extraDataFiles : HashSet DataFile := {}
-  /-- Open-source licenses, to be collected for display in the final document. -/
+  /--
+  Open-source licenses, to be collected for display in the final document. The licenses of the
+  enabled {name (full := HtmlAssets.features)}`features` are added automatically, so they don't need
+  to be listed here.
+  -/
   licenseInfo : HashSet LicenseInfo := {}
 deriving Repr, Inhabited
+
+/--
+Returns the open-source licenses of the assets, including the licenses of the enabled features.
+-/
+public def HtmlAssets.allLicenseInfo (assets : HtmlAssets) : HashSet LicenseInfo := Id.run do
+  let mut licenses := assets.licenseInfo
+  for f in assets.features do
+    licenses := licenses.insertMany f.licenseInfo
+  return licenses
 
 /--
 Returns all the files that should be written in the {lit}`-verso-data` directory.

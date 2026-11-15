@@ -29,8 +29,14 @@ from its start. The syntax, the end position and the errors must match the first
 
 The documents are small. Each has a parse error in one block, followed by more paragraphs. In most
 of them, the error is the unfinished role `{hig`. The interactive test
-`parse_errors_blockquote_in_directive.lean` checks one of these documents through the language
-server.
+`parse_errors_blockquote_in_directive.lean` checks one of these documents through the language server.
+
+Parsing a command gives its syntax, its parse errors and the position where it ends. After an edit,
+Lean parses a command again and compares only the new syntax with the old (`Syntax.eqWithInfo`,
+which also compares positions). When they are equal, Lean keeps the old command, with its errors and
+its end. That is correct only if commands with equal syntax also have equal errors and equal
+ends. When they don't, the editor shows a parse error that belongs to an earlier text. These tests
+also ensure that the same text always gives the same error.
 -/
 
 namespace Verso.IncrementalParsingTest
@@ -45,16 +51,21 @@ structure Parsed where
   failed : Bool
 deriving BEq, Repr
 
-/-- Parses the command that starts at position `pos` of `input`. -/
-def parseAt (input : String) (pos : String.Pos.Raw) : IO Parsed := do
+/-- Parses the command that starts at position `pos` of `input`, returning its syntax too. -/
+def parseSyntaxAt (input : String) (pos : String.Pos.Raw) : IO (Syntax × Parsed) := do
   let env ← mkEmptyEnvironment
   let ictx := mkInputContext input "<input>"
   let pmctx : ParserModuleContext := { env, options := {} }
   let s :=
     blockCommandRecovery.run ictx pmctx (getTokenTable env) ((mkParserState input).setPos pos)
-  let stx := if s.stxStack.size > 0 then toString s.stxStack.back else ""
+  let tree := if s.stxStack.size > 0 then s.stxStack.back else .missing
+  let stx := if s.stxStack.size > 0 then toString tree else ""
   let errors := s.allErrors.toList.map fun (p, _, e) => (p, toString e)
-  return { stx, endPos := s.pos, errors, failed := s.hasError }
+  return (tree, { stx, endPos := s.pos, errors, failed := s.hasError })
+
+/-- Parses the command that starts at position `pos` of `input`. -/
+def parseAt (input : String) (pos : String.Pos.Raw) : IO Parsed :=
+  (·.2) <$> parseSyntaxAt input pos
 
 /-- Splits a document into top-level block commands, returning each start position and result. -/
 def commands (input : String) : IO (Array (String.Pos.Raw × Parsed)) := do
@@ -403,3 +414,60 @@ hello
 "
 
 @[test] def roleChainWithErrors : Test := checkInvariant roleChain
+
+/--
+A document with a paragraph that begins with an unfinished link destination, `](`. The paragraph's
+parser doesn't leave a tree, so in prior versions of the error recovery, its command's syntax didn't
+have positions.
+-/
+def linkDestination : String :=
+"Trees grow.
+
+](leaves
+turn red
+
+Mycelium spreads.
+
+Leaves fall.
+"
+
+/--
+The changes of `changes` at `cut`, and replacements of the character at `cut` by one character.
+-/
+def changesInside (input : String) (cut : String.Pos.Raw) : List String :=
+  let pre := String.Pos.Raw.extract input 0 cut
+  let next := if cut < input.rawEndPos then cut + cut.get input else cut
+  let rest := String.Pos.Raw.extract input next input.rawEndPos
+  changes input cut ++ ["x", "}", "\n"].map (pre ++ · ++ rest)
+
+/--
+Finds the changes inside a command's text after which the command's syntax is equal to that of its
+first parse, with positions, while its errors or its end differ. Each result describes the command
+and the change.
+-/
+def staleParses (input : String) : IO (Array String) := do
+  let mut out := #[]
+  for (start, parsed) in ← commands input do
+    let (stx, _) ← parseSyntaxAt input start
+    for cut in lineStarts input do
+      if cut < start || cut ≥ parsed.endPos then continue
+      for changed in changesInside input cut do
+        let (stx', parsed') ← parseSyntaxAt changed start
+        let sameParse := parsed'.endPos == parsed.endPos && parsed'.errors == parsed.errors
+        if stx'.eqWithInfo stx && !sameParse then
+          let suffix := String.Pos.Raw.extract changed cut changed.rawEndPos
+          out := out.push s!"command at byte {start.byteIdx} ends at {parsed.endPos.byteIdx} with \
+            errors at {parsed.errors.map (·.1.byteIdx)}. Changing the text at byte {cut.byteIdx} \
+            to {repr suffix} leaves its syntax equal, and it ends at {parsed'.endPos.byteIdx} with \
+            errors at {parsed'.errors.map (·.1.byteIdx)}."
+  return out
+
+/--
+This test checks that a command's syntax determines its parse: a change inside a command's text that
+leaves its syntax equal, with positions, leaves its errors and its end equal too. Otherwise Lean
+keeps a command's errors from an earlier text after an edit.
+-/
+@[test] def equalSyntaxEqualParse : Test := do
+  let found ← staleParses linkDestination
+  assertTrue found.isEmpty "a change leaves a command's syntax equal and changes its parse"
+    (detail? := some ("\n".intercalate found.toList))

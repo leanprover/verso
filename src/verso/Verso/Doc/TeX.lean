@@ -264,12 +264,19 @@ where
   | .concat items => TeX.seq <$> items.mapM Block.toTeX
   | .other container content => GenreTeX.block Inline.toTeX Block.toTeX container content
 
+/--
+Returns the TeX of the part's title.
+
+The title is rendered in the fragile context, because titles can't accommodate `\Verb`.
+-/
+public defmethod Part.titleToTeX (p : Part g) : TeXT g m TeX :=
+  inFragile <| TeX.seq <$> p.title.mapM Inline.toTeX
 
 public partial defmethod Part.toTeX (p : Part g) (label : Option String) : TeXT g m TeX :=
   match p.metadata with
   | .none => do
     pure \TeX{
-      \Lean{← header (← inFragile <| p.title.mapM Inline.toTeX) label}
+      \Lean{← header (← p.titleToTeX) label}
       "\n\n"
       \Lean{← p.content.mapM Block.toTeX}
       "\n\n"

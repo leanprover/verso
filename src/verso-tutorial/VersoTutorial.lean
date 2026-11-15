@@ -17,6 +17,7 @@ public import VersoBlog.Component
 public import VersoBlog.Template
 public import VersoBlog.Generate
 public import VersoTutorial.Basic
+import Verso.Output.Html.KaTeX
 
 public section
 
@@ -518,6 +519,8 @@ def emit (tutorials : Tutorials) (navSite : Option Blog.Site) : EmitM Unit := do
   let dir := (← read).config.destination
   ensureDir dir
   (← readThe Manual.TraverseState).writeFiles (dir / "-verso-data")
+  -- The blog theme's pages load KaTeX from here.
+  Verso.Output.Html.writeKaTeX (dir / "-verso-data" / "katex")
 
   let site ← toSite tutorials
   let (site, blogState) ← site.traverse (← blogConfig) (← read).components

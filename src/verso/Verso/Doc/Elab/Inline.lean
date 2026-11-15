@@ -19,57 +19,43 @@ open Verso.ArgParse (SigDoc)
 
 set_option backward.privateInPublic false
 
-/-- The message that reports that no elaborator accepts `stx`. -/
-def unexpectedSyntaxMessage (stx : Syntax) : MessageData :=
-  m!"unexpected syntax{indentD stx}"
-
 public def throwUnexpected [Monad m] [MonadError m] (stx : Syntax) : m α :=
-  throwErrorAt stx (unexpectedSyntaxMessage stx)
+  throwErrorAt stx "unexpected syntax{indentD stx}"
 
 /--
-Runs `act`, which elaborates `stx`. In a top-level block that is partial syntax, if `stx` contains
-`.missing` and `act` throws an error, then the error is logged and the result is the constant
-`empty`. Lean has already reported the parse error that left the `.missing`. Otherwise, the result
-is that of `act`.
+Runs `act`, which elaborates an inline or a block. If `act` throws an error, the error is logged and
+the result is the constant `empty`, so that the rest of the enclosing block is elaborated.
 
-`empty` is returned instead of `sorry` because this is called when the final document is built, not
-when the block is elaborated. A `sorry` warning would appear in the last block of the document
-rather than the block's syntax.
+An abort exception results in `empty` without a message, because it signals that the error is
+already logged. Interrupts, runtime exceptions and other internal exceptions are rethrown.
 -/
-public def elabWithMissing (stx : Syntax) (empty : Name)
-    (act : DocElabM (TSyntax `term)) : DocElabM (TSyntax `term) := do
-  unless (← readThe PartElabM.State).blockHasMissing && stx.hasMissing do return (← act)
+public def elabOrEmpty (empty : Name) (act : DocElabM (TSyntax `term)) :
+    DocElabM (TSyntax `term) := do
   try act
   catch ex =>
+    -- Lean's `try` in `TermElabM` already passes these on.
     if ex.isInterrupt || ex.isRuntime then throw ex
-    logException ex
+    match ex with
+    | .internal id _ => unless isAbortExceptionId id do throw ex
+    | .error .. => logException ex
     return mkCIdent empty
 
 /--
-Elaborates `.missing` as an inline or a block. In a top-level block that is partial syntax, the
-result is the constant `empty`. Elsewhere, the result is `sorry` of the type `type`.
+Elaborates an inline into syntax that denotes an expression of type `Inline genre`.
+
+Inlines whose elaboration fails, either due to an exception thrown from their expander or all
+expanders rejecting them as unknown syntax, have their exceptions logged and elaborate to
+`Inline.empty`.
+
+`Syntax.missing` elaborates to `Inline.empty` without an additional message because Lean has already
+reported the parse error that gave rise to it.
 -/
-public def elabMissing (empty : Name) (type : Name) : DocElabM (TSyntax `term) := do
-  if (← readThe PartElabM.State).blockHasMissing then return mkCIdent empty
-  ``(sorryAx ($(mkCIdent type) _) (synthetic := true))
-
-/--
-Reports that no elaborator accepts `stx`.
-
-In a top-level block that contains `Syntax.missing`, `stx` may be a node that the parser left
-unfinished. There, the error is logged at `stx` and the result is the constant `empty`. Elsewhere,
-the error is thrown.
--/
-public def elabUnexpected (stx : Syntax) (empty : Name) : DocElabM (TSyntax `term) := do
-  unless (← readThe PartElabM.State).blockHasMissing do throwUnexpected stx
-  logErrorAt stx (unexpectedSyntaxMessage stx)
-  return mkCIdent empty
-
 public partial def elabInline (inline : VersoInline) : DocElabM (TSyntax `term) :=
-  withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
+  withRef inline <| withFreshMacroScope <| withIncRecDepth <|
+  elabOrEmpty ``Verso.Doc.Inline.empty do
   match inline.raw with
-  | .missing => elabMissing ``Verso.Doc.Inline.empty ``Verso.Doc.Inline
-  | stx@(.node _ kind _) => elabWithMissing stx ``Verso.Doc.Inline.empty do
+  | .missing => return mkCIdent ``Verso.Doc.Inline.empty
+  | stx@(.node _ kind _) => do
     let env ← getEnv
     match (← liftMacroM (expandMacroImpl? env stx)) with
     | some (_decl, stxNew?) => -- TODO terminfo here? Right now, we suppress most uses of it.
@@ -79,7 +65,7 @@ public partial def elabInline (inline : VersoInline) : DocElabM (TSyntax `term) 
           elabInline ⟨stxNew⟩
     | none =>
       let some view := InlineView.of ⟨stx⟩
-        | elabUnexpected stx ``Verso.Doc.Inline.empty
+        | throwUnexpected stx
       let exp ← inlineExpandersFor kind
       for e in exp do
         try
@@ -90,6 +76,6 @@ public partial def elabInline (inline : VersoInline) : DocElabM (TSyntax `term) 
             if id == unsupportedSyntaxExceptionId then pure ()
             else throw ex
           | ex => throw ex
-      elabUnexpected stx ``Verso.Doc.Inline.empty
+      throwUnexpected stx
   | other =>
-    elabUnexpected other ``Verso.Doc.Inline.empty
+    throwUnexpected other

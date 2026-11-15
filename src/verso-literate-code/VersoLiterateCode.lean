@@ -9,6 +9,7 @@ public import VersoLiterate
 public import Verso.Doc.Html
 public import Verso.Output.Html
 public import Verso.Output.Html.ElasticLunr
+public import Verso.Output.Html.Markdown
 public import Std.Data.HashMap
 public import Verso.FS
 public import VersoSearch
@@ -22,6 +23,7 @@ open Lean
 open Verso.Output.Html
 open Verso.Code
 open Verso (MonadBuildLog BuildLogT)
+open Verso.Markdown (HeaderMapping)
 
 open VersoLiterate
 open Std
@@ -83,7 +85,7 @@ def moduleContext (modName : Name) (litConfig : LiterateConfig)
   let mut modPrefix := Name.anonymous
   for h : i in [0:components.length] do
     have : i < components.length := by have := h.2.1; grind
-    modPrefix := modPrefix.mkStr (components[i].toString)
+    modPrefix := modPrefix ++ components[i]
     let resolved := litConfig.resolveForModule modPrefix
     let segments := match resolved.url with
       | some u => u.splitOn "/" |>.filter (· ≠ "")
@@ -124,91 +126,44 @@ structure HtmlState where
 
 abbrev EmitM := ReaderT HtmlContext (StateRefT HtmlState (BuildLogT IO))
 
+open Verso.Multi in
+/-- The heading information that carries over from one module doc to the next on a page. -/
+structure HeadingState where
+  /-- The HTML IDs that are in use on the page. -/
+  usedIds : Std.HashSet Slug := {}
+  /-- The Markdown headers that enclose the current position. -/
+  nesting : HeaderMapping := []
+
 open Verso.Output Html Verso.Multi in
 open MD4Lean in
 /--
 Renders a Markdown document to HTML, optionally generating unique heading IDs. When `trackHeadings`
-is true, returns heading entries and updated used-ID set. When false, headers render without IDs and
-are not included in the heading entry list. Typically, headers in docstrings do not receive IDs and
-are not tracked, while headers in moduledocs do.
+is true, returns heading entries. When false, headers render without IDs and are not included in the
+heading entry list. Typically, headers in docstrings do not receive IDs and are not tracked, while
+headers in moduledocs do receive them and are tracked.
+
+Header levels are nested relative to the headers in the heading state.
 -/
-partial def md2Html (md : MD4Lean.Document) (trackHeadings : Bool := false)
-    (usedIds : Std.HashSet Slug := {}) :
-    Html × Array Heading × Std.HashSet Slug := Id.run do
+def md2Html [Monad m] [MonadStateOf HeadingState m] (md : MD4Lean.Document)
+    (trackHeadings : Bool := false) : m (Html × Array Heading) := do
   let mut out := Html.empty
   let mut hdgs : Array Heading := #[]
-  let mut used := usedIds
   for b in md.blocks do
-    match b with
-    | .header n title =>
-      if trackHeadings then
-        let titleText := title.map headerText |>.toList |> String.join
-        let slug := Slug.unique used titleText.sluggify
-        used := used.insert slug
-        let hId := toString slug
-        let titleHtml := texts title
-        hdgs := hdgs.push { level := n, title := titleHtml, htmlId := hId }
-        out := out ++ .element s!"h{n + 1}" #[("id", hId)] titleHtml
-      else
-        out := out ++ block (.header n title)
-    | b => out := out ++ block b
-  (out, hdgs, used)
-
-where
-  block : MD4Lean.Block → Html
-  | .p txt => html%{<p>{txt.map text}</p>}
-  | .ul _ _ items => html%{<ul>{items.map fun ⟨_, _, _, txt⟩ => blocks txt}</ul>}
-  | .ol _ _ _ items => html%{<ol>{items.map fun ⟨_, _, _, txt⟩ => blocks txt}</ol>}
-  | .table hd rows =>
-    html%{<table>
-        <thead><tr>{hd.map fun h => html%{<th>{texts h}</th>} }</tr></thead>
-        <tbody>
-          {rows.map fun r => html%{<tr>{r.map fun c => html%{<td>{texts c}</td>} }</tr>} }
-        </tbody>
-      </table>
-    }
-  | .header n title => .element s!"h{n + 1}" #[] <| texts title
-  | .blockquote bs => html%{<blockquote>{blocks bs}</blockquote>}
-  | .hr => html%{<hr/>}
-  | .html xs => .raw (String.join xs.toList)
-  | .code _ _ _ ss => html%{<pre><code>{String.join ss.toList}</code></pre>}
-
-  blocks : Array MD4Lean.Block → Html
-  | xs => xs.map block
-
-  headerText : MD4Lean.Text → String
-  | .normal s => s
-  | .code s => s.toList |> String.join
-  | .em xs | .strong xs | .del xs => xs.map headerText |>.toList |> String.join
-  | .a _ _ _ txt => txt.map headerText |>.toList |> String.join
-  | _ => ""
-
-  text : MD4Lean.Text → Html
-  | .normal s => s
-  | .a href title _ txt => html%{<a href={attr href} title={attr title}>{texts txt}</a>}
-  | .nullchar => .empty
-  | .em xs => html%{<em>{texts xs}</em>}
-  | .strong xs => html%{<strong>{texts xs}</strong>}
-  | .del xs => html%{<del>{texts xs}</del>}
-  | .br _ => html%{<br />}
-  | .softbr s => s
-  | .code c => html%{<code>{String.join c.toList}</code>}
-  | .img src title alt => html%{<img src={attr src} title={attr title} alt={String.join <| Array.toList <| alt.filterMap fun | .normal s => some s | _ => none}/>}
-  | .u xs => texts xs -- TODO
-  | .wikiLink _target txt => texts txt -- TODO
-  | .entity x => .raw x
-  | .latexMath _x => .empty -- TODO
-  | .latexMathDisplay _x => .empty -- TODO
-
-  texts : Array MD4Lean.Text → Html
-  | xs => xs.map text
-
-  attr xs := xs.map attrText |>.toList |> String.join
-
-  attrText : MD4Lean.AttrText → String
-  | .normal s => s
-  | .nullchar => ""
-  | .entity e => e
+    match b, trackHeadings with
+    | .header n title, true =>
+      let (depth, slug) ← modifyGetThe HeadingState fun { usedIds, nesting } =>
+        let (depth, nesting) := nesting.addHeader n
+        let slug := Slug.unique usedIds (Markdown.plain title).sluggify
+        ((depth, slug), { usedIds := usedIds.insert slug, nesting })
+      let hId := toString slug
+      let titleHtml := Markdown.texts title
+      hdgs := hdgs.push { level := depth + 1, title := titleHtml, htmlId := hId }
+      out := out ++ Markdown.header depth #[("id", hId)] titleHtml (topLevel := 2)
+    | b, _ =>
+      out := out ++ (← modifyGetThe HeadingState fun st =>
+        let (html, nesting) := (Markdown.block b (topLevel := 2)).run st.nesting
+        (html, { st with nesting }))
+  return (out, hdgs)
 
 open MD4Lean in
 /--
@@ -261,10 +216,6 @@ section ImageRewriting
 private def isRelativeImagePath (url : String) : Bool :=
   !url.startsWith "/" && (url.splitOn "://").length <= 1
 
-/-- Converts an MD4Lean `AttrText` array to a plain string. -/
-private def attrTextToString (src : Array MD4Lean.AttrText) : String :=
-  String.join (src.map (fun | .normal s => s | .entity e => e | .nullchar => "") |>.toList)
-
 open MD4Lean in
 /--
 Rewrites image URLs in an MD4Lean document using the given function.
@@ -284,7 +235,7 @@ where
 
   rewriteText : Text → Text
     | .img src title alt =>
-      let s := attrTextToString src
+      let s := Markdown.attrText src
       if isRelativeImagePath s then .img #[.normal (f s)] title alt
       else .img src title alt
     | .a href title checked xs => .a href title checked (xs.map rewriteText)
@@ -475,13 +426,14 @@ partial def _root_.SubVerso.Highlighting.Highlighted.dropTextWhile
 open Verso.Output Html Verso.Multi Verso Doc Html in
 /--
 Renders a `Part Literate` to HTML, generating a unique heading ID for the part's title
-and recursively for all sub-parts. Returns the HTML, accumulated headings, and updated used-ID set.
+and recursively for all sub-parts. Returns the HTML and accumulated headings.
 Replicates the structure of `Verso.Doc.Html.Part.toHtml` but with heading ID assignment.
 -/
-partial def partToHtmlWithIds [Monad m] (p : Part Literate) (usedIds : Std.HashSet Slug) :
-    HtmlT Literate m (Html × Array Heading × Std.HashSet Slug) := do
-  let slug := Slug.unique usedIds (toString p.titleString).sluggify
-  let mut used := usedIds.insert slug
+partial def partToHtmlWithIds [Monad m] [MonadStateOf HeadingState m] (p : Part Literate) :
+    HtmlT Literate m (Html × Array Heading) := do
+  let slug ← modifyGetThe HeadingState fun st =>
+    let slug := Slug.unique st.usedIds (toString p.titleString).sluggify
+    (slug, { st with usedIds := st.usedIds.insert slug })
   let hId := toString slug
   let level := (← HtmlT.options).headerLevel
   let titleHtml : Html := .seq (← p.title.mapM fun (i : Inline Literate) => ToHtml.toHtml i)
@@ -490,14 +442,13 @@ partial def partToHtmlWithIds [Monad m] (p : Part Literate) (usedIds : Std.HashS
   let mut subHtml := Html.empty
   let mut hdgs : Array Heading := #[{ level, title := titleHtml, htmlId := hId }]
   for subPart in p.subParts do
-    let (subPartHtml, subHdgs, used') ←
+    let (subPartHtml, subHdgs) ←
       HtmlT.withOptions (fun o => {o with headerLevel := o.headerLevel + 1}) <|
-      partToHtmlWithIds subPart used
-    used := used'
+      partToHtmlWithIds subPart
     hdgs := hdgs ++ subHdgs
     subHtml := subHtml ++ subPartHtml
   let html := html%{<section>{headerHtml}{contentHtml}{subHtml}</section>}
-  return (html, hdgs, used)
+  return (html, hdgs)
 
 open Verso.Output Html in
 open Verso Doc Html Verso.Multi in
@@ -505,21 +456,22 @@ open SubVerso.Highlighting in
 /--
 Renders a module item's code to HTML.
 
-Returns the HTML and any headings encountered (for ToC generation). Each heading is `(level, title,
-htmlId)`.
+Returns the HTML and any headings encountered (for ToC generation).
 -/
-def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (docstringsAsText : Bool := false)
-    (usedHtmlIds : Std.HashSet Slug := {}) : HtmlT Literate m (Html × Array Heading × Std.HashSet Slug) := do
+def renderCode [Monad m] [MonadStateOf HeadingState m] (itemIdx : Nat)
+    (item : VersoLiterate.ModuleItem') (docstringsAsText : Bool := false) :
+    HtmlT Literate m (Html × Array Heading) := do
   let mut html := .empty
   let mut nextIndent := 0
   let mut hasContent := false
   let mut headings : Array Heading := #[]
-  let mut usedIds := usedHtmlIds
   let docCls := if docstringsAsText then "mod-doc" else ""
   for c in item.code, idx in 0...* do
     match c with
     | .markdown i _ s =>
-      html := html ++ html%{<div class={s!"md-text {docCls}"} style={s!"--indent: {i}"}>{(md2Html s).1}</div>}
+      -- A docstring's headers form their own outline.
+      let (mdHtml, _) := (md2Html s : StateM HeadingState _).run' {}
+      html := html ++ html%{<div class={s!"md-text {docCls}"} style={s!"--indent: {i}"}>{mdHtml}</div>}
       hasContent := true
     | .verso i _ x => do
       let text ←
@@ -548,10 +500,9 @@ def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (doc
         doc.text.mapM fun b : Block Literate => ToHtml.toHtml b
       let mut sub := Html.empty
       for (lvl, p) in doc.sections do
-        let (sectionHtml, sectionHdgs, usedIds') ←
+        let (sectionHtml, sectionHdgs) ←
           withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true, options.headerLevel := lvl + 1}) <|
-          partToHtmlWithIds p usedIds
-        usedIds := usedIds'
+          partToHtmlWithIds p
         headings := headings ++ sectionHdgs
         sub := sub ++ sectionHtml
       let idAttr := htmlId.map ("id", ·.htmlId.toString) |>.toArray
@@ -559,11 +510,10 @@ def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (doc
     | .markdownModDoc doc =>
       let htmlId := (← read).traverseState.modDocLink (← read).traverseContext.currentModule itemIdx idx
       let idAttr := htmlId.map ("id", ·.htmlId.toString) |>.toArray
-      let (mdHtml, mdHdgs, used') := md2Html doc (trackHeadings := true) usedIds
-      usedIds := used'
+      let (mdHtml, mdHdgs) ← md2Html doc (trackHeadings := true)
       headings := headings ++ mdHdgs
       html := html ++ html%{<div class="md-text mod-doc" {...idAttr}>{mdHtml}</div>}
-  return (html, headings, usedIds)
+  return (html, headings)
 where
   -- Trimming the leading newline is necessary because we display each section in HTML block mode,
   -- and we don't want to end up with an extra visual blank line between sections.

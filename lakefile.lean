@@ -207,9 +207,14 @@ private def errataDiscoveredModule (pkg : Package) : Lean.Name :=
 private def errataMainModule (pkg : Package) : Lean.Name :=
   errataGeneratedRoot pkg ++ `Main
 
-/-- The generated bridge module of a package, as a library in said package. -/
+/--
+The generated bridge module of a package, as a library in said package.
+-/
 private def errataDiscoveredLib (pkg : Package) : LeanLib where
-  pkg
+  -- The library is absent from the package's configuration, so Lake doesn't resolve the generated main's
+  -- import of the bridge, and Lean looks for the bridge in the build directory. Lake always keeps this
+  -- one module's artifacts there.
+  pkg := { pkg with config.restoreAllArtifacts? := some true }
   name := `ErrataDiscovered
   config.srcDir := errataRunnerSrcDir pkg
   config.roots := #[errataDiscoveredModule pkg]
@@ -528,11 +533,8 @@ script run (args) do
     if let some parent := file.parent then IO.FS.createDirAll parent
     let changed ← if ← file.pathExists then pure ((← IO.FS.readFile file) != src) else pure true
     if changed then IO.FS.writeFile file src
-  -- Build and run the root package's runner. The generated modules are not part of one of the
-  -- workspaces's library targets, so Lake does not resolve them as imports. Instead, Lean finds
-  -- them in the build directory, where artifacts from Lake's cache are restored.
-  let exePath ← { ws with lakeEnv.restoreAllArtifacts? := some true }.runBuild
-    (ws.root.facet `errataRunner).fetch
+  -- Build and run the root package's runner.
+  let exePath ← runBuild (ws.root.facet `errataRunner).fetch
   -- Each of the driver's warnings follows `--driver-warning`, which must match
   -- `Errata.driverWarningFlag`; the runner reports them alongside its own.
   let warningArgs := driverWarnings.flatMap (#["--driver-warning", ·])

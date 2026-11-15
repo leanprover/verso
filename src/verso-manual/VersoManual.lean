@@ -343,12 +343,8 @@ def traverseMulti (depth : Nat) (path : Path) (part : Part Manual) : TraverseM (
         pure <| .mk (← title.mapM Manual.traverseInline) titleString «meta» content' subParts'
 
 open Verso.Output.Html in
-def TraverseState.ofConfig (config : HtmlConfig) : TraverseState := Id.run do
-  let mut st : TraverseState := .initialize config.toHtmlAssets
-  for f in config.features do
-    for li in f.licenseInfo do
-      st := st.addLicenseInfo li
-  return st
+def TraverseState.ofConfig (config : HtmlConfig) : TraverseState :=
+  .initialize config.toHtmlAssets
 
 /--
 The monad in which manuals are converted to an output format.
@@ -425,6 +421,7 @@ def emitTeX (config : Config) (text : Part Manual) : EmitM Unit := do
   let frontMatter := frontMatter ++ frontParts
   let (chapters, extra) ← mainMatter.mapM (·.toTeX (m := EmitM) none (opts, {}, state, {})) extra
   let (appendices, extra) ← backMatter.mapM (·.toTeX (m := EmitM) none (opts, {}, state, {})) extra
+  let (title, extra) ← text.titleToTeX (m := EmitM) (opts, {}, state, {}) extra
   let dir := config.destination.join "tex"
   ensureDir dir
   let packages := state.texPackages
@@ -432,7 +429,8 @@ def emitTeX (config : Config) (text : Part Manual) : EmitM Unit := do
   withFile (dir.join "main.tex") .write fun h => do
     if config.verbose then
       IO.println s!"Saving {dir.join "main.tex"}"
-    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList config.twoside)
+    h.putStrLn <|
+      preamble title.asString authors date packages.toList preambleItems.toList config.twoside
     -- \frontmatter is inserted by our hardcoded preamble before the ToC, so it doesn't get inserted
     -- here. If there's any text at the start of the front matter, then we need to clear it to a new
     -- recto page after the ToC

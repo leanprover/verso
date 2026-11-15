@@ -302,7 +302,8 @@ info: Verso.Doc.Part.mk
   none
   #[Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
-        Verso.Doc.Inline.text "."]]
+        Verso.Doc.Inline.text "."],
+    Verso.Doc.Block.concat #[]]
   #[]
 -/
 #test_msgs in
@@ -326,7 +327,7 @@ info: Verso.Doc.Part.mk
   #[Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
         Verso.Doc.Inline.text "."]]
-  #[]
+  #[Verso.Doc.Part.mk #[Verso.Doc.Inline.text "A header that is too deep"] "A header that is too deep" none #[] #[]]
 -/
 #test_msgs in
 #eval checkDocInput "#doc (.none) \"Last block is a header that is too deep\" =>

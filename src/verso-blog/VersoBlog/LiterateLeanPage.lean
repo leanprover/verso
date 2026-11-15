@@ -41,17 +41,16 @@ meta def loadModuleContent
   let projectDir := ((← IO.currentDir) / leanProject).normalize
   let toolchain ← getProjectToolchain projectDir (overrideToolchain := overrideToolchain)
 
-  discard <| runCmdWithToolchain projectDir toolchain #["lake", "build", s!"+{mod}"] (restoreArtifacts := true)
-  IO.FS.withTempFile fun h f => do
-    discard <| runCmdWithToolchain projectDir toolchain #["lake", "exe", "subverso-extract-mod", mod, f.toString]
-    h.rewind
-
-    let .ok json := Json.parse (← h.readToEnd)
-      | throw <| IO.userError s!"Expected JSON"
-    match Module.fromJson? json with
-    | .error err =>
-      throw <| IO.userError s!"Couldn't parse JSON from output file: {err}\nIn:\n{json}"
-    | .ok val => pure val.items
+  let res ← runCmdWithToolchain projectDir toolchain #["lake", "query", s!"+{mod}:highlighted"]
+    (restoreArtifacts := false)
+  let some file := res.stdout.splitToList (· == '\n') |>.find? (!·.isEmpty)
+    | throw <| IO.userError s!"No result returned from build of {mod}"
+  let .ok json := Json.parse (← IO.FS.readFile file)
+    | throw <| IO.userError s!"Expected JSON"
+  match Module.fromJson? json with
+  | .error err =>
+    throw <| IO.userError s!"Couldn't parse JSON from output file: {err}\nIn:\n{json}"
+  | .ok val => pure val.items
 
 structure Helper where
   highlight (term : String) (type? : Option String) : IO Highlighted
@@ -65,7 +64,7 @@ meta def Helper.fromModule
   let toolchain ← getProjectToolchain projectDir (overrideToolchain := overrideToolchain)
 
   discard <| runCmdWithToolchain projectDir toolchain #["lake", "build", "subverso-helper"]
-  discard <| runCmdWithToolchain projectDir toolchain #["lake", "build", s!"+{mod}"] (restoreArtifacts := true)
+  discard <| runCmdWithToolchain projectDir toolchain #["lake", "build", s!"+{mod}"] (restoreArtifacts := false)
 
   let cmd := #["lake", "env", "subverso-helper", mod]
   let hl ← do

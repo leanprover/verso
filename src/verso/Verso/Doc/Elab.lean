@@ -198,15 +198,16 @@ public meta def _root_.Lean.Doc.Parser.Inline.display_math.expand : InlineExpand
 /--
 Elaborates a top-level block.
 
-Parser error recovery may result in a null node. The null node contains the trees that the block's
-parser built before its parse error. Each tree is elaborated in order as a top-level block that is
-partial syntax.
+Parser error recovery may result in a null node. The null node's first child marks where the block
+starts, and it isn't elaborated. The trees that the block's parser built before its parse error
+follow it, and each is elaborated in order as a top-level block that is partial syntax.
 -/
 public meta def partCommand (cmd : VersoBlock) : PartElabM Unit := do
   modifyThe PartElabM.State ({ · with blockHasMissing := cmd.raw.hasMissing })
   if cmd.raw.isOfKind nullKind then
     for tree in cmd.raw.getArgs do
-      unless tree.isMissing do topLevelBlock ⟨tree⟩
+      unless tree.isMissing || tree.isOfKind `Verso.Parser.recoveredBlockStart do
+        topLevelBlock ⟨tree⟩
   else topLevelBlock cmd
 where
   topLevelBlock (cmd : VersoBlock) : PartElabM Unit :=
@@ -237,7 +238,15 @@ where
       let which := which.getD ""
       let msg := m!"Block content found in a context where a header was expected."
       let note := MessageData.note m!"A document part (section/chapter/etc) consists of a header, followed by zero or more blocks, followed by zero or more sub-parts. This block occurs after a sub-part{which}, but outside of the sub-parts."
-      throwErrorAt cmd "{msg}\n{note}"
+      logErrorAt cmd m!"{msg}\n{note}"
+      -- At this location, there's no syntactically available position for the block. Nonetheless,
+      -- it is elaborated for its messages and language server information. It is, however, neither
+      -- compiled nor added.
+      let placeholder := mkIdent (← mkFreshUserName `docReconstInBlock)
+      discard <|
+        withTheReader DocElabContext ({ · with docReconstructionPlaceholder := some placeholder })
+          (elabBlock cmd)
+      return
     elabAndAddBlock (elabBlock cmd)
 
 /--
@@ -297,7 +306,13 @@ public meta partial def _root_.Lean.Doc.Parser.Block.header.command : PartComman
     let titleString := inlinesToString (← getEnv) (v.content.map (·.raw))
     let ambientLevel ← currentLevel
     let headerLevel := v.level + 1
-    if headerLevel > ambientLevel + 1 then throwErrorAt stx "Wrong header nesting - got {"".pushn '#' headerLevel} but expected at most {"#".pushn '#' ambientLevel}"
+    -- A header that is nested too deeply recovers by opening its part at the deepest level allowed
+    -- in its parent.
+    let headerLevel ←
+      if headerLevel > ambientLevel + 1 then
+        logErrorAt stx m!"Wrong header nesting - got {"".pushn '#' headerLevel} but expected at most {"#".pushn '#' ambientLevel}"
+        pure (ambientLevel + 1)
+      else pure headerLevel
     -- New subheader?
     if headerLevel == ambientLevel + 1 then
       -- Prelude is done!
