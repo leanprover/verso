@@ -54,7 +54,9 @@ class TestFindPage:
 
     def test_repeated_domain(self, server: str, page: Page):
         """A domain that is requested twice still yields a single match."""
-        errors = self.open_find(server, page, f"name=website&domain={SECTION}&domain={SECTION}")
+        errors = self.open_find(
+            server, page, f"name=website&domain={SECTION}&domain={SECTION}"
+        )
         expect(page).to_have_url(re.compile(r"#website$"))
         assert errors == []
 

@@ -70,10 +70,15 @@ class TestPageHighlights:
 
     def test_several_matches_in_one_text_node(self, server: str, page: Page):
         errors = open_page(server, page, TERM)
-        add_paragraph(page, '<p id="hl-test">One paragraph, then two paragraphs, then the end.</p>')
+        add_paragraph(
+            page,
+            '<p id="hl-test">One paragraph, then two paragraphs, then the end.</p>',
+        )
         added = page.locator("#hl-test")
         expect(added).to_have_text("One paragraph, then two paragraphs, then the end.")
-        expect(added.locator("span.text-search-results")).to_have_text(["paragraph", "paragraphs"])
+        expect(added.locator("span.text-search-results")).to_have_text(
+            ["paragraph", "paragraphs"]
+        )
         assert added.evaluate("p => p.childNodes.length") == 5
         assert errors == []
 
@@ -93,14 +98,18 @@ class TestPageHighlights:
 
         page.locator("#highlight-next").click()
         expect(count).to_have_text(f"1/{total}")
-        expect(page.locator(HIGHLIGHTS).nth(0)).to_have_class(re.compile(r"\bfocused\b"))
+        expect(page.locator(HIGHLIGHTS).nth(0)).to_have_class(
+            re.compile(r"\bfocused\b")
+        )
         expect(page.locator("#highlight-current")).to_have_text(
             page.locator(HIGHLIGHTS).nth(0).text_content() or ""
         )
 
         page.locator("#highlight-next").click()
         expect(count).to_have_text(f"2/{total}")
-        expect(page.locator(HIGHLIGHTS).nth(1)).to_have_class(re.compile(r"\bfocused\b"))
+        expect(page.locator(HIGHLIGHTS).nth(1)).to_have_class(
+            re.compile(r"\bfocused\b")
+        )
         expect(page.locator(f"{HIGHLIGHTS}.focused")).to_have_count(1)
 
         page.locator("#highlight-prev").click()
@@ -126,7 +135,9 @@ class TestPageHighlights:
             "() => allHighlights.findIndex(h => h.closest('#hl-details') !== null)"
         )
         assert index >= 0
-        assert page.evaluate("() => document.getElementById('hl-details').open") is False
+        assert (
+            page.evaluate("() => document.getElementById('hl-details').open") is False
+        )
         page.evaluate("(i) => scrollToHighlight(i)", index)
         assert page.evaluate("() => document.getElementById('hl-details').open") is True
         assert errors == []
