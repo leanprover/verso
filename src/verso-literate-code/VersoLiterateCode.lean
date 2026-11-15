@@ -83,7 +83,7 @@ def moduleContext (modName : Name) (litConfig : LiterateConfig)
   let mut modPrefix := Name.anonymous
   for h : i in [0:components.length] do
     have : i < components.length := by have := h.2.1; grind
-    modPrefix := modPrefix.mkStr (components[i].toString)
+    modPrefix := modPrefix ++ components[i]
     let resolved := litConfig.resolveForModule modPrefix
     let segments := match resolved.url with
       | some u => u.splitOn "/" |>.filter (· ≠ "")
