@@ -85,6 +85,20 @@ end SubVerso.Highlighting
 
 namespace Verso.Code
 
+/--
+Creates a SubVerso highlighting context with a fresh signature cache.
+
+By default, the context has no identifier mapping, doesn't allow definition sites, omits unparsed
+text, and doesn't suppress any namespaces.
+-/
+public def mkHighlightingContext
+    (ids : HashMap Lean.Lsp.RefIdent Lean.Lsp.RefIdent := {})
+    (definitionsPossible : Bool := false)
+    (includeUnparsed : Bool := false)
+    (suppressNamespaces : List Lean.Name := []) :
+    BaseIO Context := do
+  return { ids, definitionsPossible, includeUnparsed, suppressNamespaces, sigCache := ← IO.mkRef {} }
+
 namespace Hover
 public structure Dedup (α) extends BEq α, Hashable α where
   nextId : Nat := 0

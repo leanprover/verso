@@ -15,6 +15,7 @@ public import Lean.Elab.InfoTree.Util
 public import Lean.Server.References
 
 public import VersoLiterate
+import Verso.Code.Highlighted
 public import Verso.SyntaxUtils
 
 public section
@@ -357,6 +358,7 @@ can be re-attached to the rendered code. See {name}`DocMessage`.
 -/
 abbrev ToLitM := ReaderT (Array DocMessage) HighlightM
 
+open Verso.Code in
 /--
 Highlights a sequence of syntaxes, each with its own info tree. Typically used for highlighting a
 module, where each command has its own corresponding tree.
@@ -371,7 +373,8 @@ partial def highlightFrontendResult' (result : Compat.Frontend.FrontendResult)
   let modrefs := Lean.Server.findModuleRefs (← getFileMap) trees'
   let ids := build modrefs
 
-  let ctx := ⟨ids, true, false, sortSuppress suppressNamespaces, false, (← IO.mkRef {})⟩
+  let ctx ← mkHighlightingContext (ids := ids) (definitionsPossible := true)
+    (suppressNamespaces := sortSuppress suppressNamespaces)
 
   let mut code : Array (Array Code) := #[]
 

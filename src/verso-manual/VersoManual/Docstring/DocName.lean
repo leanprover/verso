@@ -8,6 +8,7 @@ public import SubVerso.Highlighting
 meta import Verso.Instances.Deriving
 import VersoManual.Docstring.Basic
 import VersoManual.Docstring.PrettyPrint
+import Verso.Code.Highlighted
 import Lean.Data.Lsp.Internal
 import Lean.Meta
 import Lean.Widget.TaggedText
@@ -28,6 +29,7 @@ deriving ToJson, FromJson, Repr, Quote
 
 
 open Meta in
+open Verso.Code in
 public def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := true) (showNamespace := true) (constantInfo := false) (openDecls : List OpenDecl := []) (checkDocstring : Bool := true) : MetaM DocName := do
   let env ← getEnv
   if let some _ := env.find? c then
@@ -55,7 +57,7 @@ public def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := tru
 
     let docstring? ← if checkDocstring then getDocString? env c else Lean.findDocString? env c
 
-    let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, [], false, (← IO.mkRef {})⟩
+    let hlCtx ← mkHighlightingContext
     let hlName ← (renderTagged none name : ReaderT SubVerso.Highlighting.Context MetaM _) hlCtx
     let signature ← (renderTagged none sig : ReaderT SubVerso.Highlighting.Context MetaM _) hlCtx
     pure { name := c, hlName, signature, docstring? }
