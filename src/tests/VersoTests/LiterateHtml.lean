@@ -1390,4 +1390,15 @@ def literateHtmlMultiRoot : Test := do
     for (name, test) in multiRootHtmlTests data do
       result name test
 
+/--
+Breadcrumbs for a module whose name needs `«»` escapes use its `[modules]` config and link to it.
+-/
+@[test]
+def moduleContextEscapedName : Test := do
+  let name : Lean.Name := .str `Foo "1Bar"
+  let config ← VersoLiterate.parseLiterateConfig "[modules.\"Foo.«1Bar»\"]\ntitle = \"Chapter 1\"\n"
+  let ctx := VersoLiterateCode.moduleContext name config (moduleExists? := (· == name))
+  assertBEq "Chapter 1" ctx.self.title
+  assertTrue ctx.self.isLink "escaped module's breadcrumb is a link"
+
 end VersoTests.LiterateHtml
