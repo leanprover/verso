@@ -9,6 +9,7 @@ public import MD4Lean
 public import Lean.Exception
 
 public import Verso.Doc
+public import Verso.Markdown
 import Verso.Doc.Elab
 public import Verso.Doc.Elab.Monad
 
@@ -58,22 +59,7 @@ def attr' (val : Array AttrText) : Except String String := do
   | .error e => .error e
   | .ok s => pure s
 
-/--
-A mapping from Markdown document header levels to actual Verso nesting levels.
-The values in the list are Markdown header levels. Their position in the list
-is the Verso nesting level, with the final element being Verso level 0.
-For example, the list
-    {lean}`[5,4,2,1]`
-is understood as associating:
-- Markdown level 1 to Verso nesting 0
-- Markdown level 2 to Verso nesting 1
-- Markdown level 4 to Verso nesting 2
-- Markdown level 5 to Verso nesting 3
-
-We need to keep this state to appropriately repair non-consecutive
-Markdown header levels.
--/
-public abbrev HeaderMapping := List Nat
+open Verso.Markdown (HeaderMapping)
 
 structure MDState where
   inHeaders : HeaderMapping := []
@@ -146,21 +132,10 @@ instance [Monad m] [MonadError m] : MonadError (MDT m b i) where
   withRef stx act := fun ρ σ => withRef stx (act ρ σ)
   add stx msg := fun _ρ σ => (·, σ) <$> AddErrorMessageContext.add stx msg
 
-private partial def getHeaderLevel [Monad m] (level : Nat) : MDT m b i Nat := do
-  let hdrs := (← get).inHeaders
-  match hdrs with
-  | [] =>
-    modify ({· with inHeaders := [level]})
-    pure 0
-  | docLevel :: more =>
-    if level < docLevel then
-      modify ({· with inHeaders := more})
-      getHeaderLevel level
-    else if level = docLevel then
-      pure more.length
-    else
-      modify ({· with inHeaders := level :: hdrs})
-      pure (more.length + 1)
+private def getHeaderLevel [Monad m] (level : Nat) : MDT m b i Nat := do
+  let (depth, hdrs) := (← get).inHeaders.addHeader level
+  modify ({· with inHeaders := hdrs})
+  pure depth
 
 private def getHeader  [Monad m] (level : Nat) : MDT m b i (Except String (Array i → m b)) := do
   let lvl ← getHeaderLevel level

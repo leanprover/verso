@@ -362,9 +362,9 @@ def builtinHeader : TemplateM Html := do
   for css in (← read).cssFiles do
     out := out ++ html%{<link rel="stylesheet" href={s!"-verso-data/{css}"}/>}
   out := out ++ html%{
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous"/>
-    <script defer="defer" src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="-verso-data/katex/katex.css"/>
+    <script defer="defer" src="-verso-data/katex/katex.js"></script>
+    <script defer="defer" src="-verso-data/katex/math.js"></script>
   }
 
   -- Components

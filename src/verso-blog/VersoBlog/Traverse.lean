@@ -15,16 +15,6 @@ namespace Verso.Genre.Blog.Traverse
 
 open Doc
 
-def renderMathJs : String :=
-"document.addEventListener(\"DOMContentLoaded\", () => {
-    for (const m of document.querySelectorAll(\".math.inline\")) {
-        katex.render(m.textContent, m, {throwOnError: false, displayMode: false});
-    }
-    for (const m of document.querySelectorAll(\".math.display\")) {
-        katex.render(m.textContent, m, {throwOnError: false, displayMode: true});
-    }
-});"
-
 def addCssFile (filename contents : String) : TraverseM Unit := do
   for (fn, css) in (← get).cssFiles do
     if filename == fn then

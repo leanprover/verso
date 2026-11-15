@@ -10,6 +10,7 @@ import Std.Data.HashMap
 public import SubVerso.Highlighting
 public import Verso.Doc
 import Verso.Method
+import Verso.Output.Html.Markdown
 public import Verso.Output.Html
 import Verso.Output.TeX
 meta import Verso.Instances.Deriving
@@ -123,8 +124,18 @@ public def IdSupply.unique (supply : IdSupply) (base := "--verso-unique") : Stri
 public structure State (α) where
   dedup : Dedup α
   idSupply : IdSupply
+  /--
+  {open State}
 
-public def State.empty [BEq α] [Hashable α] : State α := ⟨{}, {}⟩
+  The hover IDs of the token kinds seen so far, to be looked up in {name}`dedup` by the token kinds'
+  hover memoization keys.
+  -/
+  tokenHovers : HashMap String (Option Nat)
+
+public def State.empty [BEq α] [Hashable α] : State α where
+  dedup := {}
+  idSupply := {}
+  tokenHovers := {}
 
 public instance [BEq α] [Hashable α] : EmptyCollection (State α) where
   emptyCollection := .empty
@@ -404,7 +415,12 @@ public defmethod Highlighted.containsNewline : (t : Highlighted) → Bool
   | .tactics _ _ _ hl => hl.containsNewline
   | .span _ hl => hl.containsNewline
 
-defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :=
+/-- Renders a docstring's Markdown for display in a hover. -/
+def docstringHtml (markdown : String) : Html :=
+  html%{<div class="docstring">{Markdown.toHtml markdown (math := true)}</div>}
+
+/-- Renders a token kind's hover and adds it to the hover table, returning its ID. -/
+defmethod Token.Kind.addHover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :=
   match tok with
   | .const _n sig doc _ sigFmt =>
     let docs :=
@@ -428,7 +444,7 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :
       | some txt => separatedDocs txt
     some <$> addHover html%{<code>{toString optName}</code>{docs}}
   | .keyword _ _ none => pure none
-  | .keyword _ _ (some doc) => some <$> addHover html%{<code class="docstring">{doc}</code>}
+  | .keyword _ _ (some doc) => some <$> addHover (docstringHtml doc)
   | .var _ type tyFmt =>
     match tyFmt with
     | some fmt => some <$> addHover html%{<code data-rich-format={fmt}>{type}</code>}
@@ -443,11 +459,11 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :
   | .num (some t) _ =>
     some <$> addHover html%{<code>{t}</code>}
   | .sort (some doc) =>
-    some <$> addHover html%{<code class="docstring">{doc}</code>}
+    some <$> addHover (docstringHtml doc)
   | .levelConst i =>
-    some <$> addHover html%{<code class="docstring">{s!"The universe level {i}"}</code>}
+    some <$> addHover (docstringHtml (s!"The universe level {i}"))
   | .levelVar x =>
-    some <$> addHover html%{<code class="docstring">{s!"The universe parameter {x}"}</code>}
+    some <$> addHover (docstringHtml (s!"The universe parameter {x}"))
   | .levelOp op =>
     let doc? :=
       match op with
@@ -457,11 +473,42 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :
         some "The impredicative maximum of two universes:\n\n * `imax u 0 = 0`\n * `imax u (v+1) = max u (v+1)`"
       | _ => none
     doc?.mapM fun doc =>
-     addHover html%{<code class="docstring">{doc}</code>}
+     addHover (docstringHtml doc)
   | _ => pure none
 where
   separatedDocs txt :=
-    html%{<span class="sep"/><code class="docstring">{txt}</code>}
+    html%{<span class="sep"/>{docstringHtml txt}}
+
+/--
+Returns a string that determines a token kind's hover. Token kinds with the same key have the same
+hover.
+
+The key is the token kind's JSON encoding without the fields that never affect a hover:
+ * the occurrence tags of keywords and other syntax atoms
+ * whether a constant's occurrence is a definition site.
+-/
+defmethod Token.Kind.hoverMemoKey (tok : Token.Kind) : String :=
+  let tok : Token.Kind :=
+    match tok with
+    | .keyword n _ doc => .keyword n none doc
+    | .delim n _ doc => .delim n none doc
+    | .operator n _ doc => .operator n none doc
+    | .bracket n _ doc => .bracket n none doc
+    | .separator n _ doc => .separator n none doc
+    | .const n sig doc _ sigFmt => .const n sig doc false sigFmt
+    | k => k
+  (Lean.toJson tok).compress
+
+/--
+Returns the ID of a token kind's hover, if it has one. Token kinds with the same hover memoization
+key share one rendering of their hover.
+-/
+defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) := do
+  let memoKey := tok.hoverMemoKey
+  if let some hover := (← get).tokenHovers[memoKey]? then return hover
+  let hover ← tok.addHover?
+  modify fun st => { st with tokenHovers := st.tokenHovers.insert memoKey hover }
+  return hover
 
 public defmethod Lean.MessageSeverity.«class» : Lean.MessageSeverity → String
   | .information => "information"
@@ -513,7 +560,10 @@ defmethod Token.htmlContent (tok : Token) : HighlightHtmlM g Html := do
 
 public defmethod Token.toHtml (tok : Token) : HighlightHtmlM g Html := do
   let idAttr ← tok.kind.idAttr
-  let hoverAttr := (← tok.kind.hover?).map (fun i => #[("data-verso-hover", toString i)]) |>.getD #[]
+  let hoverAttr :=
+    if let some i := (← tok.kind.hover?) then
+      #[("data-verso-hover", toString i)]
+    else #[]
   tok.kind.addLink html%{
     <span class={tok.kind.«class» ++ " token"} data-binding={tok.kind.data} {...hoverAttr} {...idAttr}>{← tok.htmlContent}</span>
   }
@@ -1587,17 +1637,6 @@ window.onload = async () => {
         highlightedTokens = [];
       });
     }
-    /* Render docstrings */
-    if ('undefined' !== typeof marked) {
-        for (const d of document.querySelectorAll(\"code.docstring, pre.docstring\")) {
-            const str = d.innerText;
-            const html = marked.parse(str);
-            const rendered = document.createElement(\"div\");
-            rendered.classList.add(\"docstring\");
-            rendered.innerHTML = html;
-            d.parentNode.replaceChild(rendered, d);
-        }
-    }
     // Add hovers
     const versoDocData = await (" ++ highlightJsonPromise ++ ");
 
@@ -1627,20 +1666,12 @@ window.onload = async () => {
       info.style.display = 'block';
       const data = versoDocData[hoverId];
       if (data) {
-        info.innerHTML = data;
-        /* Render docstrings - TODO server-side */
-        if ('undefined' !== typeof marked) {
-          for (const d of info.querySelectorAll('code.docstring, pre.docstring')) {
-            const str = d.innerText;
-            const html = marked.parse(str);
-            const rendered = document.createElement('div');
-            rendered.classList.add('docstring');
-            rendered.innerHTML = html;
-            d.parentNode.replaceChild(rendered, d);
-          }
-        }
+        /* Verso generated the HTML from the Markdown at site build time. */
+        const parsed = new DOMParser().parseFromString(data, 'text/html');
+        info.append(...parsed.body.childNodes);
+        if (typeof versoRenderMath === 'function') versoRenderMath(info);
       } else {
-        info.innerHTML = 'Failed to load doc ID: ' + hoverId;
+        info.textContent = 'Failed to load doc ID: ' + hoverId;
       }
       return info;
     }
@@ -1719,7 +1750,11 @@ window.onload = async () => {
               links.className = 'extra-doc-links';
               extras.forEach((l) => {
                 const li = document.createElement('li');
-                li.innerHTML = \"<a href=\\\"\" + l['href'] + \"\\\" title=\\\"\" + l.long + \"\\\">\" + l.short + \"</a>\";
+                const a = document.createElement('a');
+                a.href = l['href'];
+                a.title = l.long;
+                a.textContent = l.short;
+                li.appendChild(a);
                 links.appendChild(li);
               });
               content.appendChild(links);
