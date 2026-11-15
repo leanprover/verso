@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * @typedef {{ref: string, score: number, doc: {id: string, header: string, context: string, contents: string}}} TextMatch
  * @typedef {{run: (tokens: string[]) => string[]}} ElasticLunrPipeline
@@ -16,14 +18,15 @@ const searchIndex = /** @type {{searchIndex: TextSearchIndex}} */ (/** @type {un
 
 /** Tokenizes the given string, computing stems.
  * @param {string} text
+ * @param {ElasticLunrPipeline} pipeline
  * @return {TextToken[]}
  */
-const tokenizeText = (text) => {
+const tokenizeText = (text, pipeline) => {
     const toks = [];
     const regex = /[^\s(),."“”—:]+/g;
     let match;
     while ((match = regex.exec(text)) !== null) {
-        let stems = searchIndex.pipeline.run([match[0]]);
+        let stems = pipeline.run([match[0]]);
         for (const stem of stems) {
             toks.push({
                 original: match[0],
@@ -44,68 +47,70 @@ function highlightSearchTerms() {
     if (!searchQuery) {
         return; // No search terms found
     }
+    if (!searchIndex) {
+        return;
+    }
+    const pipeline = searchIndex.pipeline;
 
-    // Stem the terms
-    const searchTerms = {};
+    // Map each stemmed term to the query word that it came from
+    /** @type {Map<string, string>} */
+    const searchTerms = new Map();
     const regex = /\S+/g;
     let match;
     while ((match = regex.exec(searchQuery)) !== null) {
-        let stems = searchIndex.pipeline.run([match[0]]);
+        let stems = pipeline.run([match[0]]);
         for (const stem of stems) {
-            searchTerms[stem.toLowerCase()] = match[0];
+            searchTerms.set(stem.toLowerCase(), match[0]);
         }
     }
 
-    // Function to highlight text in a text node
+    /**
+     * Finds the query word that matches a stem, if any.
+     * @param {string} stem
+     * @returns {string | undefined}
+     */
+    function termFor(stem) {
+        if (!expandHlMatches) return searchTerms.get(stem);
+        // Prefix matching: the longest matching term wins.
+        let bestStem = "";
+        for (const termStem of searchTerms.keys()) {
+            if (termStem.length > bestStem.length && stem.startsWith(termStem)) bestStem = termStem;
+        }
+        return bestStem.length > 0 ? searchTerms.get(bestStem) : undefined;
+    }
+
+    /**
+     * Wraps the matches in a text node in highlight spans. Text nodes without matches are left
+     * unchanged.
+     * @param {Text} textNode
+     */
     function highlightTextNode(textNode) {
-        let text = textNode.textContent;
-
-        const toks = tokenizeText(text);
-        for (const t of toks.reverse()) {
-            if (expandHlMatches) {
-                // We're doing full-text search with matching prefixes. Find the longest matching stem in the results and use it.
-                let bestStem = "";
-                for (termStem in searchTerms) {
-                    if (termStem.length <= bestStem.length) continue;
-                    if (t.stem.startsWith(termStem)) bestStem = termStem;
-                }
-                if (bestStem.length > 0) {
-                    text =
-                        text.slice(0, t.start) +
-                        `<span class="text-search-results" title="Result for “${searchTerms[bestStem]}”">${text.slice(t.start, t.end)}</span>` +
-                        text.slice(t.end);
-                }
-            } else {
-                // We're doing full-text search with whole words only. Look the stem up directly.
-                if (searchTerms.hasOwnProperty(t.stem)) {
-                    text =
-                        text.slice(0, t.start) +
-                        `<span class="text-search-results" title="Result for “${searchTerms[t.stem]}”">${text.slice(t.start, t.end)}</span>` +
-                        text.slice(t.end);
-                }
-            }
-        }
-
-        // Create a temporary container
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = text;
-
-        // Replace the text node with highlighted content
+        const text = textNode.data;
         const fragment = document.createDocumentFragment();
-        while (tempDiv.firstChild) {
-            fragment.appendChild(tempDiv.firstChild);
-        }
-        const parent = textNode.parentNode;
-        parent.replaceChild(fragment, textNode);
-        parent.querySelectorAll(".text-search-results").forEach((e) => {
-            e.addEventListener("click", () => {
-                const i = allHighlights.indexOf(e);
+        let pos = 0;
+        for (const t of tokenizeText(text, pipeline)) {
+            if (t.start < pos) continue;
+            const term = termFor(t.stem);
+            if (term === undefined) continue;
+
+            fragment.append(text.slice(pos, t.start));
+            const span = document.createElement("span");
+            span.className = "text-search-results";
+            span.title = `Result for “${term}”`;
+            span.textContent = text.slice(t.start, t.end);
+            span.addEventListener("click", () => {
+                const i = allHighlights.indexOf(span);
                 if (i >= 0) {
                     currentHighlightIndex = i;
                     updateNavigationState();
                 }
             });
-        });
+            fragment.append(span);
+            pos = t.end;
+        }
+        if (pos === 0) return;
+        fragment.append(text.slice(pos));
+        textNode.replaceWith(fragment);
     }
 
     /** Function to traverse DOM and find text nodes
@@ -150,6 +155,7 @@ function removeHighlights() {
     const highlightedElements = document.querySelectorAll("span.text-search-results");
     highlightedElements.forEach((span) => {
         const parent = span.parentNode;
+        if (!parent) return;
         parent.replaceChild(document.createTextNode(span.textContent), span);
         parent.normalize(); // Merge adjacent text nodes
     });
@@ -192,30 +198,37 @@ function prevHighlight() {
     scrollToHighlight(currentHighlightIndex);
 }
 
+/** Opens the nearest `details` ancestor of an element, if there is one.
+ * @param {HTMLElement} elem
+ */
+function openEnclosingDetails(elem) {
+    let here = elem.parentElement;
+    while (here) {
+        if (here.nodeName.toLowerCase() == "details") {
+            here.setAttribute("open", "open");
+            break;
+        }
+        here = here.parentElement;
+    }
+}
+
 /** Scroll to a specific highlight
  * @param {number} index The index of the highlight element in allHighlights
  */
 function scrollToHighlight(index) {
-    if (index >= 0 && index < allHighlights.length) {
-        // Ensure visibility by opening collapsed examples
-        let here = allHighlights[index];
-        if (here) {
-            while ((here = here.parentElement)) {
-                if (here.nodeName.toLowerCase() == "details") {
-                    here.setAttribute("open", "open");
-                    break;
-                }
-            }
-        }
+    const highlight = allHighlights[index];
+    if (index < 0 || !highlight) return;
 
-        // Scroll to it
-        allHighlights[index].scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-        });
+    // Ensure visibility by opening collapsed examples
+    openEnclosingDetails(highlight);
 
-        updateNavigationState();
-    }
+    // Scroll to it
+    highlight.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+    });
+
+    updateNavigationState();
 }
 
 /** Update navigation button states based on the contents of the document.
@@ -227,28 +240,30 @@ function updateNavigationState() {
     const currentSpan = document.getElementById("highlight-current");
     const currentCount = document.getElementById("highlight-current-count");
 
-    if (prevBtn && nextBtn && countSpan) {
+    if (
+        prevBtn instanceof HTMLButtonElement &&
+        nextBtn instanceof HTMLButtonElement &&
+        countSpan &&
+        currentSpan &&
+        currentCount
+    ) {
         const hasHighlights = allHighlights.length > 0;
         prevBtn.disabled = !hasHighlights;
         nextBtn.disabled = !hasHighlights;
 
-        if (hasHighlights && currentHighlightIndex >= 0) {
+        const current =
+            currentHighlightIndex >= 0 ? allHighlights[currentHighlightIndex] : undefined;
+        if (current) {
             countSpan.textContent = `${currentHighlightIndex + 1}/${allHighlights.length}`;
-            currentSpan.textContent = allHighlights[currentHighlightIndex].textContent;
-            let resName = allHighlights[currentHighlightIndex].title;
+            currentSpan.textContent = current.textContent;
+            let resName = current.title;
             resName = resName.charAt(0).toLowerCase() + resName.slice(1);
             currentCount.title = "Go to " + resName;
             document
                 .querySelectorAll(".text-search-results")
                 .forEach((e) => e.classList.remove("focused"));
-            let here = allHighlights[currentHighlightIndex];
-            here.classList.add("focused");
-            while ((here = here.parentElement)) {
-                if (here.nodeName.toLowerCase() == "details") {
-                    here.setAttribute("open", "open");
-                    break;
-                }
-            }
+            current.classList.add("focused");
+            openEnclosingDetails(current);
         } else {
             countSpan.textContent = hasHighlights ? `0/${allHighlights.length}` : "0/0";
             currentSpan.textContent = "";
@@ -283,13 +298,8 @@ function scrollToFirstHighlightAfter(elementId) {
     }
 
     // Find the first highlight that comes after the target element in document order
-    const targetPosition = targetElement.compareDocumentPosition ? targetElement : null;
-
-    if (!targetPosition) {
-        return false;
-    }
-
     for (let highlight of highlights) {
+        if (!(highlight instanceof HTMLElement)) continue;
         const position = targetElement.compareDocumentPosition(highlight);
         // Check if highlight comes after target element
         if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
