@@ -186,7 +186,7 @@ partial def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax :
   -- following heuristic: any remaining unprocessed doc comments are associated with the unique
   -- highest definition site that they share a closest ancestor with.
   let stx ← replaceStackM stx fun stk stx => do
-    if stx.isOfKind ``docComment && stx[1].isOfKind ``commentBody || stx[1].isOfKind ``versoCommentBody then
+    if stx.isOfKind ``docComment && (stx[1].isOfKind ``commentBody || stx[1].isOfKind ``versoCommentBody) then
       for (parent, i) in stk do
         let defs ← findHighestM parent fun x =>
           if x.isIdent then defSites.find? (fun y => identMatch y.2 x) |>.map (·.1) else none
@@ -201,9 +201,14 @@ partial def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax :
     else pure none
   return stx
 where
-  -- Doc comments in an attribute instance belong to the only definition site in it that remains after
-  -- the nested instances have been handled, and the instance then claims that site. The state is the
-  -- definition sites not yet claimed.
+  -- Finds the attributes of `@[...]` that define a constant, such as `to_additive foo`, and rewrites
+  -- their doc comments as placeholders for that constant. The state is a list of definition sites. A
+  -- definition site pairs a constant's name with the syntax that the info tree records as the binding
+  -- occurrence of that constant, such as `foo` in `to_additive foo`. An attribute counts as defining a
+  -- constant when the sites in the list that lie inside it all name that one constant. The constant's
+  -- sites are then removed from the list, so the enclosing attributes and the later passes over the
+  -- declaration don't assign further doc comments to it. Nested attributes are processed first.
+  -- Most attributes contain no definition sites and are left unchanged.
   rewriteAttrComments (stx : Syntax) : StateT (List (Name × Syntax)) TermElabM Syntax := do
     let .node info kind args := stx | return stx
     let new := Syntax.node info kind (← args.mapM rewriteAttrComments)
@@ -211,7 +216,7 @@ where
     let some range := stx.getRange? | return new
     let inside := (← get).filter fun (_, site) =>
       site.getRange?.map (range.includes · true true) |>.getD false
-    let [(x, _)] := inside | return new
+    let [x] := inside.map (·.1) |>.eraseDups | return new
     modify (·.filter (·.1 != x))
     new.replaceM fun s => do
       if s.isOfKind ``docComment then some <$> rewriteComment x s else pure none

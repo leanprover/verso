@@ -360,10 +360,13 @@ private def testDottedNameDocstrings (data : TestData) : Test := withTestDir dat
 /--
 A declaration keeps its docstring when one of its attributes defines a further constant, and a doc
 comment inside an attribute belongs to the constant defined there, including in nested attributes.
+
+Each docstring appears once in the HTML.
 -/
 private def testAttrDocstrings (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
   let json ← IO.FS.readFile (jsonDir / "LitConfig" / "Core" / "AttrDocstrings.json")
+  let html ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "AttrDocstrings" / "index.html")
   for (decl, docstring) in [
       ("first", "The docstring of the first declaration."),
       ("second", "The docstring of the second declaration."),
@@ -373,6 +376,9 @@ private def testAttrDocstrings (data : TestData) : Test := withTestDir data fun 
       ("thirdInner", "The docstring of the inner constant.")] do
     assertContains s!"\"AttrDocstrings.{decl}\",\{\"blocks\":[\{\"p\":[\{\"normal\":\"{docstring}\"" json
       s!"The docstring \"{docstring}\" is not associated with `AttrDocstrings.{decl}`."
+    let occurrences := (html.splitOn docstring).length - 1
+    assertTrue (occurrences == 1)
+      s!"Expected the docstring \"{docstring}\" once in the HTML, found it {occurrences} times."
 
 /-- Excluded modules produce no HTML output and are absent from the navbar. -/
 private def testExclude (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
