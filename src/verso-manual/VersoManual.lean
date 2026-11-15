@@ -334,7 +334,7 @@ def xref (toc : List Html.Toc) (xrefJson : String) (findJs : String) (state : Tr
   state
   config
   (localItems := #[])
-  (extraJs := [s!"let xref = {xrefJson};\n" ++ findJs])
+  (extraJs := [s!"window.xref = {xrefJson};\n" ++ findJs])
 
 def emitXrefs (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseState) (config : Config) : IO Unit := do
   let mut out : Json := Json.mkObj []
