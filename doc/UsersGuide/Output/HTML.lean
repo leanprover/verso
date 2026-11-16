@@ -120,7 +120,7 @@ Rendering highlighted code requires supporting CSS and JavaScript on each page t
 * {name}`highlightingStyle` contains the CSS rules that style highlighted code.
 * {name}`highlightingJs` produces JavaScript code that displays hovers and highlights other occurrences of an identifier. By default, it obtains hover content using {name}`fetchDocsJson`.
 * Hovers are displayed using the `tippy.js` and `popper.js` libraries. Copies of them are included as the string constants {name}`Highlighted.WebAssets.tippy` and {name}`Highlighted.WebAssets.popper`, with source maps {name}`Highlighted.WebAssets.tippy.map` and {name}`Highlighted.WebAssets.popper.map` and a stylesheet {name}`Highlighted.WebAssets.tippy.border.css`.
-* Markdown in documentation shown in hovers is rendered by the `marked` library, included as the string constant {name}`Highlighted.WebAssets.marked` with source map {name}`Highlighted.WebAssets.marked.map`.
+* Markdown in documentation shown in hovers is rendered to HTML when the site is built.
 :::
 
 {docstring highlightingStyle}
@@ -142,6 +142,7 @@ Math is typeset in the browser using the bundled KaTeX library.
 When a page has loaded, the script in {name}`Html.math.js` renders every element with these classes.
 Pages that contain mathematical notation should include this script together with KaTeX itself: its stylesheet ({name}`Html.katex.css`), its code ({name}`Html.katex.js`), and its fonts ({name}`Html.katexFonts`).
 The stylesheet refers to the fonts by relative paths, so the file layout described in their docstrings should be preserved.
+The helper function {name}`Html.writeKaTeX` writes all of these files to a directory with that layout and should be called by the code that writes a genre's HTML.
 
 {docstring Html.katex.css}
 
@@ -150,3 +151,5 @@ The stylesheet refers to the fonts by relative paths, so the file layout describ
 {docstring Html.katexFonts}
 
 {docstring Html.math.js}
+
+{docstring Html.writeKaTeX}

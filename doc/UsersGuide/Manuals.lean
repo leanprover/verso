@@ -244,6 +244,7 @@ tag := "oss-licenses"
 
 To facilitate providing appropriate credit to the authors of open-source JavaScript, CSS, and HTML libraries used to render a Verso document, inline and block elements can specify the licenses of components that they include in their rendered output.
 This is done using the {name HtmlAssets.licenseInfo}`licenseInfo` field that {name}`BlockDescr` and {name}`InlineDescr` inherit from {name}`HtmlAssets`.
+The licenses of bundled features, such as KaTeX, are included whenever the feature is enabled, either by the configuration or by an element.
 These contain a {name}`LicenseInfo`:
 
 {docstring LicenseInfo}

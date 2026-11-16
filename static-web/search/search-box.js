@@ -10,7 +10,6 @@
 // Enable typescript
 // @ts-check
 
-let /** @type Promise<null|SearchResult> */ bigPromise = Promise.resolve(null);
 import { Range } from "./unicode-input.min.js";
 import { InputAbbreviationRewriter } from "./unicode-input-component.min.js";
 
@@ -169,7 +168,8 @@ const wordChar = /\p{L}/u;
  */
 const wordStartBefore = (text, i) => {
     while (i > 0) {
-        if (!wordChar.test(text[i])) return i + 1; /* Adjust due to start indices being inclusive */
+        if (!wordChar.test(text.charAt(i)))
+            return i + 1; /* Adjust due to start indices being inclusive */
         i--;
     }
     return i;
@@ -182,7 +182,7 @@ const wordStartBefore = (text, i) => {
  */
 const wordEndAfter = (text, i) => {
     while (i < text.length) {
-        if (!wordChar.test(text[i]))
+        if (!wordChar.test(text.charAt(i)))
             return i; /* This is used as the (exclusive) end index in a slice, so one greater is correct */
         i++;
     }
@@ -251,36 +251,25 @@ const highlightTextResult = (text, query, options = {}) => {
 
     // Generate highlighted text for each snippet
     const highlightedSnippets = limitedSnippets.map((snippet) => {
-        let snippetText = text.substring(snippet.start, snippet.end);
-
-        // Adjust match positions relative to snippet start
-        const relativeMatches = snippet.matches.map((match) => ({
-            term: match.original,
-            start: match.start - snippet.start,
-            end: match.end - snippet.start,
-        }));
-
-        // Sort matches by position (descending) to avoid position shifts during replacement
-        relativeMatches.sort((a, b) => b.start - a.start);
-
-        // Apply highlighting
-        for (const match of relativeMatches) {
-            const before = snippetText.substring(0, match.start);
-            const highlighted = `<em>${match.term}</em>`;
-            const after = snippetText.substring(match.end);
-            snippetText = before + highlighted + after;
+        // Matches are in document order, so the text between them can be copied in sequence.
+        const m = document.createElement("span");
+        let pos = snippet.start;
+        for (const match of snippet.matches) {
+            if (match.start < pos) continue;
+            m.append(text.substring(pos, match.start));
+            const em = document.createElement("em");
+            em.textContent = text.substring(match.start, match.end);
+            m.append(em);
+            pos = match.end;
         }
+        m.append(text.substring(pos, snippet.end));
 
         // Add ellipses
         const prefix = snippet.start > 0 ? " …" : "";
         const suffix = snippet.end < text.length ? "… " : "";
 
         const elem = document.createElement("span");
-        elem.appendChild(document.createTextNode(prefix));
-        const m = document.createElement("span");
-        m.innerHTML = snippetText;
-        elem.appendChild(m);
-        elem.appendChild(document.createTextNode(suffix));
+        elem.append(prefix, m, suffix);
         return elem;
     });
 
@@ -298,18 +287,18 @@ const highlightTextResult = (text, query, options = {}) => {
  */
 const dataToSearchableMap = (json, domainMappers) =>
     Object.entries(json)
-        .flatMap(([key, value]) =>
-            key in domainMappers ? domainMappers[key].dataToSearchables(value) : undefined,
-        )
+        .flatMap(([key, value]) => domainMappers[key]?.dataToSearchables(value))
         .reduce((acc, cur) => {
             if (cur == null) {
                 return acc;
             }
 
-            if (!acc.hasOwnProperty(cur.searchKey)) {
-                acc[cur.searchKey] = [];
+            let entries = acc.hasOwnProperty(cur.searchKey) ? acc[cur.searchKey] : undefined;
+            if (!entries) {
+                entries = [];
+                acc[cur.searchKey] = entries;
             }
-            acc[cur.searchKey].push(cur);
+            entries.push(cur);
             return acc;
         }, /** @type {Record<string, Searchable[]>} */ ({}));
 
@@ -327,6 +316,7 @@ const dataToSearchableMap = (json, domainMappers) =>
  */
 const searchableToHtml = (domainMappers, searchable, matchedParts, document, asOption = true) => {
     const domainMapper = domainMappers[searchable.domainId];
+    if (!domainMapper) throw new Error(`Unknown search domain: ${searchable.domainId}`);
 
     const li = document.createElement("li");
     if (asOption) li.role = "option";
@@ -373,8 +363,8 @@ const searchableToHtml = (domainMappers, searchable, matchedParts, document, asO
 const docBucket = (ref) => {
     const utf8 = new TextEncoder().encode(ref);
     let hash = 0;
-    for (let i = 0; i < utf8.length; i++) {
-        hash = (hash + utf8[i]) % 256;
+    for (const byte of utf8) {
+        hash = (hash + byte) % 256;
     }
     return hash;
 };
@@ -420,9 +410,9 @@ const loadBucket = async (ref) => {
  */
 const getDocContents = async (ref) => {
     const resultBucket = await Promise.resolve(loadBucket(ref));
-
-    /** @type {DocContent} */
-    return resultBucket[ref];
+    const doc = resultBucket[ref];
+    if (!doc) throw new Error(`Missing search document: ${ref}`);
+    return doc;
 };
 
 /**
@@ -481,8 +471,7 @@ export const computeCandidates = (
     /** @type {Candidate[]} */
     const candidates = [];
     for (const fr of results) {
-        const dataItems = mappedData[fr.target];
-        for (const searchable of dataItems) {
+        for (const searchable of mappedData[fr.target] ?? []) {
             const eff = combineScore(
                 fr.score,
                 searchPriorities.semantic,
@@ -585,9 +574,7 @@ export const candidateTargetUrl = async (candidate, filter) => {
     if (candidate.kind === "semantic") {
         return resolveAgainstBase(withTermsParam(candidate.searchable.address, null));
     }
-    const resultBucket = await Promise.resolve(loadBucket(candidate.textMatch.ref));
-    /** @type {DocContent} */
-    const doc = resultBucket[candidate.textMatch.ref];
+    const doc = await getDocContents(candidate.textMatch.ref);
     return resolveAgainstBase(withTermsParam(doc.id, filter));
 };
 
@@ -892,7 +879,12 @@ class SearchBox {
 
         this.domainFilters = [];
         const docDomainFilter = document.createElement("li");
-        docDomainFilter.innerHTML = `<label><input type="checkbox" checked> Doc domain</label>`;
+        const docDomainLabel = document.createElement("label");
+        const docDomainCheckbox = document.createElement("input");
+        docDomainCheckbox.setAttribute("type", "checkbox");
+        docDomainCheckbox.setAttribute("checked", "");
+        docDomainLabel.append(docDomainCheckbox, " Doc domain");
+        docDomainFilter.append(docDomainLabel);
         docDomainFilter.classList.add("domain-filter");
         // TODO more work on the domain filters
         // this.domainFilters.push(docDomainFilter);
@@ -944,7 +936,7 @@ class SearchBox {
     }
 
     /**
-     * @param {SearchResult} option
+     * @param {SearchResult | null | undefined} option
      */
     setOption(option) {
         if (option) {
@@ -1032,8 +1024,7 @@ class SearchBox {
         let /** @type {SearchResult | null} */ firstOption = null;
         let /** @type {SearchResult | null} */ lastOption = null;
         let /** @type {SearchResult|null} */ newCurrentOption = null;
-        for (let i = 0; i < shownCandidates.length; i++) {
-            const candidate = shownCandidates[i];
+        for (const [i, candidate] of shownCandidates.entries()) {
             const option = await renderCandidateLi(candidate, {
                 domainMappers: this.domainMappers,
                 filter,
@@ -1195,13 +1186,7 @@ class SearchBox {
                         if ("fuzzysortResult" in this.currentOption) {
                             this.confirmResult(this.currentOption.item.address);
                         } else {
-                            const resultBucket = await Promise.resolve(
-                                loadBucket(this.currentOption.textItem.ref),
-                            );
-
-                            /** @type {DocContent} */
-                            const doc = resultBucket[this.currentOption.textItem.ref];
-
+                            const doc = await getDocContents(this.currentOption.textItem.ref);
                             this.confirmResult(doc.id, this.currentOption.terms);
                         }
                     }
@@ -1426,11 +1411,7 @@ class SearchBox {
             if ("fuzzysortResult" in result) {
                 this.confirmResult(result.item.address);
             } else {
-                const resultBucket = await Promise.resolve(loadBucket(result.textItem.ref));
-
-                /** @type {DocContent} */
-                const doc = resultBucket[result.textItem.ref];
-
+                const doc = await getDocContents(result.textItem.ref);
                 this.confirmResult(doc.id, resultToText(result));
             }
             this.close(true);

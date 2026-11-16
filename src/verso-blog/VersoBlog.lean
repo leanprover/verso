@@ -21,6 +21,7 @@ public import Verso.Doc.Lsp
 public import Verso.Doc.Suggestion
 public import Verso.Hover
 public import Verso.WithoutAsync
+import Verso.Output.Html.KaTeX
 public meta import Lean.Data.FuzzyMatching
 public meta import Lean.Elab.Frontend
 public meta import Lean.Elab.GuardMsgs
@@ -834,6 +835,7 @@ def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets Trave
     for (name, content) in theme.cssFiles ++ xref.cssFiles do
       FS.ensureDir (cfg.destination.join "-verso-data")
       IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
+    writeKaTeX (cfg.destination / "-verso-data" / "katex")
 where
   opts (cfg : Config)
     | ("--output"::dir::more) => opts {cfg with destination := dir} more

@@ -4,7 +4,15 @@
         "lib": ["ES2024", "DOM", "DOM.Iterable"],
         "target": "ES2024",
         "module": "es2022",
-        "noEmit": true
+        "noEmit": true,
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "noPropertyAccessFromIndexSignature": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true
     },
     "include": ["**/*.js", "**/*.d.ts"]
 }
