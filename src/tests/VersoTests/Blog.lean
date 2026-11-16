@@ -124,3 +124,30 @@ Role is aware of the environment: {lean env}`x`
 :::::::
 
 #test_guard roleSeesEnvironment.toPart.content.size > 0
+
+-- Comment-only initialization and independent code regions retain command state, while a parse
+-- error in one region must not put the next region's fresh parser into recovery mode.
+#docs (Post) independentParserRegions "Independent parser regions" :=
+:::::::
+```leanInit parserRegions
+-- no imports or prelude
+```
+
+Unicode before the code: λ 🐈.
+
+```lean parserRegions +error
+def broken := (
+```
+
+```lean parserRegions
+def café : Nat := 41
+```
+
+The saved environment is shared with inline code: {lean parserRegions}`café + 1`.
+
+```lean parserRegions
+example : café = 41 := rfl
+```
+:::::::
+
+#test_guard independentParserRegions.toPart.content.size > 0

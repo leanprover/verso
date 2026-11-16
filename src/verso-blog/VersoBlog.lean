@@ -37,7 +37,7 @@ namespace Verso.Genre.Blog
 open Lean.Doc (CodeView RoleView)
 open Verso ArgParse Doc Elab
 open Lean Elab
-open Verso.SyntaxUtils (parserInputString strLitInputContext)
+open Verso.SyntaxUtils (strLitInputContext)
 
 open SubVerso.Examples.Messages (messagesMatch)
 open SubVerso.Module (ModuleItem)
@@ -203,7 +203,7 @@ where
 section
 
 meta inductive LeanExampleData where
-  | inline (commandState : Command.State) (parserState : Parser.ModuleParserState)
+  | inline (commandState : Command.State)
   | module (positioned : Array ModuleItem)
 deriving Inhabited
 
@@ -426,8 +426,8 @@ meta instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [Mon
 @[code_block]
 meta def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
   | config , str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanInit") <| do
-    let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
-    let (header, state, msgs) ← Parser.parseHeader context
+    let (context, startPos) ← strLitInputContext str.raw (← getFileName)
+    let (header, _state, msgs) ← Parser.parseHeader context startPos
     if !header.raw[0].isNone then
       throwErrorAt header "Modules not yet supported here"
     for imp in header.raw[2].getArgs do
@@ -436,7 +436,7 @@ meta def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
     if header.raw[1].isNone then -- if the "prelude" option was not set, use the current env
       let commandState := configureCommandState (← getEnv) {}
       let commandState := { commandState with scopes := [{ header := "", opts := pp.tagAppFns.set {} true }] }
-      modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState  state)}
+      modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState)}
     else
       if header.raw[2].getArgs.isEmpty then
         let (env, msgs) ← processHeader header opts msgs context 0
@@ -446,7 +446,7 @@ meta def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
           liftM (m := IO) (throw <| IO.userError "Errors during import; aborting")
         let commandState := configureCommandState env {}
         let commandState := { commandState with scopes := [{ header := "", opts := pp.tagAppFns.set {} true }] }
-        modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState state)}
+        modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState)}
     if config.show then
       ``(Block.code $(quote str.getVersoCodeBlock)) -- TODO highlighting hack
     else
@@ -460,15 +460,15 @@ open SubVerso.Highlighting Highlighted in
 meta def lean : CodeBlockExpanderOf LeanBlockConfig
   | config, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| withoutAsync do
     let x := config.exampleContext
-    let (commandState, state) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
-      | some (.inline commandState state) => pure (commandState, state)
+    let commandState ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
+      | some (.inline commandState) => pure commandState
       | some (.module ..) => throwErrorAt x "Expected an example context for inline Lean, but found a module"
       | none => throwErrorAt x "Can't find example context"
     let (context, startPos) ← strLitInputContext str.raw (← getFileName)
     -- Process with empty messages to avoid duplicate output
     let s ←
       withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Elaborating commands") <|
-      IO.processCommands context { state with pos := startPos, leadingStartPos? := none } { commandState with messages.unreported := {} }
+      IO.processCommands context { pos := startPos, leadingStartPos? := none } { commandState with messages.unreported := {} }
     for t in s.commandState.infoState.trees do
       pushInfoTree t
 
@@ -489,7 +489,7 @@ meta def lean : CodeBlockExpanderOf LeanBlockConfig
 
     if config.keep && !config.error then
       modifyEnv fun env => exampleContextExt.modifyState env fun st => {st with
-        contexts := st.contexts.insert x.getId (.inline {s.commandState with messages := {} } s.parserState)
+        contexts := st.contexts.insert x.getId (.inline {s.commandState with messages := {} })
       }
     if let some infoName := config.name then
       modifyEnv fun env => messageContextExt.modifyState env fun st => {st with
@@ -594,16 +594,13 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
     let some { content := str, .. } := CodeView.of code
       | throwErrorAt code "Expected an inline code element"
     let x := config.exampleContext
-    let (commandState, _) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
-      | some (.inline commandState state) => pure (commandState, state)
+    let commandState ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
+      | some (.inline commandState) => pure commandState
       | some (.module ..) => throwErrorAt x "Expected an example context for inline Lean, but found a module"
       | none => throwErrorAt x "Can't find example context"
 
     let {env, scopes, ngen, ..} := commandState
     let {openDecls, currNamespace, opts, ..} := scopes.head!
-
-
-    let altStr ← parserInputString str
 
     let leveller {α} : TermElabM α → TermElabM α :=
       if let some us := config.universes then
@@ -616,7 +613,7 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
     let (newMsgs, type, tree, hls) ←
       try
         setEnv env
-        match Parser.runParserCategory env `term altStr (← getFileName) with
+        match (← SyntaxUtils.parseSourceCategory `term str.raw) with
         | .error e => throwErrorAt str e
         | .ok stx => withOptions (fun _ => opts) <| runWithOpenDecls scopes <| runWithVariables scopes fun _ => do
           let (newMsgs, type, tree) ← do
