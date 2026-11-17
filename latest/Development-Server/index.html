@@ -1,4 +1,4 @@
-<!-- Generated from commit 71a2035b44e7f54a797ce799fd1b03cdd3a44684 at 2026-10-27T21:03:50Z -->
+<!-- Generated from commit 6674cf83c82a2c260bf5827d44e58f26568f7cbe at 2026-11-17T13:29:03Z -->
 <!DOCTYPE html>
 <html><head><script>(function(){
   const {protocol:proto, host:hostName, pathname:path, search:srch, hash:hsh} = window.location;
@@ -29,7 +29,7 @@
         // Leave the default width in place when local storage is unavailable.
     }
 })();
-</script><base href="./../"/><meta charset="utf-8"/><meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/><title>Development Server</title><link rel="stylesheet" href="book.css"/><link rel="stylesheet" href="verso-vars.css"/><script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script><script defer="defer" src="-verso-search/elasticlunr.min.js"></script><script defer="defer" src="-verso-search/fuzzysort.min.js"></script><script defer="defer" src="-verso-search/searchIndex.js"></script><script defer="defer" src="-verso-search/search-config.js"></script><script type="module" src="-verso-search/search-init.js"></script><link rel="stylesheet" href="-verso-search/search-box.css"/><link rel="stylesheet" href="-verso-search/search-page.css"/><link rel="stylesheet" href="-verso-search/search-highlight.css"/><link rel="stylesheet" href="-verso-search/domain-display.css"/><script src="-verso-search/search-highlight.js" defer="defer"></script><script src="toc-resize.js" defer="defer"></script><script src="-verso-data/katex/katex.js"></script><script src="-verso-data/katex/math.js"></script><script src="-verso-data/popper.min.js"></script><script src="-verso-data/tippy-bundle.umd.min.js"></script><link rel="stylesheet" href="-verso-data/tippy-border.css"/><link rel="stylesheet" href="-verso-data/katex/katex.css"/><style>
+</script><base href="./../"/><meta charset="utf-8"/><meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/><title>Development Server</title><link rel="stylesheet" href="book.css"/><link rel="stylesheet" href="verso-vars.css"/><script defer="defer" src="-verso-search/elasticlunr.min.js"></script><script defer="defer" src="-verso-search/fuzzysort.min.js"></script><script defer="defer" src="-verso-search/searchIndex.js"></script><script defer="defer" src="-verso-search/search-config.js"></script><script type="module" src="-verso-search/search-init.js"></script><link rel="stylesheet" href="-verso-search/search-box.css"/><link rel="stylesheet" href="-verso-search/search-page.css"/><link rel="stylesheet" href="-verso-search/search-highlight.css"/><link rel="stylesheet" href="-verso-search/domain-display.css"/><script src="-verso-search/search-highlight.js" defer="defer"></script><script src="toc-resize.js" defer="defer"></script><script src="-verso-data/katex/katex.js" defer="defer"></script><script src="-verso-data/katex/math.js" defer="defer"></script><script src="-verso-data/popper.min.js"></script><script src="-verso-data/tippy-bundle.umd.min.js"></script><link rel="stylesheet" href="-verso-data/tippy-border.css"/><link rel="stylesheet" href="-verso-data/katex/katex.css"/><style>
 .namedocs {
   position: relative;
   border: solid 1px #98B2C0;
@@ -1816,17 +1816,6 @@ window.onload = async () => {
         highlightedTokens = [];
       });
     }
-    /* Render docstrings */
-    if ('undefined' !== typeof marked) {
-        for (const d of document.querySelectorAll("code.docstring, pre.docstring")) {
-            const str = d.innerText;
-            const html = marked.parse(str);
-            const rendered = document.createElement("div");
-            rendered.classList.add("docstring");
-            rendered.innerHTML = html;
-            d.parentNode.replaceChild(rendered, d);
-        }
-    }
     // Add hovers
     const versoDocData = await (fetch("-verso-docs.json").then((resp) => resp.json()));
 
@@ -1856,20 +1845,12 @@ window.onload = async () => {
       info.style.display = 'block';
       const data = versoDocData[hoverId];
       if (data) {
-        info.innerHTML = data;
-        /* Render docstrings - TODO server-side */
-        if ('undefined' !== typeof marked) {
-          for (const d of info.querySelectorAll('code.docstring, pre.docstring')) {
-            const str = d.innerText;
-            const html = marked.parse(str);
-            const rendered = document.createElement('div');
-            rendered.classList.add('docstring');
-            rendered.innerHTML = html;
-            d.parentNode.replaceChild(rendered, d);
-          }
-        }
+        /* Verso generated the HTML from the Markdown at site build time. */
+        const parsed = new DOMParser().parseFromString(data, 'text/html');
+        info.append(...parsed.body.childNodes);
+        if (typeof versoRenderMath === 'function') versoRenderMath(info);
       } else {
-        info.innerHTML = 'Failed to load doc ID: ' + hoverId;
+        info.textContent = 'Failed to load doc ID: ' + hoverId;
       }
       return info;
     }
@@ -1948,7 +1929,11 @@ window.onload = async () => {
               links.className = 'extra-doc-links';
               extras.forEach((l) => {
                 const li = document.createElement('li');
-                li.innerHTML = "<a href=\"" + l['href'] + "\" title=\"" + l.long + "\">" + l.short + "</a>";
+                const a = document.createElement('a');
+                a.href = l['href'];
+                a.title = l.long;
+                a.textContent = l.short;
+                li.appendChild(a);
                 links.appendChild(li);
               });
               content.appendChild(links);
@@ -2084,5 +2069,4 @@ set = { "Cache-Control" = "no-cache", "X-Frame-Options" = "DENY" }
 </pre></section></section><section><h2 id="serve-caching">9.4. Caching<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=serve-caching" title="Permalink">🔗</a></span></h2><p>Every response carries <code>Cache-Control: no-cache</code>, which directs the browser to revalidate before reusing a cached copy rather than to skip caching entirely.
 Each file response also carries an <code>ETag</code> derived from the file's contents and a <code>Last-Modified</code> time.</p><p>When a browser revalidates with <code>If-None-Match</code> or <code>If-Modified-Since</code> and the file is unchanged, the server replies <code>304 Not Modified</code> with no body.
 Because the <code>ETag</code> follows the contents, a rebuild that rewrites a file without changing it still will still be cheap to load.</p></section><section><h2 id="serve-behavior">9.5. Other Behavior<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=serve-behavior" title="Permalink">🔗</a></span></h2><ul><li><p>A file's <code>Content-Type</code> comes from its extension.
-A file whose extension is unknown is served as <code>text/plain</code> when its contents are valid UTF-8 text, so text-like files open in the browser instead of downloading, and as <code>application/octet-stream</code> otherwise.</p></li><li><p>Directories are served by their <code>index.html</code> when one is present; otherwise a generated listing is shown unless listings are disabled, in which case the request is refused with <code>403 Forbidden</code>.</p></li><li><p>A request for a directory without a trailing slash is redirected to add one, so relative links resolve correctly. This can be turned off.</p></li><li><p><code>Range</code> requests are supported, so media files can be sought and large files resumed.</p></li><li><p>Symbolic links are followed only while their target stays within a mounted directory. A link pointing outside every mount is refused, unless <code>follow_symlinks_outside_root</code> is set.</p></li><li><p>Only <code>GET</code> and <code>HEAD</code> are served. Other methods receive <code>405 Method Not Allowed</code>. With CORS enabled, <code>OPTIONS</code> preflight requests are answered.
-</p></li></ul></section></section><nav class="prev-next-buttons"><a class="local-button active" href="Literate-Programming/#literate" rel="prev" title="8. Literate Programming"><span class="arrow">←</span><span class="where">8. Literate Programming</span></a><a class="local-button active" href="the-index/#index" rel="next" title="Index"><span class="where">Index</span><span class="arrow">→</span></a></nav></div></main></div></body></html>
+A file whose extension is unknown is served as <code>text/plain</code> when its contents are valid UTF-8 text, so text-like files open in the browser instead of downloading, and as <code>application/octet-stream</code> otherwise.</p></li><li><p>Directories are served by their <code>index.html</code> when one is present; otherwise a generated listing is shown unless listings are disabled, in which case the request is refused with <code>403 Forbidden</code>.</p></li><li><p>A request for a directory without a trailing slash is redirected to add one, so relative links resolve correctly. This can be turned off.</p></li><li><p><code>Range</code> requests are supported, so media files can be sought and large files resumed.</p></li><li><p>Symbolic links are followed only while their target stays within a mounted directory. A link pointing outside every mount is refused, unless <code>follow_symlinks_outside_root</code> is set.</p></li><li><p>Only <code>GET</code> and <code>HEAD</code> are served. Other methods receive <code>405 Method Not Allowed</code>. With CORS enabled, <code>OPTIONS</code> preflight requests are answered.</p></li></ul></section></section><nav class="prev-next-buttons"><a class="local-button active" href="Literate-Programming/#literate" rel="prev" title="8. Literate Programming"><span class="arrow">←</span><span class="where">8. Literate Programming</span></a><a class="local-button active" href="the-index/#index" rel="next" title="Index"><span class="where">Index</span><span class="arrow">→</span></a></nav></div></main></div></body></html>

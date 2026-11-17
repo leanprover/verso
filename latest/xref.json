@@ -28,6 +28,35 @@
         "number": null},
        {"title": "Verso Markup", "shortTitle": null, "number": "2"}]},
      "address": "/Verso-Markup/"}],
+   "verso-main-interpret":
+   [{"id": "verso-main-interpret",
+     "data":
+     {"title": "Building Documents in the Interpreter",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 25,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"},
+       {"title": "Building Documents in the Interpreter",
+        "shortTitle": null,
+        "number": "7"}]},
+     "address": "/releases/"}],
+   "verso":
+   [{"id": "verso",
+     "data":
+     {"title": "Writing Documentation in Lean with Verso",
+      "shortTitle": "Documentation with Verso",
+      "sectionNum": "",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null}]},
+     "address": "/"}],
    "versioned-release-notes":
    [{"id": "versioned-release-notes",
      "data":
@@ -57,12 +86,10 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.36.0 (in development)",
-        "shortTitle": null,
-        "number": "1"},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"},
        {"title": "Adaptation to Lean's Rewritten Verso Parser",
         "shortTitle": null,
-        "number": "3"}]},
+        "number": "6"}]},
      "address": "/releases/"}],
    "traversal":
    [{"id": "traversal",
@@ -78,6 +105,23 @@
        {"title": "Building Documents", "shortTitle": null, "number": "3"},
        {"title": "Traversal", "shortTitle": null, "number": "3"}]},
      "address": "/Building-Documents/Traversal/"}],
+   "tex-block-paragraphs":
+   [{"id": "tex-block-paragraphs",
+     "data":
+     {"title": "Paragraph Breaks Between Blocks in TeX Output",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 25,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"},
+       {"title": "Paragraph Breaks Between Blocks in TeX Output",
+        "shortTitle": null,
+        "number": "5"}]},
+     "address": "/releases/"}],
    "tech-terms":
    [{"id": "tech-terms",
      "data":
@@ -125,6 +169,23 @@
         "number": "3"},
        {"title": "Syntax Errors", "shortTitle": null, "number": "1"}]},
      "address": "/Verso-Markup/"}],
+   "subproject-call":
+   [{"id": "subproject-call",
+     "data":
+     {"title": "Standardized Elan Invocation",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 25,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"},
+       {"title": "Standardized Elan Invocation",
+        "shortTitle": null,
+        "number": "4"}]},
+     "address": "/releases/"}],
    "site-config":
    [{"id": "site-config",
      "data":
@@ -304,7 +365,7 @@
    "release-v4.36.0":
    [{"id": "release-v4___36___0",
      "data":
-     {"title": "Verso 4.36.0 (in development)",
+     {"title": "Verso 4.36.0",
       "shortTitle": null,
       "sectionNum": null,
       "searchPriority": 25,
@@ -313,9 +374,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.36.0 (in development)",
-        "shortTitle": null,
-        "number": "1"}]},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "release-v4.35.0":
    [{"id": "release-v4___35___0",
@@ -612,12 +671,10 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.36.0 (in development)",
-        "shortTitle": null,
-        "number": "1"},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"},
        {"title": "Section IDs on Manual Headings",
         "shortTitle": null,
-        "number": "1"}]},
+        "number": "2"}]},
      "address": "/releases/"}],
    "manual":
    [{"id": "manual",
@@ -1006,12 +1063,10 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.36.0 (in development)",
-        "shortTitle": null,
-        "number": "1"},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"},
        {"title": "Use Lean's HTML Type and Syntax",
         "shortTitle": null,
-        "number": "2"}]},
+        "number": "3"}]},
      "address": "/releases/"}],
    "inline-syntax":
    [{"id": "inline-syntax",
@@ -1453,6 +1508,23 @@
        {"title": "Block Syntax", "shortTitle": null, "number": "2"},
        {"title": "Code Blocks", "shortTitle": null, "number": "3"}]},
      "address": "/Verso-Markup/"}],
+   "build-time-docstring-markdown":
+   [{"id": "build-time-docstring-markdown",
+     "data":
+     {"title": "Offline Docstring Markdown",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 25,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"},
+       {"title": "Offline Docstring Markdown",
+        "shortTitle": null,
+        "number": "1"}]},
+     "address": "/releases/"}],
    "build-process":
    [{"id": "build-process",
      "data":
@@ -1512,18 +1584,6 @@
        {"title": "Syntax", "shortTitle": null, "number": "2"},
        {"title": "Block Syntax", "shortTitle": null, "number": "2"}]},
      "address": "/Verso-Markup/"}],
-   "Writing-Documentation-in-Lean-with-Verso":
-   [{"id": "Writing-Documentation-in-Lean-with-Verso",
-     "data":
-     {"title": "Writing Documentation in Lean with Verso",
-      "shortTitle": "Documentation with Verso",
-      "sectionNum": "",
-      "searchPriority": 50,
-      "context":
-      [{"title": "Writing Documentation in Lean with Verso",
-        "shortTitle": "Documentation with Verso",
-        "number": null}]},
-     "address": "/"}],
    "ArgParse":
    [{"id": "ArgParse",
      "data":
@@ -1669,10 +1729,10 @@
   "description": "Documentation for Lean constants",
   "contents":
   {"[anonymous]":
-   [{"id": "Verso___Genre___Manual___BlockDescr___mk",
+   [{"id": "Verso___Genre___Manual___InlineDescr___mk",
      "data": null,
      "address": "/Manuals-and-Books/"},
-    {"id": "Verso___Genre___Manual___InlineDescr___mk",
+    {"id": "Verso___Genre___Manual___BlockDescr___mk",
      "data": null,
      "address": "/Manuals-and-Books/"}],
    "Verso.Output.TeX.text":
@@ -1713,6 +1773,10 @@
      "address": "/Output-Formats/"}],
    "Verso.Output.Html.«verso-vars.css»":
    [{"id": "Verso___Output___Html____FLQQ_verso-vars___css_FLQQ_",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.Html.writeKaTeX":
+   [{"id": "Verso___Output___Html___writeKaTeX",
      "data": null,
      "address": "/Output-Formats/"}],
    "Verso.Output.Html.math.js":
@@ -2443,16 +2507,14 @@
    [{"id": "--release-note-4___36___0",
      "data":
      {"version": "4.36.0",
-      "title": "Verso 4.36.0 (in development)",
+      "title": "Verso 4.36.0",
       "searchPriority": 25,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.36.0 (in development)",
-        "shortTitle": null,
-        "number": "1"}]},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "4.35.0":
    [{"id": "--release-note-4___35___0",
@@ -2562,7 +2624,21 @@
  {"title": "Individual changes in a release",
   "description": null,
   "contents":
-  {"versioned-release-notes":
+  {"verso-main-interpret":
+   [{"id": "--release-note-verso-main-interpret",
+     "data":
+     {"version": "4.36.0",
+      "title": "Building Documents in the Interpreter",
+      "searchPriority": 25,
+      "prs": [1054],
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"}]},
+     "address": "/releases/"}],
+   "versioned-release-notes":
    [{"id": "--release-note-versioned-release-notes",
      "data":
      {"version": "4.34.0",
@@ -2588,9 +2664,35 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.36.0 (in development)",
-        "shortTitle": null,
-        "number": "1"}]},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"}]},
+     "address": "/releases/"}],
+   "tex-block-paragraphs":
+   [{"id": "--release-note-tex-block-paragraphs",
+     "data":
+     {"version": "4.36.0",
+      "title": "Paragraph Breaks Between Blocks in TeX Output",
+      "searchPriority": 25,
+      "prs": [1081],
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"}]},
+     "address": "/releases/"}],
+   "subproject-call":
+   [{"id": "--release-note-subproject-call",
+     "data":
+     {"version": "4.36.0",
+      "title": "Standardized Elan Invocation",
+      "searchPriority": 25,
+      "prs": [1030],
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "search-priority":
    [{"id": "--release-note-search-priority",
@@ -2674,9 +2776,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.36.0 (in development)",
-        "shortTitle": null,
-        "number": "1"}]},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "literate429":
    [{"id": "--release-note-literate429",
@@ -2746,9 +2846,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.36.0 (in development)",
-        "shortTitle": null,
-        "number": "1"}]},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "inline-lean-infoview":
    [{"id": "inline-lean-infoview",
@@ -2776,9 +2874,7 @@
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.36.0 (in development)",
-        "shortTitle": null,
-        "number": "1"}]},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "folding-ranges":
    [{"id": "folding-ranges",
@@ -2947,6 +3043,20 @@
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
        {"title": "Verso 4.34.0", "shortTitle": null, "number": "3"}]},
+     "address": "/releases/"}],
+   "build-time-docstring-markdown":
+   [{"id": "--release-note-build-time-docstring-markdown",
+     "data":
+     {"version": "4.36.0",
+      "title": "Offline Docstring Markdown",
+      "searchPriority": 25,
+      "prs": [1103],
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.36.0", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "blog-lean-role":
    [{"id": "blog-lean-role",

@@ -1,0 +1,1 @@
+window.docContents[180].resolve({"/releases/#tex-block-paragraphs":{"contents":"Use withBlocksNotAsParagraphs to disable it and withBlocksAsParagraphs to enable paragraph break insertion.\n\n","context":"Writing Documentation in Lean with Verso\u0009Release Notes\u0009Verso 4.36.0","header":"Paragraph Breaks Between Blocks in TeX Output","id":"/releases/#tex-block-paragraphs"}});

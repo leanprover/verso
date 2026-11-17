@@ -1,4 +1,4 @@
-<!-- Generated from commit 71a2035b44e7f54a797ce799fd1b03cdd3a44684 at 2026-10-27T21:03:50Z -->
+<!-- Generated from commit 6674cf83c82a2c260bf5827d44e58f26568f7cbe at 2026-11-17T13:29:03Z -->
 <!DOCTYPE html>
 <html><head><script>(function(){
   const {protocol:proto, host:hostName, pathname:path, search:srch, hash:hsh} = window.location;
@@ -29,7 +29,7 @@
         // Leave the default width in place when local storage is unavailable.
     }
 })();
-</script><base href="./../"/><meta charset="utf-8"/><meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/><title>Literate Programming</title><link rel="stylesheet" href="book.css"/><link rel="stylesheet" href="verso-vars.css"/><script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script><script defer="defer" src="-verso-search/elasticlunr.min.js"></script><script defer="defer" src="-verso-search/fuzzysort.min.js"></script><script defer="defer" src="-verso-search/searchIndex.js"></script><script defer="defer" src="-verso-search/search-config.js"></script><script type="module" src="-verso-search/search-init.js"></script><link rel="stylesheet" href="-verso-search/search-box.css"/><link rel="stylesheet" href="-verso-search/search-page.css"/><link rel="stylesheet" href="-verso-search/search-highlight.css"/><link rel="stylesheet" href="-verso-search/domain-display.css"/><script src="-verso-search/search-highlight.js" defer="defer"></script><script src="toc-resize.js" defer="defer"></script><script src="-verso-data/katex/katex.js"></script><script src="-verso-data/katex/math.js"></script><script src="-verso-data/popper.min.js"></script><script src="-verso-data/tippy-bundle.umd.min.js"></script><link rel="stylesheet" href="-verso-data/tippy-border.css"/><link rel="stylesheet" href="-verso-data/katex/katex.css"/><style>
+</script><base href="./../"/><meta charset="utf-8"/><meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/><title>Literate Programming</title><link rel="stylesheet" href="book.css"/><link rel="stylesheet" href="verso-vars.css"/><script defer="defer" src="-verso-search/elasticlunr.min.js"></script><script defer="defer" src="-verso-search/fuzzysort.min.js"></script><script defer="defer" src="-verso-search/searchIndex.js"></script><script defer="defer" src="-verso-search/search-config.js"></script><script type="module" src="-verso-search/search-init.js"></script><link rel="stylesheet" href="-verso-search/search-box.css"/><link rel="stylesheet" href="-verso-search/search-page.css"/><link rel="stylesheet" href="-verso-search/search-highlight.css"/><link rel="stylesheet" href="-verso-search/domain-display.css"/><script src="-verso-search/search-highlight.js" defer="defer"></script><script src="toc-resize.js" defer="defer"></script><script src="-verso-data/katex/katex.js" defer="defer"></script><script src="-verso-data/katex/math.js" defer="defer"></script><script src="-verso-data/popper.min.js"></script><script src="-verso-data/tippy-bundle.umd.min.js"></script><link rel="stylesheet" href="-verso-data/tippy-border.css"/><link rel="stylesheet" href="-verso-data/katex/katex.css"/><style>
 .namedocs {
   position: relative;
   border: solid 1px #98B2C0;
@@ -1816,17 +1816,6 @@ window.onload = async () => {
         highlightedTokens = [];
       });
     }
-    /* Render docstrings */
-    if ('undefined' !== typeof marked) {
-        for (const d of document.querySelectorAll("code.docstring, pre.docstring")) {
-            const str = d.innerText;
-            const html = marked.parse(str);
-            const rendered = document.createElement("div");
-            rendered.classList.add("docstring");
-            rendered.innerHTML = html;
-            d.parentNode.replaceChild(rendered, d);
-        }
-    }
     // Add hovers
     const versoDocData = await (fetch("-verso-docs.json").then((resp) => resp.json()));
 
@@ -1856,20 +1845,12 @@ window.onload = async () => {
       info.style.display = 'block';
       const data = versoDocData[hoverId];
       if (data) {
-        info.innerHTML = data;
-        /* Render docstrings - TODO server-side */
-        if ('undefined' !== typeof marked) {
-          for (const d of info.querySelectorAll('code.docstring, pre.docstring')) {
-            const str = d.innerText;
-            const html = marked.parse(str);
-            const rendered = document.createElement('div');
-            rendered.classList.add('docstring');
-            rendered.innerHTML = html;
-            d.parentNode.replaceChild(rendered, d);
-          }
-        }
+        /* Verso generated the HTML from the Markdown at site build time. */
+        const parsed = new DOMParser().parseFromString(data, 'text/html');
+        info.append(...parsed.body.childNodes);
+        if (typeof versoRenderMath === 'function') versoRenderMath(info);
       } else {
-        info.innerHTML = 'Failed to load doc ID: ' + hoverId;
+        info.textContent = 'Failed to load doc ID: ' + hoverId;
       }
       return info;
     }
@@ -1948,7 +1929,11 @@ window.onload = async () => {
               links.className = 'extra-doc-links';
               extras.forEach((l) => {
                 const li = document.createElement('li');
-                li.innerHTML = "<a href=\"" + l['href'] + "\" title=\"" + l.long + "\">" + l.short + "</a>";
+                const a = document.createElement('a');
+                a.href = l['href'];
+                a.title = l.long;
+                a.textContent = l.short;
+                li.appendChild(a);
                 links.appendChild(li);
               });
               content.appendChild(links);
@@ -2116,5 +2101,4 @@ Running <code>lake query :literateHtml</code> builds the HTML and prints its pat
 Verso includes tools to automate the setup of deployment to <a href="https://docs.github.com/en/pages">GitHub Pages</a>.</p><section><h3 id="literate-github-pages-setup">8.4.1. GitHub Pages<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-github-pages-setup" title="Permalink">🔗</a></span></h3><p>To enable deployment to GitHub Pages, run:</p><pre>lake exe verso setup-literate
 </pre><p>This generates a GitHub Actions workflow file at <code>.github/workflows/verso-literate-pages.yml</code> that automatically builds and deploys the site on every push to <code>main</code>.</p><p>After generating the workflow:</p><ol start="1"><li><p>Go to the repository's <em>Settings → Pages → Source</em> and select <em>GitHub Actions</em>.</p></li><li><p>Commit and push the generated workflow file.</p></li></ol><p>As usual, make sure that <code>lake-manifest.json</code> is committed to the repository.</p><p>The first build may be slow because it compiles the full Lean project.
 Subsequent builds are faster thanks to <code>.lake</code> caching.</p><p>When Verso is upgraded, <code>lake build :literateHtml</code> will warn if the workflow file is outdated.
-Re-running <code>lake exe verso setup-literate</code> updates it, saving the previous version as a <code>.bak</code> file so that any manual customizations can be merged by hand.
-</p></section></section></section><nav class="prev-next-buttons"><a class="local-button active" href="Manuals-and-Books/#manual" rel="prev" title="7. Manuals and Books"><span class="arrow">←</span><span class="where">7. Manuals and Books</span></a><a class="local-button active" href="Development-Server/#serve" rel="next" title="9. Development Server"><span class="where">9. Development Server</span><span class="arrow">→</span></a></nav></div></main></div></body></html>
+Re-running <code>lake exe verso setup-literate</code> updates it, saving the previous version as a <code>.bak</code> file so that any manual customizations can be merged by hand.</p></section></section></section><nav class="prev-next-buttons"><a class="local-button active" href="Manuals-and-Books/#manual" rel="prev" title="7. Manuals and Books"><span class="arrow">←</span><span class="where">7. Manuals and Books</span></a><a class="local-button active" href="Development-Server/#serve" rel="next" title="9. Development Server"><span class="where">9. Development Server</span><span class="arrow">→</span></a></nav></div></main></div></body></html>

@@ -114,7 +114,7 @@ After updating either file, rebuild the site and run the browser tests to confir
 that Unicode abbreviation input still works:
 
 ```
-lake exe usersguide --delay-html-multi multi.json --delay-html-single single.json
-lake exe usersguide --resume-html-multi multi.json --resume-html-single single.json
+lake run versoMain UsersGuideMain.lean --delay-html-multi multi.json --delay-html-single single.json
+lake run versoMain UsersGuideMain.lean --resume-html-multi multi.json --resume-html-single single.json
 uv run --project browser-tests --extra test pytest browser-tests/test_search.py -v
 ```

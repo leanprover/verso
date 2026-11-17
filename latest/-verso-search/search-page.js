@@ -181,9 +181,9 @@ const renderResultsFor = async (query) => {
      */
     const renderChunk = async (start, end) => {
         const frag = document.createDocumentFragment();
-        for (let i = start; i < end; i++) {
+        for (const candidate of candidates.slice(start, end)) {
             if (myToken !== renderToken) return false;
-            const li = await renderCandidateLi(candidates[i], {
+            const li = await renderCandidateLi(candidate, {
                 domainMappers,
                 filter: query,
                 document,
@@ -206,8 +206,7 @@ const renderResultsFor = async (query) => {
     // is safe — duplicate refs resolve to the same in-flight promise. Even for
     // already-cached buckets this matters, because browsers still validate
     // `<script src>` loads over the network.
-    for (let i = 0; i < Math.min(n, EAGER); i++) {
-        const c = candidates[i];
+    for (const c of candidates.slice(0, EAGER)) {
         if (c.kind === "fullText") getDocContentsFor(c.textMatch.ref).catch(() => {});
     }
 
@@ -234,8 +233,7 @@ const renderResultsFor = async (query) => {
                 if (myToken !== renderToken) return;
                 // Same pre-warm as the eager phase — fire all tail bucket loads in
                 // parallel before starting the serial render loop.
-                for (let i = EAGER; i < n; i++) {
-                    const c = candidates[i];
+                for (const c of candidates.slice(EAGER)) {
                     if (c.kind === "fullText") {
                         getDocContentsFor(c.textMatch.ref).catch(() => {});
                     }
@@ -362,8 +360,8 @@ const updateFilterDisabled = (counts) => {
         entry.label.classList.toggle("search-page-filter--disabled", disabled);
     };
     setState(filterElements.fullText, counts.fullText);
-    for (const id of Object.keys(filterElements.domains)) {
-        setState(filterElements.domains[id], counts.domains[id] ?? 0);
+    for (const [id, entry] of Object.entries(filterElements.domains)) {
+        setState(entry, counts.domains[id] ?? 0);
     }
 };
 
@@ -378,7 +376,7 @@ const clearFilterDisabled = () => {
         entry.label.classList.remove("search-page-filter--disabled");
     };
     clear(filterElements.fullText);
-    for (const id of Object.keys(filterElements.domains)) clear(filterElements.domains[id]);
+    for (const entry of Object.values(filterElements.domains)) clear(entry);
 };
 
 /**
