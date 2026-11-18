@@ -90,7 +90,7 @@ window.onload = async () => {
         if (!tokens) {
             tokens = [];
             for (const example of document.querySelectorAll(".hl.lean")) {
-                if (example instanceof HTMLElement && example.dataset["leanContext"] == context) {
+                if (example instanceof HTMLElement && example.dataset["leanContext"] === context) {
                     for (const tok of example.querySelectorAll(
                         '.token[data-binding="' + CSS.escape(binding) + '"]',
                     )) {
@@ -185,7 +185,7 @@ window.onload = async () => {
         followCursor: "initial",
         onShow(inst) {
             const ref = inst.reference;
-            if (ref.className == "tactic") {
+            if (ref.className === "tactic") {
                 const toggle = tacticToggle(ref);
                 if (toggle && toggle.checked) {
                     return false;
@@ -218,7 +218,7 @@ window.onload = async () => {
         },
         content(tgt) {
             const content = document.createElement("span");
-            if (tgt.className == "tactic") {
+            if (tgt.className === "tactic") {
                 const state = tgt.querySelector(":scope > .tactic-state")?.cloneNode(true);
                 if (state instanceof HTMLElement) {
                     state.style.display = "block";

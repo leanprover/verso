@@ -116,15 +116,15 @@ export const combineScore = (rawScore, ...priorities) => {
  */
 const compareSnippets = (s1, s2) => {
     // First compare by number of unique terms
-    let terms1 = new Set(s1.matches.map((x) => x.stem));
-    let terms2 = new Set(s2.matches.map((x) => x.stem));
-    let terms = terms1.size - terms2.size;
+    const terms1 = new Set(s1.matches.map((x) => x.stem));
+    const terms2 = new Set(s2.matches.map((x) => x.stem));
+    const terms = terms1.size - terms2.size;
     if (terms !== 0) {
         return terms;
     }
 
     // Then by number of matches
-    let matches = s1.matches.length - s2.matches.length;
+    const matches = s1.matches.length - s2.matches.length;
     if (matches !== 0) {
         return matches;
     }
@@ -143,7 +143,7 @@ const tokenizeText = (text) => {
     const regex = /\S+/g;
     let match;
     while ((match = regex.exec(text)) !== null) {
-        let stems = searchIndex?.pipeline.run([match[0]]) ?? [];
+        const stems = searchIndex?.pipeline.run([match[0]]) ?? [];
         for (const stem of stems) {
             toks.push({
                 original: match[0],
@@ -376,7 +376,7 @@ const docBucket = (ref) => {
  */
 const loadBucket = async (ref) => {
     const bucket = docBucket(ref);
-    let bucketDocs = docContents[bucket];
+    const bucketDocs = docContents[bucket];
     if (bucketDocs) {
         return bucketDocs;
     }
@@ -431,7 +431,7 @@ const getDocContents = async (ref) => {
  */
 export const computeCandidates = (
     filter,
-    { preparedData, mappedData, searchPriorities, docPriorities, searchIndex },
+    { preparedData, mappedData, searchPriorities, docPriorities, searchIndex: textIndex },
 ) => {
     if (filter.length === 0) return [];
 
@@ -440,8 +440,8 @@ export const computeCandidates = (
     // still filters out poor matches, so the working set stays modest.
     const results = fuzzysort.go(filter, preparedData, { threshold: 0.25 });
 
-    const textResults = searchIndex
-        ? searchIndex.search(filter, {
+    const textResults = textIndex
+        ? textIndex.search(filter, {
               expand: expandMatches,
               bool: "AND",
               // `context` (the breadcrumb text) isn't an indexed field. It was, in the past, but
@@ -661,11 +661,11 @@ const textResultToHtml = async (term, match, document, snippetOpts = {}, asOptio
     const domainName = document.createElement("p");
     link.appendChild(domainName);
     domainName.className = "domain";
-    if (doc.context.trim() == "") {
+    if (doc.context.trim() === "") {
         domainName.textContent = "Full-text search";
     } else {
         // This is a slight abuse of "domain", but it seems to work well
-        let context = doc.context.replaceAll("\t", " » ");
+        const context = doc.context.replaceAll("\t", " » ");
         domainName.append(document.createTextNode(context));
         domainName.classList.add("text-context");
     }
@@ -1085,9 +1085,9 @@ class SearchBox {
      * @param {SearchResult | null} option
      */
     setCurrentOptionStyle(option) {
-        for (const opt of this.filteredOptions) {
-            const el = opt.htmlItem;
-            if (opt === option) {
+        for (const candidate of this.filteredOptions) {
+            const el = candidate.htmlItem;
+            if (candidate === option) {
                 el.setAttribute("aria-selected", "true");
                 if (
                     this.listboxNode.scrollTop + this.listboxNode.offsetHeight <
@@ -1110,7 +1110,7 @@ class SearchBox {
      */
     getPreviousOption(currentOption, lastOption) {
         if (currentOption !== this.firstOption) {
-            var index = this.filteredOptions.indexOf(currentOption);
+            const index = this.filteredOptions.indexOf(currentOption);
             return this.filteredOptions[index - 1];
         }
         return lastOption;
@@ -1122,7 +1122,7 @@ class SearchBox {
      */
     getNextOption(currentOption, firstOption) {
         if (currentOption != null && currentOption !== this.lastOption) {
-            var index = this.filteredOptions.indexOf(currentOption);
+            const index = this.filteredOptions.indexOf(currentOption);
             return this.filteredOptions[index + 1];
         }
         return firstOption;
@@ -1265,11 +1265,12 @@ class SearchBox {
                 eventHandled = true;
                 break;
 
-            case "End":
-                var length = this.comboboxNode.textContent.length;
+            case "End": {
+                const length = this.comboboxNode.textContent.length;
                 this.imeRewriter.setSelections([new Range(length, 0)]);
                 eventHandled = true;
                 break;
+            }
 
             default:
                 break;

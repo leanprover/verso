@@ -26,7 +26,7 @@ const tokenizeText = (text, pipeline) => {
     const regex = /[^\s(),."“”—:]+/g;
     let match;
     while ((match = regex.exec(text)) !== null) {
-        let stems = pipeline.run([match[0]]);
+        const stems = pipeline.run([match[0]]);
         for (const stem of stems) {
             toks.push({
                 original: match[0],
@@ -58,7 +58,7 @@ function highlightSearchTerms() {
     const regex = /\S+/g;
     let match;
     while ((match = regex.exec(searchQuery)) !== null) {
-        let stems = pipeline.run([match[0]]);
+        const stems = pipeline.run([match[0]]);
         for (const stem of stems) {
             searchTerms.set(stem.toLowerCase(), match[0]);
         }
@@ -204,7 +204,7 @@ function prevHighlight() {
 function openEnclosingDetails(elem) {
     let here = elem.parentElement;
     while (here) {
-        if (here.nodeName.toLowerCase() == "details") {
+        if (here.nodeName.toLowerCase() === "details") {
             here.setAttribute("open", "open");
             break;
         }
@@ -298,7 +298,7 @@ function scrollToFirstHighlightAfter(elementId) {
     }
 
     // Find the first highlight that comes after the target element in document order
-    for (let highlight of highlights) {
+    for (const highlight of highlights) {
         if (!(highlight instanceof HTMLElement)) continue;
         const position = targetElement.compareDocumentPosition(highlight);
         // Check if highlight comes after target element

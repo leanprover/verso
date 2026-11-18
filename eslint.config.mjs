@@ -46,6 +46,13 @@ export default [
                 },
             ],
             "promise/always-return": ["error", { ignoreLastCallback: true }],
+            eqeqeq: ["error", "smart"],
+            "prefer-const": "error",
+            "no-var": "error",
+            "no-shadow": "error",
+            "no-implied-eval": "error",
+            "no-new-func": "error",
+            "no-script-url": "error",
             // TypeScript checks the types, so the JSDoc only needs to be well-formed where it
             // exists.
             "jsdoc/require-jsdoc": "off",
