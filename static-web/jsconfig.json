@@ -13,5 +13,15 @@
         "noUnusedLocals": true,
         "noUnusedParameters": true
     },
-    "include": ["find.js", "math.js", "toc-resize.js", "toc-resize-preload.js"]
+    "include": [
+        "find.js",
+        "math.js",
+        "toc-resize.js",
+        "toc-resize-preload.js",
+        "highlighted-code.js",
+        "highlighted-code.d.ts",
+        "marginalia.js",
+        "add-trailing-slash.js",
+        "literate/copy-button.js"
+    ]
 }
