@@ -61,7 +61,7 @@ const buildSearchBox = () => {
 };
 
 // Initialize search box
-const data = fetch("xref.json").then((data) => data.json());
+const dataPromise = fetch("xref.json").then((response) => response.json());
 window.addEventListener("load", () => {
     // Pages that render their own search UI (e.g. the full-page search results view,
     // which has a plain input next to live-updating results) opt out of the header
@@ -74,20 +74,22 @@ window.addEventListener("load", () => {
     mount.append(buildSearchBox());
     const searchWrapper = document.querySelector(".combobox-list");
     if (!(searchWrapper instanceof HTMLElement)) return;
-    data.then((data) => {
-        const windowAny = /** @type {any} */ (window);
-        const docPriorities = windowAny.docPriorities;
-        // Set by `search-config.js` (written by `emitSearchBox`) when the genre provides a
-        // full-page search results view. Absent → Enter-without-selection stays a no-op.
-        const searchPagePath =
-            typeof windowAny.searchPagePath === "string" ? windowAny.searchPagePath : null;
-        registerSearch({
-            searchWrapper,
-            data,
-            domainMappers,
-            searchPriorities,
-            docPriorities,
-            searchPagePath,
-        });
-    });
+    dataPromise
+        .then((data) => {
+            const windowAny = /** @type {any} */ (window);
+            const docPriorities = windowAny.docPriorities;
+            // Set by `search-config.js` (written by `emitSearchBox`) when the genre provides a
+            // full-page search results view. Absent → Enter-without-selection stays a no-op.
+            const searchPagePath =
+                typeof windowAny.searchPagePath === "string" ? windowAny.searchPagePath : null;
+            registerSearch({
+                searchWrapper,
+                data,
+                domainMappers,
+                searchPriorities,
+                docPriorities,
+                searchPagePath,
+            });
+        })
+        .catch((err) => console.error("Failed to set up search:", err));
 });
