@@ -3,27 +3,25 @@
     "use strict";
 
     function addCopyButtons() {
-        var codeBoxes = document.querySelectorAll(".code-box");
-        for (var i = 0; i < codeBoxes.length; i++) {
-            var box = codeBoxes[i];
-            var button = document.createElement("button");
+        for (const box of document.querySelectorAll(".code-box")) {
+            const button = document.createElement("button");
             button.className = "copy-button";
             button.textContent = "Copy";
             button.setAttribute("aria-label", "Copy code to clipboard");
-            button.addEventListener("click", handleCopy);
+            button.addEventListener("click", () => handleCopy(button));
             box.appendChild(button);
         }
     }
 
-    function handleCopy(e) {
-        var button = e.currentTarget;
-        var codeBox = button.parentElement;
+    /** @param {HTMLButtonElement} button */
+    function handleCopy(button) {
+        const codeBox = button.parentElement;
+        if (!codeBox) return;
         // Collect text content from the code box, excluding the button itself
-        var text = "";
-        var children = codeBox.childNodes;
-        for (var i = 0; i < children.length; i++) {
-            var child = children[i];
-            if (child !== button && !child.classList?.contains("lean-output")) {
+        let text = "";
+        for (const child of codeBox.childNodes) {
+            const isOutput = child instanceof Element && child.classList.contains("lean-output");
+            if (child !== button && !isOutput) {
                 text += child.textContent;
             }
         }
@@ -40,7 +38,7 @@
                 });
         } else {
             // Fallback for older browsers
-            var textarea = document.createElement("textarea");
+            const textarea = document.createElement("textarea");
             textarea.value = text;
             textarea.style.position = "fixed";
             textarea.style.opacity = "0";
@@ -49,13 +47,14 @@
             try {
                 document.execCommand("copy");
                 showCopied(button);
-            } catch (err) {
+            } catch {
                 // silently fail
             }
             document.body.removeChild(textarea);
         }
     }
 
+    /** @param {HTMLButtonElement} button */
     function showCopied(button) {
         button.textContent = "Copied!";
         button.classList.add("copied");

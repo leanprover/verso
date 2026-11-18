@@ -261,11 +261,14 @@ jobs:
                   npx tsc --noEmit -p jsconfig.json
                   popd
 
-            - name: Type check the xref redirect JS code
+            - name: Type check the page scripts
               run: |
                   pushd static-web
                   npx tsc --noEmit -p jsconfig.json
                   popd
+
+            - name: Lint the page scripts
+              run: npm run lint
 
             # The widget is checked against the React and InfoView declarations that `npm ci`
             # installs, which are the versions the InfoView runs it with.

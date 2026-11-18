@@ -45,8 +45,8 @@ const docContents = ((/** @type {any} */ windowAny) => {
 const expandMatches = true;
 
 /**
- * Per-layer log-space contribution for a priority value. A priority {@code p} contributes
- * {@code (p - 50) / 50}; {@code 50} (or {@code null}/{@code undefined}) is neutral (0).
+ * Per-layer log-space contribution for a priority value. A priority `p` contributes
+ * `(p - 50) / 50`; `50` (or `null`/`undefined`) is neutral (0).
  * @param {number | undefined | null} p
  * @returns {number}
  */
@@ -54,8 +54,8 @@ export const priorityContribution = (p) => (p == null ? 0 : (p - 50) / 50);
 
 /**
  * Combines a raw score with any number of priority layers. Layer contributions are summed in
- * log space and the raw score is scaled by {@code 2^sum}, so combining is additive in the
- * exponent: two layers at 75 stack to {@code 2^(0.5 + 0.5) = 2}, not {@code 1.5 * 1.5 = 2.25}.
+ * log space and the raw score is scaled by `2^sum`, so combining is additive in the
+ * exponent: two layers at 75 stack to `2^(0.5 + 0.5) = 2`, not `1.5 * 1.5 = 2.25`.
  * Undefined/null layers contribute 0 (neutral), so callers can pass optional priorities
  * directly without pre-filtering.
  * @param {number} rawScore
@@ -112,7 +112,7 @@ export const combineScore = (rawScore, ...priorities) => {
 /**
  * @param {TextSnippet} s1
  * @param {TextSnippet} s2
- * @return {number}
+ * @returns {number}
  */
 const compareSnippets = (s1, s2) => {
     // First compare by number of unique terms
@@ -135,7 +135,7 @@ const compareSnippets = (s1, s2) => {
 
 /**
  * @param {string} text
- * @return {TextToken[]}
+ * @returns {TextToken[]}
  */
 const tokenizeText = (text) => {
     /** @type {TextToken[]} */
@@ -164,7 +164,7 @@ const wordChar = /\p{L}/u;
 /**
  * @param {string} text
  * @param {number} i
- * @return {number}
+ * @returns {number}
  */
 const wordStartBefore = (text, i) => {
     while (i > 0) {
@@ -178,7 +178,7 @@ const wordStartBefore = (text, i) => {
 /**
  * @param {string} text
  * @param {number} i
- * @return {number}
+ * @returns {number}
  */
 const wordEndAfter = (text, i) => {
     while (i < text.length) {
@@ -193,7 +193,7 @@ const wordEndAfter = (text, i) => {
  * @param {string} text
  * @param {string} query
  * @param {{contextLength?: number, maxSnippets?: number}} options
- * @return {Element|null}
+ * @returns {Element|null}
  */
 const highlightTextResult = (text, query, options = {}) => {
     const {
@@ -283,7 +283,7 @@ const highlightTextResult = (text, query, options = {}) => {
  *
  * @param {any} json
  * @param {DomainMappers} domainMappers
- * @return {Record<string, Searchable[]>}
+ * @returns {Record<string, Searchable[]>}
  */
 const dataToSearchableMap = (json, domainMappers) =>
     Object.entries(json)
@@ -293,7 +293,7 @@ const dataToSearchableMap = (json, domainMappers) =>
                 return acc;
             }
 
-            let entries = acc.hasOwnProperty(cur.searchKey) ? acc[cur.searchKey] : undefined;
+            let entries = Object.hasOwn(acc, cur.searchKey) ? acc[cur.searchKey] : undefined;
             if (!entries) {
                 entries = [];
                 acc[cur.searchKey] = entries;
@@ -312,7 +312,7 @@ const dataToSearchableMap = (json, domainMappers) =>
  * @param {MatchedPart[]} matchedParts
  * @param {Document} document
  * @param {boolean} [asOption]
- * @return {HTMLLIElement}
+ * @returns {HTMLLIElement}
  */
 const searchableToHtml = (domainMappers, searchable, matchedParts, document, asOption = true) => {
     const domainMapper = domainMappers[searchable.domainId];
@@ -358,7 +358,7 @@ const searchableToHtml = (domainMappers, searchable, matchedParts, document, asO
 /**
  * Gets the sort bucket for a given document ID.
  * @param {string} ref
- * @return {number}
+ * @returns {number}
  */
 const docBucket = (ref) => {
     const utf8 = new TextEncoder().encode(ref);
@@ -372,7 +372,7 @@ const docBucket = (ref) => {
 /**
  * Loads the needed document bucket as a promise.
  * @param {string} ref
- * @return {Promise<Record<string, DocContent>>}
+ * @returns {Promise<Record<string, DocContent>>}
  */
 const loadBucket = async (ref) => {
     const bucket = docBucket(ref);
@@ -406,7 +406,7 @@ const loadBucket = async (ref) => {
 
 /**
  * @param {string} ref The identifier of the document to fetch from the store
- * @return {Promise<DocContent>}
+ * @returns {Promise<DocContent>}
  */
 const getDocContents = async (ref) => {
     const resultBucket = await Promise.resolve(loadBucket(ref));
@@ -427,7 +427,7 @@ const getDocContents = async (ref) => {
  *   docPriorities: Record<string, number>,
  *   searchIndex: TextSearchIndex,
  * }} opts
- * @return {Candidate[]}
+ * @returns {Candidate[]}
  */
 export const computeCandidates = (
     filter,
@@ -500,7 +500,7 @@ export const computeCandidates = (
  * is mounted.
  *
  * @param {string} dest
- * @return {string}
+ * @returns {string}
  */
 export const resolveAgainstBase = (dest) => {
     const base = document.querySelector("base");
@@ -539,7 +539,7 @@ export const navigateBaseRelative = (dest) => {
  *   textSnippet?: TextSnippetOptions,
  *   asOption?: boolean,
  * }} opts
- * @return {Promise<HTMLLIElement|null>}
+ * @returns {Promise<HTMLLIElement|null>}
  */
 export const renderCandidateLi = async (candidate, opts) => {
     const { domainMappers, filter, document: doc = document, textSnippet, asOption = true } = opts;
@@ -568,7 +568,7 @@ export const renderCandidateLi = async (candidate, opts) => {
  *
  * @param {Candidate} candidate
  * @param {string} filter
- * @return {Promise<string>}
+ * @returns {Promise<string>}
  */
 export const candidateTargetUrl = async (candidate, filter) => {
     if (candidate.kind === "semantic") {
@@ -603,7 +603,7 @@ const withTermsParam = (itemAddress, query) => {
  * @param {Document} document
  * @param {TextSnippetOptions} [snippetOpts]
  * @param {boolean} [asOption]  Whether to apply `role="option"`. See `searchableToHtml`.
- * @return {Promise<HTMLLIElement|null>}
+ * @returns {Promise<HTMLLIElement|null>}
  */
 const textResultToHtml = async (term, match, document, snippetOpts = {}, asOption = true) => {
     const headerContext = snippetOpts.header ?? 30;
@@ -675,7 +675,7 @@ const textResultToHtml = async (term, match, document, snippetOpts = {}, asOptio
 
 /**
  * @param {SearchResult} result
- * @returns string
+ * @returns {string}
  */
 const resultToText = (result) => {
     if ("fuzzysortResult" in result) {
@@ -690,7 +690,7 @@ const resultToText = (result) => {
  * @template Y
  * @param {T | null | undefined} v
  * @param {(t: T) => Y} fn
- * @returns Y | undefined
+ * @returns {Y | undefined}
  */
 const opt = (v, fn) => (v != null ? fn(v) : undefined);
 
@@ -801,7 +801,7 @@ class SearchBox {
     /**
      * Incrementing counter used to detect and cancel stale computations
      * @type {number}
-     * */
+     */
     requestCounter;
 
     /**
@@ -1168,7 +1168,7 @@ class SearchBox {
 
     /**
      * @param {KeyboardEvent} event
-     * @returns void
+     * @returns {Promise<void>}
      */
     async onComboboxKeyDown(event) {
         let eventHandled = false;
@@ -1283,7 +1283,7 @@ class SearchBox {
 
     /**
      * @param {KeyboardEvent} event
-     * @returns void
+     * @returns {Promise<void>}
      */
     async onComboboxKeyUp(event) {
         let eventHandled = false;
@@ -1359,7 +1359,7 @@ class SearchBox {
 
     /**
      * @param {PointerEvent} event
-     * @returns void
+     * @returns {void}
      */
     onBackgroundPointerUp(event) {
         const node = /** @type {Node | null} */ (event.target);
@@ -1400,11 +1400,11 @@ class SearchBox {
 
     /**
      * @param {SearchResult} result
-     * @returns MouseEventHandler
+     * @returns {() => Promise<void>}
      */
     onOptionClick(result) {
         /**
-         * @returns void
+         * @returns {Promise<void>}
          */
         return async () => {
             this.comboboxNode.textContent = resultToText(result);
@@ -1480,7 +1480,7 @@ export const registerSearch = ({
  * Exported for use by `search-page.js`, which maps full-text candidates to their host page
  * before navigating.
  * @param {string} ref
- * @return {Promise<DocContent>}
+ * @returns {Promise<DocContent>}
  */
 export const getDocContentsFor = (ref) => getDocContents(ref);
 
@@ -1490,6 +1490,6 @@ export const getDocContentsFor = (ref) => getDocContents(ref);
  *
  * @param {any} json
  * @param {DomainMappers} domainMappers
- * @return {Record<string, Searchable[]>}
+ * @returns {Record<string, Searchable[]>}
  */
 export const buildSearchableMap = (json, domainMappers) => dataToSearchableMap(json, domainMappers);

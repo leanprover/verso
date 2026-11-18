@@ -1,31 +1,53 @@
+/* global tippy, versoRenderMath */
+
 window.onload = async () => {
-    // Don't show hovers inside of closed tactic states
+    /**
+     * Returns the checkbox that opens and closes a tactic's proof state, if it has one.
+     * @param {Element} tactic
+     * @returns {HTMLInputElement | null}
+     */
+    function tacticToggle(tactic) {
+        const toggle = tactic.querySelector(":scope > input.tactic-toggle");
+        return toggle instanceof HTMLInputElement ? toggle : null;
+    }
+
+    /**
+     * Don't show hovers inside of closed tactic states
+     * @param {Element} elem
+     */
     function blockedByTactic(elem) {
-        let parent = elem.parentNode;
-        while (parent && "classList" in parent) {
+        let parent = elem.parentElement;
+        while (parent) {
             if (parent.classList.contains("tactic")) {
-                const toggle = parent.querySelector(":scope > input.tactic-toggle");
+                const toggle = tacticToggle(parent);
                 if (toggle) {
                     return !toggle.checked;
                 }
             }
-            parent = parent.parentNode;
+            parent = parent.parentElement;
         }
         return false;
     }
 
-    // The innermost element under the pointer, used to show only the most specific hover
+    /**
+     * The innermost element under the pointer, used to show only the most specific hover
+     * @type {Element | null}
+     */
     let hoverTarget = null;
     document.addEventListener(
         "mouseover",
         (e) => {
-            hoverTarget = e.target;
+            hoverTarget = e.target instanceof Element ? e.target : null;
         },
         true,
     );
 
-    // Visible tippy references; a tooltip is blocked while an unrelated one is visible
+    /**
+     * Visible tippy references; a tooltip is blocked while an unrelated one is visible
+     * @type {Set<HTMLElement>}
+     */
     const visibleTippies = new Set();
+    /** @param {Element} elem */
     function blockedByTippy(elem) {
         for (const ref of visibleTippies) {
             if (!ref.contains(elem) && !elem.contains(ref)) return true;
@@ -33,13 +55,16 @@ window.onload = async () => {
         return false;
     }
 
-    // Whether the element's tooltip would have content to show. Content nested in a
-    // collapsed tactic region is covered by the region's proof-state tooltip, whether or
-    // not a tippy instance is currently attached to it.
+    /**
+     * Whether the element's tooltip would have content to show. Content nested in a
+     * collapsed tactic region is covered by the region's proof-state tooltip, whether or
+     * not a tippy instance is currently attached to it.
+     * @param {HTMLElement} el
+     */
     function showsContent(el) {
         if (!el._tippy) return false;
         if (el.classList.contains("tactic")) {
-            const toggle = el.querySelector(":scope > input.tactic-toggle");
+            const toggle = tacticToggle(el);
             return !!toggle && !toggle.checked;
         }
         return (
@@ -48,25 +73,37 @@ window.onload = async () => {
         );
     }
 
-    // The nearest enclosing element whose tooltip has content
+    /**
+     * The nearest enclosing element whose tooltip has content
+     * @param {Element | null} el
+     * @returns {HTMLElement | null}
+     */
     function innermostShowable(el) {
-        while (el && el.nodeType === Node.ELEMENT_NODE) {
-            if (showsContent(el)) return el;
+        while (el) {
+            if (el instanceof HTMLElement && showsContent(el)) return el;
             el = el.parentElement;
         }
         return null;
     }
 
-    // Binding highlights via event delegation with cached lookups
+    /**
+     * Binding highlights via event delegation with cached lookups
+     * @type {Map<string, Element[]>}
+     */
     const bindingCache = new Map(); // context+binding -> [token elements]
+    /** @type {Element[]} */
     let highlightedTokens = [];
+    /**
+     * @param {string | undefined} context
+     * @param {string} binding
+     */
     function getBindingTokens(context, binding) {
         const key = context + "\0" + binding;
         let tokens = bindingCache.get(key);
         if (!tokens) {
             tokens = [];
             for (const example of document.querySelectorAll(".hl.lean")) {
-                if (example.dataset.leanContext == context) {
+                if (example instanceof HTMLElement && example.dataset["leanContext"] == context) {
                     for (const tok of example.querySelectorAll(
                         '.token[data-binding="' + CSS.escape(binding) + '"]',
                     )) {
@@ -78,20 +115,30 @@ window.onload = async () => {
         }
         return tokens;
     }
+    /**
+     * Returns the token that an event targets, if any.
+     * @param {Event} event
+     * @returns {HTMLElement | null}
+     */
+    function eventToken(event) {
+        const token = event.target instanceof Element ? event.target.closest(".token") : null;
+        return token instanceof HTMLElement ? token : null;
+    }
     for (const container of document.querySelectorAll(".hl.lean")) {
+        if (!(container instanceof HTMLElement)) continue;
         container.addEventListener("mouseover", (event) => {
-            const c = event.target.closest(".token");
-            if (!c || !c.dataset.binding || c.dataset.binding === "" || !container.contains(c))
-                return;
+            const c = eventToken(event);
+            const binding = c?.dataset["binding"];
+            if (!c || !binding || !container.contains(c)) return;
             if (blockedByTactic(c)) return;
-            const tokens = getBindingTokens(container.dataset.leanContext, c.dataset.binding);
+            const tokens = getBindingTokens(container.dataset["leanContext"], binding);
             for (const tok of tokens) {
                 tok.classList.add("binding-hl");
             }
             highlightedTokens = tokens;
         });
         container.addEventListener("mouseout", (event) => {
-            const c = event.target.closest(".token");
+            const c = eventToken(event);
             if (!c || !container.contains(c)) return;
             for (const tok of highlightedTokens) {
                 tok.classList.remove("binding-hl");
@@ -102,6 +149,7 @@ window.onload = async () => {
     // Add hovers
     const versoDocData = await window.versoLoadDocData();
 
+    /** @param {Element} element */
     function hideParentTooltips(element) {
         let parent = element.parentElement;
         while (parent) {
@@ -113,15 +161,19 @@ window.onload = async () => {
         }
     }
 
+    /** @param {Element} element */
     function hideDescendantTooltips(element) {
         for (const ref of visibleTippies) {
             if (ref !== element && element.contains(ref)) {
-                ref._tippy.hide();
+                ref._tippy?.hide();
             }
         }
     }
 
-    // Renders the documentation for a hover ID from the doc table
+    /**
+     * Renders the documentation for a hover ID from the doc table
+     * @param {string} hoverId
+     */
     function docHoverContent(hoverId) {
         const info = document.createElement("span");
         info.className = "hover-info";
@@ -138,22 +190,17 @@ window.onload = async () => {
         return info;
     }
 
+    /** @type {TippyProps} */
     const defaultTippyProps = {
-        /* DEBUG -- remove the space: * /
-      onHide(any) { return false; },
-      trigger: "click",
-      // */
-        /* theme: "lean", */
         maxWidth: "none",
         appendTo: () => document.body,
         interactive: true,
         delay: [100, null],
-        /* ignoreAttributes: true, */
         followCursor: "initial",
         onShow(inst) {
             const ref = inst.reference;
             if (ref.className == "tactic") {
-                const toggle = ref.querySelector(":scope > input.tactic-toggle");
+                const toggle = tacticToggle(ref);
                 if (toggle && toggle.checked) {
                     return false;
                 }
@@ -175,9 +222,7 @@ window.onload = async () => {
             }
             hideParentTooltips(ref);
             hideDescendantTooltips(ref);
-            if (blockedByTippy(ref)) {
-                return false;
-            }
+            return !blockedByTippy(ref);
         },
         onShown(inst) {
             visibleTippies.add(inst.reference);
@@ -188,9 +233,11 @@ window.onload = async () => {
         content(tgt) {
             const content = document.createElement("span");
             if (tgt.className == "tactic") {
-                const state = tgt.querySelector(":scope > .tactic-state").cloneNode(true);
-                state.style.display = "block";
-                content.appendChild(state);
+                const state = tgt.querySelector(":scope > .tactic-state")?.cloneNode(true);
+                if (state instanceof HTMLElement) {
+                    state.style.display = "block";
+                    content.appendChild(state);
+                }
                 content.style.display = "block";
                 content.className = "hl lean popup";
             } else {
@@ -202,29 +249,29 @@ window.onload = async () => {
                 // Messages come from the inline hover-info; documentation comes from the doc
                 // table. An element with both (a message span sharing a documented token's
                 // extent) shows both in one tooltip.
-                const hoverId = tgt.dataset.versoHover;
+                const hoverId = tgt.dataset["versoHover"];
                 const hoverInfo = tgt.querySelector(".hover-info");
                 if (hoverInfo) {
                     content.appendChild(hoverInfo.cloneNode(true));
                 }
                 if (hoverId) {
-                    // TODO stop doing an implicit conversion from string to number here
                     content.appendChild(docHoverContent(hoverId));
                 }
                 if (hoverInfo && hoverId) {
                     content.classList.add("mixed");
                 }
                 const extraLinks =
-                    tgt.dataset["versoLinks"] || tgt.parentElement.dataset["versoLinks"];
+                    tgt.dataset["versoLinks"] || tgt.parentElement?.dataset["versoLinks"];
                 if (extraLinks) {
                     try {
+                        /** @type {{href: string, long: string, short: string}[]} */
                         const extras = JSON.parse(extraLinks);
                         const links = document.createElement("ul");
                         links.className = "extra-doc-links";
                         extras.forEach((l) => {
                             const li = document.createElement("li");
                             const a = document.createElement("a");
-                            a.href = l["href"];
+                            a.href = l.href;
                             a.title = l.long;
                             a.textContent = l.short;
                             li.appendChild(a);
@@ -259,15 +306,19 @@ window.onload = async () => {
     document.querySelectorAll(".hl.lean .tactic").forEach((element) => {
         element.setAttribute("data-tippy-theme", "tactic");
     });
-    // Skip tokens inside closed tactics — they interfere with tactic tippys
+    /**
+     * Skip tokens inside closed tactics — they interfere with tactic tippys
+     * @type {Set<Element>}
+     */
     const closedTactics = new Set();
     document.querySelectorAll(".hl.lean .tactic").forEach((tactic) => {
-        const toggle = tactic.querySelector(":scope > input.tactic-toggle");
+        const toggle = tacticToggle(tactic);
         if (toggle && !toggle.checked) closedTactics.add(tactic);
     });
+    /** @param {Element} el */
     function isInsideClosedTactic(el) {
         const tactic = el.closest(".tactic");
-        return tactic && tactic !== el && closedTactics.has(tactic);
+        return tactic !== null && tactic !== el && closedTactics.has(tactic);
     }
 
     const tokenSelector =
@@ -283,7 +334,7 @@ window.onload = async () => {
     const tacticTippySelector =
         ".const.token, .keyword.token, .literal.token, .option.token, .var.token, .typed.token, .has-info, .level-var, .level-const, .level-op, .sort";
     document.querySelectorAll(".hl.lean .tactic").forEach((tactic) => {
-        const toggle = tactic.querySelector(":scope > input.tactic-toggle");
+        const toggle = tacticToggle(tactic);
         if (toggle)
             toggle.addEventListener("change", () => {
                 if (toggle.checked) {

@@ -19,7 +19,7 @@ const searchIndex = /** @type {{searchIndex: TextSearchIndex}} */ (/** @type {un
 /** Tokenizes the given string, computing stems.
  * @param {string} text
  * @param {ElasticLunrPipeline} pipeline
- * @return {TextToken[]}
+ * @returns {TextToken[]}
  */
 const tokenizeText = (text, pipeline) => {
     const toks = [];

@@ -177,7 +177,7 @@ const renderResultsFor = async (query) => {
      * at the end. Returns false if the render was cancelled mid-way by a newer query.
      * @param {number} start
      * @param {number} end
-     * @return {Promise<boolean>}
+     * @returns {Promise<boolean>}
      */
     const renderChunk = async (start, end) => {
         const frag = document.createDocumentFragment();
@@ -243,7 +243,7 @@ const renderResultsFor = async (query) => {
                     const ok = await renderChunk(start, Math.min(start + CHUNK, n));
                     if (!ok) return;
                     // Hand the main thread back to the scheduler between chunks.
-                    await new Promise((r) => setTimeout(r, 0));
+                    await new Promise((resolve) => setTimeout(resolve, 0));
                 }
             },
             { timeout: 500 },
@@ -274,7 +274,7 @@ const syncUrl = (query) => {
  *
  * @param {HTMLElement} host
  * @param {string} initialValue
- * @return {HTMLInputElement}
+ * @returns {HTMLInputElement}
  */
 const mountInput = (host, initialValue) => {
     const input = document.createElement("input");

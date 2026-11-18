@@ -48,7 +48,7 @@ const slugReplacements = {
 function sluggify(s) {
     let out = "";
     for (const c of s) {
-        if (/^[a-zA-Z0-9_-]$/.test(c)) out += c;
+        if (/^[\w-]$/.test(c)) out += c;
         else if (c === " " || c === "\t" || c === "\r" || c === "\n") out += "-";
         else out += slugReplacements[c] ?? "___";
     }

@@ -1,8 +1,8 @@
 (() => {
     const setupHover = () => {
         document.querySelectorAll(".marginalia-reference").forEach((reference) => {
-            const marker = reference.querySelector("[aria-details]");
-            const note = marker && document.getElementById(marker.getAttribute("aria-details"));
+            const noteId = reference.querySelector("[aria-details]")?.getAttribute("aria-details");
+            const note = noteId ? document.getElementById(noteId) : null;
             if (!note) return;
 
             const highlight = () => {
@@ -29,9 +29,9 @@
     const mobile = matchMedia("(width <= 700px)");
     mobile.addEventListener("change", (event) => {
         if (!event.matches) {
-            document
-                .querySelectorAll(".marginalia-note:popover-open")
-                .forEach((note) => note.hidePopover());
+            document.querySelectorAll(".marginalia-note:popover-open").forEach((note) => {
+                if (note instanceof HTMLElement) note.hidePopover();
+            });
         }
     });
 })();
