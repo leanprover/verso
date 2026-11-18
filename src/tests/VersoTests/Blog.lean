@@ -151,3 +151,61 @@ example : café = 41 := rfl
 :::::::
 
 #test_guard independentParserRegions.toPart.content.size > 0
+
+-- Forward to the ordinary blog expanders with code that has no original source span.
+@[code_block]
+meta def generatedLeanInit : Doc.Elab.CodeBlockExpanderOf LeanInitBlockConfig :=
+  fun config _ => Blog.leanInit config (Lean.Doc.mkVersoCodeBlockFrom .missing "")
+
+@[role]
+meta def generatedLean : Doc.Elab.RoleExpanderOf LeanInlineConfig := fun config args => do
+  let #[code] := args | throwError "Expected one inline code element"
+  let contents := Lean.Doc.mkVersoCodeFrom .missing "Nat.succ 1"
+  Blog.leanCanonical config #[⟨code.raw.setArg 1 contents.raw⟩]
+
+#docs (Post) generatedLeanRegions "Generated Lean regions" :=
+:::::::
+```generatedLeanInit generated
+```
+
+The generated header initializes a context: {lean generated}`Nat.succ 1`.
+
+```leanInit source
+```
+
+The role supplies a generated term: {generatedLean source}`unused`.
+:::::::
+
+#test_guard generatedLeanRegions.toPart.content.size > 0
+
+-- Make a term parser observe an option that is set in the surrounding document.
+private def defaultParserOptionsGuard : Parser.Parser := {
+  fn := fun c s =>
+    if c.options.getBool `pp.universes false then s.mkError "Expected default parser options"
+    else s
+}
+
+@[combinator_formatter defaultParserOptionsGuard]
+private meta def defaultParserOptionsFormatter : PrettyPrinter.Formatter := pure ()
+
+@[combinator_parenthesizer defaultParserOptionsGuard]
+private meta def defaultParserOptionsParenthesizer : PrettyPrinter.Parenthesizer := pure ()
+
+syntax (name := defaultParserOptionTerm) "defaultParserOptionTerm%" defaultParserOptionsGuard : term
+
+@[term_elab defaultParserOptionTerm]
+private meta def elabDefaultParserOptionTerm : Elab.Term.TermElab := fun _ _ => pure (mkNatLit 0)
+
+set_option pp.universes true
+
+#docs (Post) defaultInlineParserOptions "Default inline parser options" :=
+:::::::
+```leanInit example
+```
+
+The inline parser uses default options: {lean example}`defaultParserOptionTerm%`.
+:::::::
+
+set_option pp.universes false
+
+#test_guard defaultInlineParserOptions.toPart.content.size > 0

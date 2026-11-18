@@ -426,7 +426,12 @@ meta instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [Mon
 @[code_block]
 meta def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
   | config , str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanInit") <| do
-    let (context, startPos) ← strLitInputContext str.raw (← getFileName)
+    let fileName ← getFileName
+    let (context, startPos) ←
+      if str.raw.getPos?.isSome then
+        strLitInputContext str.raw fileName
+      else
+        pure (Parser.mkInputContext str.getVersoCodeBlock fileName, 0)
     let (header, _state, msgs) ← Parser.parseHeader context startPos
     if !header.raw[0].isNone then
       throwErrorAt header "Modules not yet supported here"
@@ -613,7 +618,13 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
     let (newMsgs, type, tree, hls) ←
       try
         setEnv env
-        match (← SyntaxUtils.parseSourceCategory `term str.raw) with
+        let parsed ←
+          if str.raw.getPos?.isSome then
+            -- Match the default parser options used by Lean's standalone parser.
+            withOptions (fun _ => {}) <| SyntaxUtils.parseSourceCategory `term str.raw
+          else
+            pure (Parser.runParserCategory env `term str.getVersoCode (← getFileName))
+        match parsed with
         | .error e => throwErrorAt str e
         | .ok stx => withOptions (fun _ => opts) <| runWithOpenDecls scopes <| runWithVariables scopes fun _ => do
           let (newMsgs, type, tree) ← do
