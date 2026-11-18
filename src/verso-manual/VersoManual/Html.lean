@@ -402,13 +402,7 @@ on servers that don't do this step.
 This is a hack - it only helps clients with JS enabled, and should really be fixed in the server
 configuration. But not all hosts allow this to happen, and most clients have JS enabled.
 -/
-def addSlashJs : String :=
-r#"(function(){
-  const {protocol:proto, host:hostName, pathname:path, search:srch, hash:hsh} = window.location;
-  if (!(path.endsWith("/") || path.endsWith(".html"))) {
-    window.location.replace(`${proto}//${hostName}${path}/${srch}${hsh}`);
-  }
-})()"#
+def addSlashJs : String := include_str "../../../static-web/add-trailing-slash.js"
 
 /--
 Applies a saved table-of-contents width before the first paint.
