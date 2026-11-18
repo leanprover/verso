@@ -1,0 +1,8 @@
+# The zizmor configuration of the Lean UX team: a copy of canonical/zizmor.yml in
+# leanprover/ux-team-policy. Exceptions for one finding go next to it, as a
+# `# zizmor: ignore[<audit>]` comment that says why, so that this file stays the same everywhere.
+rules:
+    # Every workflow with a privileged trigger (`pull_request_target`, `issue_comment`,
+    # `workflow_run`) needs a recorded review: see the `privileged-workflows` check.
+    dangerous-triggers:
+        disable: true

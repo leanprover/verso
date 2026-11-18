@@ -50,6 +50,8 @@ public import VersoManual.Bibliography
 public import VersoManual.Row
 public import VersoManual.Diagrams
 public import VersoManual.Table
+public import VersoManual.LiveDocument.Extension
+public import VersoManual.LiveDocument.Rpc
 
 public section
 
@@ -1080,3 +1082,62 @@ where
       emit cfg text traverseState
       for step in extraSteps do
         step .single cfg.toConfig traverseState text
+
+section HtmlRPC
+
+open Lean
+
+/-! Alternative route to HTML output -/
+
+def shortcutToHtml (extensionImpls : ExtensionImpls) (part : Lean.Doc.Part Genre.Manual.Inline Genre.Manual.Block Genre.Manual.PartMetadata) : IO VersoDocumentData := do
+  let (logs, result) ← runWithLogs do
+    let (part, traverseState) ← traverse part { htmlDepth := 0 }
+    let contentGenerator : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) Html := do
+      Manual.toHtml {} {} traverseState (traverseState.definitionIds {}) {} {} part
+    let (html, htmlState) ← contentGenerator |>.run .empty |>.run {}
+
+    let featureJsFiles :=
+      traverseState.features.toArray.flatMap fun f =>
+        f.jsFilePaths.map fun (name, defer) => ("/verso/view/-verso-data/" ++ name, defer)
+    let extraJsFiles :=
+      sortJs <|
+        traverseState.extraJsFiles.toArray.map (false, ·.toStaticJsFile)
+    let extraJsFiles := featureJsFiles ++ extraJsFiles.map fun
+      | (true, f) => (f.filename, f.defer)
+      | (false, f) => ("/verso/view/-verso-data/" ++ f.filename, f.defer)
+    let cssFiles :=
+      traverseState.extraCssFiles.toArray.map (·.filename) ++
+      traverseState.features.toArray.flatMap (fun f => f.cssFilePaths)
+
+    let page := Html.standalonePage html htmlState.dedup.docJson
+      (extraJsFiles := extraJsFiles)
+      (extraStylesheets := cssFiles.toList.map ("/verso/view/-verso-data/" ++ ·))
+    return Html.doctype ++ page.render
+  if logs.size > 0 then
+    return .errors (logs.map (·.format))
+  return .success result
+where
+  runWithLogs {a} (act : ReaderT ExtensionImpls (BuildLogT IO) a) : IO (Array LogMessage × a) := do
+    let logger ← Logger.new
+    let result ← ReaderT.run act extensionImpls |> (ReaderT.run · logger)
+    return (← logger.errors, result)
+
+/-! When the document is finished parsing, generate HTML and put it in the extension -/
+
+open Elab.Command in
+def putDocInContext (doc : VersoDocumentData) : CommandElabM Unit := do
+  modifyEnv (versoDocumentExt.setState · (.some doc))
+
+section RPC
+open Elab.Command Server
+
+@[doc_finalize]
+unsafe def liveDocFinalizer : CommandElabM Unit := do
+  let name := docName (← getEnv).mainModule
+  let versoDoc ← liftTermElabM <| evalConst (VersoDoc Manual) name
+  let htmlDoc ← shortcutToHtml (by exact extension_impls%) (versoDoc.toPart)
+  putDocInContext htmlDoc
+
+
+end RPC
+end HtmlRPC
