@@ -14,6 +14,7 @@ public meta import Verso.Doc.Elab.Monad
 import Verso.Doc.Concrete.InlineString
 public import Verso.Doc.Concrete.Environment
 import Verso.Doc.Lsp
+public meta import Verso.Doc.Elab.Finalize
 
 namespace Verso.Doc.Concrete
 
@@ -505,10 +506,11 @@ elab_rules : command
   if let some contentStart := tok.getTrailingTailPos? then
     modifyEnv fun env => lastVersoEndPosExt.setState env (some contentStart)
 
-  -- Edge case: if there are no blocks after the =>, the replacement command parser isn't called, so
-  -- this command finishes the document. Its syntax ends with `emptyDocument` exactly in this case.
+  -- Edge case: if there are no blocks after the =>, the replacement command parser isn't get called, so
+  -- this command finishes the document. Its syntax ends with `emptyDocument` exactly in this case/
   if empty.isSome then
     finishDoc
+    Finalize.runFinalizers
 
 open Command in
 /--
@@ -537,4 +539,5 @@ public meta def elabVersoLastBlock : Command.CommandElab
     -- Verso does not finish the document.
     withLogging <| runVersoBlock b
     finishDoc
+    Finalize.runFinalizers
   | _ => throwUnsupportedSyntax
