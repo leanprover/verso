@@ -27,6 +27,5 @@ interface Element {
 }
 
 interface Window {
-    /** Loads the rendered documentation for hovers, keyed by hover ID. */
     versoLoadDocData(): Promise<Record<string, string>>;
 }

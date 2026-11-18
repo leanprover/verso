@@ -2,7 +2,6 @@
 
 window.onload = async () => {
     /**
-     * Returns the checkbox that opens and closes a tactic's proof state, if it has one.
      * @param {Element} tactic
      * @returns {HTMLInputElement | null}
      */
@@ -11,10 +10,8 @@ window.onload = async () => {
         return toggle instanceof HTMLInputElement ? toggle : null;
     }
 
-    /**
-     * Don't show hovers inside of closed tactic states
-     * @param {Element} elem
-     */
+    // Don't show hovers inside of closed tactic states
+    /** @param {Element} elem */
     function blockedByTactic(elem) {
         let parent = elem.parentElement;
         while (parent) {
@@ -29,10 +26,8 @@ window.onload = async () => {
         return false;
     }
 
-    /**
-     * The innermost element under the pointer, used to show only the most specific hover
-     * @type {Element | null}
-     */
+    // The innermost element under the pointer, used to show only the most specific hover
+    /** @type {Element | null} */
     let hoverTarget = null;
     document.addEventListener(
         "mouseover",
@@ -42,10 +37,8 @@ window.onload = async () => {
         true,
     );
 
-    /**
-     * Visible tippy references; a tooltip is blocked while an unrelated one is visible
-     * @type {Set<HTMLElement>}
-     */
+    // Visible tippy references; a tooltip is blocked while an unrelated one is visible
+    /** @type {Set<HTMLElement>} */
     const visibleTippies = new Set();
     /** @param {Element} elem */
     function blockedByTippy(elem) {
@@ -55,12 +48,10 @@ window.onload = async () => {
         return false;
     }
 
-    /**
-     * Whether the element's tooltip would have content to show. Content nested in a
-     * collapsed tactic region is covered by the region's proof-state tooltip, whether or
-     * not a tippy instance is currently attached to it.
-     * @param {HTMLElement} el
-     */
+    // Whether the element's tooltip would have content to show. Content nested in a
+    // collapsed tactic region is covered by the region's proof-state tooltip, whether or
+    // not a tippy instance is currently attached to it.
+    /** @param {HTMLElement} el */
     function showsContent(el) {
         if (!el._tippy) return false;
         if (el.classList.contains("tactic")) {
@@ -73,8 +64,8 @@ window.onload = async () => {
         );
     }
 
+    // The nearest enclosing element whose tooltip has content
     /**
-     * The nearest enclosing element whose tooltip has content
      * @param {Element | null} el
      * @returns {HTMLElement | null}
      */
@@ -86,10 +77,8 @@ window.onload = async () => {
         return null;
     }
 
-    /**
-     * Binding highlights via event delegation with cached lookups
-     * @type {Map<string, Element[]>}
-     */
+    // Binding highlights via event delegation with cached lookups
+    /** @type {Map<string, Element[]>} */
     const bindingCache = new Map(); // context+binding -> [token elements]
     /** @type {Element[]} */
     let highlightedTokens = [];
@@ -116,7 +105,6 @@ window.onload = async () => {
         return tokens;
     }
     /**
-     * Returns the token that an event targets, if any.
      * @param {Event} event
      * @returns {HTMLElement | null}
      */
@@ -170,10 +158,8 @@ window.onload = async () => {
         }
     }
 
-    /**
-     * Renders the documentation for a hover ID from the doc table
-     * @param {string} hoverId
-     */
+    // Renders the documentation for a hover ID from the doc table
+    /** @param {string} hoverId */
     function docHoverContent(hoverId) {
         const info = document.createElement("span");
         info.className = "hover-info";
@@ -192,10 +178,16 @@ window.onload = async () => {
 
     /** @type {TippyProps} */
     const defaultTippyProps = {
+        /* DEBUG -- remove the space: * /
+      onHide(any) { return false; },
+      trigger: "click",
+      // */
+        /* theme: "lean", */
         maxWidth: "none",
         appendTo: () => document.body,
         interactive: true,
         delay: [100, null],
+        /* ignoreAttributes: true, */
         followCursor: "initial",
         onShow(inst) {
             const ref = inst.reference;
@@ -255,6 +247,7 @@ window.onload = async () => {
                     content.appendChild(hoverInfo.cloneNode(true));
                 }
                 if (hoverId) {
+                    // TODO stop doing an implicit conversion from string to number here
                     content.appendChild(docHoverContent(hoverId));
                 }
                 if (hoverInfo && hoverId) {
@@ -306,10 +299,8 @@ window.onload = async () => {
     document.querySelectorAll(".hl.lean .tactic").forEach((element) => {
         element.setAttribute("data-tippy-theme", "tactic");
     });
-    /**
-     * Skip tokens inside closed tactics — they interfere with tactic tippys
-     * @type {Set<Element>}
-     */
+    // Skip tokens inside closed tactics — they interfere with tactic tippys
+    /** @type {Set<Element>} */
     const closedTactics = new Set();
     document.querySelectorAll(".hl.lean .tactic").forEach((tactic) => {
         const toggle = tacticToggle(tactic);

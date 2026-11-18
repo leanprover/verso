@@ -89,5 +89,5 @@ window.addEventListener("load", () => {
             docPriorities,
             searchPagePath,
         });
-    }).catch((err) => console.error("Failed to load the search data:", err));
+    }).catch((err) => console.error("Failed to set up search:", err));
 });

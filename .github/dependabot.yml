@@ -10,6 +10,16 @@ updates:
       directory: "/"
       schedule:
           interval: "weekly"
+      # Releases are proposed only once they are a week old.
+      cooldown:
+          default-days: 7
+      groups:
+          eslint:
+              patterns:
+                  - "eslint"
+                  - "eslint-*"
+                  - "@eslint/*"
+                  - "globals"
       ignore:
           # The React declarations follow the React the InfoView is built with, and a new major
           # version of that arrives with an InfoView release.
