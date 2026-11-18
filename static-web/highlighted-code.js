@@ -85,14 +85,14 @@ window.onload = async () => {
      * @param {string} binding
      */
     function getBindingTokens(context, binding) {
-        const key = context + "\0" + binding;
+        const key = `${context}\0${binding}`;
         let tokens = bindingCache.get(key);
         if (!tokens) {
             tokens = [];
             for (const example of document.querySelectorAll(".hl.lean")) {
                 if (example instanceof HTMLElement && example.dataset["leanContext"] === context) {
                     for (const tok of example.querySelectorAll(
-                        '.token[data-binding="' + CSS.escape(binding) + '"]',
+                        `.token[data-binding="${CSS.escape(binding)}"]`,
                     )) {
                         tokens.push(tok);
                     }
@@ -169,7 +169,7 @@ window.onload = async () => {
             info.append(...parsed.body.childNodes);
             if (typeof versoRenderMath === "function") versoRenderMath(info);
         } else {
-            info.textContent = "Failed to load doc ID: " + hoverId;
+            info.textContent = `Failed to load doc ID: ${hoverId}`;
         }
         return info;
     }

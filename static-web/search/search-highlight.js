@@ -258,7 +258,7 @@ function updateNavigationState() {
             currentSpan.textContent = current.textContent;
             let resName = current.title;
             resName = resName.charAt(0).toLowerCase() + resName.slice(1);
-            currentCount.title = "Go to " + resName;
+            currentCount.title = `Go to ${resName}`;
             document
                 .querySelectorAll(".text-search-results")
                 .forEach((e) => e.classList.remove("focused"));
@@ -379,7 +379,7 @@ function createControlButtons() {
 
 // Run the highlighter when DOM is ready
 if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () {
+    document.addEventListener("DOMContentLoaded", () => {
         highlightSearchTerms();
         createControlButtons();
         updateHighlightsArray();

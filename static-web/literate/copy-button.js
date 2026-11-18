@@ -30,10 +30,10 @@
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard
                 .writeText(text)
-                .then(function () {
+                .then(() => {
                     showCopied(button);
                 })
-                .catch(function () {
+                .catch(() => {
                     // clipboard write failed (e.g. permissions denied)
                 });
         } else {
@@ -58,7 +58,7 @@
     function showCopied(button) {
         button.textContent = "Copied!";
         button.classList.add("copied");
-        setTimeout(function () {
+        setTimeout(() => {
             button.textContent = "Copy";
             button.classList.remove("copied");
         }, 2000);

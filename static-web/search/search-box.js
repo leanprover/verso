@@ -507,7 +507,7 @@ export const resolveAgainstBase = (dest) => {
     if (!base) return dest;
     const baseNoSlash = base.href.endsWith("/") ? base.href.slice(0, -1) : base.href;
     const destNoSlash = dest.startsWith("/") ? dest.slice(1) : dest;
-    return baseNoSlash + "/" + destNoSlash;
+    return `${baseNoSlash}/${destNoSlash}`;
 };
 
 /**
@@ -584,9 +584,9 @@ export const candidateTargetUrl = async (candidate, filter) => {
  * @param {string|null} query
  */
 const withTermsParam = (itemAddress, query) => {
-    const q = query ? "?terms=" + encodeURIComponent(query) : "";
+    const q = query ? `?terms=${encodeURIComponent(query)}` : "";
     const [addr, id] = itemAddress.split("#", 2);
-    return id ? addr + q + "#" + id : addr + q;
+    return id ? `${addr}${q}#${id}` : `${addr}${q}`;
 };
 
 /**
@@ -680,9 +680,8 @@ const textResultToHtml = async (term, match, document, snippetOpts = {}, asOptio
 const resultToText = (result) => {
     if ("fuzzysortResult" in result) {
         return result.fuzzysortResult.target;
-    } else {
-        return result.terms;
     }
+    return result.terms;
 };
 
 /**
@@ -1193,7 +1192,7 @@ class SearchBox {
                 } else if (this.searchPagePath && this.filter.trim().length > 0) {
                     // Submit the query to the full-page search results view.
                     navigateBaseRelative(
-                        this.searchPagePath + "?q=" + encodeURIComponent(this.filter.trim()),
+                        `${this.searchPagePath}?q=${encodeURIComponent(this.filter.trim())}`,
                     );
                 }
                 this.close(true);
