@@ -1,0 +1,110 @@
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/header_tag_metadata_action.lean"},
+ "range":
+ {"start": {"line": 15, "character": 2}, "end": {"line": 15, "character": 2}},
+ "context": {"diagnostics": []}}
+[{"title": "Add `tag := \"leaves\"`",
+  "kind": "quickfix",
+  "edit":
+  {"documentChanges":
+   [{"textDocument":
+     {"version": 1,
+      "uri":
+      "file:///src/tests/interactive/test-cases/header_tag_metadata_action.lean"},
+     "edits":
+     [{"range":
+       {"start": {"line": 11, "character": 0},
+        "end": {"line": 15, "character": 3}},
+       "newText":
+       "# Leaves\n%%%\ntag := \"leaves\"\nshortTitle := \"Leaves\"\n%%%"}]}]},
+  "data":
+  {"providerResultIndex": 0,
+   "providerName":
+   "_private.Lean.Meta.Tactic.TryThis.0.Lean.Meta.Tactic.TryThis.tryThisProvider",
+   "params":
+   {"textDocument":
+    {"uri":
+     "file:///src/tests/interactive/test-cases/header_tag_metadata_action.lean"},
+    "range":
+    {"start": {"line": 15, "character": 2},
+     "end": {"line": 15, "character": 2}},
+    "context": {"diagnostics": []}}}},
+ {"title": "Add `tag := none`",
+  "kind": "quickfix",
+  "edit":
+  {"documentChanges":
+   [{"textDocument":
+     {"version": 1,
+      "uri":
+      "file:///src/tests/interactive/test-cases/header_tag_metadata_action.lean"},
+     "edits":
+     [{"range":
+       {"start": {"line": 11, "character": 0},
+        "end": {"line": 15, "character": 3}},
+       "newText":
+       "# Leaves\n%%%\ntag := none\nshortTitle := \"Leaves\"\n%%%"}]}]},
+  "data":
+  {"providerResultIndex": 1,
+   "providerName":
+   "_private.Lean.Meta.Tactic.TryThis.0.Lean.Meta.Tactic.TryThis.tryThisProvider",
+   "params":
+   {"textDocument":
+    {"uri":
+     "file:///src/tests/interactive/test-cases/header_tag_metadata_action.lean"},
+    "range":
+    {"start": {"line": 15, "character": 2},
+     "end": {"line": 15, "character": 2}},
+    "context": {"diagnostics": []}}}}]
+Resolution of Add `tag := "leaves"`:
+{"title": "Add `tag := \"leaves\"`",
+ "kind": "quickfix",
+ "edit":
+ {"documentChanges":
+  [{"textDocument":
+    {"version": 1,
+     "uri":
+     "file:///src/tests/interactive/test-cases/header_tag_metadata_action.lean"},
+    "edits":
+    [{"range":
+      {"start": {"line": 11, "character": 0},
+       "end": {"line": 15, "character": 3}},
+      "newText":
+      "# Leaves\n%%%\ntag := \"leaves\"\nshortTitle := \"Leaves\"\n%%%"}]}]},
+ "data":
+ {"providerResultIndex": 0,
+  "providerName":
+  "_private.Lean.Meta.Tactic.TryThis.0.Lean.Meta.Tactic.TryThis.tryThisProvider",
+  "params":
+  {"textDocument":
+   {"uri":
+    "file:///src/tests/interactive/test-cases/header_tag_metadata_action.lean"},
+   "range":
+   {"start": {"line": 15, "character": 2}, "end": {"line": 15, "character": 2}},
+   "context": {"diagnostics": []}}}}
+Resolution of Add `tag := none`:
+{"title": "Add `tag := none`",
+ "kind": "quickfix",
+ "edit":
+ {"documentChanges":
+  [{"textDocument":
+    {"version": 1,
+     "uri":
+     "file:///src/tests/interactive/test-cases/header_tag_metadata_action.lean"},
+    "edits":
+    [{"range":
+      {"start": {"line": 11, "character": 0},
+       "end": {"line": 15, "character": 3}},
+      "newText":
+      "# Leaves\n%%%\ntag := none\nshortTitle := \"Leaves\"\n%%%"}]}]},
+ "data":
+ {"providerResultIndex": 1,
+  "providerName":
+  "_private.Lean.Meta.Tactic.TryThis.0.Lean.Meta.Tactic.TryThis.tryThisProvider",
+  "params":
+  {"textDocument":
+   {"uri":
+    "file:///src/tests/interactive/test-cases/header_tag_metadata_action.lean"},
+   "range":
+   {"start": {"line": 15, "character": 2}, "end": {"line": 15, "character": 2}},
+   "context": {"diagnostics": []}}}}

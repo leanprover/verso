@@ -1,0 +1,30 @@
+{"version": 1,
+ "uri":
+ "file:///src/tests/interactive/test-cases/header_tag_action_other_line.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 2,
+   "range":
+   {"start": {"line": 17, "character": 0}, "end": {"line": 17, "character": 8}},
+   "message":
+   "Missing permalink tag\n\nHint: Add a metadata block with a tag or explicitly indicate that no tag is desired:\n  • # Leaves\n    ̲%̲%̲%̲\n    ̲t̲a̲g̲ ̲:̲=̲ ̲\"̲l̲e̲a̲v̲e̲s̲\"̲\n    ̲%̲%̲%̲\n  • # Leaves\n    ̲%̲%̲%̲\n    ̲t̲a̲g̲ ̲:̲=̲ ̲n̲o̲n̲e̲\n    ̲%̲%̲%̲\n\nNote: The tag is used as a permanent name for the section or chapter. Writers of this or other documents may use it to link to the section, and it is used to share permanent links. In HTML content, they are used as IDs for headers. Section tags should remain unchanged over time.\n\nNote: This linter can be disabled with `set_option linter.verso.manual.headerTags false`",
+   "fullRange":
+   {"start": {"line": 17, "character": 0},
+    "end": {"line": 17, "character": 8}}},
+  {"source": "Lean 4",
+   "severity": 2,
+   "range":
+   {"start": {"line": 19, "character": 0}, "end": {"line": 19, "character": 9}},
+   "message":
+   "Unnecessary '_'\n\nHint: Use the minimal number of '_'s\n  _̵_̵M̵a̵p̵l̵e̵_̵_̵_̲M̲a̲p̲l̲e̲_̲\n\nNote: This linter can be disabled with `set_option linter.verso.markup.emph false`",
+   "fullRange":
+   {"start": {"line": 19, "character": 0},
+    "end": {"line": 19, "character": 9}}}]}
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/header_tag_action_other_line.lean"},
+ "range":
+ {"start": {"line": 19, "character": 0}, "end": {"line": 19, "character": 0}},
+ "context": {"diagnostics": []}}
+[]

@@ -10,7 +10,6 @@
 // Enable typescript
 // @ts-check
 
-let /** @type Promise<null|SearchResult> */ bigPromise = Promise.resolve(null);
 import { Range } from "./unicode-input.min.js";
 import { InputAbbreviationRewriter } from "./unicode-input-component.min.js";
 
@@ -46,8 +45,8 @@ const docContents = ((/** @type {any} */ windowAny) => {
 const expandMatches = true;
 
 /**
- * Per-layer log-space contribution for a priority value. A priority {@code p} contributes
- * {@code (p - 50) / 50}; {@code 50} (or {@code null}/{@code undefined}) is neutral (0).
+ * Per-layer log-space contribution for a priority value. A priority `p` contributes
+ * `(p - 50) / 50`; `50` (or `null`/`undefined`) is neutral (0).
  * @param {number | undefined | null} p
  * @returns {number}
  */
@@ -55,8 +54,8 @@ export const priorityContribution = (p) => (p == null ? 0 : (p - 50) / 50);
 
 /**
  * Combines a raw score with any number of priority layers. Layer contributions are summed in
- * log space and the raw score is scaled by {@code 2^sum}, so combining is additive in the
- * exponent: two layers at 75 stack to {@code 2^(0.5 + 0.5) = 2}, not {@code 1.5 * 1.5 = 2.25}.
+ * log space and the raw score is scaled by `2^sum`, so combining is additive in the
+ * exponent: two layers at 75 stack to `2^(0.5 + 0.5) = 2`, not `1.5 * 1.5 = 2.25`.
  * Undefined/null layers contribute 0 (neutral), so callers can pass optional priorities
  * directly without pre-filtering.
  * @param {number} rawScore
@@ -113,19 +112,19 @@ export const combineScore = (rawScore, ...priorities) => {
 /**
  * @param {TextSnippet} s1
  * @param {TextSnippet} s2
- * @return {number}
+ * @returns {number}
  */
 const compareSnippets = (s1, s2) => {
     // First compare by number of unique terms
-    let terms1 = new Set(s1.matches.map((x) => x.stem));
-    let terms2 = new Set(s2.matches.map((x) => x.stem));
-    let terms = terms1.size - terms2.size;
+    const terms1 = new Set(s1.matches.map((x) => x.stem));
+    const terms2 = new Set(s2.matches.map((x) => x.stem));
+    const terms = terms1.size - terms2.size;
     if (terms !== 0) {
         return terms;
     }
 
     // Then by number of matches
-    let matches = s1.matches.length - s2.matches.length;
+    const matches = s1.matches.length - s2.matches.length;
     if (matches !== 0) {
         return matches;
     }
@@ -136,7 +135,7 @@ const compareSnippets = (s1, s2) => {
 
 /**
  * @param {string} text
- * @return {TextToken[]}
+ * @returns {TextToken[]}
  */
 const tokenizeText = (text) => {
     /** @type {TextToken[]} */
@@ -144,7 +143,7 @@ const tokenizeText = (text) => {
     const regex = /\S+/g;
     let match;
     while ((match = regex.exec(text)) !== null) {
-        let stems = searchIndex?.pipeline.run([match[0]]) ?? [];
+        const stems = searchIndex?.pipeline.run([match[0]]) ?? [];
         for (const stem of stems) {
             toks.push({
                 original: match[0],
@@ -165,11 +164,12 @@ const wordChar = /\p{L}/u;
 /**
  * @param {string} text
  * @param {number} i
- * @return {number}
+ * @returns {number}
  */
 const wordStartBefore = (text, i) => {
     while (i > 0) {
-        if (!wordChar.test(text[i])) return i + 1; /* Adjust due to start indices being inclusive */
+        if (!wordChar.test(text.charAt(i)))
+            return i + 1; /* Adjust due to start indices being inclusive */
         i--;
     }
     return i;
@@ -178,11 +178,11 @@ const wordStartBefore = (text, i) => {
 /**
  * @param {string} text
  * @param {number} i
- * @return {number}
+ * @returns {number}
  */
 const wordEndAfter = (text, i) => {
     while (i < text.length) {
-        if (!wordChar.test(text[i]))
+        if (!wordChar.test(text.charAt(i)))
             return i; /* This is used as the (exclusive) end index in a slice, so one greater is correct */
         i++;
     }
@@ -193,7 +193,7 @@ const wordEndAfter = (text, i) => {
  * @param {string} text
  * @param {string} query
  * @param {{contextLength?: number, maxSnippets?: number}} options
- * @return {Element|null}
+ * @returns {Element|null}
  */
 const highlightTextResult = (text, query, options = {}) => {
     const {
@@ -251,36 +251,25 @@ const highlightTextResult = (text, query, options = {}) => {
 
     // Generate highlighted text for each snippet
     const highlightedSnippets = limitedSnippets.map((snippet) => {
-        let snippetText = text.substring(snippet.start, snippet.end);
-
-        // Adjust match positions relative to snippet start
-        const relativeMatches = snippet.matches.map((match) => ({
-            term: match.original,
-            start: match.start - snippet.start,
-            end: match.end - snippet.start,
-        }));
-
-        // Sort matches by position (descending) to avoid position shifts during replacement
-        relativeMatches.sort((a, b) => b.start - a.start);
-
-        // Apply highlighting
-        for (const match of relativeMatches) {
-            const before = snippetText.substring(0, match.start);
-            const highlighted = `<em>${match.term}</em>`;
-            const after = snippetText.substring(match.end);
-            snippetText = before + highlighted + after;
+        // Matches are in document order, so the text between them can be copied in sequence.
+        const m = document.createElement("span");
+        let pos = snippet.start;
+        for (const match of snippet.matches) {
+            if (match.start < pos) continue;
+            m.append(text.substring(pos, match.start));
+            const em = document.createElement("em");
+            em.textContent = text.substring(match.start, match.end);
+            m.append(em);
+            pos = match.end;
         }
+        m.append(text.substring(pos, snippet.end));
 
         // Add ellipses
         const prefix = snippet.start > 0 ? " …" : "";
         const suffix = snippet.end < text.length ? "… " : "";
 
         const elem = document.createElement("span");
-        elem.appendChild(document.createTextNode(prefix));
-        const m = document.createElement("span");
-        m.innerHTML = snippetText;
-        elem.appendChild(m);
-        elem.appendChild(document.createTextNode(suffix));
+        elem.append(prefix, m, suffix);
         return elem;
     });
 
@@ -294,22 +283,22 @@ const highlightTextResult = (text, query, options = {}) => {
  *
  * @param {any} json
  * @param {DomainMappers} domainMappers
- * @return {Record<string, Searchable[]>}
+ * @returns {Record<string, Searchable[]>}
  */
 const dataToSearchableMap = (json, domainMappers) =>
     Object.entries(json)
-        .flatMap(([key, value]) =>
-            key in domainMappers ? domainMappers[key].dataToSearchables(value) : undefined,
-        )
+        .flatMap(([key, value]) => domainMappers[key]?.dataToSearchables(value))
         .reduce((acc, cur) => {
             if (cur == null) {
                 return acc;
             }
 
-            if (!acc.hasOwnProperty(cur.searchKey)) {
-                acc[cur.searchKey] = [];
+            let entries = Object.hasOwn(acc, cur.searchKey) ? acc[cur.searchKey] : undefined;
+            if (!entries) {
+                entries = [];
+                acc[cur.searchKey] = entries;
             }
-            acc[cur.searchKey].push(cur);
+            entries.push(cur);
             return acc;
         }, /** @type {Record<string, Searchable[]>} */ ({}));
 
@@ -323,10 +312,11 @@ const dataToSearchableMap = (json, domainMappers) =>
  * @param {MatchedPart[]} matchedParts
  * @param {Document} document
  * @param {boolean} [asOption]
- * @return {HTMLLIElement}
+ * @returns {HTMLLIElement}
  */
 const searchableToHtml = (domainMappers, searchable, matchedParts, document, asOption = true) => {
     const domainMapper = domainMappers[searchable.domainId];
+    if (!domainMapper) throw new Error(`Unknown search domain: ${searchable.domainId}`);
 
     const li = document.createElement("li");
     if (asOption) li.role = "option";
@@ -368,13 +358,13 @@ const searchableToHtml = (domainMappers, searchable, matchedParts, document, asO
 /**
  * Gets the sort bucket for a given document ID.
  * @param {string} ref
- * @return {number}
+ * @returns {number}
  */
 const docBucket = (ref) => {
     const utf8 = new TextEncoder().encode(ref);
     let hash = 0;
-    for (let i = 0; i < utf8.length; i++) {
-        hash = (hash + utf8[i]) % 256;
+    for (const byte of utf8) {
+        hash = (hash + byte) % 256;
     }
     return hash;
 };
@@ -382,11 +372,11 @@ const docBucket = (ref) => {
 /**
  * Loads the needed document bucket as a promise.
  * @param {string} ref
- * @return {Promise<Record<string, DocContent>>}
+ * @returns {Promise<Record<string, DocContent>>}
  */
 const loadBucket = async (ref) => {
     const bucket = docBucket(ref);
-    let bucketDocs = docContents[bucket];
+    const bucketDocs = docContents[bucket];
     if (bucketDocs) {
         return bucketDocs;
     }
@@ -416,13 +406,13 @@ const loadBucket = async (ref) => {
 
 /**
  * @param {string} ref The identifier of the document to fetch from the store
- * @return {Promise<DocContent>}
+ * @returns {Promise<DocContent>}
  */
 const getDocContents = async (ref) => {
     const resultBucket = await Promise.resolve(loadBucket(ref));
-
-    /** @type {DocContent} */
-    return resultBucket[ref];
+    const doc = resultBucket[ref];
+    if (!doc) throw new Error(`Missing search document: ${ref}`);
+    return doc;
 };
 
 /**
@@ -437,11 +427,11 @@ const getDocContents = async (ref) => {
  *   docPriorities: Record<string, number>,
  *   searchIndex: TextSearchIndex,
  * }} opts
- * @return {Candidate[]}
+ * @returns {Candidate[]}
  */
 export const computeCandidates = (
     filter,
-    { preparedData, mappedData, searchPriorities, docPriorities, searchIndex },
+    { preparedData, mappedData, searchPriorities, docPriorities, searchIndex: textIndex },
 ) => {
     if (filter.length === 0) return [];
 
@@ -450,8 +440,8 @@ export const computeCandidates = (
     // still filters out poor matches, so the working set stays modest.
     const results = fuzzysort.go(filter, preparedData, { threshold: 0.25 });
 
-    const textResults = searchIndex
-        ? searchIndex.search(filter, {
+    const textResults = textIndex
+        ? textIndex.search(filter, {
               expand: expandMatches,
               bool: "AND",
               // `context` (the breadcrumb text) isn't an indexed field. It was, in the past, but
@@ -481,8 +471,7 @@ export const computeCandidates = (
     /** @type {Candidate[]} */
     const candidates = [];
     for (const fr of results) {
-        const dataItems = mappedData[fr.target];
-        for (const searchable of dataItems) {
+        for (const searchable of mappedData[fr.target] ?? []) {
             const eff = combineScore(
                 fr.score,
                 searchPriorities.semantic,
@@ -511,14 +500,14 @@ export const computeCandidates = (
  * is mounted.
  *
  * @param {string} dest
- * @return {string}
+ * @returns {string}
  */
 export const resolveAgainstBase = (dest) => {
     const base = document.querySelector("base");
     if (!base) return dest;
     const baseNoSlash = base.href.endsWith("/") ? base.href.slice(0, -1) : base.href;
     const destNoSlash = dest.startsWith("/") ? dest.slice(1) : dest;
-    return baseNoSlash + "/" + destNoSlash;
+    return `${baseNoSlash}/${destNoSlash}`;
 };
 
 /**
@@ -550,7 +539,7 @@ export const navigateBaseRelative = (dest) => {
  *   textSnippet?: TextSnippetOptions,
  *   asOption?: boolean,
  * }} opts
- * @return {Promise<HTMLLIElement|null>}
+ * @returns {Promise<HTMLLIElement|null>}
  */
 export const renderCandidateLi = async (candidate, opts) => {
     const { domainMappers, filter, document: doc = document, textSnippet, asOption = true } = opts;
@@ -579,15 +568,13 @@ export const renderCandidateLi = async (candidate, opts) => {
  *
  * @param {Candidate} candidate
  * @param {string} filter
- * @return {Promise<string>}
+ * @returns {Promise<string>}
  */
 export const candidateTargetUrl = async (candidate, filter) => {
     if (candidate.kind === "semantic") {
         return resolveAgainstBase(withTermsParam(candidate.searchable.address, null));
     }
-    const resultBucket = await Promise.resolve(loadBucket(candidate.textMatch.ref));
-    /** @type {DocContent} */
-    const doc = resultBucket[candidate.textMatch.ref];
+    const doc = await getDocContents(candidate.textMatch.ref);
     return resolveAgainstBase(withTermsParam(doc.id, filter));
 };
 
@@ -597,9 +584,9 @@ export const candidateTargetUrl = async (candidate, filter) => {
  * @param {string|null} query
  */
 const withTermsParam = (itemAddress, query) => {
-    const q = query ? "?terms=" + encodeURIComponent(query) : "";
+    const q = query ? `?terms=${encodeURIComponent(query)}` : "";
     const [addr, id] = itemAddress.split("#", 2);
-    return id ? addr + q + "#" + id : addr + q;
+    return id ? `${addr}${q}#${id}` : `${addr}${q}`;
 };
 
 /**
@@ -616,7 +603,7 @@ const withTermsParam = (itemAddress, query) => {
  * @param {Document} document
  * @param {TextSnippetOptions} [snippetOpts]
  * @param {boolean} [asOption]  Whether to apply `role="option"`. See `searchableToHtml`.
- * @return {Promise<HTMLLIElement|null>}
+ * @returns {Promise<HTMLLIElement|null>}
  */
 const textResultToHtml = async (term, match, document, snippetOpts = {}, asOption = true) => {
     const headerContext = snippetOpts.header ?? 30;
@@ -674,11 +661,11 @@ const textResultToHtml = async (term, match, document, snippetOpts = {}, asOptio
     const domainName = document.createElement("p");
     link.appendChild(domainName);
     domainName.className = "domain";
-    if (doc.context.trim() == "") {
+    if (doc.context.trim() === "") {
         domainName.textContent = "Full-text search";
     } else {
         // This is a slight abuse of "domain", but it seems to work well
-        let context = doc.context.replaceAll("\t", " » ");
+        const context = doc.context.replaceAll("\t", " » ");
         domainName.append(document.createTextNode(context));
         domainName.classList.add("text-context");
     }
@@ -688,14 +675,13 @@ const textResultToHtml = async (term, match, document, snippetOpts = {}, asOptio
 
 /**
  * @param {SearchResult} result
- * @returns string
+ * @returns {string}
  */
 const resultToText = (result) => {
     if ("fuzzysortResult" in result) {
         return result.fuzzysortResult.target;
-    } else {
-        return result.terms;
     }
+    return result.terms;
 };
 
 /**
@@ -703,7 +689,7 @@ const resultToText = (result) => {
  * @template Y
  * @param {T | null | undefined} v
  * @param {(t: T) => Y} fn
- * @returns Y | undefined
+ * @returns {Y | undefined}
  */
 const opt = (v, fn) => (v != null ? fn(v) : undefined);
 
@@ -814,7 +800,7 @@ class SearchBox {
     /**
      * Incrementing counter used to detect and cancel stale computations
      * @type {number}
-     * */
+     */
     requestCounter;
 
     /**
@@ -892,7 +878,12 @@ class SearchBox {
 
         this.domainFilters = [];
         const docDomainFilter = document.createElement("li");
-        docDomainFilter.innerHTML = `<label><input type="checkbox" checked> Doc domain</label>`;
+        const docDomainLabel = document.createElement("label");
+        const docDomainCheckbox = document.createElement("input");
+        docDomainCheckbox.setAttribute("type", "checkbox");
+        docDomainCheckbox.setAttribute("checked", "");
+        docDomainLabel.append(docDomainCheckbox, " Doc domain");
+        docDomainFilter.append(docDomainLabel);
         docDomainFilter.classList.add("domain-filter");
         // TODO more work on the domain filters
         // this.domainFilters.push(docDomainFilter);
@@ -944,7 +935,7 @@ class SearchBox {
     }
 
     /**
-     * @param {SearchResult} option
+     * @param {SearchResult | null | undefined} option
      */
     setOption(option) {
         if (option) {
@@ -1032,8 +1023,7 @@ class SearchBox {
         let /** @type {SearchResult | null} */ firstOption = null;
         let /** @type {SearchResult | null} */ lastOption = null;
         let /** @type {SearchResult|null} */ newCurrentOption = null;
-        for (let i = 0; i < shownCandidates.length; i++) {
-            const candidate = shownCandidates[i];
+        for (const [i, candidate] of shownCandidates.entries()) {
             const option = await renderCandidateLi(candidate, {
                 domainMappers: this.domainMappers,
                 filter,
@@ -1094,9 +1084,9 @@ class SearchBox {
      * @param {SearchResult | null} option
      */
     setCurrentOptionStyle(option) {
-        for (const opt of this.filteredOptions) {
-            const el = opt.htmlItem;
-            if (opt === option) {
+        for (const candidate of this.filteredOptions) {
+            const el = candidate.htmlItem;
+            if (candidate === option) {
                 el.setAttribute("aria-selected", "true");
                 if (
                     this.listboxNode.scrollTop + this.listboxNode.offsetHeight <
@@ -1119,7 +1109,7 @@ class SearchBox {
      */
     getPreviousOption(currentOption, lastOption) {
         if (currentOption !== this.firstOption) {
-            var index = this.filteredOptions.indexOf(currentOption);
+            const index = this.filteredOptions.indexOf(currentOption);
             return this.filteredOptions[index - 1];
         }
         return lastOption;
@@ -1131,7 +1121,7 @@ class SearchBox {
      */
     getNextOption(currentOption, firstOption) {
         if (currentOption != null && currentOption !== this.lastOption) {
-            var index = this.filteredOptions.indexOf(currentOption);
+            const index = this.filteredOptions.indexOf(currentOption);
             return this.filteredOptions[index + 1];
         }
         return firstOption;
@@ -1177,7 +1167,7 @@ class SearchBox {
 
     /**
      * @param {KeyboardEvent} event
-     * @returns void
+     * @returns {Promise<void>}
      */
     async onComboboxKeyDown(event) {
         let eventHandled = false;
@@ -1195,20 +1185,14 @@ class SearchBox {
                         if ("fuzzysortResult" in this.currentOption) {
                             this.confirmResult(this.currentOption.item.address);
                         } else {
-                            const resultBucket = await Promise.resolve(
-                                loadBucket(this.currentOption.textItem.ref),
-                            );
-
-                            /** @type {DocContent} */
-                            const doc = resultBucket[this.currentOption.textItem.ref];
-
+                            const doc = await getDocContents(this.currentOption.textItem.ref);
                             this.confirmResult(doc.id, this.currentOption.terms);
                         }
                     }
                 } else if (this.searchPagePath && this.filter.trim().length > 0) {
                     // Submit the query to the full-page search results view.
                     navigateBaseRelative(
-                        this.searchPagePath + "?q=" + encodeURIComponent(this.filter.trim()),
+                        `${this.searchPagePath}?q=${encodeURIComponent(this.filter.trim())}`,
                     );
                 }
                 this.close(true);
@@ -1280,11 +1264,12 @@ class SearchBox {
                 eventHandled = true;
                 break;
 
-            case "End":
-                var length = this.comboboxNode.textContent.length;
+            case "End": {
+                const length = this.comboboxNode.textContent.length;
                 this.imeRewriter.setSelections([new Range(length, 0)]);
                 eventHandled = true;
                 break;
+            }
 
             default:
                 break;
@@ -1298,7 +1283,7 @@ class SearchBox {
 
     /**
      * @param {KeyboardEvent} event
-     * @returns void
+     * @returns {Promise<void>}
      */
     async onComboboxKeyUp(event) {
         let eventHandled = false;
@@ -1374,7 +1359,7 @@ class SearchBox {
 
     /**
      * @param {PointerEvent} event
-     * @returns void
+     * @returns {void}
      */
     onBackgroundPointerUp(event) {
         const node = /** @type {Node | null} */ (event.target);
@@ -1415,22 +1400,18 @@ class SearchBox {
 
     /**
      * @param {SearchResult} result
-     * @returns MouseEventHandler
+     * @returns {() => Promise<void>}
      */
     onOptionClick(result) {
         /**
-         * @returns void
+         * @returns {Promise<void>}
          */
         return async () => {
             this.comboboxNode.textContent = resultToText(result);
             if ("fuzzysortResult" in result) {
                 this.confirmResult(result.item.address);
             } else {
-                const resultBucket = await Promise.resolve(loadBucket(result.textItem.ref));
-
-                /** @type {DocContent} */
-                const doc = resultBucket[result.textItem.ref];
-
+                const doc = await getDocContents(result.textItem.ref);
                 this.confirmResult(doc.id, resultToText(result));
             }
             this.close(true);
@@ -1499,7 +1480,7 @@ export const registerSearch = ({
  * Exported for use by `search-page.js`, which maps full-text candidates to their host page
  * before navigating.
  * @param {string} ref
- * @return {Promise<DocContent>}
+ * @returns {Promise<DocContent>}
  */
 export const getDocContentsFor = (ref) => getDocContents(ref);
 
@@ -1509,6 +1490,6 @@ export const getDocContentsFor = (ref) => getDocContents(ref);
  *
  * @param {any} json
  * @param {DomainMappers} domainMappers
- * @return {Record<string, Searchable[]>}
+ * @returns {Record<string, Searchable[]>}
  */
 export const buildSearchableMap = (json, domainMappers) => dataToSearchableMap(json, domainMappers);

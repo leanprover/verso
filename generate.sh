@@ -12,8 +12,8 @@ if ! command -v inkscape >/dev/null 2>&1; then
 fi
 
 echo "Building the user's guide as TeX and HTML"
-lake exe usersguide --delay-html-multi multi.json --delay-html-single single.json --with-tex
-lake exe usersguide --resume-html-multi multi.json --resume-html-single single.json
+lake run versoMain UsersGuideMain.lean --delay-html-multi multi.json --delay-html-single single.json --with-tex
+lake run versoMain UsersGuideMain.lean --resume-html-multi multi.json --resume-html-single single.json
 
 echo "Building the user's guide as PDF"
 mkdir -p _out/tex

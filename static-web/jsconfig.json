@@ -2,7 +2,26 @@
     "compilerOptions": {
         "lib": ["ES2024", "DOM", "DOM.Iterable"],
         "target": "ES2024",
-        "noEmit": true
+        "noEmit": true,
+        "checkJs": true,
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "noPropertyAccessFromIndexSignature": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true
     },
-    "include": ["find.js", "toc-resize.js", "toc-resize-preload.js"]
+    "include": [
+        "find.js",
+        "math.js",
+        "toc-resize.js",
+        "toc-resize-preload.js",
+        "highlighted-code.js",
+        "highlighted-code.d.ts",
+        "marginalia.js",
+        "add-trailing-slash.js",
+        "literate/copy-button.js"
+    ]
 }

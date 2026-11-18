@@ -207,9 +207,14 @@ private def errataDiscoveredModule (pkg : Package) : Lean.Name :=
 private def errataMainModule (pkg : Package) : Lean.Name :=
   errataGeneratedRoot pkg ++ `Main
 
-/-- The generated bridge module of a package, as a library in said package. -/
+/--
+The generated bridge module of a package, as a library in said package.
+-/
 private def errataDiscoveredLib (pkg : Package) : LeanLib where
-  pkg
+  -- The library is absent from the package's configuration, so Lake doesn't resolve the generated main's
+  -- import of the bridge, and Lean looks for the bridge in the build directory. Lake always keeps this
+  -- one module's artifacts there.
+  pkg := { pkg with config.restoreAllArtifacts? := some true }
   name := `ErrataDiscovered
   config.srcDir := errataRunnerSrcDir pkg
   config.roots := #[errataDiscoveredModule pkg]
@@ -528,11 +533,8 @@ script run (args) do
     if let some parent := file.parent then IO.FS.createDirAll parent
     let changed ← if ← file.pathExists then pure ((← IO.FS.readFile file) != src) else pure true
     if changed then IO.FS.writeFile file src
-  -- Build and run the root package's runner. The generated modules are not part of one of the
-  -- workspaces's library targets, so Lake does not resolve them as imports. Instead, Lean finds
-  -- them in the build directory, where artifacts from Lake's cache are restored.
-  let exePath ← { ws with lakeEnv.restoreAllArtifacts? := some true }.runBuild
-    (ws.root.facet `errataRunner).fetch
+  -- Build and run the root package's runner.
+  let exePath ← runBuild (ws.root.facet `errataRunner).fetch
   -- Each of the driver's warnings follows `--driver-warning`, which must match
   -- `Errata.driverWarningFlag`; the runner reports them alongside its own.
   let warningArgs := driverWarnings.flatMap (#["--driver-warning", ·])
@@ -550,70 +552,47 @@ input_file leanToolchain where
   text := true
   path := "lean-toolchain"
 
+@[default_target]
 lean_lib UsersGuide where
   srcDir := "doc"
   leanOptions := #[⟨`weak.linter.verso.manual.headerTags, true⟩]
   needs := #[leanToolchain]
 
+-- A demo site that shows how to generate websites with Verso.
 @[default_target]
-lean_exe usersguide where
-  root := `UsersGuideMain
-  supportInterpreter := true
-
--- A demo site that shows how to generate websites with Verso
 lean_lib DemoSite where
   srcDir := "test-projects/website"
   roots := #[`DemoSite]
 
+-- An example of a textbook project built in Verso.
 @[default_target]
-lean_exe demosite where
-  srcDir := "test-projects/website"
-  root := `DemoSiteMain
-  supportInterpreter := true
-
--- An example of a textbook project built in Verso
 lean_lib DemoTextbook where
   srcDir := "test-projects/textbook"
   roots := #[`DemoTextbook]
 
+-- An example of a package documentation project built in Verso.
 @[default_target]
-lean_exe demotextbook where
-  srcDir := "test-projects/textbook"
-  root := `DemoTextbookMain
-  supportInterpreter := true
-
--- An example of a package documentation project built in Verso
 lean_lib PackageManual where
   srcDir := "test-projects/package-manual"
   roots := #[`PackageManual]
 
-@[default_target]
-lean_exe packagedocs where
-  srcDir := "test-projects/package-manual"
-  root := `PackageManualMain
-  supportInterpreter := true
-
--- An example of a minimal nontrivial custom genre
+-- An example of a minimal nontrivial custom genre.
 @[default_target]
 lean_lib SimplePage where
   srcDir := "test-projects/custom-genre"
   roots := #[`SimplePage]
 
 @[default_target]
-lean_exe simplepage where
-  srcDir := "test-projects/custom-genre"
-  root := `SimplePageMain
-  supportInterpreter := true
-
-@[default_target]
 lean_lib TutorialExample where
   srcDir := "test-projects/tutorial-test"
 
-@[default_target]
-lean_exe «tutorial-example» where
-  srcDir := "test-projects/tutorial-test"
-  root := `TutorialExampleMain
-  supportInterpreter := true
+/-- `lake run versoMain File.lean ARGS...` is shorthand for `lake lean File.lean -- --run File.lean ARGS...`.
+This uses the IR interpreter to evaluate the `main` function in `File.lean`. -/
+script versoMain (args) do
+  let file :: rest := args
+    | IO.eprintln "usage: lake run versoMain FILE.lean [ARGS...]"
+      return 1
+  (← getWorkspace).evalLeanFile file (#["--run", file] ++ rest.toArray)
 
 private def leanOptionArgs (m : Module) : Array String := Id.run do
   let opts := Module.leanOptions m

@@ -34,7 +34,7 @@ block_extension Block.row (alignItems : String) where
         </div>
       }
   toTeX :=
-    some <| fun _ go _ _ content => do
+    some <| fun _ go _ _ content => Verso.Doc.TeX.withBlocksNotAsParagraphs do
       let rendered ← content.mapM go
       pure <| .seq <| rendered.toList.intersperse (.raw "\\quad ") |>.toArray
 

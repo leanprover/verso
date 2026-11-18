@@ -1,0 +1,106 @@
+{"version": 1,
+ "uri": "file:///src/tests/interactive/test-cases/header_tag_action.lean",
+ "isIncremental": false,
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 2,
+   "range":
+   {"start": {"line": 15, "character": 0}, "end": {"line": 15, "character": 8}},
+   "message":
+   "Missing permalink tag\n\nHint: Add a metadata block with a tag or explicitly indicate that no tag is desired:\n  • # Leaves\n    ̲%̲%̲%̲\n    ̲t̲a̲g̲ ̲:̲=̲ ̲\"̲l̲e̲a̲v̲e̲s̲\"̲\n    ̲%̲%̲%̲\n  • # Leaves\n    ̲%̲%̲%̲\n    ̲t̲a̲g̲ ̲:̲=̲ ̲n̲o̲n̲e̲\n    ̲%̲%̲%̲\n\nNote: The tag is used as a permanent name for the section or chapter. Writers of this or other documents may use it to link to the section, and it is used to share permanent links. In HTML content, they are used as IDs for headers. Section tags should remain unchanged over time.\n\nNote: This linter can be disabled with `set_option linter.verso.manual.headerTags false`",
+   "fullRange":
+   {"start": {"line": 15, "character": 0},
+    "end": {"line": 15, "character": 8}}}]}
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/header_tag_action.lean"},
+ "range":
+ {"start": {"line": 15, "character": 2}, "end": {"line": 15, "character": 2}},
+ "context": {"diagnostics": []}}
+[{"title": "Add `tag := \"leaves\"`",
+  "kind": "quickfix",
+  "edit":
+  {"documentChanges":
+   [{"textDocument":
+     {"version": 1,
+      "uri": "file:///src/tests/interactive/test-cases/header_tag_action.lean"},
+     "edits":
+     [{"range":
+       {"start": {"line": 15, "character": 0},
+        "end": {"line": 15, "character": 8}},
+       "newText": "# Leaves\n%%%\ntag := \"leaves\"\n%%%"}]}]},
+  "data":
+  {"providerResultIndex": 0,
+   "providerName": "Verso.Genre.Manual.headerTagActions",
+   "params":
+   {"textDocument":
+    {"uri": "file:///src/tests/interactive/test-cases/header_tag_action.lean"},
+    "range":
+    {"start": {"line": 15, "character": 2},
+     "end": {"line": 15, "character": 2}},
+    "context": {"diagnostics": []}}}},
+ {"title": "Add `tag := none`",
+  "kind": "quickfix",
+  "edit":
+  {"documentChanges":
+   [{"textDocument":
+     {"version": 1,
+      "uri": "file:///src/tests/interactive/test-cases/header_tag_action.lean"},
+     "edits":
+     [{"range":
+       {"start": {"line": 15, "character": 0},
+        "end": {"line": 15, "character": 8}},
+       "newText": "# Leaves\n%%%\ntag := none\n%%%"}]}]},
+  "data":
+  {"providerResultIndex": 1,
+   "providerName": "Verso.Genre.Manual.headerTagActions",
+   "params":
+   {"textDocument":
+    {"uri": "file:///src/tests/interactive/test-cases/header_tag_action.lean"},
+    "range":
+    {"start": {"line": 15, "character": 2},
+     "end": {"line": 15, "character": 2}},
+    "context": {"diagnostics": []}}}}]
+Resolution of Add `tag := "leaves"`:
+{"title": "Add `tag := \"leaves\"`",
+ "kind": "quickfix",
+ "edit":
+ {"documentChanges":
+  [{"textDocument":
+    {"version": 1,
+     "uri": "file:///src/tests/interactive/test-cases/header_tag_action.lean"},
+    "edits":
+    [{"range":
+      {"start": {"line": 15, "character": 0},
+       "end": {"line": 15, "character": 8}},
+      "newText": "# Leaves\n%%%\ntag := \"leaves\"\n%%%"}]}]},
+ "data":
+ {"providerResultIndex": 0,
+  "providerName": "Verso.Genre.Manual.headerTagActions",
+  "params":
+  {"textDocument":
+   {"uri": "file:///src/tests/interactive/test-cases/header_tag_action.lean"},
+   "range":
+   {"start": {"line": 15, "character": 2}, "end": {"line": 15, "character": 2}},
+   "context": {"diagnostics": []}}}}
+Resolution of Add `tag := none`:
+{"title": "Add `tag := none`",
+ "kind": "quickfix",
+ "edit":
+ {"documentChanges":
+  [{"textDocument":
+    {"version": 1,
+     "uri": "file:///src/tests/interactive/test-cases/header_tag_action.lean"},
+    "edits":
+    [{"range":
+      {"start": {"line": 15, "character": 0},
+       "end": {"line": 15, "character": 8}},
+      "newText": "# Leaves\n%%%\ntag := none\n%%%"}]}]},
+ "data":
+ {"providerResultIndex": 1,
+  "providerName": "Verso.Genre.Manual.headerTagActions",
+  "params":
+  {"textDocument":
+   {"uri": "file:///src/tests/interactive/test-cases/header_tag_action.lean"},
+   "range":
+   {"start": {"line": 15, "character": 2}, "end": {"line": 15, "character": 2}},
+   "context": {"diagnostics": []}}}}

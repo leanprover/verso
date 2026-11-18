@@ -83,7 +83,7 @@ block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String
         let rowsOut : TeX.TeXT Manual (ReaderT ExtensionImpls (BuildLogT IO)) (Array Output.TeX) := do
           rows.mapIdxM fun i r => do
             let cols ← r.mapM fun c => do
-              let cell : Output.TeX ← Array.mapM goB c
+              let cell : Output.TeX ← TeX.withBlocksNotAsParagraphs <| Array.mapM goB c
               if header && i == 0 then
                 pure cell -- TODO: bold?
               else

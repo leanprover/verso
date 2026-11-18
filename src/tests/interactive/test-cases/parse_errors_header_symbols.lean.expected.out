@@ -256,6 +256,14 @@
   "kind": 15,
   "children":
   [{"selectionRange":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 42, "character": 15}},
+    "range":
+    {"start": {"line": 42, "character": 0},
+     "end": {"line": 70, "character": 0}},
+    "name": "Weekend ",
+    "kind": 15},
+   {"selectionRange":
     {"start": {"line": 70, "character": 0},
      "end": {"line": 70, "character": 8}},
     "range":

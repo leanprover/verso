@@ -13,7 +13,8 @@ for the hover and the definition of the role name.
 The hovers and the definition are the same in both paragraphs. The hover of the label says that the
 label is the name of a footnote or a link reference. The hover of the role name is the role's
 documentation, and its definition is the role's declaration in this file. The highlights of the
-label are its definition and its uses up to and including the paragraph.
+label are its definition and all of its uses. The runner waits for the whole file to be elaborated
+before its first request, so that the highlights don't depend on timing.
 
 In prior versions of the error recovery, the second paragraph had no hovers, highlights or
 definitions.
@@ -41,6 +42,7 @@ def hig : RoleExpanderOf Unit
 [park]: https://example.com/park
 
 We walked to [the park][park] and saw {hig}[a heron] by {hig}[the lake].
+                        --^ sync
                         --^ textDocument/hover
                         --^ textDocument/documentHighlight
                                        --^ textDocument/hover

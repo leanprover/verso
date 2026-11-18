@@ -15,7 +15,9 @@ public import Lean.Elab.InfoTree.Util
 public import Lean.Server.References
 
 public import VersoLiterate
+import Verso.Code.Highlighted
 public import Verso.SyntaxUtils
+import Verso.Output.Html.Markdown
 
 public section
 
@@ -25,6 +27,7 @@ open SubVerso Module
 open SubVerso.Highlighting (Highlighted highlight highlightMany)
 open VersoLiterate
 open Verso.Doc
+open Verso.Output.Html
 
 
 def helpText : String :=
@@ -146,7 +149,12 @@ def findHighestM [Monad m] (stx : Syntax) (fn : Syntax → Option α) : m (Array
 Finds the definition sites of each constant in an info tree, and replaces each docstring with a
 reference to the definition for later substitution.
 -/
-def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax := do
+partial def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax := do
+  -- `#guard_msgs` takes the messages it expects as a doc comment, but it's not really
+  -- documentation. It must not be attached to the declaration in the command that `#guard_msgs`
+  -- wraps.
+  if stx.isOfKind ``Lean.guardMsgsCmd then
+    return stx.setArg 4 (← findDocstringDefs stx[4] t)
   -- Find the definition sites of all constants in this info tree
   let defSites := t.deepestNodes fun _ i _ =>
     match i with
@@ -159,6 +167,11 @@ def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax := do
     | _ => none
   let defSites ← defSites.filterM fun x => do
     return (← findInternalDocString? (← getEnv) x.1) |>.isSome
+  -- An attribute can define a further constant, as in `@[to_additive foo /-- ... -/] def bar`. The
+  -- declaration's modifiers hold `foo`'s definition site and `bar`'s doc comment, while `bar`'s
+  -- definition site lies outside them, so attributes are handled first and the definition sites
+  -- that they claim take no further part.
+  let (stx, defSites) ← (rewriteAttrComments stx).run defSites
   -- Now find the largest syntax object that contains just one of these definition sites and replace
   -- all doc comments with a placeholder token
   let stx ← stx.replaceM fun s => do
@@ -176,7 +189,7 @@ def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax := do
   -- following heuristic: any remaining unprocessed doc comments are associated with the unique
   -- highest definition site that they share a closest ancestor with.
   let stx ← replaceStackM stx fun stk stx => do
-    if stx.isOfKind ``docComment && stx[1].isOfKind ``commentBody || stx[1].isOfKind ``versoCommentBody then
+    if stx.isOfKind ``docComment && (stx[1].isOfKind ``commentBody || stx[1].isOfKind ``versoCommentBody) then
       for (parent, i) in stk do
         let defs ← findHighestM parent fun x =>
           if x.isIdent then defSites.find? (fun y => identMatch y.2 x) |>.map (·.1) else none
@@ -191,8 +204,32 @@ def findDocstringDefs (stx : Syntax) (t : InfoTree) : TermElabM Syntax := do
     else pure none
   return stx
 where
+  -- Finds the attributes of `@[...]` that define a constant, such as `to_additive foo`, and rewrites
+  -- their doc comments as placeholders for that constant. The state is a list of definition sites. A
+  -- definition site pairs a constant's name with the syntax that the info tree records as the binding
+  -- occurrence of that constant, such as `foo` in `to_additive foo`. An attribute counts as defining a
+  -- constant when the sites in the list that lie inside it all name that one constant. The constant's
+  -- sites are then removed from the list, so the enclosing attributes and the later passes over the
+  -- declaration don't assign further doc comments to it. Nested attributes are processed first.
+  -- Most attributes contain no definition sites and are left unchanged.
+  rewriteAttrComments (stx : Syntax) : StateT (List (Name × Syntax)) TermElabM Syntax := do
+    let .node info kind args := stx | return stx
+    let new := Syntax.node info kind (← args.mapM rewriteAttrComments)
+    if kind != ``Lean.Parser.Term.attrInstance then return new
+    let some range := stx.getRange? | return new
+    let inside := (← get).filter fun (_, site) =>
+      site.getRange?.map (range.includes · true true) |>.getD false
+    let [x] := inside.map (·.1) |>.eraseDups | return new
+    modify (·.filter (·.1 != x))
+    new.replaceM fun s => do
+      if s.isOfKind ``docComment then some <$> rewriteComment x s else pure none
+
+  -- For `structure A.B.C`, the binder's syntax is `C` with the source range of `A.B.C`, so the
+  -- identifiers are also compared by their source range.
   identMatch (stx1 stx2 : Syntax) : Bool :=
-    normIdent stx1 == normIdent stx2
+    let stx1 := normIdent stx1
+    let stx2 := normIdent stx2
+    stx1 == stx2 || stx1.hasSameRange stx2
 
   normIdent (stx : Syntax) : Syntax :=
     if stx.getKind == ``declId then stx[0] else stx
@@ -348,6 +385,7 @@ can be re-attached to the rendered code. See {name}`DocMessage`.
 -/
 abbrev ToLitM := ReaderT (Array DocMessage) HighlightM
 
+open Verso.Code in
 /--
 Highlights a sequence of syntaxes, each with its own info tree. Typically used for highlighting a
 module, where each command has its own corresponding tree.
@@ -362,7 +400,8 @@ partial def highlightFrontendResult' (result : Compat.Frontend.FrontendResult)
   let modrefs := Lean.Server.findModuleRefs (← getFileMap) trees'
   let ids := build modrefs
 
-  let ctx := ⟨ids, true, false, sortSuppress suppressNamespaces, false, (← IO.mkRef {})⟩
+  let ctx ← mkHighlightingContext (ids := ids) (definitionsPossible := true)
+    (suppressNamespaces := sortSuppress suppressNamespaces)
 
   let mut code : Array (Array Code) := #[]
 
@@ -399,7 +438,7 @@ where
           if let some doc := doc? then
             return #[.modDoc (← toModLit doc |>.run docMsgs)]
         else if stx[1].isOfKind ``commentBody then
-          if let some doc := MD4Lean.parse stx[1][0].getAtomVal then
+          if let some doc := Markdown.parse stx[1][0].getAtomVal then
             return #[.markdownModDoc doc]
 
     highlight' (Option.map (#[·]) res.info[0]? |>.getD #[]) stx true
@@ -414,7 +453,7 @@ where
         if let some v ← findInternalDocString? (← getEnv) declName then
           some <$> do match v with
           | .inl x =>
-            let some md := MD4Lean.parse x
+            let some md := Markdown.parse x
               | pure (Code.markdown i (some declName) ⟨#[.code #[] #[] none #["Failed to parse Markdown:\n", x]]⟩)
             pure (Code.markdown i (some declName) md)
           | .inr x =>
@@ -442,7 +481,7 @@ where
   parseDocComment (text : String) : Code :=
     let docText := (text.dropPrefix "/-- " |>.toString |>.dropSuffix " -/"
           |>.dropSuffix "\n-/" |>.dropSuffix "-/").trimAsciiEnd.toString
-    match MD4Lean.parse docText with
+    match Markdown.parse docText with
     | some md => .markdown 0 none md
     | none => .markdown 0 none ⟨#[.code #[] #[] none #[docText]]⟩
 
@@ -545,10 +584,6 @@ section ImageCollection
 private def isRelativeImagePath (url : String) : Bool :=
   !url.startsWith "/" && (url.splitOn "://").length <= 1
 
-/-- Converts an MD4Lean `AttrText` array to a plain string. -/
-private def attrTextToString (src : Array MD4Lean.AttrText) : String :=
-  String.join (src.map (fun | .normal s => s | .entity e => e | .nullchar => "") |>.toList)
-
 open MD4Lean in
 /-- Collects relative image paths from an MD4Lean document. -/
 private partial def collectMdImages (doc : Document) : Array String :=
@@ -567,7 +602,7 @@ where
 
   collectText : Text → Array String
     | .img src _title _alt =>
-      let s := attrTextToString src
+      let s := Markdown.attrText src
       if isRelativeImagePath s then #[s] else #[]
     | .a _ _ _ xs | .em xs | .strong xs | .del xs | .u xs | .wikiLink _ xs => collectTexts xs
     | .normal _ | .nullchar | .br _ | .softbr _ | .code _ | .entity _ | .latexMath _ | .latexMathDisplay _ => #[]
