@@ -1,11 +1,18 @@
-<!-- Generated from commit 6674cf83c82a2c260bf5827d44e58f26568f7cbe at 2026-11-17T13:29:03Z -->
+<!-- Generated from commit c0fce8ca212d6a33d010c3be09bec07dfa3b9ed4 at 2026-11-18T15:18:49Z -->
 <!DOCTYPE html>
-<html><head><script>(function(){
-  const {protocol:proto, host:hostName, pathname:path, search:srch, hash:hsh} = window.location;
-  if (!(path.endsWith("/") || path.endsWith(".html"))) {
-    window.location.replace(`${proto}//${hostName}${path}/${srch}${hsh}`);
-  }
-})()</script><script>// Enable TypeScript checking.
+<html><head><script>(function () {
+    const {
+        protocol: proto,
+        host: hostName,
+        pathname: path,
+        search: srch,
+        hash: hsh,
+    } = window.location;
+    if (!(path.endsWith("/") || path.endsWith(".html"))) {
+        window.location.replace(`${proto}//${hostName}${path}/${srch}${hsh}`);
+    }
+})();
+</script><script>// Enable TypeScript checking.
 // @ts-check
 
 // Applies a saved table-of-contents width before the first paint.
@@ -1724,288 +1731,355 @@ a.technical-term:hover {
   background-color: var(--verso-selected-color);
   outline: auto;
 }
-</style><script>
+</style><script>window.versoLoadDocData = () => (fetch("-verso-docs.json").then((resp) => resp.json()));
 window.onload = async () => {
+    /**
+     * @param {Element} tactic
+     * @returns {HTMLInputElement | null}
+     */
+    function tacticToggle(tactic) {
+        const toggle = tactic.querySelector(":scope > input.tactic-toggle");
+        return toggle instanceof HTMLInputElement ? toggle : null;
+    }
 
     // Don't show hovers inside of closed tactic states
+    /** @param {Element} elem */
     function blockedByTactic(elem) {
-      let parent = elem.parentNode;
-      while (parent && "classList" in parent) {
-        if (parent.classList.contains("tactic")) {
-          const toggle = parent.querySelector(":scope > input.tactic-toggle");
-          if (toggle) {
-            return !toggle.checked;
-          }
+        let parent = elem.parentElement;
+        while (parent) {
+            if (parent.classList.contains("tactic")) {
+                const toggle = tacticToggle(parent);
+                if (toggle) {
+                    return !toggle.checked;
+                }
+            }
+            parent = parent.parentElement;
         }
-        parent = parent.parentNode;
-      }
-      return false;
+        return false;
     }
 
     // The innermost element under the pointer, used to show only the most specific hover
+    /** @type {Element | null} */
     let hoverTarget = null;
-    document.addEventListener('mouseover', (e) => { hoverTarget = e.target; }, true);
+    document.addEventListener(
+        "mouseover",
+        (e) => {
+            hoverTarget = e.target instanceof Element ? e.target : null;
+        },
+        true,
+    );
 
     // Visible tippy references; a tooltip is blocked while an unrelated one is visible
+    /** @type {Set<HTMLElement>} */
     const visibleTippies = new Set();
+    /** @param {Element} elem */
     function blockedByTippy(elem) {
-      for (const ref of visibleTippies) {
-        if (!ref.contains(elem) && !elem.contains(ref)) return true;
-      }
-      return false;
+        for (const ref of visibleTippies) {
+            if (!ref.contains(elem) && !elem.contains(ref)) return true;
+        }
+        return false;
     }
 
     // Whether the element's tooltip would have content to show. Content nested in a
     // collapsed tactic region is covered by the region's proof-state tooltip, whether or
     // not a tippy instance is currently attached to it.
+    /** @param {HTMLElement} el */
     function showsContent(el) {
-      if (!el._tippy) return false;
-      if (el.classList.contains('tactic')) {
-        const toggle = el.querySelector(':scope > input.tactic-toggle');
-        return !!toggle && !toggle.checked;
-      }
-      return (!!el.querySelector('.hover-info') || 'versoHover' in el.dataset) &&
-        !blockedByTactic(el);
+        if (!el._tippy) return false;
+        if (el.classList.contains("tactic")) {
+            const toggle = tacticToggle(el);
+            return !!toggle && !toggle.checked;
+        }
+        return (
+            (!!el.querySelector(".hover-info") || "versoHover" in el.dataset) &&
+            !blockedByTactic(el)
+        );
     }
 
     // The nearest enclosing element whose tooltip has content
+    /**
+     * @param {Element | null} el
+     * @returns {HTMLElement | null}
+     */
     function innermostShowable(el) {
-      while (el && el.nodeType === Node.ELEMENT_NODE) {
-        if (showsContent(el)) return el;
-        el = el.parentElement;
-      }
-      return null;
+        while (el) {
+            if (el instanceof HTMLElement && showsContent(el)) return el;
+            el = el.parentElement;
+        }
+        return null;
     }
 
     // Binding highlights via event delegation with cached lookups
+    /** @type {Map<string, Element[]>} */
     const bindingCache = new Map(); // context+binding -> [token elements]
+    /** @type {Element[]} */
     let highlightedTokens = [];
+    /**
+     * @param {string | undefined} context
+     * @param {string} binding
+     */
     function getBindingTokens(context, binding) {
-      const key = context + "\0" + binding;
-      let tokens = bindingCache.get(key);
-      if (!tokens) {
-        tokens = [];
-        for (const example of document.querySelectorAll(".hl.lean")) {
-          if (example.dataset.leanContext == context) {
-            for (const tok of example.querySelectorAll(".token[data-binding=\"" + CSS.escape(binding) + "\"]")) {
-              tokens.push(tok);
+        const key = `${context}\0${binding}`;
+        let tokens = bindingCache.get(key);
+        if (!tokens) {
+            tokens = [];
+            for (const example of document.querySelectorAll(".hl.lean")) {
+                if (example instanceof HTMLElement && example.dataset["leanContext"] === context) {
+                    for (const tok of example.querySelectorAll(
+                        `.token[data-binding="${CSS.escape(binding)}"]`,
+                    )) {
+                        tokens.push(tok);
+                    }
+                }
             }
-          }
+            bindingCache.set(key, tokens);
         }
-        bindingCache.set(key, tokens);
-      }
-      return tokens;
+        return tokens;
+    }
+    /**
+     * @param {Event} event
+     * @returns {HTMLElement | null}
+     */
+    function eventToken(event) {
+        const token = event.target instanceof Element ? event.target.closest(".token") : null;
+        return token instanceof HTMLElement ? token : null;
     }
     for (const container of document.querySelectorAll(".hl.lean")) {
-      container.addEventListener("mouseover", (event) => {
-        const c = event.target.closest(".token");
-        if (!c || !c.dataset.binding || c.dataset.binding === "" || !container.contains(c)) return;
-        if (blockedByTactic(c)) return;
-        const tokens = getBindingTokens(container.dataset.leanContext, c.dataset.binding);
-        for (const tok of tokens) {
-          tok.classList.add("binding-hl");
-        }
-        highlightedTokens = tokens;
-      });
-      container.addEventListener("mouseout", (event) => {
-        const c = event.target.closest(".token");
-        if (!c || !container.contains(c)) return;
-        for (const tok of highlightedTokens) {
-          tok.classList.remove("binding-hl");
-        }
-        highlightedTokens = [];
-      });
+        if (!(container instanceof HTMLElement)) continue;
+        container.addEventListener("mouseover", (event) => {
+            const c = eventToken(event);
+            const binding = c?.dataset["binding"];
+            if (!c || !binding || !container.contains(c)) return;
+            if (blockedByTactic(c)) return;
+            const tokens = getBindingTokens(container.dataset["leanContext"], binding);
+            for (const tok of tokens) {
+                tok.classList.add("binding-hl");
+            }
+            highlightedTokens = tokens;
+        });
+        container.addEventListener("mouseout", (event) => {
+            const c = eventToken(event);
+            if (!c || !container.contains(c)) return;
+            for (const tok of highlightedTokens) {
+                tok.classList.remove("binding-hl");
+            }
+            highlightedTokens = [];
+        });
     }
     // Add hovers
-    const versoDocData = await (fetch("-verso-docs.json").then((resp) => resp.json()));
+    const versoDocData = await window.versoLoadDocData();
 
+    /** @param {Element} element */
     function hideParentTooltips(element) {
-      let parent = element.parentElement;
-      while (parent) {
-        const tippyInstance = parent._tippy;
-        if (tippyInstance) {
-          tippyInstance.hide();
+        let parent = element.parentElement;
+        while (parent) {
+            const tippyInstance = parent._tippy;
+            if (tippyInstance) {
+                tippyInstance.hide();
+            }
+            parent = parent.parentElement;
         }
-        parent = parent.parentElement;
-      }
     }
 
+    /** @param {Element} element */
     function hideDescendantTooltips(element) {
-      for (const ref of visibleTippies) {
-        if (ref !== element && element.contains(ref)) {
-          ref._tippy.hide();
+        for (const ref of visibleTippies) {
+            if (ref !== element && element.contains(ref)) {
+                ref._tippy?.hide();
+            }
         }
-      }
     }
 
     // Renders the documentation for a hover ID from the doc table
+    /** @param {string} hoverId */
     function docHoverContent(hoverId) {
-      const info = document.createElement('span');
-      info.className = 'hover-info';
-      info.style.display = 'block';
-      const data = versoDocData[hoverId];
-      if (data) {
-        /* Verso generated the HTML from the Markdown at site build time. */
-        const parsed = new DOMParser().parseFromString(data, 'text/html');
-        info.append(...parsed.body.childNodes);
-        if (typeof versoRenderMath === 'function') versoRenderMath(info);
-      } else {
-        info.textContent = 'Failed to load doc ID: ' + hoverId;
-      }
-      return info;
+        const info = document.createElement("span");
+        info.className = "hover-info";
+        info.style.display = "block";
+        const data = versoDocData[hoverId];
+        if (data) {
+            /* Verso generated the HTML from the Markdown at site build time. */
+            const parsed = new DOMParser().parseFromString(data, "text/html");
+            info.append(...parsed.body.childNodes);
+            if (typeof versoRenderMath === "function") versoRenderMath(info);
+        } else {
+            info.textContent = `Failed to load doc ID: ${hoverId}`;
+        }
+        return info;
     }
 
-
-
-
+    /** @type {TippyProps} */
     const defaultTippyProps = {
-      /* DEBUG -- remove the space: * /
-      onHide(any) { return false; },
-      trigger: "click",
-      // */
-      /* theme: "lean", */
-      maxWidth: "none",
-      appendTo: () => document.body,
-      interactive: true,
-      delay: [100, null],
-      /* ignoreAttributes: true, */
-      followCursor: 'initial',
-      onShow(inst) {
-        const ref = inst.reference;
-        if (ref.className == 'tactic') {
-          const toggle = ref.querySelector(":scope > input.tactic-toggle");
-          if (toggle && toggle.checked) {
-            return false;
-          }
-        } else if (ref.querySelector(".hover-info") || "versoHover" in ref.dataset) {
-          if (blockedByTactic(ref)) { return false };
-        } else { // Nothing to show here!
-          return false;
-        }
-        // Show only the most specific hover under the pointer
-        if (hoverTarget && ref.contains(hoverTarget) && innermostShowable(hoverTarget) !== ref) {
-          return false;
-        }
-        hideParentTooltips(ref);
-        hideDescendantTooltips(ref);
-        if (blockedByTippy(ref)) { return false; }
-      },
-      onShown(inst) { visibleTippies.add(inst.reference); },
-      onHidden(inst) { visibleTippies.delete(inst.reference); },
-      content (tgt) {
-        const content = document.createElement("span");
-        if (tgt.className == 'tactic') {
-          const state = tgt.querySelector(":scope > .tactic-state").cloneNode(true);
-          state.style.display = "block";
-          content.appendChild(state);
-          content.style.display = "block";
-          content.className = "hl lean popup";
-        } else {
-          content.className = "hl lean";
-          content.style.display = "block";
-          content.style.maxHeight = "300px";
-          content.style.overflowY = "auto";
-          content.style.overflowX = "hidden";
-          // Messages come from the inline hover-info; documentation comes from the doc
-          // table. An element with both (a message span sharing a documented token's
-          // extent) shows both in one tooltip.
-          const hoverId = tgt.dataset.versoHover;
-          const hoverInfo = tgt.querySelector(".hover-info");
-          if (hoverInfo) {
-            content.appendChild(hoverInfo.cloneNode(true));
-          }
-          if (hoverId) {
-            // TODO stop doing an implicit conversion from string to number here
-            content.appendChild(docHoverContent(hoverId));
-          }
-          if (hoverInfo && hoverId) {
-            content.classList.add('mixed');
-          }
-          const extraLinks = tgt.dataset['versoLinks'] || tgt.parentElement.dataset['versoLinks'];
-          if (extraLinks) {
-            try {
-              const extras = JSON.parse(extraLinks);
-              const links = document.createElement('ul');
-              links.className = 'extra-doc-links';
-              extras.forEach((l) => {
-                const li = document.createElement('li');
-                const a = document.createElement('a');
-                a.href = l['href'];
-                a.title = l.long;
-                a.textContent = l.short;
-                li.appendChild(a);
-                links.appendChild(li);
-              });
-              content.appendChild(links);
-            } catch (error) {
-              console.error(error);
+        /* theme: "lean", */
+        maxWidth: "none",
+        appendTo: () => document.body,
+        interactive: true,
+        delay: [100, null],
+        /* ignoreAttributes: true, */
+        followCursor: "initial",
+        onShow(inst) {
+            const ref = inst.reference;
+            if (ref.className === "tactic") {
+                const toggle = tacticToggle(ref);
+                if (toggle && toggle.checked) {
+                    return false;
+                }
+            } else if (ref.querySelector(".hover-info") || "versoHover" in ref.dataset) {
+                if (blockedByTactic(ref)) {
+                    return false;
+                }
+            } else {
+                // Nothing to show here!
+                return false;
             }
-          }
-        }
-        return content;
-      }
+            // Show only the most specific hover under the pointer
+            if (
+                hoverTarget &&
+                ref.contains(hoverTarget) &&
+                innermostShowable(hoverTarget) !== ref
+            ) {
+                return false;
+            }
+            hideParentTooltips(ref);
+            hideDescendantTooltips(ref);
+            return !blockedByTippy(ref);
+        },
+        onShown(inst) {
+            visibleTippies.add(inst.reference);
+        },
+        onHidden(inst) {
+            visibleTippies.delete(inst.reference);
+        },
+        content(tgt) {
+            const content = document.createElement("span");
+            if (tgt.className === "tactic") {
+                const state = tgt.querySelector(":scope > .tactic-state")?.cloneNode(true);
+                if (state instanceof HTMLElement) {
+                    state.style.display = "block";
+                    content.appendChild(state);
+                }
+                content.style.display = "block";
+                content.className = "hl lean popup";
+            } else {
+                content.className = "hl lean";
+                content.style.display = "block";
+                content.style.maxHeight = "300px";
+                content.style.overflowY = "auto";
+                content.style.overflowX = "hidden";
+                // Messages come from the inline hover-info; documentation comes from the doc
+                // table. An element with both (a message span sharing a documented token's
+                // extent) shows both in one tooltip.
+                const hoverId = tgt.dataset["versoHover"];
+                const hoverInfo = tgt.querySelector(".hover-info");
+                if (hoverInfo) {
+                    content.appendChild(hoverInfo.cloneNode(true));
+                }
+                if (hoverId) {
+                    content.appendChild(docHoverContent(hoverId));
+                }
+                if (hoverInfo && hoverId) {
+                    content.classList.add("mixed");
+                }
+                const extraLinks =
+                    tgt.dataset["versoLinks"] || tgt.parentElement?.dataset["versoLinks"];
+                if (extraLinks) {
+                    try {
+                        /** @type {{href: string, long: string, short: string}[]} */
+                        const extras = JSON.parse(extraLinks);
+                        const links = document.createElement("ul");
+                        links.className = "extra-doc-links";
+                        extras.forEach((l) => {
+                            const li = document.createElement("li");
+                            const a = document.createElement("a");
+                            a.href = l.href;
+                            a.title = l.long;
+                            a.textContent = l.short;
+                            li.appendChild(a);
+                            links.appendChild(li);
+                        });
+                        content.appendChild(links);
+                    } catch (error) {
+                        console.error(error);
+                    }
+                }
+            }
+            return content;
+        },
     };
 
-
-    document.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort').forEach(element => {
-      element.setAttribute('data-tippy-theme', 'lean');
+    document
+        .querySelectorAll(
+            ".hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort",
+        )
+        .forEach((element) => {
+            element.setAttribute("data-tippy-theme", "lean");
+        });
+    document.querySelectorAll(".hl.lean .has-info.warning").forEach((element) => {
+        element.setAttribute("data-tippy-theme", "warning message");
     });
-    document.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
-      element.setAttribute('data-tippy-theme', 'warning message');
+    document.querySelectorAll(".hl.lean .has-info.information").forEach((element) => {
+        element.setAttribute("data-tippy-theme", "info message");
     });
-    document.querySelectorAll('.hl.lean .has-info.information').forEach(element => {
-      element.setAttribute('data-tippy-theme', 'info message');
+    document.querySelectorAll(".hl.lean .has-info.error").forEach((element) => {
+        element.setAttribute("data-tippy-theme", "error message");
     });
-    document.querySelectorAll('.hl.lean .has-info.error').forEach(element => {
-      element.setAttribute('data-tippy-theme', 'error message');
-    });
-    document.querySelectorAll('.hl.lean .tactic').forEach(element => {
-      element.setAttribute('data-tippy-theme', 'tactic');
+    document.querySelectorAll(".hl.lean .tactic").forEach((element) => {
+        element.setAttribute("data-tippy-theme", "tactic");
     });
     // Skip tokens inside closed tactics — they interfere with tactic tippys
+    /** @type {Set<Element>} */
     const closedTactics = new Set();
-    document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
-      const toggle = tactic.querySelector(':scope > input.tactic-toggle');
-      if (toggle && !toggle.checked) closedTactics.add(tactic);
+    document.querySelectorAll(".hl.lean .tactic").forEach((tactic) => {
+        const toggle = tacticToggle(tactic);
+        if (toggle && !toggle.checked) closedTactics.add(tactic);
     });
+    /** @param {Element} el */
     function isInsideClosedTactic(el) {
-      const tactic = el.closest('.tactic');
-      return tactic && tactic !== el && closedTactics.has(tactic);
+        const tactic = el.closest(".tactic");
+        return tactic !== null && tactic !== el && closedTactics.has(tactic);
     }
 
-    const tokenSelector = '.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort';
-    tippy(Array.from(document.querySelectorAll(tokenSelector)).filter(el => !isInsideClosedTactic(el)), defaultTippyProps);
+    const tokenSelector =
+        ".hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort";
+    tippy(
+        Array.from(document.querySelectorAll(tokenSelector)).filter(
+            (el) => !isInsideClosedTactic(el),
+        ),
+        defaultTippyProps,
+    );
 
     // Create/destroy token tippys when tactic checkbox toggles
-    const tacticTippySelector = '.const.token, .keyword.token, .literal.token, .option.token, .var.token, .typed.token, .has-info, .level-var, .level-const, .level-op, .sort';
-    document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
-      const toggle = tactic.querySelector(':scope > input.tactic-toggle');
-      if (toggle) toggle.addEventListener('change', () => {
-        if (toggle.checked) {
-          closedTactics.delete(tactic);
-          tactic.querySelectorAll(tacticTippySelector).forEach(el => {
-            if (!el._tippy) {
-              tippy(el, defaultTippyProps);
-            }
-          });
-        } else {
-          closedTactics.add(tactic);
-          tactic.querySelectorAll(tacticTippySelector).forEach(el => {
-            if (el._tippy) el._tippy.destroy();
-          });
-        }
-        // The toggle changes which element's tooltip belongs to the pointer's position,
-        // but the pointer stays put, so no hover event announces the change. Show the
-        // right tooltip once the click that flipped the toggle has hidden the old one.
-        setTimeout(() => {
-          if (hoverTarget && hoverTarget.isConnected) {
-            const showable = innermostShowable(hoverTarget);
-            if (showable && showable._tippy) showable._tippy.show();
-          }
-        }, 0);
-      });
-  });
-}
+    const tacticTippySelector =
+        ".const.token, .keyword.token, .literal.token, .option.token, .var.token, .typed.token, .has-info, .level-var, .level-const, .level-op, .sort";
+    document.querySelectorAll(".hl.lean .tactic").forEach((tactic) => {
+        const toggle = tacticToggle(tactic);
+        if (toggle)
+            toggle.addEventListener("change", () => {
+                if (toggle.checked) {
+                    closedTactics.delete(tactic);
+                    tactic.querySelectorAll(tacticTippySelector).forEach((el) => {
+                        if (!el._tippy) {
+                            tippy(el, defaultTippyProps);
+                        }
+                    });
+                } else {
+                    closedTactics.add(tactic);
+                    tactic.querySelectorAll(tacticTippySelector).forEach((el) => {
+                        if (el._tippy) el._tippy.destroy();
+                    });
+                }
+                // The toggle changes which element's tooltip belongs to the pointer's position,
+                // but the pointer stays put, so no hover event announces the change. Show the
+                // right tooltip once the click that flipped the toggle has hidden the old one.
+                setTimeout(() => {
+                    if (hoverTarget && hoverTarget.isConnected) {
+                        const showable = innermostShowable(hoverTarget);
+                        if (showable && showable._tippy) showable._tippy.show();
+                    }
+                }, 0);
+            });
+    });
+};
 </script></head><body><header><div class="header-logo-wrapper"></div><div class="header-title-wrapper"><a href class="header-title"><h1>Documentation with Verso</h1></a></div></header><label for="toggle-toc" id="toggle-toc-click"><span class="line line1"></span><span class="line line2"></span><span class="line line3"></span></label><div class="with-toc"><div class="toc-backdrop" onclick="document.getElementById('toggle-toc-click')?.click()"></div><nav id="toc"><input type="checkbox" id="toggle-toc"/><div class="first"><a href class="toc-title"><h1>Documentation with Verso</h1></a><div class="split-tocs"><div class="split-toc book"><div class="title"><label for="--verso-manual-toc-----bookRoot" class="toggle-split-toc"><input type="checkbox" class="toggle-split-toc" id="--verso-manual-toc-----bookRoot"/></label><span class>Table of Contents</span></div><table><tr class="numbered"><td class="num">1.</td><td><a href="Genres/#genres">Genres</a></td></tr><tr class="numbered"><td class="num">2.</td><td><a href="Verso-Markup/#verso-markup">Verso Markup</a></td></tr><tr class="current numbered"><td class="num">3.</td><td><a href="Building-Documents/#build-process">Building Documents</a></td></tr><tr class="numbered"><td class="num">4.</td><td><a href="Extensions/#extensions">Extensions</a></td></tr><tr class="numbered"><td class="num">5.</td><td><a href="Output-Formats/#outputs">Output Formats</a></td></tr><tr class="numbered"><td class="num">6.</td><td><a href="Websites/#website">Websites</a></td></tr><tr class="numbered"><td class="num">7.</td><td><a href="Manuals-and-Books/#manual">Manuals and Books</a></td></tr><tr class="numbered"><td class="num">8.</td><td><a href="Literate-Programming/#literate">Literate Programming</a></td></tr><tr class="numbered"><td class="num">9.</td><td><a href="Development-Server/#serve">Development Server</a></td></tr><tr class="unnumbered"><td class="num"></td><td><a href="the-index/#index">Index</a></td></tr><tr class="unnumbered"><td class="num"></td><td><a href="releases/#release-notes">Release Notes</a></td></tr><tr class="unnumbered"><td class="num"></td><td><a href="Dependencies/#dependencies">Dependencies</a></td></tr></table></div><div class="split-toc"><div class="title"><label for="--verso-manual-toc-build-process" class="toggle-split-toc"><input type="checkbox" class="toggle-split-toc" id="--verso-manual-toc-build-process" checked="checked"/></label><span class="number">3.</span> <span class><a href="Building-Documents/#build-process">Building Documents</a></span></div><table><tr class="numbered"><td class="num">3.1.</td><td><a href="Building-Documents/Elaboration/#elaboration">Elaboration</a></td></tr><tr class="numbered"><td class="num">3.2.</td><td><a href="Building-Documents/Compilation/#compilation">Compilation</a></td></tr><tr class="current numbered"><td class="num">3.3.</td><td><a href="Building-Documents/Traversal/#traversal">Traversal</a></td></tr><tr class="numbered"><td class="num">3.4.</td><td><a href="Building-Documents/Output-Generation/#output-gen">Output Generation</a></td></tr></table></div><div class="split-toc"><div class="title"><label for="--verso-manual-toc-traversal" class="toggle-split-toc"><input type="checkbox" class="toggle-split-toc" id="--verso-manual-toc-traversal" checked="checked"/></label><span class="number">3.3.</span> <span class="current"><a href="Building-Documents/Traversal/#traversal">Traversal</a></span></div><ol><li><a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk"><code>Traverse</code></a></li><li><a href="Building-Documents/Traversal/#Verso___Doc___TraversePart___mk"><code>TraversePart</code></a></li><li><a href="Building-Documents/Traversal/#Verso___Doc___TraverseBlock___mk"><code>TraverseBlock</code></a></li></ol></div></div></div><div class="last"></div></nav><div class="toc-resize-handle"></div><main><div class="content-wrapper"><nav class="prev-next-buttons"><a class="local-button active" href="Building-Documents/Compilation/#compilation" rel="prev" title="3.2. Compilation"><span class="arrow">←</span><span class="where">3.2. Compilation</span></a><a class="local-button active" href="Building-Documents/Output-Generation/#output-gen" rel="next" title="3.4. Output Generation"><span class="where">3.4. Output Generation</span><span class="arrow">→</span></a></nav><section><h1 id="traversal">3.3. Traversal<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=traversal" title="Permalink">🔗</a></span></h1><p>Because they are Lean values, Verso documents adhere to the structure of Lean programs in general.
 In particular, Lean doesn't support cyclic import graphs.
 It's common, however, for technical writing to include cyclic references; two sections that describe different aspects of something will frequently refer to one another.
@@ -2015,8 +2089,8 @@ The document may also be modified during traversal; this allows the title of a s
 This traversal is repeated until the resulting document and metadata tables are not modified; it fails if a set number of passes are executed that result in modifications each time.</p><p>Verso provides a general-purpose traversal mechanism for <code class="hl lean inline" data-lean-context="examples"><a href="Building-Documents/Elaboration/#Verso___Doc___Part" title="Documentation for Verso.Doc.Part"><span class="const token" data-binding="const-Verso.Doc.Part" data-verso-hover="9">Part</span></a></code>, <code class="hl lean inline" data-lean-context="examples"><a href="Building-Documents/Elaboration/#Verso___Doc___Block" title="Documentation for Verso.Doc.Block"><span class="const token" data-binding="const-Verso.Doc.Block" data-verso-hover="11">Block</span></a></code>, and <code class="hl lean inline" data-lean-context="examples"><a href="Building-Documents/Elaboration/#Verso___Doc___Inline" title="Documentation for Verso.Doc.Inline"><span class="const token" data-binding="const-Verso.Doc.Inline" data-verso-hover="12">Inline</span></a></code> that genres may use.
 <code class="hl lean inline" data-lean-context="examples"><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseState"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseState" data-verso-hover="16">Genre.TraverseState</span></a></code> contains the genre-specific information that's accumulated during traversal, while <code class="hl lean inline" data-lean-context="examples"><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">Genre.TraverseContext</span></a></code> provides a means of tracking the surrounding document context.
 To use this framework, genres should define instances of <code class="hl lean inline" data-lean-context="examples"><a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk" title="Documentation for Verso.Doc.Traverse"><span class="const token" data-binding="const-Verso.Doc.Traverse" data-verso-hover="18">Traverse</span></a></code>, which specifies the traversal of a genre's custom elements.
-Additionally, instances of <code class="hl lean inline" data-lean-context="examples"><a href="Building-Documents/Traversal/#Verso___Doc___TraversePart___mk" title="Documentation for Verso.Doc.TraversePart"><span class="const token" data-binding="const-Verso.Doc.TraversePart" data-verso-hover="19">TraversePart</span></a></code> and <code class="hl lean inline" data-lean-context="examples"><a href="Building-Documents/Traversal/#Verso___Doc___TraverseBlock___mk" title="Documentation for Verso.Doc.TraverseBlock"><span class="const token" data-binding="const-Verso.Doc.TraverseBlock" data-verso-hover="20">TraverseBlock</span></a></code> specify how traversal keeps track of the current position in a document.</p><div class="namedocs" id="Verso___Doc___Traverse___mk"><span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Doc.Traverse.block" title="Permalink">🔗</a></span><span class="label">type class</span><pre class="signature hl lean block"><div class="wide-only"><a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk" title="Documentation for Verso.Doc.Traverse"><span class="const token" data-binding="const-Verso.Doc.Traverse" data-verso-hover="18">Verso.Doc.Traverse</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.2812" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="1">Doc.Genre</span></a><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.2814" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><span class="const token" data-binding="const-outParam" data-verso-hover="22">outParam</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span><span class="unknown token" data-binding>)</span><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type 1</span></div><div class="narrow-only"><a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk" title="Documentation for Verso.Doc.Traverse"><span class="const token" data-binding="const-Verso.Doc.Traverse" data-verso-hover="18">Verso.Doc.Traverse</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.2812" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="1">Doc.Genre</span></a><span class="unknown token" data-binding>)</span><span class="inter-text">
-  </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.2814" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><span class="const token" data-binding="const-outParam" data-verso-hover="22">outParam</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span><span class="unknown token" data-binding>)</span><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type 1</span></div></pre><div class="text"><p>Genre-specific traversal.</p><p>The traversal pass is where cross-references are resolved. The traversal pass repeatedly applies a
+Additionally, instances of <code class="hl lean inline" data-lean-context="examples"><a href="Building-Documents/Traversal/#Verso___Doc___TraversePart___mk" title="Documentation for Verso.Doc.TraversePart"><span class="const token" data-binding="const-Verso.Doc.TraversePart" data-verso-hover="19">TraversePart</span></a></code> and <code class="hl lean inline" data-lean-context="examples"><a href="Building-Documents/Traversal/#Verso___Doc___TraverseBlock___mk" title="Documentation for Verso.Doc.TraverseBlock"><span class="const token" data-binding="const-Verso.Doc.TraverseBlock" data-verso-hover="20">TraverseBlock</span></a></code> specify how traversal keeps track of the current position in a document.</p><div class="namedocs" id="Verso___Doc___Traverse___mk"><span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Doc.Traverse.block" title="Permalink">🔗</a></span><span class="label">type class</span><pre class="signature hl lean block"><div class="wide-only"><a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk" title="Documentation for Verso.Doc.Traverse"><span class="const token" data-binding="const-Verso.Doc.Traverse" data-verso-hover="18">Verso.Doc.Traverse</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.2408" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="1">Doc.Genre</span></a><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.2410" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><span class="const token" data-binding="const-outParam" data-verso-hover="22">outParam</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span><span class="unknown token" data-binding>)</span><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type 1</span></div><div class="narrow-only"><a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk" title="Documentation for Verso.Doc.Traverse"><span class="const token" data-binding="const-Verso.Doc.Traverse" data-verso-hover="18">Verso.Doc.Traverse</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.2408" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="1">Doc.Genre</span></a><span class="unknown token" data-binding>)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.2410" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><span class="const token" data-binding="const-outParam" data-verso-hover="22">outParam</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span><span class="unknown token" data-binding>)</span><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type 1</span></div></pre><div class="text"><p>Genre-specific traversal.</p><p>The traversal pass is where cross-references are resolved. The traversal pass repeatedly applies a
 genre-specific stateful computation until a fixed point is reached, both with respect to the state
 and the document. Traversal may update the state or rewrite parts of the document.</p><p>The methods <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>part</span></code>, <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>block</span></code>, and <code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-inline" data-verso-hover="23">inline</span></code> provide effects to be carried out before traversing the
 given level of the AST, and <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>part</span></code> allows the part's metadata to be updated.</p><p><code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>genrePart</span></code> is carried out after <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>part</span></code>. It allows genre-specific rewriting of the entire part based
@@ -2024,13 +2098,13 @@ on genre-specific metadata. This is typically used to construct a table of conte
 but it can in principle arbitrarily rewrite the part. <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>inPart</span></code> is used to locally transform the
 genre's traversal context along the lines of <code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-MonadWithReader.withReader" data-verso-hover="24">withReader</span></code>, and can be used to keep track of e.g. the
 current position in the table of contents.</p><p><code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>genreBlock</span></code> and <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>genreInline</span></code> are invoked when traversal encounters <code class="hl lean inline" data-lean-context="docstring-examples"><a href="Manuals-and-Books/#Verso___Genre___Manual___Block___mk" title="Documentation for Verso.Genre.Manual.Block"><span class="const token" data-binding="const-Verso.Genre.Manual.Block" data-verso-hover="25">Block</span></a><span class="built-in delim token" data-binding>.</span><span class="unknown token" data-binding>other</span></code> and
-<code class="hl lean inline" data-lean-context="docstring-examples"><a href="Manuals-and-Books/#Verso___Genre___Manual___Inline___mk" title="Documentation for Verso.Genre.Manual.Inline"><span class="const token" data-binding="const-Verso.Genre.Manual.Inline" data-verso-hover="26">Inline</span></a><span class="built-in delim token" data-binding>.</span><span class="unknown token" data-binding>other</span></code>. It may rewrite them, or have state effects.</p><div class="docstring-section" role="group" aria-labelledby="docstring-section-Instance-Constructor"><p class="docstring-section-label" id="docstring-section-Instance-Constructor">Instance Constructor</p><section class="subdocs"><pre class="name-and-type hl lean"><a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk" title="Documentation for Verso.Doc.Traverse.mk"><span class="const token" data-binding="const-Verso.Doc.Traverse.mk" data-verso-hover="27">Verso.Doc.Traverse.mk</span></a></pre><div class="docs"></div></section></div><div class="docstring-section" role="group" aria-labelledby="docstring-section-Methods"><p class="docstring-section-label" id="docstring-section-Methods">Methods</p><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.Traverse.part" data-verso-hover="28">part</span> : <span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadReader" data-verso-hover="29">MonadReader</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadState" data-verso-hover="30">MonadState</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseState"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseState" data-verso-hover="16">TraverseState</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Part" title="Documentation for Verso.Doc.Part"><span class="const token" data-binding="const-Verso.Doc.Part" data-verso-hover="9">Doc.Part</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.PartMetadata"><span class="const token" data-binding="const-Verso.Doc.Genre.PartMetadata" data-verso-hover="32">PartMetadata</span></a><span class="unknown token" data-binding>)</span></pre><div class="docs"><p>The effects carried out before traversing a <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>Part</span></code>.</p></div></section><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.Traverse.block" data-verso-hover="33">block</span> : <span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadReader" data-verso-hover="29">MonadReader</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadState" data-verso-hover="30">MonadState</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseState"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseState" data-verso-hover="16">TraverseState</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Block" title="Documentation for Verso.Doc.Block"><span class="const token" data-binding="const-Verso.Doc.Block" data-verso-hover="11">Doc.Block</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="const token" data-binding="const-Unit" data-verso-hover="34">Unit</span></pre><div class="docs"><p>The effects carried out before traversing a <code class="hl lean inline" data-lean-context="docstring-examples"><a href="Manuals-and-Books/#Verso___Genre___Manual___Block___mk" title="Documentation for Verso.Genre.Manual.Block"><span class="const token" data-binding="const-Verso.Genre.Manual.Block" data-verso-hover="25">Block</span></a></code>.</p></div></section><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.Traverse.inline" data-verso-hover="35">inline</span> : <span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadReader" data-verso-hover="29">MonadReader</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadState" data-verso-hover="30">MonadState</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseState"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseState" data-verso-hover="16">TraverseState</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Inline" title="Documentation for Verso.Doc.Inline"><span class="const token" data-binding="const-Verso.Doc.Inline" data-verso-hover="12">Doc.Inline</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="const token" data-binding="const-Unit" data-verso-hover="34">Unit</span></pre><div class="docs"><p>The effects carried out before traversing an <code class="hl lean inline" data-lean-context="docstring-examples"><a href="Manuals-and-Books/#Verso___Genre___Manual___Inline___mk" title="Documentation for Verso.Genre.Manual.Inline"><span class="const token" data-binding="const-Verso.Genre.Manual.Inline" data-verso-hover="26">Inline</span></a></code>.</p></div></section><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.Traverse.genrePart" data-verso-hover="36">genrePart</span> : <span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadReader" data-verso-hover="29">MonadReader</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text">
-  </span><span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadState" data-verso-hover="30">MonadState</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseState"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseState" data-verso-hover="16">TraverseState</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.PartMetadata"><span class="const token" data-binding="const-Verso.Doc.Genre.PartMetadata" data-verso-hover="32">PartMetadata</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Part" title="Documentation for Verso.Doc.Part"><span class="const token" data-binding="const-Verso.Doc.Part" data-verso-hover="9">Doc.Part</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><a href="Building-Documents/Elaboration/#Verso___Doc___Part" title="Documentation for Verso.Doc.Part"><span class="const token" data-binding="const-Verso.Doc.Part" data-verso-hover="9">Doc.Part</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>)</span><span class="unknown token" data-binding>)</span></pre><div class="docs"><p>Operations carried out after <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.2866" data-verso-hover="37">part</span></code>, when a part has metadata. It allows genre-specific rewriting
+<code class="hl lean inline" data-lean-context="docstring-examples"><a href="Manuals-and-Books/#Verso___Genre___Manual___Inline___mk" title="Documentation for Verso.Genre.Manual.Inline"><span class="const token" data-binding="const-Verso.Genre.Manual.Inline" data-verso-hover="26">Inline</span></a><span class="built-in delim token" data-binding>.</span><span class="unknown token" data-binding>other</span></code>. It may rewrite them, or have state effects.</p><div class="docstring-section" role="group" aria-labelledby="docstring-section-Instance-Constructor"><p class="docstring-section-label" id="docstring-section-Instance-Constructor">Instance Constructor</p><section class="subdocs"><pre class="name-and-type hl lean"><a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk" title="Documentation for Verso.Doc.Traverse.mk"><span class="const token" data-binding="const-Verso.Doc.Traverse.mk" data-verso-hover="27">Verso.Doc.Traverse.mk</span></a></pre><div class="docs"></div></section></div><div class="docstring-section" role="group" aria-labelledby="docstring-section-Methods"><p class="docstring-section-label" id="docstring-section-Methods">Methods</p><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.Traverse.part" data-verso-hover="28">part</span> : <span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadReader" data-verso-hover="29">MonadReader</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadState" data-verso-hover="30">MonadState</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseState"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseState" data-verso-hover="16">TraverseState</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Part" title="Documentation for Verso.Doc.Part"><span class="const token" data-binding="const-Verso.Doc.Part" data-verso-hover="9">Doc.Part</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.PartMetadata"><span class="const token" data-binding="const-Verso.Doc.Genre.PartMetadata" data-verso-hover="32">PartMetadata</span></a><span class="unknown token" data-binding>)</span></pre><div class="docs"><p>The effects carried out before traversing a <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>Part</span></code>.</p></div></section><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.Traverse.block" data-verso-hover="33">block</span> : <span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadReader" data-verso-hover="29">MonadReader</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadState" data-verso-hover="30">MonadState</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseState"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseState" data-verso-hover="16">TraverseState</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Block" title="Documentation for Verso.Doc.Block"><span class="const token" data-binding="const-Verso.Doc.Block" data-verso-hover="11">Doc.Block</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="const token" data-binding="const-Unit" data-verso-hover="34">Unit</span></pre><div class="docs"><p>The effects carried out before traversing a <code class="hl lean inline" data-lean-context="docstring-examples"><a href="Manuals-and-Books/#Verso___Genre___Manual___Block___mk" title="Documentation for Verso.Genre.Manual.Block"><span class="const token" data-binding="const-Verso.Genre.Manual.Block" data-verso-hover="25">Block</span></a></code>.</p></div></section><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.Traverse.inline" data-verso-hover="35">inline</span> : <span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadReader" data-verso-hover="29">MonadReader</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadState" data-verso-hover="30">MonadState</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseState"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseState" data-verso-hover="16">TraverseState</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Inline" title="Documentation for Verso.Doc.Inline"><span class="const token" data-binding="const-Verso.Doc.Inline" data-verso-hover="12">Doc.Inline</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="const token" data-binding="const-Unit" data-verso-hover="34">Unit</span></pre><div class="docs"><p>The effects carried out before traversing an <code class="hl lean inline" data-lean-context="docstring-examples"><a href="Manuals-and-Books/#Verso___Genre___Manual___Inline___mk" title="Documentation for Verso.Genre.Manual.Inline"><span class="const token" data-binding="const-Verso.Genre.Manual.Inline" data-verso-hover="26">Inline</span></a></code>.</p></div></section><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.Traverse.genrePart" data-verso-hover="36">genrePart</span> : <span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadReader" data-verso-hover="29">MonadReader</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text">
+  </span><span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadState" data-verso-hover="30">MonadState</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseState"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseState" data-verso-hover="16">TraverseState</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.PartMetadata"><span class="const token" data-binding="const-Verso.Doc.Genre.PartMetadata" data-verso-hover="32">PartMetadata</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Part" title="Documentation for Verso.Doc.Part"><span class="const token" data-binding="const-Verso.Doc.Part" data-verso-hover="9">Doc.Part</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><a href="Building-Documents/Elaboration/#Verso___Doc___Part" title="Documentation for Verso.Doc.Part"><span class="const token" data-binding="const-Verso.Doc.Part" data-verso-hover="9">Doc.Part</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>)</span><span class="unknown token" data-binding>)</span></pre><div class="docs"><p>Operations carried out after <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.2462" data-verso-hover="37">part</span></code>, when a part has metadata. It allows genre-specific rewriting
 of the entire part based on genre-specific metadata. This is typically used to construct a table
 of contents or permalinks, but it can in principle arbitrarily rewrite the part. If it returns
-<code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span></code>, then no rewrite is performed.</p></div></section><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.Traverse.genreBlock" data-verso-hover="39">genreBlock</span> : <span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadReader" data-verso-hover="29">MonadReader</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text">
-  </span><span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadState" data-verso-hover="30">MonadState</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseState"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseState" data-verso-hover="16">TraverseState</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.Block"><span class="const token" data-binding="const-Verso.Doc.Genre.Block" data-verso-hover="40">Block</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><a href="Building-Documents/Elaboration/#Verso___Doc___Block" title="Documentation for Verso.Doc.Block"><span class="const token" data-binding="const-Verso.Doc.Block" data-verso-hover="11">Doc.Block</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><a href="Building-Documents/Elaboration/#Verso___Doc___Block" title="Documentation for Verso.Doc.Block"><span class="const token" data-binding="const-Verso.Doc.Block" data-verso-hover="11">Doc.Block</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>)</span><span class="unknown token" data-binding>)</span></pre><div class="docs"><p>The traversal of genre-specific block values. If it returns <code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span></code>, then no rewrite is performed.</p></div></section><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.Traverse.genreInline" data-verso-hover="42">genreInline</span> : <span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadReader" data-verso-hover="29">MonadReader</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text">
-  </span><span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadState" data-verso-hover="30">MonadState</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseState"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseState" data-verso-hover="16">TraverseState</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.Inline"><span class="const token" data-binding="const-Verso.Doc.Genre.Inline" data-verso-hover="43">Inline</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><a href="Building-Documents/Elaboration/#Verso___Doc___Inline" title="Documentation for Verso.Doc.Inline"><span class="const token" data-binding="const-Verso.Doc.Inline" data-verso-hover="12">Doc.Inline</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2610" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><a href="Building-Documents/Elaboration/#Verso___Doc___Inline" title="Documentation for Verso.Doc.Inline"><span class="const token" data-binding="const-Verso.Doc.Inline" data-verso-hover="12">Doc.Inline</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2609" data-verso-hover="10">g</span><span class="unknown token" data-binding>)</span><span class="unknown token" data-binding>)</span></pre><div class="docs"><p>The traversal of genre-specific inline values. If it returns <code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span></code>, then no rewrite is performed.</p></div></section></div></div></div><div class="namedocs" id="Verso___Doc___TraversePart___mk"><span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Doc.TraversePart" title="Permalink">🔗</a></span><span class="label">type class</span><pre class="signature hl lean block"><div class="wide-only"><a href="Building-Documents/Traversal/#Verso___Doc___TraversePart___mk" title="Documentation for Verso.Doc.TraversePart"><span class="const token" data-binding="const-Verso.Doc.TraversePart" data-verso-hover="19">Verso.Doc.TraversePart</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.4986" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="1">Doc.Genre</span></a><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span></div><div class="narrow-only"><a href="Building-Documents/Traversal/#Verso___Doc___TraversePart___mk" title="Documentation for Verso.Doc.TraversePart"><span class="const token" data-binding="const-Verso.Doc.TraversePart" data-verso-hover="19">Verso.Doc.TraversePart</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.4986" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="1">Doc.Genre</span></a><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text">
-  </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span></div></pre><div class="text"><p>Specifies how to modify the context while traversing the contents of a given part.</p><div class="docstring-section" role="group" aria-labelledby="docstring-section-Instance-Constructor-next"><p class="docstring-section-label" id="docstring-section-Instance-Constructor-next">Instance Constructor</p><section class="subdocs"><pre class="name-and-type hl lean"><a href="Building-Documents/Traversal/#Verso___Doc___TraversePart___mk" title="Documentation for Verso.Doc.TraversePart.mk"><span class="const token" data-binding="const-Verso.Doc.TraversePart.mk" data-verso-hover="44">Verso.Doc.TraversePart.mk</span></a></pre><div class="docs"></div></section></div><div class="docstring-section" role="group" aria-labelledby="docstring-section-Methods-next"><p class="docstring-section-label" id="docstring-section-Methods-next">Methods</p><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.TraversePart.inPart" data-verso-hover="45">inPart</span> : <a href="Building-Documents/Elaboration/#Verso___Doc___Part" title="Documentation for Verso.Doc.Part"><span class="const token" data-binding="const-Verso.Doc.Part" data-verso-hover="9">Doc.Part</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.4971" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.4971" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.4971" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a></pre><div class="docs"><p>How to modify the context while traversing the contents of a given part. This is applied after
-<code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>part</span></code> and <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>genrePart</span></code> have rewritten the text, if applicable.</p><p>It is also used during HTML generation.</p></div></section></div></div></div><div class="namedocs" id="Verso___Doc___TraverseBlock___mk"><span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Doc.TraverseBlock.mk" title="Permalink">🔗</a></span><span class="label">type class</span><pre class="signature hl lean block"><div class="wide-only"><a href="Building-Documents/Traversal/#Verso___Doc___TraverseBlock___mk" title="Documentation for Verso.Doc.TraverseBlock"><span class="const token" data-binding="const-Verso.Doc.TraverseBlock" data-verso-hover="20">Verso.Doc.TraverseBlock</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.5336" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="1">Doc.Genre</span></a><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span></div><div class="narrow-only"><a href="Building-Documents/Traversal/#Verso___Doc___TraverseBlock___mk" title="Documentation for Verso.Doc.TraverseBlock"><span class="const token" data-binding="const-Verso.Doc.TraverseBlock" data-verso-hover="20">Verso.Doc.TraverseBlock</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.5336" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="1">Doc.Genre</span></a><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text">
-  </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span></div></pre><div class="text"><p>Specifies how to modify the context while traversing the contents of a given block.</p><div class="docstring-section" role="group" aria-labelledby="docstring-section-Instance-Constructor-next-next"><p class="docstring-section-label" id="docstring-section-Instance-Constructor-next-next">Instance Constructor</p><section class="subdocs"><pre class="name-and-type hl lean"><a href="Building-Documents/Traversal/#Verso___Doc___TraverseBlock___mk" title="Documentation for Verso.Doc.TraverseBlock.mk"><span class="const token" data-binding="const-Verso.Doc.TraverseBlock.mk" data-verso-hover="46">Verso.Doc.TraverseBlock.mk</span></a></pre><div class="docs"></div></section></div><div class="docstring-section" role="group" aria-labelledby="docstring-section-Methods-next-next"><p class="docstring-section-label" id="docstring-section-Methods-next-next">Methods</p><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.TraverseBlock.inBlock" data-verso-hover="47">inBlock</span> : <a href="Building-Documents/Elaboration/#Verso___Doc___Block" title="Documentation for Verso.Doc.Block"><span class="const token" data-binding="const-Verso.Doc.Block" data-verso-hover="11">Doc.Block</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.5321" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.5321" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.5321" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a></pre><div class="docs"><p>How to modify the context while traversing a given block.</p><p>It is also used during HTML generation.</p></div></section></div></div></div></section><nav class="prev-next-buttons"><a class="local-button active" href="Building-Documents/Compilation/#compilation" rel="prev" title="3.2. Compilation"><span class="arrow">←</span><span class="where">3.2. Compilation</span></a><a class="local-button active" href="Building-Documents/Output-Generation/#output-gen" rel="next" title="3.4. Output Generation"><span class="where">3.4. Output Generation</span><span class="arrow">→</span></a></nav></div></main></div></body></html>
+<code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span></code>, then no rewrite is performed.</p></div></section><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.Traverse.genreBlock" data-verso-hover="39">genreBlock</span> : <span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadReader" data-verso-hover="29">MonadReader</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text">
+  </span><span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadState" data-verso-hover="30">MonadState</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseState"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseState" data-verso-hover="16">TraverseState</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.Block"><span class="const token" data-binding="const-Verso.Doc.Genre.Block" data-verso-hover="40">Block</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><a href="Building-Documents/Elaboration/#Verso___Doc___Block" title="Documentation for Verso.Doc.Block"><span class="const token" data-binding="const-Verso.Doc.Block" data-verso-hover="11">Doc.Block</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><a href="Building-Documents/Elaboration/#Verso___Doc___Block" title="Documentation for Verso.Doc.Block"><span class="const token" data-binding="const-Verso.Doc.Block" data-verso-hover="11">Doc.Block</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>)</span><span class="unknown token" data-binding>)</span></pre><div class="docs"><p>The traversal of genre-specific block values. If it returns <code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span></code>, then no rewrite is performed.</p></div></section><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.Traverse.genreInline" data-verso-hover="42">genreInline</span> : <span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadReader" data-verso-hover="29">MonadReader</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text">
+  </span><span class="unknown token" data-binding>[</span><span class="const token" data-binding="const-MonadState" data-verso-hover="30">MonadState</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseState"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseState" data-verso-hover="16">TraverseState</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="unknown token" data-binding>]</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.Inline"><span class="const token" data-binding="const-Verso.Doc.Genre.Inline" data-verso-hover="43">Inline</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><a href="Building-Documents/Elaboration/#Verso___Doc___Inline" title="Documentation for Verso.Doc.Inline"><span class="const token" data-binding="const-Verso.Doc.Inline" data-verso-hover="12">Doc.Inline</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2206" data-verso-hover="21">m</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><a href="Building-Documents/Elaboration/#Verso___Doc___Inline" title="Documentation for Verso.Doc.Inline"><span class="const token" data-binding="const-Verso.Doc.Inline" data-verso-hover="12">Doc.Inline</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.2205" data-verso-hover="10">g</span><span class="unknown token" data-binding>)</span><span class="unknown token" data-binding>)</span></pre><div class="docs"><p>The traversal of genre-specific inline values. If it returns <code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-Option.none" data-verso-hover="38">none</span></code>, then no rewrite is performed.</p></div></section></div></div></div><div class="namedocs" id="Verso___Doc___TraversePart___mk"><span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Doc.TraversePart" title="Permalink">🔗</a></span><span class="label">type class</span><pre class="signature hl lean block"><div class="wide-only"><a href="Building-Documents/Traversal/#Verso___Doc___TraversePart___mk" title="Documentation for Verso.Doc.TraversePart"><span class="const token" data-binding="const-Verso.Doc.TraversePart" data-verso-hover="19">Verso.Doc.TraversePart</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.4281" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="1">Doc.Genre</span></a><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span></div><div class="narrow-only"><a href="Building-Documents/Traversal/#Verso___Doc___TraversePart___mk" title="Documentation for Verso.Doc.TraversePart"><span class="const token" data-binding="const-Verso.Doc.TraversePart" data-verso-hover="19">Verso.Doc.TraversePart</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.4281" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="1">Doc.Genre</span></a><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text">
+  </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span></div></pre><div class="text"><p>Specifies how to modify the context while traversing the contents of a given part.</p><div class="docstring-section" role="group" aria-labelledby="docstring-section-Instance-Constructor-next"><p class="docstring-section-label" id="docstring-section-Instance-Constructor-next">Instance Constructor</p><section class="subdocs"><pre class="name-and-type hl lean"><a href="Building-Documents/Traversal/#Verso___Doc___TraversePart___mk" title="Documentation for Verso.Doc.TraversePart.mk"><span class="const token" data-binding="const-Verso.Doc.TraversePart.mk" data-verso-hover="44">Verso.Doc.TraversePart.mk</span></a></pre><div class="docs"></div></section></div><div class="docstring-section" role="group" aria-labelledby="docstring-section-Methods-next"><p class="docstring-section-label" id="docstring-section-Methods-next">Methods</p><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.TraversePart.inPart" data-verso-hover="45">inPart</span> : <a href="Building-Documents/Elaboration/#Verso___Doc___Part" title="Documentation for Verso.Doc.Part"><span class="const token" data-binding="const-Verso.Doc.Part" data-verso-hover="9">Doc.Part</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.4266" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.4266" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.4266" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a></pre><div class="docs"><p>How to modify the context while traversing the contents of a given part. This is applied after
+<code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>part</span></code> and <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding>genrePart</span></code> have rewritten the text, if applicable.</p><p>It is also used during HTML generation.</p></div></section></div></div></div><div class="namedocs" id="Verso___Doc___TraverseBlock___mk"><span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Doc.TraverseBlock.mk" title="Permalink">🔗</a></span><span class="label">type class</span><pre class="signature hl lean block"><div class="wide-only"><a href="Building-Documents/Traversal/#Verso___Doc___TraverseBlock___mk" title="Documentation for Verso.Doc.TraverseBlock"><span class="const token" data-binding="const-Verso.Doc.TraverseBlock" data-verso-hover="20">Verso.Doc.TraverseBlock</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.4599" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="1">Doc.Genre</span></a><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span></div><div class="narrow-only"><a href="Building-Documents/Traversal/#Verso___Doc___TraverseBlock___mk" title="Documentation for Verso.Doc.TraverseBlock"><span class="const token" data-binding="const-Verso.Doc.TraverseBlock" data-verso-hover="20">Verso.Doc.TraverseBlock</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>(</span><span class="var token" data-binding="var-_uniq.4599" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="1">Doc.Genre</span></a><span class="unknown token" data-binding>)</span><span class="inter-text"> </span><span class="unknown token" data-binding>:</span><span class="inter-text">
+  </span><span class="sort token" data-binding="sort-4270320377459421588" data-verso-hover="2">Type</span></div></pre><div class="text"><p>Specifies how to modify the context while traversing the contents of a given block.</p><div class="docstring-section" role="group" aria-labelledby="docstring-section-Instance-Constructor-next-next"><p class="docstring-section-label" id="docstring-section-Instance-Constructor-next-next">Instance Constructor</p><section class="subdocs"><pre class="name-and-type hl lean"><a href="Building-Documents/Traversal/#Verso___Doc___TraverseBlock___mk" title="Documentation for Verso.Doc.TraverseBlock.mk"><span class="const token" data-binding="const-Verso.Doc.TraverseBlock.mk" data-verso-hover="46">Verso.Doc.TraverseBlock.mk</span></a></pre><div class="docs"></div></section></div><div class="docstring-section" role="group" aria-labelledby="docstring-section-Methods-next-next"><p class="docstring-section-label" id="docstring-section-Methods-next-next">Methods</p><section class="subdocs"><pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Doc.TraverseBlock.inBlock" data-verso-hover="47">inBlock</span> : <a href="Building-Documents/Elaboration/#Verso___Doc___Block" title="Documentation for Verso.Doc.Block"><span class="const token" data-binding="const-Verso.Doc.Block" data-verso-hover="11">Doc.Block</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.4584" data-verso-hover="10">g</span><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.4584" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a><span class="inter-text"> </span><span class="unknown token" data-binding>→</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.4584" data-verso-hover="10">g</span><span class="unknown token" data-binding>.</span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre.TraverseContext"><span class="const token" data-binding="const-Verso.Doc.Genre.TraverseContext" data-verso-hover="17">TraverseContext</span></a></pre><div class="docs"><p>How to modify the context while traversing a given block.</p><p>It is also used during HTML generation.</p></div></section></div></div></div></section><nav class="prev-next-buttons"><a class="local-button active" href="Building-Documents/Compilation/#compilation" rel="prev" title="3.2. Compilation"><span class="arrow">←</span><span class="where">3.2. Compilation</span></a><a class="local-button active" href="Building-Documents/Output-Generation/#output-gen" rel="next" title="3.4. Output Generation"><span class="where">3.4. Output Generation</span><span class="arrow">→</span></a></nav></div></main></div></body></html>

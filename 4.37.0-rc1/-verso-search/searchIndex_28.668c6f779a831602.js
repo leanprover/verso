@@ -1,0 +1,1 @@
+window.docContents[28].resolve({"/Verso-Markup/#differences-from-markdown":{"contents":"This is a quick \"cheat sheet\" for those who are used to Markdown, documenting the differences.\n\n\n\n\n\n\n\n\n\n\n\n","context":"Writing Documentation in Lean with Verso\u0009Verso Markup","header":"2.3. Differences from Markdown","id":"/Verso-Markup/#differences-from-markdown"}});
