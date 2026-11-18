@@ -19,14 +19,14 @@ const searchIndex = /** @type {{searchIndex: TextSearchIndex}} */ (/** @type {un
 /** Tokenizes the given string, computing stems.
  * @param {string} text
  * @param {ElasticLunrPipeline} pipeline
- * @returns {TextToken[]}
+ * @return {TextToken[]}
  */
 const tokenizeText = (text, pipeline) => {
     const toks = [];
     const regex = /[^\s(),."“”—:]+/g;
     let match;
     while ((match = regex.exec(text)) !== null) {
-        const stems = pipeline.run([match[0]]);
+        let stems = pipeline.run([match[0]]);
         for (const stem of stems) {
             toks.push({
                 original: match[0],
@@ -58,7 +58,7 @@ function highlightSearchTerms() {
     const regex = /\S+/g;
     let match;
     while ((match = regex.exec(searchQuery)) !== null) {
-        const stems = pipeline.run([match[0]]);
+        let stems = pipeline.run([match[0]]);
         for (const stem of stems) {
             searchTerms.set(stem.toLowerCase(), match[0]);
         }
@@ -204,7 +204,7 @@ function prevHighlight() {
 function openEnclosingDetails(elem) {
     let here = elem.parentElement;
     while (here) {
-        if (here.nodeName.toLowerCase() === "details") {
+        if (here.nodeName.toLowerCase() == "details") {
             here.setAttribute("open", "open");
             break;
         }
@@ -258,7 +258,7 @@ function updateNavigationState() {
             currentSpan.textContent = current.textContent;
             let resName = current.title;
             resName = resName.charAt(0).toLowerCase() + resName.slice(1);
-            currentCount.title = `Go to ${resName}`;
+            currentCount.title = "Go to " + resName;
             document
                 .querySelectorAll(".text-search-results")
                 .forEach((e) => e.classList.remove("focused"));
@@ -298,7 +298,7 @@ function scrollToFirstHighlightAfter(elementId) {
     }
 
     // Find the first highlight that comes after the target element in document order
-    for (const highlight of highlights) {
+    for (let highlight of highlights) {
         if (!(highlight instanceof HTMLElement)) continue;
         const position = targetElement.compareDocumentPosition(highlight);
         // Check if highlight comes after target element
@@ -379,7 +379,7 @@ function createControlButtons() {
 
 // Run the highlighter when DOM is ready
 if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
+    document.addEventListener("DOMContentLoaded", function () {
         highlightSearchTerms();
         createControlButtons();
         updateHighlightsArray();

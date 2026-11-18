@@ -251,36 +251,25 @@ const highlightTextResult = (text, query, options = {}) => {
 
     // Generate highlighted text for each snippet
     const highlightedSnippets = limitedSnippets.map((snippet) => {
-        let snippetText = text.substring(snippet.start, snippet.end);
-
-        // Adjust match positions relative to snippet start
-        const relativeMatches = snippet.matches.map((match) => ({
-            term: match.original,
-            start: match.start - snippet.start,
-            end: match.end - snippet.start,
-        }));
-
-        // Sort matches by position (descending) to avoid position shifts during replacement
-        relativeMatches.sort((a, b) => b.start - a.start);
-
-        // Apply highlighting
-        for (const match of relativeMatches) {
-            const before = snippetText.substring(0, match.start);
-            const highlighted = `<em>${match.term}</em>`;
-            const after = snippetText.substring(match.end);
-            snippetText = before + highlighted + after;
+        // Matches are in document order, so the text between them can be copied in sequence.
+        const m = document.createElement("span");
+        let pos = snippet.start;
+        for (const match of snippet.matches) {
+            if (match.start < pos) continue;
+            m.append(text.substring(pos, match.start));
+            const em = document.createElement("em");
+            em.textContent = text.substring(match.start, match.end);
+            m.append(em);
+            pos = match.end;
         }
+        m.append(text.substring(pos, snippet.end));
 
         // Add ellipses
         const prefix = snippet.start > 0 ? " …" : "";
         const suffix = snippet.end < text.length ? "… " : "";
 
         const elem = document.createElement("span");
-        elem.appendChild(document.createTextNode(prefix));
-        const m = document.createElement("span");
-        m.innerHTML = snippetText;
-        elem.appendChild(m);
-        elem.appendChild(document.createTextNode(suffix));
+        elem.append(prefix, m, suffix);
         return elem;
     });
 
