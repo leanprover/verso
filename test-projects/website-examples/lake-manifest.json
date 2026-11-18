@@ -1,11 +1,12 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "packagesDir": ".lake/packages",
   "packages": [
     {
       "url": "https://github.com/leanprover/subverso",
       "type": "git",
       "subDir": null,
+      "scope": "",
       "rev": "37ba4687eeb97bf7243dcc8a4c2694f71c67793c",
       "name": "subverso",
       "manifestFile": "lake-manifest.json",
@@ -15,5 +16,6 @@
     }
   ],
   "name": "examples",
-  "lakeDir": ".lake"
+  "lakeDir": ".lake",
+  "fixedToolchain": false
 }

@@ -91,7 +91,7 @@ meta def ValDesc.documentableName : ValDesc m (Ident × Name) where
             m!"Set option 'verso.docstring.allowDeprecated' to '{true}' to allow documentation for deprecated names."
       else
         -- Defer to default Lean deprecation warnings and settings if it's not a hard error
-        Lean.Linter.checkDeprecated x false
+        Lean.Linter.checkDeprecated x .none
       pure (n, x)
     | other => throwError "Expected identifier, got {other}"
 
@@ -1197,7 +1197,7 @@ meta def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : Do
     let cctx : Command.Context := { fileName := ← getFileName, fileMap := FileMap.ofString str, snap? := none, cancelTk? := none}
 
     let mut cmdState : Command.State := {env := ← getEnv, maxRecDepth := ← MonadRecDepth.getMaxRecDepth, scopes := [{header := ""}]}
-    let mut pstate := { pos := 0, recovering := false, hasLeading := false}
+    let mut pstate := { pos := 0, recovering := false, leadingStartPos? := none}
     let mut cmds := #[]
 
     repeat

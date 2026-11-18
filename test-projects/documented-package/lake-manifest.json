@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "packagesDir": ".lake/packages",
   "packages": [
     {
@@ -16,5 +16,6 @@
     }
   ],
   "name": "«zipper-example»",
-  "lakeDir": ".lake"
+  "lakeDir": ".lake",
+  "fixedToolchain": false
 }
