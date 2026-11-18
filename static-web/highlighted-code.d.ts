@@ -22,6 +22,8 @@ interface TippyProps {
 
 declare function tippy(targets: Element | Element[], props: TippyProps): unknown;
 
+declare function versoRenderMath(root: ParentNode): void;
+
 interface Element {
     _tippy?: TippyInstance;
 }

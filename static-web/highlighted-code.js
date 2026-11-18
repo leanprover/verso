@@ -1,5 +1,3 @@
-/* global tippy, versoRenderMath */
-
 window.onload = async () => {
     /**
      * @param {Element} tactic
@@ -178,10 +176,6 @@ window.onload = async () => {
 
     /** @type {TippyProps} */
     const defaultTippyProps = {
-        /* DEBUG -- remove the space: * /
-      onHide(any) { return false; },
-      trigger: "click",
-      // */
         /* theme: "lean", */
         maxWidth: "none",
         appendTo: () => document.body,
@@ -247,7 +241,6 @@ window.onload = async () => {
                     content.appendChild(hoverInfo.cloneNode(true));
                 }
                 if (hoverId) {
-                    // TODO stop doing an implicit conversion from string to number here
                     content.appendChild(docHoverContent(hoverId));
                 }
                 if (hoverInfo && hoverId) {

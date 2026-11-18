@@ -20,6 +20,12 @@ export default [
         },
     },
     {
+        files: ["static-web/highlighted-code.js"],
+        languageOptions: {
+            globals: { tippy: "readonly", versoRenderMath: "readonly" },
+        },
+    },
+    {
         files: ["static-web/search/search-*.js"],
         ignores: ["static-web/search/search-highlight.js"],
         languageOptions: { sourceType: "module" },
