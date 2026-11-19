@@ -33,25 +33,60 @@ jobs:
                   # it to the script as RELEASE_NOTES_BASE.
                   fetch-depth: 2
 
-            - name: Install subproject toolchains
-              run: |
-                  find . -name lean-toolchain -type f -not -path './.*' | while read -r f; do
-                      elan toolchain install "$(cat "$f")"
-                  done
-
             - name: List all files
               run: |
                   find . -name "*.lean" -type f
 
-            - name: lean version
-              run: |
-                  lean --version
+            # The installs and cache restores that are marked `background` run while the
+            # toolchains install and the project builds. A `wait` step that names a background
+            # step blocks until it finishes, fails if it failed, and makes its changes to the
+            # PATH visible to the steps that follow.
+            - name: Install PDF Dependencies
+              id: texlive
+              uses: $/.github/actions/install-texlive
+              background: true
+
+            # Inkscape is needed by the LaTeX `svg` package, which converts
+            # SVG files emitted by `diagram` code blocks to PDF at build time.
+            - name: Install Inkscape
+              id: inkscape
+              run: sudo apt-get update && sudo apt-get install -y --no-install-recommends inkscape
+              background: true
+
+            - name: Install uv
+              id: uv
+              uses: astral-sh/setup-uv@v10.3.3
+              with:
+                  enable-cache: true
+                  cache-dependency-glob: "browser-tests/pyproject.toml"
+              background: true
+
+            - name: Cache Playwright browsers
+              id: playwright-cache
+              uses: actions/cache@v6.1.0
+              with:
+                  path: .playwright-browsers
+                  key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
+              background: true
+
+            - uses: actions/setup-node@v7.1.0
+              id: node
+              with:
+                  node-version: "lts/*"
+                  cache: npm
+              background: true
+
+            - name: Install linkchecker
+              id: linkchecker
+              run: pip install linkchecker
+              background: true
 
             - name: Compute short SHA
               id: shortSHA
               run: echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
             - name: Cache .lake
+              id: lake-cache
               uses: actions/cache@v6.1.0
               with:
                   path: .lake
@@ -62,6 +97,73 @@ jobs:
                   # Try to restore cache for same OS/Lean/deps, but don't get less specific, because Lake isn't always happy to get build product version mismatches
                   restore-keys: |
                       ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}-
+              background: true
+
+            - name: Cache literate-config test project
+              id: literate-config-cache
+              uses: actions/cache@v6.1.0
+              with:
+                  path: test-projects/literate-config/.lake
+                  key:
+                      literate-config-${{ runner.os }}-${{
+                      hashFiles('test-projects/literate-config/lean-toolchain') }}-${{
+                      hashFiles('test-projects/literate-config/lake-manifest.json') }}-${{
+                      steps.shortSHA.outputs.short_sha }}
+                  restore-keys: |
+                      literate-config-${{ runner.os }}-${{ hashFiles('test-projects/literate-config/lean-toolchain') }}-${{ hashFiles('test-projects/literate-config/lake-manifest.json') }}-
+              background: true
+
+            - name: Cache literate-multi-root test project
+              id: literate-multi-root-cache
+              uses: actions/cache@v6.1.0
+              with:
+                  path: test-projects/literate-multi-root/.lake
+                  key:
+                      literate-multi-root-${{ runner.os }}-${{
+                      hashFiles('test-projects/literate-multi-root/lean-toolchain') }}-${{
+                      hashFiles('test-projects/literate-multi-root/lake-manifest.json') }}-${{
+                      steps.shortSHA.outputs.short_sha }}
+                  restore-keys: |
+                      literate-multi-root-${{ runner.os }}-${{ hashFiles('test-projects/literate-multi-root/lean-toolchain') }}-${{ hashFiles('test-projects/literate-multi-root/lake-manifest.json') }}-
+              background: true
+
+            # Directories whose names start with a dot are skipped at every depth. The caches
+            # that are being restored put the `lean-toolchain` files of dependencies there.
+            - name: Install subproject toolchains
+              run: |
+                  find . -name lean-toolchain -type f -not -path '*/.*' | while read -r f; do
+                      elan toolchain install "$(cat "$f")"
+                  done
+
+            - name: lean version
+              run: |
+                  lean --version
+
+            # The caches are in place before Lake runs. The Playwright and npm installs below
+            # use uv and Node, and the Playwright install runs `apt-get`, which the Inkscape
+            # install has finished using.
+            - name: Wait for the caches and the first installs
+              wait:
+                  [
+                      lake-cache,
+                      literate-config-cache,
+                      literate-multi-root-cache,
+                      inkscape,
+                      uv,
+                      playwright-cache,
+                      node,
+                  ]
+
+            - name: Install Playwright browsers
+              id: playwright
+              run: |
+                  uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
+              background: true
+
+            - name: Install npm packages
+              id: npm
+              run: npm ci
+              background: true
 
             # This was failing CI from clang crashing, so do it first for fast turnaround
             - name: Build the website examples subproject
@@ -138,31 +240,8 @@ jobs:
                   fi
                   lake lean scripts/release_notes.lean
 
-            - name: Install PDF Dependencies
-              uses: $/.github/actions/install-texlive
-
-            # Inkscape is needed by the LaTeX `svg` package, which converts
-            # SVG files emitted by `diagram` code blocks to PDF at build time.
-            - name: Install Inkscape
-              run: sudo apt-get update && sudo apt-get install -y --no-install-recommends inkscape
-
-            # Install uv and Playwright before tests, since lake test
-            # runs literate browser tests that need them
-            - name: Install uv
-              uses: astral-sh/setup-uv@v10.3.3
-              with:
-                  enable-cache: true
-                  cache-dependency-glob: "browser-tests/pyproject.toml"
-
-            - name: Cache Playwright browsers
-              uses: actions/cache@v6.1.0
-              with:
-                  path: .playwright-browsers
-                  key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
-
-            - name: Install Playwright browsers
-              run: |
-                  uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
+            - name: Wait for the remaining installs
+              wait: [texlive, playwright, npm, linkchecker]
 
             # The LaTeX `svg` package shells out to `inkscape --version` during
             # the `--check-tex` build. Fail here with a clear message if Inkscape
@@ -172,10 +251,157 @@ jobs:
               run: |
                   inkscape --version
 
-            - name: Run tests
-              id: tests
+            - name: Test the dev server
               run: |
-                  lake test -- --test-options --verbose --wfail --junit=errata-report.xml --markdown=errata-summary.md -- --check-tex
+                  ./src/tests/run_serve_test.sh
+
+            # The steps from here to the parallel group generate every site that the group
+            # reads. They run one at a time, so that one Lake process at a time builds in a
+            # workspace.
+            - name: Generate the test website
+              run: |
+                  lake run versoMain test-projects/website/DemoSiteMain.lean --output _out/test-projects/demosite
+
+            - name: Generate the test genre's document
+              run: |
+                  lake run versoMain test-projects/custom-genre/SimplePageMain.lean
+
+            - name: Generate some source HTML
+              run: |
+                  lake build Verso.Hover:literate
+                  lake exe verso-html .lake/build/literate htmlout
+
+            - name: Generate the test tutorial site
+              run: |
+                  lake run versoMain test-projects/tutorial-test/TutorialExampleMain.lean
+
+            - name: Generate the manual
+              run: |
+                  ./generate.sh
+                  cp _out/tex/main.pdf ./manual.pdf
+                  cp -r _out/html-multi html-multi
+                  cp README-html.md html-multi/README.md
+                  zip -r html-manual.zip html-multi
+
+            - name: Generate the demo site and make sure page_link works
+              run: |
+                  lake run versoMain test-projects/website/DemoSiteMain.lean --output _out/demosite
+                  # Fail if the generated about page doesn't have the expected base tag and blog link
+                  grep -qF '<a href="blog/">blog</a> genre' _out/demosite/about/index.html
+                  grep -qF '<base href=".././"/>' _out/demosite/about/index.html
+
+            # The sites are copied to `_out/literate-sites`, which is where the browser tests
+            # read them.
+            - name: Build the literate sites for browser tests
+              run: src/tests/run_literate_browser_tests.sh build
+
+            - name: Build the VersoHtml site for browser tests
+              run: |
+                  # The verso-html genre renders literate JSON into a standalone HTML site.
+                  # We reuse the literate-config test project (already cached) as input, then
+                  # run verso-html against its literate-JSON output.
+                  pushd test-projects/literate-config
+                  lake build +LitConfig:literate
+                  popd
+                  lake exe verso-html test-projects/literate-config/.lake/build/literate _out/verso-html
+
+            - name: Build the package-manual site for browser tests
+              run: |
+                  lake run versoMain test-projects/package-manual/PackageManualMain.lean --output _out/package-manual
+
+            # The steps in this group run at the same time, and the job continues once all of
+            # them have finished. A step that fails leaves the others running, and fails the
+            # job when the group ends.
+            #
+            # The browser suites and the link checks read sites in `_out`, which the steps
+            # above have completed and which the group leaves unchanged. `lake test` builds in
+            # the root workspace and in the literate test projects, and the widget tests build
+            # in `test-projects/errata-widget`.
+            - parallel:
+                  - name: Run tests
+                    run: |
+                        lake test -- --test-options --verbose --wfail --junit=errata-report.xml --markdown=errata-summary.md -- --check-tex
+
+                  # These tests show the widget in the real InfoView, which `npm ci` installs.
+                  # pytest runs them only when `-m errata_widget` selects them.
+                  - name: Run the run-test widget's browser tests
+                    run: |
+                        uv run --project browser-tests --extra test pytest browser-tests/errata-widget -m errata_widget -v
+
+                  - name: Run literate browser tests
+                    run: src/tests/run_literate_browser_tests.sh test literate-config
+
+                  - name: Run multi-root literate browser tests
+                    run: src/tests/run_literate_browser_tests.sh test literate-multi-root
+
+                  - name: Run browser tests
+                    run: |
+                        uv run --project browser-tests --extra test pytest \
+                          browser-tests/test_search.py \
+                          browser-tests/test_search_priority.py \
+                          browser-tests/test_search_page.py \
+                          browser-tests/test_search_highlight.py \
+                          browser-tests/test_search_path_prefix.py \
+                          browser-tests/test_toc_resize.py \
+                          browser-tests/test_redirect.py \
+                          browser-tests/test_katex.py -v
+
+                  - name: Run VersoHtml browser tests
+                    run: |
+                        uv run --project browser-tests --extra test pytest \
+                          browser-tests/verso-html -v \
+                          --site-dir "$(pwd)/_out/verso-html"
+
+                  - name: Run package-manual browser tests
+                    run: |
+                        uv run --project browser-tests --extra test pytest \
+                          browser-tests/package-manual -v \
+                          --site-dir "$(pwd)/_out/package-manual/html-multi"
+
+                  - name: Check internal links on the test website
+                    run: |
+                        linkchecker --config=.linkchecker/linkcheckerrc --no-status ./_out/test-projects/demosite/
+
+                  - name: Check internal links on the test tutorial site
+                    run: |
+                        linkchecker --config=.linkchecker/linkcheckerrc --no-status ./_out/tut/
+
+                  - name: Type check the search bar code
+                    run: |
+                        pushd _out/html-multi/-verso-search
+                        npx tsc --noEmit -p jsconfig.json
+                        popd
+
+                  - name: Type check the page scripts
+                    run: |
+                        pushd static-web
+                        npx tsc --noEmit -p jsconfig.json
+                        popd
+
+                  - name: Lint the page scripts
+                    run: npm run lint
+
+                  # The widget is checked against the React and InfoView declarations that
+                  # `npm ci` installs, which are the versions the InfoView runs it with.
+                  - name: Type check the run-test widget JS code
+                    run: npm run typecheck:widget
+
+                  - name: Check the ToC width storage key stays in sync
+                    run: |
+                        # toc-resize.js and toc-resize-preload.js must agree on the localStorage
+                        # key, since the preload primes the value the main script later reads.
+                        main_key=$(grep -oE 'STORAGE_KEY = "[^"]+"' static-web/toc-resize.js | grep -oE '"[^"]+"')
+                        preload_key=$(grep -oE 'getItem\("[^"]+"\)' static-web/toc-resize-preload.js | grep -oE '"[^"]+"')
+                        echo "toc-resize.js storage key:         ${main_key:-<none>}"
+                        echo "toc-resize-preload.js storage key: ${preload_key:-<none>}"
+                        if [ -z "$main_key" ] || [ -z "$preload_key" ]; then
+                            echo "::error::Could not find the ToC width storage key in one of the scripts" >&2
+                            exit 1
+                        fi
+                        if [ "$main_key" != "$preload_key" ]; then
+                            echo "::error::ToC width localStorage key differs between toc-resize.js and toc-resize-preload.js" >&2
+                            exit 1
+                        fi
 
             - name: Add test results to the job summary
               if: always()
@@ -188,9 +414,9 @@ jobs:
             # passed or failed, and a build that fails first leaves it unwritten.
             - name: Publish the JUnit test report
               if:
-                  always() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure')
-                  && hashFiles('errata-report.xml') != '' && (github.event_name != 'pull_request' ||
-                  github.event.pull_request.head.repo.full_name == github.repository)
+                  always() && hashFiles('errata-report.xml') != '' && (github.event_name !=
+                  'pull_request' || github.event.pull_request.head.repo.full_name ==
+                  github.repository)
               uses: dorny/test-reporter@v3.2.0
               with:
                   name: Errata tests
@@ -207,169 +433,6 @@ jobs:
                       errata-report.xml
                       errata-summary.md
                   if-no-files-found: ignore
-
-            - name: Test the dev server
-              run: |
-                  ./src/tests/run_serve_test.sh
-
-            - name: Generate the test website
-              run: |
-                  lake run versoMain test-projects/website/DemoSiteMain.lean --output _out/test-projects/demosite
-
-            - name: Generate the test genre's document
-              run: |
-                  lake run versoMain test-projects/custom-genre/SimplePageMain.lean
-
-            - name: Generate some source HTML
-              run: |
-                  lake build Verso.Hover:literate
-                  lake exe verso-html .lake/build/literate htmlout
-
-            - name: Install linkchecker
-              run: pip install linkchecker
-
-            - name: Check internal links on the test website
-              run: |
-                  linkchecker --config=.linkchecker/linkcheckerrc --no-status ./_out/test-projects/demosite/
-
-            - name: Generate the test tutorial site
-              run: |
-                  lake run versoMain test-projects/tutorial-test/TutorialExampleMain.lean
-
-            - name: Check internal links on the test tutorial site
-              run: |
-                  linkchecker --config=.linkchecker/linkcheckerrc --no-status ./_out/tut/
-
-            - name: Generate the manual
-              run: |
-                  ./generate.sh
-                  cp _out/tex/main.pdf ./manual.pdf
-                  cp -r _out/html-multi html-multi
-                  cp README-html.md html-multi/README.md
-                  zip -r html-manual.zip html-multi
-
-            - uses: actions/setup-node@v7.1.0
-              with:
-                  node-version: "lts/*"
-                  cache: npm
-
-            - run: npm ci
-
-            - name: Type check the search bar code
-              run: |
-                  pushd _out/html-multi/-verso-search
-                  npx tsc --noEmit -p jsconfig.json
-                  popd
-
-            - name: Type check the page scripts
-              run: |
-                  pushd static-web
-                  npx tsc --noEmit -p jsconfig.json
-                  popd
-
-            - name: Lint the page scripts
-              run: npm run lint
-
-            # The widget is checked against the React and InfoView declarations that `npm ci`
-            # installs, which are the versions the InfoView runs it with.
-            - name: Type check the run-test widget JS code
-              run: npm run typecheck:widget
-
-            # These tests show the widget in the real InfoView, which `npm ci` installs. pytest runs
-            # them only when `-m errata_widget` selects them.
-            - name: Run the run-test widget's browser tests
-              run: |
-                  uv run --project browser-tests --extra test pytest browser-tests/errata-widget -m errata_widget -v
-
-            - name: Check the ToC width storage key stays in sync
-              run: |
-                  # toc-resize.js and toc-resize-preload.js must agree on the localStorage
-                  # key, since the preload primes the value the main script later reads.
-                  main_key=$(grep -oE 'STORAGE_KEY = "[^"]+"' static-web/toc-resize.js | grep -oE '"[^"]+"')
-                  preload_key=$(grep -oE 'getItem\("[^"]+"\)' static-web/toc-resize-preload.js | grep -oE '"[^"]+"')
-                  echo "toc-resize.js storage key:         ${main_key:-<none>}"
-                  echo "toc-resize-preload.js storage key: ${preload_key:-<none>}"
-                  if [ -z "$main_key" ] || [ -z "$preload_key" ]; then
-                      echo "::error::Could not find the ToC width storage key in one of the scripts" >&2
-                      exit 1
-                  fi
-                  if [ "$main_key" != "$preload_key" ]; then
-                      echo "::error::ToC width localStorage key differs between toc-resize.js and toc-resize-preload.js" >&2
-                      exit 1
-                  fi
-
-            - name: Generate the demo site and make sure page_link works
-              run: |
-                  lake run versoMain test-projects/website/DemoSiteMain.lean --output _out/demosite
-                  # Fail if the generated about page doesn't have the expected base tag and blog link
-                  grep -qF '<a href="blog/">blog</a> genre' _out/demosite/about/index.html
-                  grep -qF '<base href=".././"/>' _out/demosite/about/index.html
-
-            # uv and Playwright are installed before `lake test` above.
-            - name: Cache literate-config test project
-              uses: actions/cache@v6.1.0
-              with:
-                  path: test-projects/literate-config/.lake
-                  key:
-                      literate-config-${{ runner.os }}-${{
-                      hashFiles('test-projects/literate-config/lean-toolchain') }}-${{
-                      hashFiles('test-projects/literate-config/lake-manifest.json') }}-${{
-                      steps.shortSHA.outputs.short_sha }}
-                  restore-keys: |
-                      literate-config-${{ runner.os }}-${{ hashFiles('test-projects/literate-config/lean-toolchain') }}-${{ hashFiles('test-projects/literate-config/lake-manifest.json') }}-
-
-            - name: Cache literate-multi-root test project
-              uses: actions/cache@v6.1.0
-              with:
-                  path: test-projects/literate-multi-root/.lake
-                  key:
-                      literate-multi-root-${{ runner.os }}-${{
-                      hashFiles('test-projects/literate-multi-root/lean-toolchain') }}-${{
-                      hashFiles('test-projects/literate-multi-root/lake-manifest.json') }}-${{
-                      steps.shortSHA.outputs.short_sha }}
-                  restore-keys: |
-                      literate-multi-root-${{ runner.os }}-${{ hashFiles('test-projects/literate-multi-root/lean-toolchain') }}-${{ hashFiles('test-projects/literate-multi-root/lake-manifest.json') }}-
-
-            - name: Run literate browser tests
-              run: src/tests/run_literate_browser_tests.sh
-
-            - name: Run browser tests
-              run: |
-                  uv run --project browser-tests --extra test pytest \
-                    browser-tests/test_search.py \
-                    browser-tests/test_search_priority.py \
-                    browser-tests/test_search_page.py \
-                    browser-tests/test_search_highlight.py \
-                    browser-tests/test_search_path_prefix.py \
-                    browser-tests/test_toc_resize.py \
-                    browser-tests/test_redirect.py \
-                    browser-tests/test_katex.py -v
-
-            - name: Build the VersoHtml site for browser tests
-              run: |
-                  # The verso-html genre renders literate JSON into a standalone HTML site.
-                  # We reuse the literate-config test project (already cached) as input, then
-                  # run verso-html against its literate-JSON output.
-                  pushd test-projects/literate-config
-                  lake build +LitConfig:literate
-                  popd
-                  lake exe verso-html test-projects/literate-config/.lake/build/literate _out/verso-html
-
-            - name: Run VersoHtml browser tests
-              run: |
-                  uv run --project browser-tests --extra test pytest \
-                    browser-tests/verso-html -v \
-                    --site-dir "$(pwd)/_out/verso-html"
-
-            - name: Build the package-manual site for browser tests
-              run: |
-                  lake run versoMain test-projects/package-manual/PackageManualMain.lean --output _out/package-manual
-
-            - name: Run package-manual browser tests
-              run: |
-                  uv run --project browser-tests --extra test pytest \
-                    browser-tests/package-manual -v \
-                    --site-dir "$(pwd)/_out/package-manual/html-multi"
 
             - name: Upload docs to artifact storage
               if: github.ref != 'refs/heads/main'
