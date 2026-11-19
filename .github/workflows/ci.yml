@@ -99,6 +99,8 @@ jobs:
                       ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}-
               background: true
 
+            # The literate test projects get their manifests from `lake update`, so the keys of
+            # their caches use the root manifest, which pins the dependencies that they share.
             - name: Cache literate-config test project
               id: literate-config-cache
               uses: actions/cache@v6.1.0
@@ -107,10 +109,9 @@ jobs:
                   key:
                       literate-config-${{ runner.os }}-${{
                       hashFiles('test-projects/literate-config/lean-toolchain') }}-${{
-                      hashFiles('test-projects/literate-config/lake-manifest.json') }}-${{
-                      steps.shortSHA.outputs.short_sha }}
+                      hashFiles('lake-manifest.json') }}-${{ steps.shortSHA.outputs.short_sha }}
                   restore-keys: |
-                      literate-config-${{ runner.os }}-${{ hashFiles('test-projects/literate-config/lean-toolchain') }}-${{ hashFiles('test-projects/literate-config/lake-manifest.json') }}-
+                      literate-config-${{ runner.os }}-${{ hashFiles('test-projects/literate-config/lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-
               background: true
 
             - name: Cache literate-multi-root test project
@@ -121,10 +122,9 @@ jobs:
                   key:
                       literate-multi-root-${{ runner.os }}-${{
                       hashFiles('test-projects/literate-multi-root/lean-toolchain') }}-${{
-                      hashFiles('test-projects/literate-multi-root/lake-manifest.json') }}-${{
-                      steps.shortSHA.outputs.short_sha }}
+                      hashFiles('lake-manifest.json') }}-${{ steps.shortSHA.outputs.short_sha }}
                   restore-keys: |
-                      literate-multi-root-${{ runner.os }}-${{ hashFiles('test-projects/literate-multi-root/lean-toolchain') }}-${{ hashFiles('test-projects/literate-multi-root/lake-manifest.json') }}-
+                      literate-multi-root-${{ runner.os }}-${{ hashFiles('test-projects/literate-multi-root/lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-
               background: true
 
             # Directories whose names start with a dot are skipped at every depth. The caches
@@ -139,20 +139,20 @@ jobs:
               run: |
                   lean --version
 
-            # The caches are in place before Lake runs. The Playwright and npm installs below
-            # use uv and Node, and the Playwright install runs `apt-get`, which the Inkscape
-            # install has finished using.
-            - name: Wait for the caches and the first installs
-              wait:
-                  [
-                      lake-cache,
-                      literate-config-cache,
-                      literate-multi-root-cache,
-                      inkscape,
-                      uv,
-                      playwright-cache,
-                      node,
-                  ]
+            - name: Wait for the Lake caches
+              wait: [lake-cache, literate-config-cache, literate-multi-root-cache]
+
+            # This was failing CI from clang crashing, so do it first for fast turnaround
+            - name: Build the website examples subproject
+              run: |
+                  pushd test-projects/website-examples
+                  lake build
+                  popd
+
+            # The Playwright and npm installs below use uv and Node, and the Playwright install
+            # runs `apt-get`, which the Inkscape install has finished using.
+            - name: Wait for the first installs
+              wait: [inkscape, uv, playwright-cache, node]
 
             - name: Install Playwright browsers
               id: playwright
@@ -164,13 +164,6 @@ jobs:
               id: npm
               run: npm ci
               background: true
-
-            # This was failing CI from clang crashing, so do it first for fast turnaround
-            - name: Build the website examples subproject
-              run: |
-                  pushd test-projects/website-examples
-                  lake build
-                  popd
 
             - name: Check for orphaned modules
               run: |
@@ -258,32 +251,56 @@ jobs:
             # The steps from here to the parallel group generate every site that the group
             # reads. They run one at a time, so that one Lake process at a time builds in a
             # workspace.
+            #
+            # Each of them continues on error, so that the remaining sites are generated and
+            # the tests run and report their results. The step named "Check that every site
+            # was generated" fails the job for a step that failed here.
             - name: Generate the test website
+              id: test-website
+              continue-on-error: true
               run: |
                   lake run versoMain test-projects/website/DemoSiteMain.lean --output _out/test-projects/demosite
 
             - name: Generate the test genre's document
+              id: test-genre-document
+              continue-on-error: true
               run: |
                   lake run versoMain test-projects/custom-genre/SimplePageMain.lean
 
             - name: Generate some source HTML
+              id: source-html
+              continue-on-error: true
               run: |
                   lake build Verso.Hover:literate
                   lake exe verso-html .lake/build/literate htmlout
 
             - name: Generate the test tutorial site
+              id: tutorial-site
+              continue-on-error: true
               run: |
                   lake run versoMain test-projects/tutorial-test/TutorialExampleMain.lean
 
-            - name: Generate the manual
+            - name: Generate the manual's HTML and TeX source
+              id: manual-html
+              continue-on-error: true
               run: |
-                  ./generate.sh
-                  cp _out/tex/main.pdf ./manual.pdf
+                  ./generate.sh html
                   cp -r _out/html-multi html-multi
                   cp README-html.md html-multi/README.md
                   zip -r html-manual.zip html-multi
 
+            # LaTeX runs while the remaining sites are generated.
+            - name: Generate the manual's PDF
+              id: manual-pdf
+              continue-on-error: true
+              run: |
+                  ./generate.sh pdf
+                  cp _out/tex/main.pdf ./manual.pdf
+              background: true
+
             - name: Generate the demo site and make sure page_link works
+              id: demo-site
+              continue-on-error: true
               run: |
                   lake run versoMain test-projects/website/DemoSiteMain.lean --output _out/demosite
                   # Fail if the generated about page doesn't have the expected base tag and blog link
@@ -293,9 +310,13 @@ jobs:
             # The sites are copied to `_out/literate-sites`, which is where the browser tests
             # read them.
             - name: Build the literate sites for browser tests
+              id: literate-sites
+              continue-on-error: true
               run: src/tests/run_literate_browser_tests.sh build
 
             - name: Build the VersoHtml site for browser tests
+              id: verso-html-site
+              continue-on-error: true
               run: |
                   # The verso-html genre renders literate JSON into a standalone HTML site.
                   # We reuse the literate-config test project (already cached) as input, then
@@ -306,17 +327,28 @@ jobs:
                   lake exe verso-html test-projects/literate-config/.lake/build/literate _out/verso-html
 
             - name: Build the package-manual site for browser tests
+              id: package-manual-site
+              continue-on-error: true
               run: |
                   lake run versoMain test-projects/package-manual/PackageManualMain.lean --output _out/package-manual
 
-            # The steps in this group run at the same time, and the job continues once all of
-            # them have finished. A step that fails leaves the others running, and fails the
-            # job when the group ends.
+            # The widget builds this executable in the root workspace when it runs a test. It is
+            # built here so that the widget's browser tests find it up to date.
+            - name: Build the widget's test runner
+              run: lake build errata-run-one
+
+            # The PDF is finished before `lake test` starts its own LaTeX runs.
+            - name: Wait for the manual's PDF
+              wait: manual-pdf
+
+            # The steps in this group run concurrently, ten at a time, and the job continues
+            # once all of them have finished. A step that fails leaves the others running, and
+            # fails the job when the group ends.
             #
             # The browser suites and the link checks read sites in `_out`, which the steps
-            # above have completed and which the group leaves unchanged. `lake test` builds in
-            # the root workspace and in the literate test projects, and the widget tests build
-            # in `test-projects/errata-widget`.
+            # above have completed and which the group leaves unchanged. `lake test` is the
+            # only step in the group that builds in the root workspace and in the literate test
+            # projects. The widget tests build in `test-projects/errata-widget`.
             - parallel:
                   - name: Run tests
                     run: |
@@ -433,6 +465,30 @@ jobs:
                       errata-report.xml
                       errata-summary.md
                   if-no-files-found: ignore
+
+            # A step that continues on error has the outcome `failure` and the conclusion
+            # `success`. The manual's PDF is also checked directly, because its step runs in
+            # the background. That step has finished by now: "Wait for the manual's PDF" comes
+            # before the parallel group, and a `wait` step runs whether or not earlier steps
+            # failed.
+            - name: Check that every site was generated
+              if: ${{ !cancelled() }}
+              env:
+                  STEPS: ${{ toJSON(steps) }}
+                  MANUAL_HTML: ${{ steps.manual-html.outcome }}
+              run: |
+                  failed="$(jq -r 'to_entries[] | select(.value.outcome == "failure" and .value.conclusion == "success") | .key' <<<"$STEPS" | paste -sd' ' -)"
+                  if [ "$MANUAL_HTML" = success ] && [ ! -f manual.pdf ]; then
+                      case " $failed " in
+                          *" manual-pdf "*) ;;
+                          *) failed="${failed:+$failed }manual-pdf" ;;
+                      esac
+                  fi
+                  if [ -n "$failed" ]; then
+                      echo "::error::These site generation steps failed: $failed"
+                      exit 1
+                  fi
+                  echo "Every site was generated."
 
             - name: Upload docs to artifact storage
               if: github.ref != 'refs/heads/main'

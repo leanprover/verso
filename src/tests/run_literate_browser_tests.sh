@@ -54,7 +54,7 @@ test_site() {
 
     describe "$project"
     if [[ ! -d "$site_dir" ]]; then
-        echo "No site at ${site_dir}; run '$0 build' first" >&2
+        echo "${site_dir} doesn't exist; run '$0 build' first" >&2
         exit 1
     fi
 
@@ -64,13 +64,17 @@ test_site() {
     echo "  ${label} browser tests passed!"
 }
 
+build_sites() {
+    for project in "${PROJECTS[@]}"; do build_site "$project"; done
+}
+
 case "${1:-all}" in
     all)
-        for project in "${PROJECTS[@]}"; do build_site "$project"; done
+        build_sites
         for project in "${PROJECTS[@]}"; do test_site "$project"; done
         ;;
     build)
-        for project in "${PROJECTS[@]}"; do build_site "$project"; done
+        build_sites
         ;;
     test)
         if [[ $# -ne 2 ]]; then
