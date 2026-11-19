@@ -5,7 +5,9 @@ set -euo pipefail
 #
 #   run_literate_browser_tests.sh               build every site, then test each one
 #   run_literate_browser_tests.sh build         build every site
-#   run_literate_browser_tests.sh test PROJECT  test the site that was built for PROJECT
+#   run_literate_browser_tests.sh test PROJECT [PYTEST_ARG...]
+#                                               test the site that was built for PROJECT,
+#                                               passing the remaining arguments to pytest
 #
 # Each test project is built via `lake query :literateHtml` (which builds and
 # prints the output path). The site is then copied to `_out/literate-sites`,
@@ -51,6 +53,7 @@ build_site() {
 test_site() {
     local project="$1"
     local site_dir="${SITES_DIR}/${project}"
+    shift
 
     describe "$project"
     if [[ ! -d "$site_dir" ]]; then
@@ -60,7 +63,7 @@ test_site() {
 
     echo "Running ${label} browser tests against ${site_dir}..."
     uv run --project browser-tests --extra test \
-        pytest "$test_dir" -v --site-dir "$(pwd)/${site_dir}"
+        pytest "$test_dir" -v --site-dir "$(pwd)/${site_dir}" "$@"
     echo "  ${label} browser tests passed!"
 }
 
@@ -77,14 +80,15 @@ case "${1:-all}" in
         build_sites
         ;;
     test)
-        if [[ $# -ne 2 ]]; then
-            echo "usage: $0 test PROJECT" >&2
+        if [[ $# -lt 2 ]]; then
+            echo "usage: $0 test PROJECT [PYTEST_ARG...]" >&2
             exit 1
         fi
-        test_site "$2"
+        shift
+        test_site "$@"
         ;;
     *)
-        echo "usage: $0 [build | test PROJECT]" >&2
+        echo "usage: $0 [build | test PROJECT [PYTEST_ARG...]]" >&2
         exit 1
         ;;
 esac

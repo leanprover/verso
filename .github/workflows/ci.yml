@@ -361,10 +361,11 @@ jobs:
                         uv run --project browser-tests --extra test pytest browser-tests/errata-widget -m errata_widget -v
 
                   - name: Run literate browser tests
-                    run: src/tests/run_literate_browser_tests.sh test literate-config
+                    run: src/tests/run_literate_browser_tests.sh test literate-config --port 8101
 
                   - name: Run multi-root literate browser tests
-                    run: src/tests/run_literate_browser_tests.sh test literate-multi-root
+                    run:
+                        src/tests/run_literate_browser_tests.sh test literate-multi-root --port 8102
 
                   - name: Run browser tests
                     run: |
@@ -376,19 +377,19 @@ jobs:
                           browser-tests/test_search_path_prefix.py \
                           browser-tests/test_toc_resize.py \
                           browser-tests/test_redirect.py \
-                          browser-tests/test_katex.py -v
+                          browser-tests/test_katex.py -v --port 8103
 
                   - name: Run VersoHtml browser tests
                     run: |
                         uv run --project browser-tests --extra test pytest \
                           browser-tests/verso-html -v \
-                          --site-dir "$(pwd)/_out/verso-html"
+                          --site-dir "$(pwd)/_out/verso-html" --port 8104
 
                   - name: Run package-manual browser tests
                     run: |
                         uv run --project browser-tests --extra test pytest \
                           browser-tests/package-manual -v \
-                          --site-dir "$(pwd)/_out/package-manual/html-multi"
+                          --site-dir "$(pwd)/_out/package-manual/html-multi" --port 8105
 
                   - name: Check internal links on the test website
                     run: |
