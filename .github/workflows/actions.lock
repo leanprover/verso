@@ -5,7 +5,7 @@ version: 'v0.0.3'
 workflows:
     '.github/workflows/actionlint.yml':
         - 'actions/checkout@v7.0.1'
-        - 'reviewdog/action-actionlint@v1.83.0'
+        - 'reviewdog/action-actionlint@v1.84.1'
     '.github/workflows/check-format.yml':
         - 'actions/checkout@v7.0.1'
         - 'astral-sh/setup-uv@v10.3.3'
@@ -127,9 +127,9 @@ dependencies:
         commit: 'sha1-d22a32a27c918fe470bbc562e984f80ec48c2668'
         owner_id: 10933561
         repo_id: 238209201
-    'reviewdog/action-actionlint@v1.83.0':
-        ref: 'v1.83.0'
-        commit: 'sha1-a7d35aaf8c309203a4ae861d32b7bd490baa7bf3'
+    'reviewdog/action-actionlint@v1.84.1':
+        ref: 'v1.84.1'
+        commit: 'sha1-ae857e78c1b42b3d0a49637181b09d3d56d402b4'
         owner_id: 48765237
         repo_id: 385059686
     'zauguin/install-texlive@f5e7d0b117035fff797d4392ea94131747e03d60':
