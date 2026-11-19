@@ -4,6 +4,8 @@ updates:
       directory: "/"
       schedule:
           interval: "weekly"
+      cooldown:
+          default-days: 7
 
     # The widget is type-checked against these packages, so a new InfoView release shows up here.
     - package-ecosystem: "npm"
