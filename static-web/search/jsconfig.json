@@ -16,5 +16,5 @@
         "noUnusedParameters": true
     },
     "include": ["**/*.js", "**/*.d.ts"],
-    "exclude": ["**/*.min.js"]
+    "exclude": ["**/*.min.js", "searchIndex*.js", "search-config.js"]
 }
