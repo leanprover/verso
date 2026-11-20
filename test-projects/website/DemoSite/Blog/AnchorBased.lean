@@ -24,6 +24,7 @@ set_option pp.rawOnError true
 %%%
 authors := ["Fictional Author", "Another Fictional Author"]
 subtitle := "Drop the Anchor"
+featuredImage := "static/A.svg"
 date := {year := 2024, month := 3, day := 5}
 categories := [examples, other]
 %%%
