@@ -33,5 +33,6 @@ jobs:
             - name: Install uv
               uses: astral-sh/setup-uv@v10.3.3
 
+            # The version is the one that ruff.toml requires.
             - name: Check Python formatting with ruff
-              run: uvx ruff format --check .
+              run: uvx ruff@0.17.6 format --check .
