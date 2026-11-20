@@ -388,17 +388,17 @@ const ChunkSpan = React.memo(
 
 /**
  * One chunk's span, at its position in the output.
- * @param chunks {Chunk[]}
+ * @param chunk {Chunk}
  * @param i {number}
  * @param execStartTime {number}
  * @param hovered {boolean}
  * @param setHovered {(index: number) => void}
  */
-function chunkSpan(chunks, i, execStartTime, hovered, setHovered) {
+function chunkSpan(chunk, i, execStartTime, hovered, setHovered) {
     return e(ChunkSpan, {
         key: i,
         index: i,
-        chunk: chunks[i],
+        chunk,
         execStartTime,
         hovered,
         onHover: setHovered,
@@ -435,14 +435,16 @@ function outputBlock(cache, chunks, execStartTime, hovered, setHovered) {
         c.spans = [];
         c.execStartTime = execStartTime;
     }
-    for (let i = c.spans.length; i < chunks.length; i++) {
-        c.spans.push(chunkSpan(chunks, i, execStartTime, false, setHovered));
-    }
-    c.last = chunks.length ? chunks[chunks.length - 1] : null;
+    const start = c.spans.length;
+    chunks.slice(start).forEach((chunk, k) => {
+        c.spans.push(chunkSpan(chunk, start + k, execStartTime, false, setHovered));
+    });
+    c.last = chunks.at(-1) ?? null;
     // The highlight is the one thing the pointer decides, so it is the one span built again.
     const spans = c.spans.slice();
-    if (hovered >= 0 && hovered < spans.length) {
-        spans[hovered] = chunkSpan(chunks, hovered, execStartTime, true, setHovered);
+    const hoveredChunk = hovered < spans.length ? chunks[hovered] : undefined;
+    if (hoveredChunk) {
+        spans[hovered] = chunkSpan(hoveredChunk, hovered, execStartTime, true, setHovered);
     }
     return e(
         "pre",
@@ -616,8 +618,8 @@ const OutputSection = React.memo(
         const spanCache = React.useRef(
             /** @type {SpanCache} */ ({ spans: [], last: null, execStartTime: 0 }),
         );
-        // Whether a chunk of the output on show is under the pointer.
-        const showing = hovered >= 0 && hovered < chunks.length;
+        // The chunk of the output on show that is under the pointer.
+        const hoveredChunk = hovered >= 0 ? chunks[hovered] : undefined;
 
         return e(
             "details",
@@ -647,16 +649,16 @@ const OutputSection = React.memo(
                         style: {
                             color: dimColor,
                             fontSize: dimSize,
-                            visibility: showing ? "visible" : "hidden",
+                            visibility: hoveredChunk ? "visible" : "hidden",
                         },
                     },
                     "  —  ",
                     e(
                         "span",
                         { style: { fontFamily: monoFont } },
-                        showing ? chunks[hovered].stream : " ",
+                        hoveredChunk ? hoveredChunk.stream : " ",
                     ),
-                    " " + (showing ? chunkOffset(chunks[hovered], execStartTime) : ""),
+                    " " + (hoveredChunk ? chunkOffset(hoveredChunk, execStartTime) : ""),
                 ),
             ),
             e(
@@ -732,7 +734,7 @@ const treeStyle =
  * @param props {{id: number, results: ResultNode[], kids: number[][], execStartTime: number,
  *                reveal: (source: Source) => void, isOpen: (id: number) => boolean,
  *                onOpenChange: (id: number, open: boolean) => void}}
- * @returns {React.ReactElement}
+ * @returns {React.ReactElement | null}
  */
 function NamedResult(props) {
     const result = props.results[props.id];
@@ -741,6 +743,7 @@ function NamedResult(props) {
         /** @type {SpanCache} */ ({ spans: [], last: null, execStartTime: 0 }),
     );
     const [hovered, setHovered] = React.useState(-1);
+    if (!result) return null;
     const inside = props.kids[props.id] || [];
     const reported = !!(result.message || result.detail || result.output.length || inside.length);
     const open = reported && props.isOpen(props.id);
@@ -819,12 +822,14 @@ function NamedResult(props) {
  * @typedef {{id: number, parent: number, name: string, status: ShownStatus, durationMs: number,
  *            message: string, detail: string, location: Source | null,
  *            output: Chunk[]}} ResultNode
- * @typedef {{id: number, parent: number, name: string, status?: Status, durationMs: number,
- *            message?: string, detail?: string, location?: Source,
- *            output: Chunk[]}} Report a result as the server reports it
- * @typedef {{status: Status, durationMs: number, message?: string, detail?: string,
- *            location?: Source, results: Report[], description?: string, seed?: string,
- *            options: Option[], unreadOptions: string[]}} Outcome
+ * @typedef {{id: number, parent: number, name: string, status?: Status | undefined,
+ *            durationMs: number, message?: string | undefined, detail?: string | undefined,
+ *            location?: Source | undefined, output: Chunk[]}} Report a result as the server
+ *            reports it
+ * @typedef {{status: Status, durationMs: number, message?: string | undefined,
+ *            detail?: string | undefined, location?: Source | undefined, results: Report[],
+ *            description?: string | undefined, seed?: string | undefined, options: Option[],
+ *            unreadOptions: string[]}} Outcome
  * @typedef {{phase: string, chunks: Chunk[], results: ResultNode[], startTime: number,
  *            startedAt: number, buildMs: number, execStartTime: number,
  *            runId: string}} RunFields
@@ -914,34 +919,39 @@ function mismatch(path, problem) {
 /**
  * The fields of an object that has each of `required` and no fields outside `required` and
  * `optional`.
+ * @template {string} K
+ * @template {string} [O=never]
  * @param value {unknown}
  * @param path {string}
- * @param required {string[]}
- * @param [optional] {string[]}
- * @returns {Record<string, unknown>}
+ * @param required {readonly K[]}
+ * @param [optional] {readonly O[]}
+ * @returns {Record<K, unknown> & Partial<Record<O, unknown>>}
  */
 function readFields(value, path, required, optional = []) {
     const fields = readObject(value, path, required);
+    /** @type {readonly string[]} */
+    const known = [...required, ...optional];
     for (const key of Object.keys(fields)) {
-        if (!required.includes(key) && !optional.includes(key)) {
+        if (!known.includes(key)) {
             mismatch(path + "." + key, "unexpected field");
         }
     }
-    return fields;
+    return /** @type {Record<K, unknown> & Partial<Record<O, unknown>>} */ (fields);
 }
 
 /**
  * The fields of an object that has each of `required`, and perhaps others.
+ * @template {string} K
  * @param value {unknown}
  * @param path {string}
- * @param required {string[]}
- * @returns {Record<string, unknown>}
+ * @param required {readonly K[]}
+ * @returns {Record<K, unknown>}
  */
 function readObject(value, path, required) {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
         return mismatch(path, "expected an object, got " + JSON.stringify(value));
     }
-    const fields = /** @type {Record<string, unknown>} */ (value);
+    const fields = /** @type {Record<K, unknown>} */ (value);
     for (const key of required) {
         if (!(key in fields)) mismatch(path + "." + key, "missing");
     }
@@ -1220,8 +1230,9 @@ function readProps(value) {
 function placeChunks(chunks, reply) {
     const added = reply.chunks;
     const start = Math.max(0, reply.nextSince - added.length);
-    for (let i = 0; i < added.length && start + i <= chunks.length; i++) {
-        chunks[start + i] = added[i];
+    for (const [i, chunk] of added.entries()) {
+        if (start + i > chunks.length) break;
+        chunks[start + i] = chunk;
     }
     return chunks;
 }
@@ -1248,8 +1259,7 @@ function outputsByResult(cache, chunks) {
         c.count = 0;
         c.byResult = new Map();
     }
-    for (; c.count < chunks.length; c.count++) {
-        const chunk = chunks[c.count];
+    for (const chunk of chunks.slice(c.count)) {
         const id = chunk.result;
         let group = c.byResult.get(id);
         if (!group) {
@@ -1258,6 +1268,7 @@ function outputsByResult(cache, chunks) {
         }
         group.push(chunk);
     }
+    c.count = chunks.length;
     return c.byResult;
 }
 
@@ -1274,8 +1285,12 @@ function mergeResults(results, reply) {
     const next = results.slice();
     /** @param id {number} */
     function at(id) {
-        while (next.length <= id) next.push(blankResult(next.length));
-        return next[id];
+        while (next.length < id) next.push(blankResult(next.length));
+        const found = next[id];
+        if (found) return found;
+        const blank = blankResult(id);
+        next.push(blank);
+        return blank;
     }
     for (const ev of reply.results) {
         const shown = at(ev.id);
@@ -1331,7 +1346,8 @@ function failingPaths(results) {
         return result.status === "failed" || result.status === "error";
     });
     for (let i = results.length - 1; i > 0; i--) {
-        if (failing[i]) failing[results[i].parent] = true;
+        const result = results[i];
+        if (result && failing[i]) failing[result.parent] = true;
     }
     return failing;
 }
@@ -1346,12 +1362,12 @@ function childrenOf(results) {
     const children = results.map(function () {
         return [];
     });
-    for (let i = 1; i < results.length; i++) {
-        const parent = results[i].parent;
+    results.forEach(function (result, i) {
+        const parent = result.parent;
         // A named result has a higher identifier than the result that holds it, so a parent at or
         // above a result's own identifier belongs to no tree and its result is left out.
-        if (parent >= 0 && parent < i) children[parent].push(i);
-    }
+        if (parent >= 0 && parent < i) children[parent]?.push(i);
+    });
     return children;
 }
 
@@ -1805,7 +1821,7 @@ function TestRun(props) {
      * @param failing {boolean[]}
      */
     function isResultOpen(id, failing) {
-        return id in openResults ? openResults[id] : expandNamed || failing[id];
+        return openResults[id] ?? (expandNamed || failing[id] === true);
     }
 
     /**
@@ -2346,11 +2362,12 @@ function TestRun(props) {
     // tree itself, so taking it here as well would say it twice. The test's own result has a verdict
     // once the test has ended. A run that ended before that, such as one whose build failed or whose
     // runner exited early, has only the outcome to report.
-    const own = results.length && results[0].status ? results[0] : null;
+    const first = results[0];
+    const own = first && first.status ? first : null;
     const ownMessage = own ? own.message : (outcome && outcome.message) || "";
     const ownDetail = own ? own.detail : (outcome && outcome.detail) || "";
     const ownLocation = own ? own.location : (outcome && outcome.location) || null;
-    const rootOutput = results.length ? results[0].output : [];
+    const rootOutput = first ? first.output : [];
     // When the run's output is shown in more than one box, a control in the title copies all of it.
     const outputBoxes = results.filter(function (r) {
         return r.output.length > 0;
@@ -2373,22 +2390,20 @@ function TestRun(props) {
         : null;
 
     // The named results below the test, each with what it reported inside it.
-    const resultTree = kids.length
-        ? kids[0].map(function (id) {
-              return e(NamedResult, {
-                  key: id,
-                  id,
-                  results,
-                  kids,
-                  execStartTime,
-                  reveal,
-                  isOpen: function (resultId) {
-                      return isResultOpen(resultId, failing);
-                  },
-                  onOpenChange: setResultOpen,
-              });
-          })
-        : [];
+    const resultTree = (kids[0] ?? []).map(function (id) {
+        return e(NamedResult, {
+            key: id,
+            id,
+            results,
+            kids,
+            execStartTime,
+            reveal,
+            isOpen: function (resultId) {
+                return isResultOpen(resultId, failing);
+            },
+            onOpenChange: setResultOpen,
+        });
+    });
 
     // The primary status/progress element, then dimmed badges: start time, build and run durations.
     let primary = null;

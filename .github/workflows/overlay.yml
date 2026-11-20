@@ -24,9 +24,12 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             contents: write
+        # A workflow_run event names its upstream workflow only by name, so the run also has
+        # to be a push in this repository, which is how a tagged version is deployed.
         if:
-            ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion ==
-            'success' }}
+            ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion ==
+            'success' && github.event.workflow_run.event == 'push' &&
+            github.event.workflow_run.head_repository.full_name == github.repository) }}
         steps:
             - name: Checkout repository
               uses: actions/checkout@v7.0.1

@@ -19,7 +19,7 @@
         "toc-resize.js",
         "toc-resize-preload.js",
         "highlighted-code.js",
-        "highlighted-code.d.ts",
+        "highlighted-code-globals.d.ts",
         "marginalia.js",
         "add-trailing-slash.js",
         "literate/copy-button.js"

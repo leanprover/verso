@@ -1,0 +1,36 @@
+name: ShellCheck
+
+on:
+    pull_request:
+    merge_group:
+
+permissions:
+    contents: read
+
+jobs:
+    shellcheck:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7.0.1
+              with:
+                  persist-credentials: false
+
+            # A shell script has the suffix .sh or .bash, or it has a name without a suffix and
+            # names sh, bash, dash, or ksh as its interpreter.
+            - name: Run ShellCheck on every shell script
+              run: |
+                  scripts=()
+                  while IFS= read -r -d '' file; do
+                      case "${file##*/}" in
+                          *.sh | *.bash) scripts+=("$file") ;;
+                          *.*) ;;
+                          *)
+                              if head -n 1 -- "$file" 2>/dev/null | grep -Eq '^#! *([^ ]*/env +)?([^ ]*/)?(sh|bash|dash|ksh)( |$)'; then
+                                  scripts+=("$file")
+                              fi
+                              ;;
+                      esac
+                  done < <(git ls-files -z)
+                  if [ "${#scripts[@]}" -gt 0 ]; then
+                      shellcheck -- "${scripts[@]}"
+                  fi

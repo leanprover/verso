@@ -1,0 +1,2 @@
+# Standard ruff settings for Verso-related repositories.
+line-length = 88

@@ -2,6 +2,9 @@ name: Check for trailing newlines
 
 on: [pull_request, merge_group]
 
+permissions:
+    contents: read
+
 jobs:
     check-trailing-newlines:
         name: "Check text files have trailing newlines"

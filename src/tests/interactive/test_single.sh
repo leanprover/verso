@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 RUN_DIR=src/tests/interactive
 
-source $RUN_DIR/common.sh
+# shellcheck source=common.sh
+source "$RUN_DIR/common.sh"
 
 # IO.Process.exit (used by the file worker) seems to be incompatible with LSAN
 # TODO: investigate or work around

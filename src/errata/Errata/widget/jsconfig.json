@@ -5,7 +5,16 @@
         "module": "esnext",
         "moduleResolution": "bundler",
         "skipLibCheck": true,
-        "noEmit": true
+        "noEmit": true,
+        "checkJs": true,
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "noPropertyAccessFromIndexSignature": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true
     },
     "include": ["*.js"]
 }

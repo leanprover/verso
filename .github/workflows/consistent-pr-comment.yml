@@ -93,11 +93,19 @@ jobs:
             - name: Sync test-project lean-toolchains
               run: |
                   mapfile -t targets < "$RUNNER_TEMP/toolchain-targets"
+                  # The pull request's files are data here. A symlink among them
+                  # could point the copy at a file outside the checkout.
+                  if [ -L lean-toolchain ] || [ ! -f lean-toolchain ]; then
+                    echo "Refusing to copy lean-toolchain: it is not a regular file"
+                    exit 1
+                  fi
                   for t in "${targets[@]}"; do
-                    if [ -L "$t" ]; then
-                      echo "Refusing to write through symlink: $t"
-                      exit 1
-                    fi
+                    for path in test-projects "$(dirname "$t")" "$t"; do
+                      if [ -L "$path" ]; then
+                        echo "Refusing to write through symlink: $path"
+                        exit 1
+                      fi
+                    done
                   done
                   for t in "${targets[@]}"; do
                     cp lean-toolchain "$t"

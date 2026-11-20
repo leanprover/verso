@@ -1,0 +1,33 @@
+name: Type check JavaScript
+
+on:
+    pull_request:
+    merge_group:
+
+permissions:
+    contents: read
+
+jobs:
+    typecheck:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7.0.1
+              with:
+                  persist-credentials: false
+
+            - uses: actions/setup-node@v7.1.0
+              with:
+                  node-version: "lts/*"
+                  cache: npm
+
+            - run: npm ci
+
+            - name: Type check every jsconfig.json and tsconfig*.json
+              run: |
+                  status=0
+                  while IFS= read -r -d '' config; do
+                      echo "::group::$config"
+                      npx --no-install tsc --noEmit -p "$config" || status=1
+                      echo "::endgroup::"
+                  done < <(git ls-files -z -- ':(glob)**/jsconfig.json' ':(glob)**/tsconfig*.json')
+                  exit "$status"

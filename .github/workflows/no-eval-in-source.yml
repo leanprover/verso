@@ -2,6 +2,9 @@ name: "No #eval in source files"
 
 on: [pull_request, merge_group]
 
+permissions:
+    contents: read
+
 jobs:
     check-no-eval:
         name: "Check no #eval in source files"

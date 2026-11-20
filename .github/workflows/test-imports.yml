@@ -7,6 +7,9 @@ name: All test modules imported
 
 on: [pull_request, merge_group]
 
+permissions:
+    contents: read
+
 jobs:
     check-test-imports:
         name: "Check all test modules are imported"
