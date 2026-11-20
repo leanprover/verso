@@ -1,18 +1,19 @@
+# shellcheck shell=bash
 set -euo pipefail
 
-ulimit -s ${MAIN_STACK_SIZE:-8192}
-DIFF=diff
+ulimit -s "${MAIN_STACK_SIZE:-8192}"
+DIFF=(diff)
 if diff --color --help >/dev/null 2>&1; then
-    DIFF="diff --color";
+    DIFF=(diff --color);
 fi
 
 function fail {
-    echo $1
+    echo "$1"
     exit 1
 }
 
 INTERACTIVE=no
-if [ $1 == "-i" ]; then
+if [ "$1" == "-i" ]; then
     INTERACTIVE=yes
     shift
 fi
@@ -26,6 +27,8 @@ function lean_has_llvm_support {
 
 function compile_lean_c_backend {
     lean --c="$f.c" "$f" || fail "Failed to compile $f into C file"
+    # LEANC_OPTS holds any number of options, one word each.
+    # shellcheck disable=SC2086
     leanc ${LEANC_OPTS-} -O3 -DNDEBUG -o "$f.out" "$@" "$f.c" || fail "Failed to compile C file $f.c"
 }
 
@@ -35,13 +38,14 @@ function compile_lean_llvm_backend {
     rm "*.bc" || true # remove bitcode files
     rm "*.o" || true # remove object files
     lean --bc="$f.linked.bc" "$f" || fail "Failed to compile $f into bitcode file"
+    # shellcheck disable=SC2086
     leanc ${LEANC_OPTS-} -O3 -DNDEBUG -o "$f.out" "$@" "$f.linked.bc" || fail "Failed to link object file '$f.linked.bc'"
     set +o xtrace
 }
 
 function exec_capture_raw {
     # backtraces are system-specific, strip them (might be captured in `#guard_msgs`)
-    LEAN_BACKTRACE=0 "$@" 2>&1 > "$f.produced.out"
+    LEAN_BACKTRACE=0 "$@" > "$f.produced.out" 2>&1
 }
 
 # produces filtered output intended for usage with `diff_produced`
@@ -59,8 +63,8 @@ function exec_capture {
 function check_ret {
     [ -n "${expected_ret+x}" ] || expected_ret=0
     [ -f "$f.expected.ret" ] && expected_ret=$(< "$f.expected.ret")
-    if [ -n "$expected_ret" ] && [ $ret -ne $expected_ret ]; then
-        echo "Unexpected return code $ret executing '$@'; expected $expected_ret. Output:"
+    if [ -n "$expected_ret" ] && [ "$ret" -ne "$expected_ret" ]; then
+        echo "Unexpected return code $ret executing '$*'; expected $expected_ret. Output:"
         cat "$f.produced.out"
         exit 1
     fi
@@ -81,7 +85,7 @@ function exec_check {
 
 function diff_produced {
     if test -f "$f.expected.out"; then
-        if $DIFF -au --strip-trailing-cr -I "executing external script" "$f.expected.out" "$f.produced.out"; then
+        if "${DIFF[@]}" -au --strip-trailing-cr -I "executing external script" "$f.expected.out" "$f.produced.out"; then
             :
         else
             echo "ERROR: file $f.produced.out does not match $f.expected.out"
@@ -96,8 +100,8 @@ function diff_produced {
     else
         echo "ERROR: file $f.expected.out does not exist"
         if [ $INTERACTIVE == "yes" ]; then
-            read -p "copy $f.produced.out (y/n)? "
-            if [ $REPLY == "y" ]; then
+            read -r -p "copy $f.produced.out (y/n)? "
+            if [ "$REPLY" == "y" ]; then
                 cp -- "$f.produced.out" "$f.expected.out"
                 echo "-- copied $f.produced.out --> $f.expected.out"
             fi

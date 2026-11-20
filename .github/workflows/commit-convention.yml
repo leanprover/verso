@@ -5,6 +5,9 @@ on:
         types: [opened, edited, reopened]
     merge_group:
 
+permissions:
+    contents: read
+
 jobs:
     check-pr-title:
         name: "PR title follows commit convention"

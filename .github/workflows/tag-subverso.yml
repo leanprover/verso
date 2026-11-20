@@ -6,6 +6,10 @@ on:
             - "v4*"
     workflow_dispatch:
 
+# The tags are pushed to SubVerso with SUBVERSO_PUSH_TOKEN.
+permissions:
+    contents: read
+
 jobs:
     sync-tags:
         runs-on: ubuntu-latest

@@ -5,6 +5,7 @@
         "target": "ES2024",
         "module": "es2022",
         "noEmit": true,
+        "checkJs": true,
         "strict": true,
         "noUncheckedIndexedAccess": true,
         "exactOptionalPropertyTypes": true,
@@ -14,5 +15,6 @@
         "noUnusedLocals": true,
         "noUnusedParameters": true
     },
-    "include": ["**/*.js", "**/*.d.ts"]
+    "include": ["**/*.js", "**/*.d.ts"],
+    "exclude": ["**/*.min.js"]
 }

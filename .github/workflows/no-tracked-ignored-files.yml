@@ -2,6 +2,9 @@ name: No tracked ignored files
 
 on: [pull_request, merge_group]
 
+permissions:
+    contents: read
+
 jobs:
     check-tracked-ignored:
         name: "Check no tracked file matches .gitignore"
