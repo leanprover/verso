@@ -838,7 +838,7 @@ class SearchBox {
         this.imeRewriter = new InputAbbreviationRewriter(
             {
                 abbreviationCharacter: "\\",
-                customTranslations: [],
+                customTranslations: {},
                 eagerReplacementEnabled: true,
             },
             comboboxNode,

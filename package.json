@@ -1,7 +1,8 @@
 {
+    "name": "verso",
+    "private": true,
     "scripts": {
-        "lint": "eslint static-web eslint.config.mjs",
-        "typecheck:widget": "tsc --noEmit -p src/errata/Errata/widget/jsconfig.json"
+        "lint": "eslint static-web eslint.config.mjs eslint.shared.mjs"
     },
     "browserslist": [
         "defaults",
@@ -20,7 +21,7 @@
         "eslint-plugin-promise": "7.3.0",
         "eslint-plugin-regexp": "3.3.3",
         "globals": "17.14.0",
-        "prettier": "3.7.4",
+        "prettier": "3.10.1",
         "typescript": "7.0.2"
     }
 }

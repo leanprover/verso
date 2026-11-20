@@ -4,6 +4,9 @@ on:
     pull_request:
     merge_group:
 
+permissions:
+    contents: read
+
 jobs:
     check-prettier-formatting:
         runs-on: ubuntu-latest
@@ -11,12 +14,15 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v7.0.1
 
-            - name: Check formatting with prettier
-              uses: creyD/prettier_action@v4.6
+            - uses: actions/setup-node@v7.1.0
               with:
-                  dry: true
-                  prettier_options: "--check ."
-                  prettier_version: 3.7.4
+                  node-version: "lts/*"
+                  cache: npm
+
+            - run: npm ci
+
+            - name: Check formatting with prettier
+              run: npx --no-install prettier --check .
 
     check-python-formatting:
         runs-on: ubuntu-latest

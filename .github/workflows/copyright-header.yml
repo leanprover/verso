@@ -2,6 +2,9 @@ name: Check for copyright header and too-big Lean imports
 
 on: [pull_request, merge_group]
 
+permissions:
+    contents: read
+
 jobs:
     check-lean-files:
         name: "Check copyright header and Lean import size"

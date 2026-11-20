@@ -12,18 +12,28 @@ on:
 
     workflow_dispatch:
 
+# The Netlify action records a deployment and a commit status.
+permissions:
+    contents: read
+    deployments: write
+    statuses: write
+
 jobs:
     deploy:
         name: Deploy to Netlify
         runs-on: ubuntu-latest
+        # A workflow_run event names its upstream workflow only by name, so the run also has
+        # to come from this repository and from an event other than a pull request.
         if:
-            ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion ==
-            'success' }}
+            ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion ==
+            'success' && github.event.workflow_run.event != 'pull_request' &&
+            github.event.workflow_run.head_repository.full_name == github.repository) }}
         steps:
             - name: Checkout postdeploy branch
               uses: actions/checkout@v7.0.1
               with:
                   ref: postdeploy
+                  persist-credentials: false
 
             - name: Deploy to Netlify
               uses: nwtgck/actions-netlify@v4.0.0
