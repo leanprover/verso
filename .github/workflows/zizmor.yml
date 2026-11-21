@@ -1,0 +1,26 @@
+name: zizmor
+
+on:
+    pull_request:
+    merge_group:
+
+permissions:
+    contents: read
+
+jobs:
+    zizmor:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7.0.1
+              with:
+                  persist-credentials: false
+
+            - uses: astral-sh/setup-uv@v10.3.3
+
+            # Audits the workflows, composite actions, and dependabot.yml with the settings of
+            # .github/zizmor.yml.
+            - name: Audit GitHub Actions with zizmor
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run:
+                  uvx zizmor@1.32.0 --format github --min-severity low --config .github/zizmor.yml .
