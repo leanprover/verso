@@ -5,6 +5,7 @@ import socket
 import subprocess
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright
 
 # TODO: adjust default path to built site relative to this directory
@@ -151,20 +152,50 @@ def browser(request, playwright_instance):
     browser.close()
 
 
+def _origin(url):
+    parts = urlsplit(url)
+    return (parts.scheme, parts.netloc)
+
+
 @pytest.fixture
 def page(browser, request):
-    """A fresh page that fails its test if any request returns an error status or fails to load."""
+    """A fresh page that fails its test if the site's own files are missing or fail to load.
+
+    Only HTTP errors and network failures for the site, the origin of the first navigation, count. Requests that the browser aborts
+    itself, such as those cancelled by a navigation, and the browser's favicon probe are ignored.
+    Tests that expect such failures carry the `allow_missing_files` marker.
+    """
     page = browser.new_page()
     failures = []
-    page.on(
-        "response",
-        lambda r: failures.append(f"{r.status} {r.url}") if r.status >= 400 else None,
-    )
-    page.on(
-        "requestfailed",
-        lambda r: failures.append(f"failed ({r.failure}) {r.url}"),
-    )
+    site = []
+
+    def on_request(req):
+        # The site is the origin of the page's first navigation.
+        if not site and req.is_navigation_request() and req.frame == page.main_frame:
+            if urlsplit(req.url).scheme in ("http", "https"):
+                site.append(_origin(req.url))
+
+    def same_site(url):
+        return bool(site) and _origin(url) == site[0]
+
+    def on_response(response):
+        url = response.url
+        if response.status >= 400 and same_site(url) and urlsplit(url).path != "/favicon.ico":
+            failures.append(f"{response.status} {url}")
+
+    def on_request_failed(req):
+        reason = req.failure or ""
+        aborted = "ABORTED" in reason.upper()
+        if same_site(req.url) and not aborted and urlsplit(req.url).path != "/favicon.ico":
+            failures.append(f"failed ({reason}) {req.url}")
+
+    page.on("request", on_request)
+    page.on("response", on_response)
+    page.on("requestfailed", on_request_failed)
     yield page
+    page.remove_listener("request", on_request)
+    page.remove_listener("response", on_response)
+    page.remove_listener("requestfailed", on_request_failed)
     page.close()
     if failures and request.node.get_closest_marker("allow_missing_files") is None:
         pytest.fail("requests for missing or unloadable files:\n" + "\n".join(failures))
