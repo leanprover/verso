@@ -408,7 +408,12 @@ meta def elabCommands [Literal k] (config : LeanBlockConfig) (str : TSyntax k)
     let (ictx, startPos) ← SyntaxUtils.strLitInputContext str.raw (← getFileName)
     let cctx : Command.Context := { fileName := ← getFileName, fileMap := text, snap? := none, cancelTk? := none}
 
-    let mut cmdState : Command.State := { env := ← getEnv, maxRecDepth := ← MonadRecDepth.getMaxRecDepth, scopes := origScopes }
+    -- Name auxiliary declarations under the module's private prefix, as `Command.mkState` does,
+    -- so that documents elaborated in different modules don't create clashing names.
+    let mut cmdState : Command.State := {
+      env := ← getEnv, maxRecDepth := ← MonadRecDepth.getMaxRecDepth, scopes := origScopes,
+      auxDeclNGen := .ofPrefix <| mkPrivateName (← getEnv) .anonymous
+    }
     let mut pstate := { pos := startPos, recovering := false, leadingStartPos? := none }
     let mut cmds := #[]
     let mut cmdTrees : Array (Option Lean.Elab.InfoTree) := #[]
