@@ -158,12 +158,23 @@ def _origin(url):
 
 
 @pytest.fixture
-def page(browser, request):
+def missing_file_allowlist():
+    """URL paths of the site that may be missing without failing a test.
+
+    A `conftest.py` in a test directory overrides this fixture for sites that have known gaps.
+    """
+    return []
+
+
+@pytest.fixture
+def page(browser, request, missing_file_allowlist):
     """A fresh page that fails its test if the site's own files are missing or fail to load.
 
-    Only HTTP errors and network failures for the site, the origin of the first navigation, count. Requests that the browser aborts
-    itself, such as those cancelled by a navigation, and the browser's favicon probe are ignored.
-    Tests that expect such failures carry the `allow_missing_files` marker.
+    Only HTTP errors and network failures for the site, the origin of the first navigation, count.
+    Requests that the browser aborts itself, such as those cancelled by a navigation, and the
+    browser's favicon probe are ignored.
+    Paths in `missing_file_allowlist` and tests that carry the `allow_missing_files` marker are
+    exempt.
     """
     page = browser.new_page()
     failures = []
@@ -175,18 +186,24 @@ def page(browser, request):
             if urlsplit(req.url).scheme in ("http", "https"):
                 site.append(_origin(req.url))
 
-    def same_site(url):
-        return bool(site) and _origin(url) == site[0]
+    def counts(url):
+        path = urlsplit(url).path
+        return (
+            bool(site)
+            and _origin(url) == site[0]
+            and path != "/favicon.ico"
+            and path not in missing_file_allowlist
+        )
 
     def on_response(response):
-        url = response.url
-        if response.status >= 400 and same_site(url) and urlsplit(url).path != "/favicon.ico":
-            failures.append(f"{response.status} {url}")
+        if response.status >= 400 and counts(response.url):
+            failures.append(f"{response.status} {response.url}")
 
     def on_request_failed(req):
         reason = req.failure or ""
-        aborted = "ABORTED" in reason.upper()
-        if same_site(req.url) and not aborted and urlsplit(req.url).path != "/favicon.ico":
+        # Browsers name a request that they cancel themselves differently (ERR_ABORTED,
+        # NS_BINDING_ABORTED, NS_ERROR_ABORT).
+        if "ABORT" not in reason.upper() and counts(req.url):
             failures.append(f"failed ({reason}) {req.url}")
 
     page.on("request", on_request)
