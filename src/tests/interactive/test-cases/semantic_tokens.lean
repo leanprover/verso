@@ -8,7 +8,7 @@ Tests semantic highlighting for prose, literal code, and elaborated Lean code in
 open Verso Genre Manual InlineLean
 
 #doc (Manual) "Semantic tokens" =>
-Ordinary prose and `literal code`.
+Ordinary prose, *bold*, _emphasized_, *_both_*, and `literal code`.
 
 The term {lean}`List.map` is elaborated Lean code.
 

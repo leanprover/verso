@@ -202,7 +202,7 @@ block_extension Block.exampleLeanFile (filename : String) where
         return .empty
     let descr := \TeX{\texttt{\Lean{"File: " ++ filename} } }
     pure <| .seq #[.raw "\\begin{FileVerbatim}[label={", descr, .raw "}]\n",
-    (← blocks.mapM goB), .raw "\n\\end{FileVerbatim}\n" ]
+    (← Verso.Doc.TeX.withBlocksNotAsParagraphs <| blocks.mapM goB), .raw "\n\\end{FileVerbatim}\n" ]
 
   extraCss := [exampleFileCss]
   toHtml := open Verso.Output Html in

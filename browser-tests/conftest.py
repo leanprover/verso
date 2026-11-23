@@ -19,6 +19,21 @@ def find_free_port():
         return s.getsockname()[1]
 
 
+def wait_for_server(proc, port, timeout=30):
+    """Wait until the server process accepts connections on the port."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError(f"the test server exited with code {proc.returncode}")
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                return
+        except OSError:
+            time.sleep(0.1)
+    proc.terminate()
+    raise RuntimeError(f"the test server did not accept connections within {timeout}s")
+
+
 def load_redirects():
     """Load redirects from JSON file and return a list of (source, target) tuples."""
     json_path = Path(__file__).parent / REDIRECTS_JSON_PATH
@@ -115,7 +130,7 @@ def server(request):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    time.sleep(1)
+    wait_for_server(proc, port)
     yield f"http://127.0.0.1:{port}"
     proc.terminate()
     proc.wait()

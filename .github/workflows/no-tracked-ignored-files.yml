@@ -1,0 +1,25 @@
+name: No tracked ignored files
+
+on: [pull_request, merge_group]
+
+permissions:
+    contents: read
+
+jobs:
+    check-tracked-ignored:
+        name: "Check no tracked file matches .gitignore"
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7.0.1
+
+            - name: Check for tracked files that match .gitignore
+              run: |
+                  # Generated files are ignored so that they stay out of the
+                  # repository. Tracking them can lead to merge conflicts.
+                  tracked=$(git ls-files -ci --exclude-standard)
+                  if [ -n "$tracked" ]; then
+                    echo "These tracked files match .gitignore and should be removed with 'git rm --cached':"
+                    echo "$tracked"
+                    exit 1
+                  fi
+                  echo "No tracked files match .gitignore."

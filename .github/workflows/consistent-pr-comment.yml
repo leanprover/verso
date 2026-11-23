@@ -15,7 +15,7 @@ jobs:
             pull-requests: write
         steps:
             - name: Check user permission
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              uses: actions/github-script@v9.0.0
               with:
                   script: |
                       const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
@@ -32,7 +32,7 @@ jobs:
 
             - name: Get PR details
               id: pr-details
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              uses: actions/github-script@v9.0.0
               with:
                   script: |
                       const { data: pr } = await github.rest.pulls.get({
@@ -48,7 +48,7 @@ jobs:
                       }
 
             - name: Add reaction to acknowledge
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              uses: actions/github-script@v9.0.0
               with:
                   script: |
                       await github.rest.reactions.createForIssueComment({
@@ -59,9 +59,31 @@ jobs:
                       });
 
             - name: Checkout repository
-              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              uses: actions/checkout@v7.0.1
               with:
                   token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Resolve toolchain sync targets
+              # Read the list from the default-branch checkout, before the pull
+              # request's own code is on disk. This job can write to the
+              # repository, so it must not take instructions from the PR.
+              run: |
+                  list=test-projects/root-toolchain-projects.txt
+                  mapfile -t names < <(grep -vE '^[[:space:]]*(#|$)' "$list")
+                  if [ "${#names[@]}" -eq 0 ]; then
+                    echo "Error: no projects listed in $list" >&2
+                    exit 1
+                  fi
+                  for name in "${names[@]}"; do
+                    case "$name" in
+                      */* | . | ..)
+                        echo "Error: $list must list bare directory names, got '$name'" >&2
+                        exit 1
+                        ;;
+                    esac
+                    echo "test-projects/$name/lean-toolchain"
+                  done > "$RUNNER_TEMP/toolchain-targets"
+                  cat "$RUNNER_TEMP/toolchain-targets"
 
             - name: Checkout PR branch
               env:
@@ -70,16 +92,20 @@ jobs:
 
             - name: Sync test-project lean-toolchains
               run: |
-                  targets=(
-                    test-projects/literate-config/lean-toolchain
-                    test-projects/literate-multi-root/lean-toolchain
-                    test-projects/errata-widget/lean-toolchain
-                  )
+                  mapfile -t targets < "$RUNNER_TEMP/toolchain-targets"
+                  # The pull request's files are data here. A symlink among them
+                  # could point the copy at a file outside the checkout.
+                  if [ -L lean-toolchain ] || [ ! -f lean-toolchain ]; then
+                    echo "Refusing to copy lean-toolchain: it is not a regular file"
+                    exit 1
+                  fi
                   for t in "${targets[@]}"; do
-                    if [ -L "$t" ]; then
-                      echo "Refusing to write through symlink: $t"
-                      exit 1
-                    fi
+                    for path in test-projects "$(dirname "$t")" "$t"; do
+                      if [ -L "$path" ]; then
+                        echo "Refusing to write through symlink: $path"
+                        exit 1
+                      fi
+                    done
                   done
                   for t in "${targets[@]}"; do
                     cp lean-toolchain "$t"
@@ -90,10 +116,8 @@ jobs:
               run: |
                   git config user.name "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
-                  git add -- \
-                    test-projects/literate-config/lean-toolchain \
-                    test-projects/literate-multi-root/lean-toolchain \
-                    test-projects/errata-widget/lean-toolchain
+                  mapfile -t targets < "$RUNNER_TEMP/toolchain-targets"
+                  git add -- "${targets[@]}"
                   if git diff --cached --quiet; then
                     echo "No consistency fixes needed"
                     echo "changes=false" >> "$GITHUB_OUTPUT"
@@ -104,7 +128,7 @@ jobs:
                   fi
 
             - name: Add completion reaction
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              uses: actions/github-script@v9.0.0
               with:
                   script: |
                       await github.rest.reactions.createForIssueComment({
@@ -116,7 +140,7 @@ jobs:
 
             - name: Add failure reaction
               if: failure()
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              uses: actions/github-script@v9.0.0
               with:
                   script: |
                       await github.rest.reactions.createForIssueComment({

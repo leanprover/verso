@@ -52,6 +52,14 @@ public def HtmlT.cast {g1 g2 : Genre} (act : HtmlT g1 m α)
   fun ρ σ =>
     act (ρ.cast context_eq.symm state_eq.symm) σ
 
+/--
+Runs an HTML generation action with a context and an initial hover state. Returns the action's
+result and the final hover state.
+-/
+public def HtmlT.run (act : HtmlT genre m α) (ctx : HtmlT.Context genre)
+    (hovers : Verso.Code.Hover.State Html) : m (α × Verso.Code.Hover.State Html) :=
+  act ctx hovers
+
 public def HtmlT.options [Monad m] : HtmlT genre m Options := do
   return (← read).options
 

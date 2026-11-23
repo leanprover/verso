@@ -193,7 +193,6 @@ private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Boo
   let codeAssets : Html := if includeCodeAssets then html%{
     <script src="popper.js"></script>
     <script src="tippy.js"></script>
-    <script src="marked.js"></script>
     <script>{Html.raw highlightingJs}</script>
     <style>{Html.raw highlightingStyle}</style>
     <link rel="stylesheet" href="tippy-border.css"/>
@@ -222,7 +221,9 @@ Returns the body HTML and updated highlight state.
 -/
 private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
     (ctx : HtmlContext) (initHlState : HtmlState) :
-    BuildLogT IO (Html × HtmlState × Array Heading) := do
+    BuildLogT IO (Html × HtmlState × Array Heading) :=
+  -- The heading state makes the module docs on the page one outline with unique IDs.
+  StateT.run' (s := { usedIds := ctx.traverseState.usedHtmlIds : HeadingState }) do
   let emitCtx := { ctx with
     options := {}
     traverseContext := { currentModule := mod.name }
@@ -231,13 +232,15 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
   let hlCtx : HighlightHtmlM.Context Literate := { emitCtx with options := emitCtx.codeOptions }
 
   -- Render a single code item and its output messages
-  let renderCodeItemWithOutput (idx : Nat) (item : ModuleItem') (hlState : HtmlState) : BuildLogT IO (Html × HtmlState) := do
-    let ((codeHtml, _, _), st) ← renderCode idx item |>.run emitCtx hlState.hlState
+  let renderCodeItemWithOutput (idx : Nat) (item : ModuleItem') (hlState : HtmlState) :
+      StateT HeadingState (BuildLogT IO) (Html × HtmlState) := do
+    let ((codeHtml, _), st) ← renderCode idx item |>.run emitCtx hlState.hlState
     let (outputHtml, st') := renderOutputMessages #[(idx, item)] resolved.showOutput hlCtx st
     return (codeHtml ++ outputHtml, { hlState with hlState := st' })
 
   -- Render accumulated code items into a code box
-  let flushCodeItems (items : Array (Nat × ModuleItem')) (hlState : HtmlState) : BuildLogT IO (Html × HtmlState) := do
+  let flushCodeItems (items : Array (Nat × ModuleItem')) (hlState : HtmlState) :
+      StateT HeadingState (BuildLogT IO) (Html × HtmlState) := do
     if items.isEmpty then return (.empty, hlState)
     let mut boxHtml : Html := .empty
     let mut hlState := hlState
@@ -275,7 +278,7 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
   for h : itemIdx in 0...mod.contents.size do
     let item := mod.contents[itemIdx]
     if ModuleItem'.isImport item then
-      let ((codeHtml, _, _), st) ← renderCode itemIdx item |>.run emitCtx importHlState.hlState
+      let ((codeHtml, _), st) ← renderCode itemIdx item |>.run emitCtx importHlState.hlState
       importHlState := { importHlState with hlState := st }
       importHtml := importHtml ++ codeHtml
   if resolved.showImports && importHtml != .empty then
@@ -290,7 +293,6 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
   let mut currentCodeItems : Array (Nat × ModuleItem') := #[]
   let mut hlState := importHlState
   let mut allHeadings : Array Heading := #[]
-  let mut usedIds := ctx.traverseState.usedHtmlIds
   for (origIdx, item) in contents do
     let item := filterDocstrings item
     let hasModDoc := item.code.any Code.isModDoc
@@ -301,9 +303,8 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
       hlState := hlState'
       body := body ++ flushHtml
       currentCodeItems := #[]
-      let ((itemHtml, hdgs, usedIds'), st) ← renderCode origIdx item (usedHtmlIds := usedIds) |>.run emitCtx hlState.hlState
+      let ((itemHtml, hdgs), st) ← renderCode origIdx item |>.run emitCtx hlState.hlState
       hlState := { hlState with hlState := st }
-      usedIds := usedIds'
       allHeadings := allHeadings ++ hdgs
       body := body ++ itemHtml
     else if hasDeclDocAsText then
@@ -316,7 +317,8 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
       let remainingCode := (item.code.filter (!Code.isDeclDoc ·)).toList.dropWhile
         fun | .highlighted hl => newlinesOnly hl | _ => false
       let codeItem := { item with code := remainingCode.toArray }
-      let ((docHtml, _), st) ← renderCode origIdx docItem (docstringsAsText := true) |>.run emitCtx hlState.hlState
+      let ((docHtml, _), st) ←
+        renderCode origIdx docItem (docstringsAsText := true) |>.run emitCtx hlState.hlState
       hlState := { hlState with hlState := st }
       body := body ++ docHtml
       let (codeBoxHtml, hlState') ← renderCodeItemWithOutput origIdx codeItem hlState
@@ -492,18 +494,9 @@ def main (args : List String) : IO UInt32 := do
     IO.FS.writeFile (config.outputDir / "popper.js") Verso.Code.Highlighted.WebAssets.popper
     IO.FS.writeFile (config.outputDir / "tippy.js") Verso.Code.Highlighted.WebAssets.tippy
     IO.FS.writeFile (config.outputDir / "tippy-border.css") Verso.Code.Highlighted.WebAssets.tippy.border.css
-    IO.FS.writeFile (config.outputDir / "marked.js") Verso.Code.Highlighted.WebAssets.marked
     IO.FS.writeFile (config.outputDir / "verso-vars.css") Verso.Output.Html.«verso-vars.css»
     IO.FS.writeFile (config.outputDir / "literate.css") literate.css
-    -- Copy KaTeX dependencies
-    IO.FS.createDirAll (config.outputDir / "katex")
-    IO.FS.writeFile (config.outputDir / "katex" / "katex.css") katex.css
-    IO.FS.writeFile (config.outputDir / "katex" / "katex.js") katex.js
-    IO.FS.writeFile (config.outputDir / "katex" / "math.js") math.js
-    for (name, contents) in katexFonts do
-      let path := config.outputDir / name
-      path.parent.forM IO.FS.createDirAll
-      IO.FS.writeBinFile path contents
+    writeKaTeX (config.outputDir / "katex")
     -- Copy the copy-button JS
     IO.FS.writeFile (config.outputDir / "copy-button.js") copyButtonJs
     emitSearchBox (config.outputDir / "-verso-search") (searchPagePath := some "search/")

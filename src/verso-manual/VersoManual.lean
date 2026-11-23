@@ -217,7 +217,7 @@ meta def ref : RoleExpanderOf RoleArgs
 block_extension Block.paragraph where
   traverse := fun _ _ _ => pure none
   toTeX :=
-    some <| fun _ go _ _ content => do
+    some <| fun _ go _ _ content => Verso.Doc.TeX.withBlocksNotAsParagraphs do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   toHtml :=
@@ -343,12 +343,8 @@ def traverseMulti (depth : Nat) (path : Path) (part : Part Manual) : TraverseM (
         pure <| .mk (← title.mapM Manual.traverseInline) titleString «meta» content' subParts'
 
 open Verso.Output.Html in
-def TraverseState.ofConfig (config : HtmlConfig) : TraverseState := Id.run do
-  let mut st : TraverseState := .initialize config.toHtmlAssets
-  for f in config.features do
-    for li in f.licenseInfo do
-      st := st.addLicenseInfo li
-  return st
+def TraverseState.ofConfig (config : HtmlConfig) : TraverseState :=
+  .initialize config.toHtmlAssets
 
 /--
 The monad in which manuals are converted to an output format.
@@ -425,6 +421,7 @@ def emitTeX (config : Config) (text : Part Manual) : EmitM Unit := do
   let frontMatter := frontMatter ++ frontParts
   let (chapters, extra) ← mainMatter.mapM (·.toTeX (m := EmitM) none (opts, {}, state, {})) extra
   let (appendices, extra) ← backMatter.mapM (·.toTeX (m := EmitM) none (opts, {}, state, {})) extra
+  let (title, extra) ← text.titleToTeX (m := EmitM) (opts, {}, state, {}) extra
   let dir := config.destination.join "tex"
   ensureDir dir
   let packages := state.texPackages
@@ -432,7 +429,8 @@ def emitTeX (config : Config) (text : Part Manual) : EmitM Unit := do
   withFile (dir.join "main.tex") .write fun h => do
     if config.verbose then
       IO.println s!"Saving {dir.join "main.tex"}"
-    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList config.twoside)
+    h.putStrLn <|
+      preamble title.asString authors date packages.toList preambleItems.toList config.twoside
     -- \frontmatter is inserted by our hardcoded preamble before the ToC, so it doesn't get inserted
     -- here. If there's any text at the start of the front matter, then we need to clear it to a new
     -- recto page after the ToC
@@ -767,6 +765,8 @@ where
     let definitionIds := state.definitionIds ctxt
     let linkTargets := config.linkTargets state (← readThe AllRemotes)
     let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets {})
+    let heading :=
+      partHeading state ctxt (text.metadata.bind (·.id)) 1 titleHtml (showNumber := false) (showPermalink := false)
     let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets {})
     let bookToc ← text.subParts.mapM (fun p => toc 0 opts (ctxt.inPart p) state definitionIds linkTargets p)
     let bookTocHtml := open Verso.Output.Html in
@@ -782,7 +782,7 @@ where
         Manual.toHtml { opts with headerLevel := 2 } (ctxt.inPart p) state definitionIds linkTargets {} p
     let pageContent := open Verso.Output.Html in
       html%{<section>
-          {Html.titlePage titleHtml authors authorshipNote introHtml}
+          {Html.titlePage heading authors authorshipNote introHtml}
           {bookTocHtml}
           {contents}
         </section>}
@@ -894,13 +894,8 @@ where
       (root : Bool) (depth : Nat) (dir : System.FilePath) (part : Part Manual) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) Unit := do
     let thisFile := part.metadata.bind (·.file) |>.getD (part.titleString.sluggify.toString)
     let dir := if root then dir else dir.join thisFile
-    let sectionNum := sectionHtml ctxt
-    let pageTitleHtml := sectionNum ++ (← Html.seq <$> part.title.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets codeOptions))
-    let titleHtml :=
-      pageTitleHtml ++
-      if let some id := part.metadata.bind (·.id) then
-        permalink id state
-      else .empty
+    let titleHtml ← Html.seq <$> part.title.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets codeOptions)
+    let heading := partHeading state ctxt (part.metadata.bind (·.id)) 1 titleHtml
     let introHtml ← Html.seq <$> part.content.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets codeOptions)
     let contents ←
       if depth == 0 || part.htmlSplit == .never then
@@ -929,13 +924,13 @@ where
             </section>
           }
         else .empty
-        html%{<section>{Html.titlePage titleHtml authors authorshipNote introHtml ++ contents}{subTocHtml}</section>}
+        html%{<section>{Html.titlePage heading authors authorshipNote introHtml ++ contents}{subTocHtml}</section>}
       else
         let subTocHtml :=
           if (depth > 0 && part.htmlSplit != .never) && subToc.size > 0 && part.htmlToc then
             html%{<ol class="section-toc">{subToc.map (·.html config.sectionTocDepth)}</ol>}
           else .empty
-        html%{<section><h1>{titleHtml}</h1>{introHtml}{contents}{subTocHtml}</section>}
+        html%{<section>{heading.toHtml}{introHtml}{contents}{subTocHtml}</section>}
 
     ensureDir dir
     IO.FS.withFile (dir.join "index.html") .write fun h => do

@@ -46,7 +46,12 @@ public def tippyCss : CssFile where
   filename := "tippy-border.css"
   contents := tippy.border.css
 
+/--
+The assets for highlighted Lean code and its hovers. KaTeX is used because docstring hovers may
+include math.
+-/
 public def highlightAssets : HtmlAssets where
+  features := {.KaTeX}
   extraCss := { CSS.mk highlightingStyle }
   extraJs := { JS.mk highlightingJs }
   extraJsFiles := { popperJs, tippyJs }

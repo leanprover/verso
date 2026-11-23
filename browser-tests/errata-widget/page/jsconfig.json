@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "lib": ["ES2024", "DOM", "DOM.Iterable"],
+        "target": "ES2024",
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "paths": {
+            "/infoview/loader.production.min.js": [
+                "../../../node_modules/@leanprover/infoview/dist/loader.d.ts"
+            ]
+        },
+        "skipLibCheck": true,
+        "noEmit": true,
+        "checkJs": true,
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "noPropertyAccessFromIndexSignature": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true
+    },
+    "include": ["*.js"]
+}

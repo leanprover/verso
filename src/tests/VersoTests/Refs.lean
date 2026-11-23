@@ -531,12 +531,12 @@ info: Verso.Doc.Part.mk
   #eval headerLink.toPart
 
 /-
-Link uses resolve in a block that a part command adds without its own
-`blockInternalDocReconstructionPlaceholder`.
+Link uses are resolved in a block that is added by a part command elaborator using `addBlock`.
 
 The part command `plainDirective` adds such a block. The value of the document shows the URL of the
-link use in it. For such a block, `addBlock` binds the context's `docReconstructionPlaceholder`.
-Without this binding, elaboration would fail with an unknown identifier.
+link use in it. In the block's definition, `addBlock` correctly sets the value of the context's
+`docReconstructionPlaceholder`. Without this value, elaboration would fail with an unknown
+identifier.
 -/
 
 section

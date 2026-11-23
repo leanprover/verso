@@ -15,7 +15,7 @@ jobs:
             pull-requests: write
         steps:
             - name: Check user permission
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              uses: actions/github-script@v9.0.0
               with:
                   script: |
                       const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
@@ -32,7 +32,7 @@ jobs:
 
             - name: Get PR details
               id: pr-details
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              uses: actions/github-script@v9.0.0
               with:
                   script: |
                       const { data: pr } = await github.rest.pulls.get({
@@ -40,6 +40,7 @@ jobs:
                         repo: context.repo.repo,
                         pull_number: context.payload.issue.number
                       });
+                      core.setOutput('base_ref', pr.base.ref);
                       const isFork = pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`;
                       if (isFork && !pr.maintainer_can_modify) {
                         core.setFailed(
@@ -48,7 +49,7 @@ jobs:
                       }
 
             - name: Add reaction to acknowledge
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              uses: actions/github-script@v9.0.0
               with:
                   script: |
                       await github.rest.reactions.createForIssueComment({
@@ -59,9 +60,28 @@ jobs:
                       });
 
             - name: Checkout repository
-              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              uses: actions/checkout@v7.0.1
               with:
                   token: ${{ secrets.GITHUB_TOKEN }}
+
+            - uses: actions/setup-node@v7.1.0
+              with:
+                  node-version: "lts/*"
+
+            # This job has a write token, so the code that it runs comes from the branch that the
+            # pull request targets. Prettier and its configuration are set aside here, before the pull
+            # request is checked out, and the pull request's own package.json is not installed.
+            - name: Install the Prettier that the target branch pins
+              env:
+                  BASE_REF: ${{ steps.pr-details.outputs.base_ref }}
+              run: |
+                  git fetch --depth 1 origin "refs/heads/$BASE_REF"
+                  mkdir "$RUNNER_TEMP/prettier"
+                  for file in package.json package-lock.json .prettierrc; do
+                      git show "FETCH_HEAD:$file" > "$RUNNER_TEMP/prettier/$file"
+                  done
+                  cd "$RUNNER_TEMP/prettier"
+                  npm ci --ignore-scripts
 
             - name: Checkout PR branch
               env:
@@ -69,7 +89,9 @@ jobs:
               run: gh pr checkout ${{ github.event.issue.number }}
 
             - name: Run Prettier
-              run: npx prettier@3.7.4 --write .
+              run: |
+                  "$RUNNER_TEMP/prettier/node_modules/.bin/prettier" \
+                      --config "$RUNNER_TEMP/prettier/.prettierrc" --write .
 
             - name: Commit and push
               id: commit
@@ -87,7 +109,7 @@ jobs:
                   fi
 
             - name: Add completion reaction
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              uses: actions/github-script@v9.0.0
               with:
                   script: |
                       await github.rest.reactions.createForIssueComment({

@@ -18,7 +18,7 @@ info: Verso.Doc.Part.mk
   #[Verso.Doc.Inline.text "Title"]
   "Title"
   none
-  #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "A paragraph.", Verso.Doc.Inline.linebreak "\n"]]
+  #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "A paragraph."]]
   #[]
 -/
 #test_msgs in

@@ -4,12 +4,28 @@ updates:
       directory: "/"
       schedule:
           interval: "weekly"
+      cooldown:
+          default-days: 7
+      commit-message:
+          prefix: "chore"
 
     # The widget is type-checked against these packages, so a new InfoView release shows up here.
     - package-ecosystem: "npm"
       directory: "/"
       schedule:
           interval: "weekly"
+      # Releases are proposed only once they are a week old.
+      cooldown:
+          default-days: 7
+      commit-message:
+          prefix: "chore"
+      groups:
+          eslint:
+              patterns:
+                  - "eslint"
+                  - "eslint-*"
+                  - "@eslint/*"
+                  - "globals"
       ignore:
           # The React declarations follow the React the InfoView is built with, and a new major
           # version of that arrives with an InfoView release.
@@ -17,5 +33,12 @@ updates:
             update-types: ["version-update:semver-major"]
           - dependency-name: "@types/react-dom"
             update-types: ["version-update:semver-major"]
-          # Prettier's version is also pinned in check-format.yml, and the two move together.
-          - dependency-name: "prettier"
+
+    - package-ecosystem: "uv"
+      directory: "/browser-tests"
+      schedule:
+          interval: "weekly"
+      cooldown:
+          default-days: 7
+      commit-message:
+          prefix: "chore"

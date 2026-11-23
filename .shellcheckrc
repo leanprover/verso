@@ -1,0 +1,3 @@
+# Scripts that source a helper are checked together with it.
+external-sources=true
+source-path=SCRIPTDIR

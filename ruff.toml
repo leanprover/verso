@@ -1,0 +1,3 @@
+# Standard ruff settings for Verso-related repositories.
+required-version = "==0.17.6"
+line-length = 88

@@ -24,15 +24,18 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             contents: write
+        # A workflow_run event names its upstream workflow only by name, so the run also has
+        # to be a push in this repository, which is how a tagged version is deployed.
         if:
-            ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion ==
-            'success' }}
+            ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion ==
+            'success' && github.event.workflow_run.event == 'push' &&
+            github.event.workflow_run.head_repository.full_name == github.repository) }}
         steps:
             - name: Checkout repository
-              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              uses: actions/checkout@v7.0.1
 
             - name: Set up Python
-              uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+              uses: actions/setup-python@v7.1.0
               with:
                   python-version: "3.12"
 

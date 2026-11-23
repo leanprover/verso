@@ -1,8 +1,16 @@
 name: Deploy PR Preview
 
+# Publishes the site that CI built for a pull request as a Netlify preview.
+#
+# The file is the same in every repository. What differs is supplied by convention:
+# - the workflow that builds the site is named "CI",
+# - it uploads the site as an artifact named "site-for-deploy",
+# - the repository variable NETLIFY_SITE_ID holds the id of the Netlify site,
+# - the repository secret NETLIFY_AUTH_TOKEN holds the Netlify token.
+
 on:
     workflow_run:
-        workflows: ["Continuous Integration"]
+        workflows: ["CI"]
         types:
             - completed
 
@@ -20,16 +28,16 @@ jobs:
         # Only run when:
         # - The triggering workflow succeeded
         # - The triggering event was a pull_request
-        # - We're in the official repository (not a fork)
+        # - We're in a repository of the leanprover organization (not a fork)
         if: >
             github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event ==
-            'pull_request' && github.repository == 'leanprover/verso'
+            'pull_request' && github.repository_owner == 'leanprover'
         steps:
             # This workflow can use repository secrets, so it runs after PR CI
             # instead of directly on pull_request. It deploys the CI artifact
             # without checking out or executing pull-request code.
             - name: Resolve PR information
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              uses: actions/github-script@v9.0.0
               id: pr-info
               with:
                   script: |
@@ -100,23 +108,24 @@ jobs:
                       exit 1
                   fi
 
-            - name: Download HTML manual artifact
-              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+            - name: Download site artifact
+              uses: actions/download-artifact@v8.0.2
               with:
                   run-id: ${{ github.event.workflow_run.id }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  name: html-manual-for-deploy
-                  path: html-manual
+                  name: site-for-deploy
+                  path: site
 
-            # This third-party action is pinned because it receives the Netlify
-            # token. GitHub reporting is disabled here and handled below.
+            # A pull request's site is a preview. Under workflow_run, the ref of this job is
+            # always main, so the step marks the deployment as a preview and doesn't designate a
+            # production branch.
             - name: Deploy to Netlify
               id: netlify
-              uses: nwtgck/actions-netlify@d22a32a27c918fe470bbc562e984f80ec48c2668 # v4.0.0
+              uses: nwtgck/actions-netlify@v4.0.0
               with:
-                  publish-dir: html-manual
+                  publish-dir: site
                   production-deploy: false
-                  alias: verso-pr-${{ steps.pr-info.outputs.pullRequestNumber }}
+                  alias: pr-${{ steps.pr-info.outputs.pullRequestNumber }}
                   deploy-message:
                       "pr#${{ steps.pr-info.outputs.pullRequestNumber }}: ${{
                       steps.pr-info.outputs.pullRequestTitle }}"
@@ -130,14 +139,14 @@ jobs:
                   fails-without-credentials: true
               env:
                   NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-                  NETLIFY_SITE_ID: "8a89abd8-095b-4496-a9c1-381d2d5629ec"
+                  NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
 
             # The deployment should point at the PR test/merge SHA when
             # available, not the default-branch SHA of this workflow_run job.
             - name: Record GitHub deployment
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              uses: actions/github-script@v9.0.0
               env:
-                  DEPLOY_ENVIRONMENT: "verso-pr-#${{ steps.pr-info.outputs.pullRequestNumber }}"
+                  DEPLOY_ENVIRONMENT: "pr-#${{ steps.pr-info.outputs.pullRequestNumber }}"
                   DEPLOY_SOURCE_SHA: ${{ steps.pr-info.outputs.sourceHeadSha }}
                   DEPLOY_TARGET_SHA: ${{ steps.pr-info.outputs.targetCommitSha }}
                   DEPLOY_URL: ${{ steps.netlify.outputs.deploy-url }}
@@ -172,7 +181,7 @@ jobs:
                         auto_merge: false,
                         required_contexts: [],
                         environment,
-                        description: `Verso manual preview for ${environment}`,
+                        description: `Site preview for ${environment}`,
                         transient_environment: true,
                         production_environment: false,
                       });
@@ -193,10 +202,8 @@ jobs:
                         `Recorded ${environment} deployment ${deployment.data.id} for ${ref}: ${deployUrl}`
                       );
 
-            # Keep the existing PR-comment signal while the deployment-based
-            # preview path is validated.
             - name: Post deployment comment on PR
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              uses: actions/github-script@v9.0.0
               env:
                   DEPLOY_URL: ${{ steps.netlify.outputs.deploy-url }}
                   PULL_REQUEST_NUMBER: ${{ steps.pr-info.outputs.pullRequestNumber }}

@@ -113,3 +113,22 @@ Done
       break
 
 end
+
+section
+/-
+In single-page HTML output, no part gets its own page, so every ToC entry has the empty path. The
+entries' links must still point at the sections' IDs.
+-/
+private def singlePageToc : Toc where
+  title := "First section"
+  path := #[]
+  id := some "Repro--First-section"
+  sectionNum := none
+  children := [
+    {title := "Second section", path := #[], id := some "Repro--Second-section", sectionNum := none, children := []}
+  ]
+
+#test_guard (singlePageToc.html none).render.contains "href=\"/#Repro--First-section\""
+#test_guard (singlePageToc.html none).render.contains "href=\"/#Repro--Second-section\""
+
+end

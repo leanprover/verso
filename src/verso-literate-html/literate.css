@@ -22,6 +22,7 @@
     --verso-breadcrumb-color: #495057;
 
     /* Code boxes */
+    --verso-code-color: var(--verso-text-color);
     --verso-code-box-background-color: #f6f8fa;
     --verso-code-box-border-color: #e1e4e8;
 

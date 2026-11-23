@@ -215,9 +215,7 @@ public partial def Toc.html (depth : Option Nat) : Toc → Html
   | {title, shortTitle := _, path, id, sectionNum, children} =>
     if depth = some 0 then .empty
     else
-      let page :=
-        if path.isEmpty then "/"
-        else path.link id
+      let page := path.link id
       let sectionNum :=
         match sectionNum with
         | none => html%{<span class="unnumbered"></span>}
@@ -382,9 +380,13 @@ where
       | none => html%{<span class="unnumbered"></span>}
       | some ns => html%{<span class="number">{sectionNumberString ns}</span>{" "}}
 
-public def titlePage (title : Html) (authors : List String) (authorshipNote : Option String) (intro : Html) : Html := html%{
+/--
+Renders a manual's title page using the supplied heading's level, {lit}`id` attribute, and contents.
+-/
+public def titlePage (heading : Heading) (authors : List String) (authorshipNote : Option String)
+    (intro : Html) : Html := html%{
   <div class="titlepage">
-    <h1>{title}</h1>
+    {heading.toHtml}
     <div class="authors">
       {authors.toArray.map (html%{<span class="author">{Coe.coe ·}</span>})}
       {if let some note := authorshipNote then html%{<p class="note">{note}</p>} else .empty }
@@ -400,13 +402,7 @@ on servers that don't do this step.
 This is a hack - it only helps clients with JS enabled, and should really be fixed in the server
 configuration. But not all hosts allow this to happen, and most clients have JS enabled.
 -/
-def addSlashJs : String :=
-r#"(function(){
-  const {protocol:proto, host:hostName, pathname:path, search:srch, hash:hsh} = window.location;
-  if (!(path.endsWith("/") || path.endsWith(".html"))) {
-    window.location.replace(`${proto}//${hostName}${path}/${srch}${hsh}`);
-  }
-})()"#
+def addSlashJs : String := include_str "../../../static-web/add-trailing-slash.js"
 
 /--
 Applies a saved table-of-contents width before the first paint.
@@ -454,7 +450,6 @@ public def page
         <title>{textTitle}</title>
         <link rel="stylesheet" href="book.css" />
         <link rel="stylesheet" href="verso-vars.css" />
-        <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
         { searchAssetTags }
         <script src="toc-resize.js" defer="defer"></script>
         {extraJsFiles.map fun f => (html%{<script src={s!"{f.1}"} {...if f.2 then defer else #[]}></script>})}

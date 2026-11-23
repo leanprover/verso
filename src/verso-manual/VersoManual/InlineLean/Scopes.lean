@@ -58,7 +58,12 @@ def runWithVariables (elabFn : Array Expr → TermElabM α) : TermElabM α := do
   let scope := (← getScopes).head!
   Term.withAutoBoundImplicit do
     let msgLog ← Core.getMessageLog
-    Term.elabBinders scope.varDecls fun xs => do
+    -- No info is recorded while the section variables are elaborated. The `variable` command's own
+    -- elaboration has already recorded their binders, and recording them again here would leave
+    -- binders in the document's info tree that are reported by the unused variable linter.
+
+    let infoEnabled := (← getInfoState).enabled
+    withEnableInfoTree false <| Term.elabBinders scope.varDecls fun xs => withEnableInfoTree infoEnabled do
       -- We need to synthesize postponed terms because this is a checkpoint for the auto-bound implicit feature
       -- If we don't use this checkpoint here, then auto-bound implicits in the postponed terms will not be handled correctly.
       Term.synthesizeSyntheticMVarsNoPostponing

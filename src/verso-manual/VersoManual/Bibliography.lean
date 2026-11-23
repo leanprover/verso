@@ -218,7 +218,7 @@ def Citable.bibTeX (go : Doc.Inline Genre.Manual → TeXT Manual (ReaderT Extens
        \Lean{authors}  ", "
        \Lean{toString p.year} ". "
        \Lean{ link \TeX{ "``" \Lean{← go p.title} "''" } } ". In "
-       \em{ \Lean{ ← go p.booktitle } "." }
+       \emph{ \Lean{ ← go p.booktitle } "." }
        \Lean{ (← p.series.mapM go).map (fun x => \TeX{" (" \Lean{x} ") "}) |>.getD .empty  }
      }
   | .article p =>
@@ -227,15 +227,15 @@ def Citable.bibTeX (go : Doc.Inline Genre.Manual → TeXT Manual (ReaderT Extens
     let numberInl ← go p.number
     let numberTeX : TeX := if (slugString p.number).isEmpty then .empty
                             else \TeX{"(" \Lean{numberInl} ")"}
-    let pagesTeX : TeX := p.pages.map (fun (x, y) => \TeX{", pp.~" \Lean{toString x} "--" \Lean{toString y} })
+    let pagesTeX : TeX := p.pages.map (fun (x, y) => \TeX{", pp." ~ \Lean{toString x} "--" \Lean{toString y} })
                            |>.getD .empty
     return \TeX{
        \Lean{authors}  " ("
        \Lean{ (← p.month.mapM go).map (fun x => \TeX{\Lean{x} " "}) |>.getD .empty  }
        \Lean{toString p.year} "). "
        \Lean{ link \TeX{ "``" \Lean{← go p.title} "''" } } ". "
-       \em{ \Lean{ ← go p.journal } \Lean{journalDot} }
-       "~" \textbf{ \Lean{ ← go p.volume } }
+       \emph{ \Lean{ ← go p.journal } \Lean{journalDot} }
+       ~ \textbf{ \Lean{ ← go p.volume } }
        \Lean{numberTeX}
        \Lean{pagesTeX}
        "."
@@ -244,7 +244,7 @@ def Citable.bibTeX (go : Doc.Inline Genre.Manual → TeXT Manual (ReaderT Extens
     return \TeX{
        \Lean{← go p.author}  ", "
        \Lean{toString p.year} ". "
-       \em{ \Lean{ ← go p.title } } ". "
+       \emph{ \Lean{ ← go p.title } } ". "
        \Lean{← go p.degree} ", "
        \Lean{← go p.university}
      }
@@ -326,7 +326,7 @@ where
     else if h : p.authors.size = 1 then
       go <| Bibliography.lastName p.authors[0]
     else if h : p.authors.size > 3 then
-      (· ++ \TeX{" " \em{"et al."} }) <$> go (Bibliography.lastName p.authors[0])
+      (· ++ \TeX{" " \emph{"et al."} }) <$> go (Bibliography.lastName p.authors[0])
     else andListTeX <$> p.authors.mapM (go ∘ Bibliography.lastName)
 
 @[implicit_reducible]

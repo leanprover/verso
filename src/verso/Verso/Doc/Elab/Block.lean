@@ -28,13 +28,22 @@ def decorateClosing : BlockView → DocElabM Unit
   | _ => pure ()
 
 
-/-- Elaborates a parsed block into syntax denoting an expression of type `Block genre`. -/
+/--
+Elaborates a parsed block into syntax that denotes an expression of type `Block genre`.
+
+Blocks whose elaboration fails, either due to an exception thrown by its expander or all expanders
+deciding not to attempt it, are reported. They elaborate to `Block.empty`.
+
+`Syntax.missing` elaborates to `Block.empty` without a new logged message because Lean has already
+reported the parse error.
+-/
 public partial def elabBlock (block : VersoBlock) : DocElabM (TSyntax `term) :=
   withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
-  withRef block <| withFreshMacroScope <| withIncRecDepth <| do
+  withRef block <| withFreshMacroScope <| withIncRecDepth <|
+  elabOrEmpty ``Verso.Doc.Block.empty do
   match block.raw with
-  | .missing => elabMissing ``Verso.Doc.Block.empty ``Verso.Doc.Block
-  | stx@(.node _ kind _) => elabWithMissing stx ``Verso.Doc.Block.empty do
+  | .missing => return mkCIdent ``Verso.Doc.Block.empty
+  | stx@(.node _ kind _) => do
     let env ← getEnv
     match (← liftMacroM (expandMacroImpl? env stx)) with
     | some (_decl, stxNew?) => -- TODO terminfo here? Right now, we suppress most uses of it.

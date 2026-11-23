@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 import Errata
 import Verso
 import VersoManual
+import VersoTests.DocCommandInput
 import VersoTests.Refs.AcrossBlocks
 import VersoTests.Refs.ManualFootnote
 import VersoTests.Refs.SameName
@@ -92,8 +93,7 @@ info: Verso.Doc.Part.mk
                    "earlier"
                    #[(Verso.Doc.Inline.text "An earlier footnote with a "),
                      (Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "link")] "https://example.com/earlier"),
-                     (Verso.Doc.Inline.text ".")])],
-            Verso.Doc.Inline.linebreak "\n"]]
+                     (Verso.Doc.Inline.text ".")])]]]
       #[]]
 -/
 #test_msgs in
@@ -115,10 +115,7 @@ info: Verso.Doc.Part.mk
   none
   #[Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "A ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "link")] "https://example.com/third",
-        Verso.Doc.Inline.text ".",
-        Verso.Doc.Inline.footnote
-          "shared"
-          #[(Verso.Doc.Inline.text "The third footnote."), (Verso.Doc.Inline.linebreak "\n")]]]
+        Verso.Doc.Inline.text ".", Verso.Doc.Inline.footnote "shared" #[(Verso.Doc.Inline.text "The third footnote.")]]]
   #[]
 -/
 #test_msgs in
@@ -195,7 +192,7 @@ info: some
 /--
 info: some
   ["text \"A note about \"", "other Verso.Genre.Manual.InlineLean.Inline.lean (mentions Nat.succ: true)",
-    "text \", with a \"", "link \"https://example.com\"", "text \".\"", "other inline"]
+    "text \", with a \"", "link \"https://example.com\"", "text \".\""]
 -/
 #test_msgs in
 #eval (footnoteIn "note" (%doc VersoTests.Refs.ManualFootnote)).map summarize
@@ -207,57 +204,7 @@ reported them. Command 0 is the {lit}`#doc` command itself, and command {lit}`k`
 {lit}`k`-th top-level block.
 -/
 
-/-- Renders a message with its position. -/
-def showMessage (m : Message) : IO String := do
-  let severity := match m.severity with
-    | .error => "error"
-    | .warning => "warning"
-    | .information => "info"
-  return s!"{m.pos.line}:{m.pos.column}: {severity}: {← m.data.toString}"
-
-/--
-Elaborates {lit}`input` as the rest of a module, in the current environment. Returns the resulting
-environment, and each command's messages rendered with the command's number.
--/
-def elabModuleRest (input : String) : CommandElabM (Environment × String) := do
-  let inputCtx := Parser.mkInputContext input "RefsInput.lean"
-  let st ← IO.processCommandsIncrementally inputCtx {}
-    (Command.mkState (← getEnv) {} (← getOptions)) none
-  let mut out := #[]
-  let mut snap := st.initialSnap
-  let mut i := 0
-  repeat
-    let msgs := Language.toSnapshotTree snap.elabSnap |>.getAll
-      |>.map (·.diagnostics.msgLog) |>.foldl (· ++ ·) MessageLog.empty
-    for m in msgs.toList do
-      out := out.push s!"command {i}: {← showMessage m}"
-    i := i + 1
-    match snap.nextCmdSnap? with
-    | some next => snap := next.task.get
-    | none => break
-  return (st.commandState.env, "\n".intercalate out.toList)
-
-unsafe def evalDocUnsafe (env : Environment) (opts : Options) (n : Name) : IO (VersoDoc Genre.none) :=
-  IO.ofExcept <| env.evalConst (VersoDoc Genre.none) opts n
-
-/-- Evaluates the document constant {lit}`n` of {lit}`env`. -/
-@[implemented_by evalDocUnsafe]
-opaque evalDoc (env : Environment) (opts : Options) (n : Name) : IO (VersoDoc Genre.none)
-
-/--
-Elaborates {lit}`input`, which ends with a {lit}`#doc` command, and logs its messages and its
-document.
--/
-def checkDocInput (input : String) : CommandElabM Unit := do
-  let (env, msgs) ← elabModuleRest input
-  logInfo msgs
-  let docName := Verso.Doc.docName (← getMainModule)
-  if env.contains docName then
-    match ← (evalDoc env (← getOptions) docName).toBaseIO with
-    | .ok doc => logInfo m!"{repr doc.toPart}"
-    | .error _ => logInfo m!"The document is defined, and it contains errors, so it can't be evaluated."
-  else
-    logInfo m!"The document {docName} is not defined."
+open Verso.Tests.DocCommandInput
 
 /-
 In a {lit}`#doc` document, every message about links and footnotes appears, and the document is
@@ -355,7 +302,8 @@ info: Verso.Doc.Part.mk
   none
   #[Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
-        Verso.Doc.Inline.text "."]]
+        Verso.Doc.Inline.text "."],
+    Verso.Doc.Block.concat #[]]
   #[]
 -/
 #test_msgs in
@@ -379,7 +327,7 @@ info: Verso.Doc.Part.mk
   #[Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
         Verso.Doc.Inline.text "."]]
-  #[]
+  #[Verso.Doc.Part.mk #[Verso.Doc.Inline.text "A header that is too deep"] "A header that is too deep" none #[] #[]]
 -/
 #test_msgs in
 #eval checkDocInput "#doc (.none) \"Last block is a header that is too deep\" =>
@@ -415,7 +363,7 @@ info: Verso.Doc.Part.mk
   "Footnote error"
   none
   #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "Text.", Verso.Doc.Inline.footnote "f" #[]],
-    Verso.Doc.Block.para #[Verso.Doc.Inline.text "A later paragraph.", Verso.Doc.Inline.linebreak "\n"]]
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "A later paragraph."]]
   #[]
 -/
 #test_msgs in
@@ -474,7 +422,7 @@ info: Verso.Doc.Part.mk
         Verso.Doc.Inline.text "."],
     Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "Broken ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "u")] "",
-        Verso.Doc.Inline.text " then ", Verso.Doc.Inline.concat #[], Verso.Doc.Inline.linebreak "\n"]]
+        Verso.Doc.Inline.text " then ", Verso.Doc.Inline.concat #[]]]
   #[]
 -/
 #test_msgs in
@@ -496,8 +444,7 @@ info: Verso.Doc.Part.mk
   #[Verso.Doc.Block.para
       #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
         Verso.Doc.Inline.text "."],
-    Verso.Doc.Block.para
-      #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[], Verso.Doc.Inline.linebreak "\n"]]
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[]]]
   #[]
 -/
 #test_msgs in
@@ -521,8 +468,7 @@ info: Verso.Doc.Part.mk
       #[Verso.Doc.Inline.text "First ", Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "use")] "",
         Verso.Doc.Inline.text "."],
     Verso.Doc.Block.para #[Verso.Doc.Inline.text "Second."],
-    Verso.Doc.Block.para
-      #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[], Verso.Doc.Inline.linebreak "\n"]]
+    Verso.Doc.Block.para #[Verso.Doc.Inline.text "Broken then ", Verso.Doc.Inline.concat #[]]]
   #[]
 -/
 #test_msgs in
