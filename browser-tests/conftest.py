@@ -152,7 +152,19 @@ def browser(request, playwright_instance):
 
 
 @pytest.fixture
-def page(browser):
+def page(browser, request):
+    """A fresh page that fails its test if any request returns an error status or fails to load."""
     page = browser.new_page()
+    failures = []
+    page.on(
+        "response",
+        lambda r: failures.append(f"{r.status} {r.url}") if r.status >= 400 else None,
+    )
+    page.on(
+        "requestfailed",
+        lambda r: failures.append(f"failed ({r.failure}) {r.url}"),
+    )
     yield page
     page.close()
+    if failures and request.node.get_closest_marker("allow_missing_files") is None:
+        pytest.fail("requests for missing or unloadable files:\n" + "\n".join(failures))

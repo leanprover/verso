@@ -1,9 +1,7 @@
 import katex from '../katex.mjs';
 
 /* eslint-disable */
-
 /* -*- Mode: JavaScript; indent-tabs-mode:nil; js-indent-level: 2 -*- */
-
 /* vim: set ts=2 et sw=2 tw=80: */
 
 /*************************************************************
@@ -46,24 +44,29 @@ import katex from '../katex.mjs';
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+
 //
 // Coding Style
 //   - use '' for identifiers that can by minified/uglified
 //   - use "" for strings that need to stay untouched
+
 // version: "3.3.0" for MathJax and KaTeX
+
 // Add \ce, \pu, and \tripledash to the KaTeX macros.
+
 katex.__defineMacro("\\ce", function (context) {
   return chemParse(context.consumeArgs(1)[0], "ce");
 });
-
 katex.__defineMacro("\\pu", function (context) {
   return chemParse(context.consumeArgs(1)[0], "pu");
-}); //  Needed for \bond for the ~ forms
+});
+
+//  Needed for \bond for the ~ forms
 //  Raise by 2.56mu, not 2mu. We're raising a hyphen-minus, U+002D, not 
 //  a mathematical minus, U+2212. So we need that extra 0.56.
-
-
 katex.__defineMacro("\\tripledash", "{\\vphantom{-}\\raisebox{2.56mu}{$\\mkern2mu" + "\\tiny\\text{-}\\mkern1mu\\text{-}\\mkern1mu\\text{-}\\mkern2mu$}}");
+
+//
 //  This is the main function for handing the \ce and \pu commands.
 //  It takes the argument to \ce or \pu and returns the corresponding TeX string.
 //
@@ -72,27 +75,23 @@ var chemParse = function chemParse(tokens, stateMachine) {
   // Recreate the argument string from KaTeX's array of tokens.
   var str = "";
   var expectedLoc = tokens.length && tokens[tokens.length - 1].loc.start;
-
   for (var i = tokens.length - 1; i >= 0; i--) {
     if (tokens[i].loc.start > expectedLoc) {
       // context.consumeArgs has eaten a space.
       str += " ";
       expectedLoc = tokens[i].loc.start;
     }
-
     str += tokens[i].text;
     expectedLoc += tokens[i].text.length;
   }
-
   var tex = texify.go(mhchemParser.go(str, stateMachine));
   return tex;
-}; //
+};
+
+//
 // Core parser for mhchem syntax  (recursive)
 //
-
 /** @type {MhchemParser} */
-
-
 var mhchemParser = {
   //
   // Parses mchem \ce syntax
@@ -104,12 +103,12 @@ var mhchemParser = {
     if (!input) {
       return [];
     }
-
     if (stateMachine === undefined) {
       stateMachine = 'ce';
     }
+    var state = '0';
 
-    var state = '0'; //
+    //
     // String buffers for parsing:
     //
     // buffer.a == amount
@@ -142,79 +141,68 @@ var mhchemParser = {
     // 3 == next atom
     // c == macro
     //
-
     /** @type {Buffer} */
-
     var buffer = {};
     buffer['parenthesisLevel'] = 0;
     input = input.replace(/\n/g, " ");
     input = input.replace(/[\u2212\u2013\u2014\u2010]/g, "-");
-    input = input.replace(/[\u2026]/g, "..."); //
+    input = input.replace(/[\u2026]/g, "...");
+
+    //
     // Looks through mhchemParser.transitions, to execute a matching action
     // (recursive)
     //
-
     var lastInput;
     var watchdog = 10;
     /** @type {ParserOutput[]} */
-
     var output = [];
-
     while (true) {
       if (lastInput !== input) {
         watchdog = 10;
         lastInput = input;
       } else {
         watchdog--;
-      } //
+      }
+      //
       // Find actions in transition table
       //
-
-
       var machine = mhchemParser.stateMachines[stateMachine];
       var t = machine.transitions[state] || machine.transitions['*'];
-
       iterateTransitions: for (var i = 0; i < t.length; i++) {
         var matches = mhchemParser.patterns.match_(t[i].pattern, input);
-
         if (matches) {
           //
           // Execute actions
           //
           var task = t[i].task;
-
           for (var iA = 0; iA < task.action_.length; iA++) {
-            var o; //
+            var o;
+            //
             // Find and execute action
             //
-
             if (machine.actions[task.action_[iA].type_]) {
               o = machine.actions[task.action_[iA].type_](buffer, matches.match_, task.action_[iA].option);
             } else if (mhchemParser.actions[task.action_[iA].type_]) {
               o = mhchemParser.actions[task.action_[iA].type_](buffer, matches.match_, task.action_[iA].option);
             } else {
               throw ["MhchemBugA", "mhchem bug A. Please report. (" + task.action_[iA].type_ + ")"]; // Trying to use non-existing action
-            } //
+            }
+            //
             // Add output
             //
-
-
             mhchemParser.concatArray(output, o);
-          } //
+          }
+          //
           // Set next state,
           // Shorten input,
           // Continue with next character
           //   (= apply only one transition per position)
           //
-
-
           state = task.nextState || state;
-
           if (input.length > 0) {
             if (!task.revisit) {
               input = matches.remainder;
             }
-
             if (!task.toContinue) {
               break iterateTransitions;
             }
@@ -222,11 +210,10 @@ var mhchemParser = {
             return output;
           }
         }
-      } //
+      }
+      //
       // Prevent infinite loop
       //
-
-
       if (watchdog <= 0) {
         throw ["MhchemBugU", "mhchem bug U. Please report."]; // Unexpected character
       }
@@ -270,46 +257,37 @@ var mhchemParser = {
       '-9.,9 no missing 0': /^[+\-]?[0-9]+(?:[.,][0-9]+)?/,
       '(-)(9.,9)(e)(99)': function e99(input) {
         var m = input.match(/^(\+\-|\+\/\-|\+|\-|\\pm\s?)?([0-9]+(?:[,.][0-9]+)?|[0-9]*(?:\.[0-9]+))?(\((?:[0-9]+(?:[,.][0-9]+)?|[0-9]*(?:\.[0-9]+))\))?(?:([eE]|\s*(\*|x|\\times|\u00D7)\s*10\^)([+\-]?[0-9]+|\{[+\-]?[0-9]+\}))?/);
-
         if (m && m[0]) {
           return {
             match_: m.splice(1),
             remainder: input.substr(m[0].length)
           };
         }
-
         return null;
       },
       '(-)(9)^(-9)': function _(input) {
         var m = input.match(/^(\+\-|\+\/\-|\+|\-|\\pm\s?)?([0-9]+(?:[,.][0-9]+)?|[0-9]*(?:\.[0-9]+)?)\^([+\-]?[0-9]+|\{[+\-]?[0-9]+\})/);
-
         if (m && m[0]) {
           return {
             match_: m.splice(1),
             remainder: input.substr(m[0].length)
           };
         }
-
         return null;
       },
-      'state of aggregation $': function stateOfAggregation$(input) {
+      'state of aggregation $': function state_of_aggregation_$(input) {
         // ... or crystal system
         var a = mhchemParser.patterns.findObserveGroups(input, "", /^\([a-z]{1,3}(?=[\),])/, ")", ""); // (aq), (aq,$\infty$), (aq, sat)
-
         if (a && a.remainder.match(/^($|[\s,;\)\]\}])/)) {
           return a;
         } //  AND end of 'phrase'
-
-
         var m = input.match(/^(?:\((?:\\ca\s?)?\$[amothc]\$\))/); // OR crystal system ($o$) (\ca$c$)
-
         if (m) {
           return {
             match_: m[0],
             remainder: input.substr(m[0].length)
           };
         }
-
         return null;
       },
       '_{(state of aggregation)}$': /^_\{(\([a-z]{1,3}\))\}/,
@@ -431,23 +409,19 @@ var mhchemParser = {
       'roman numeral': /^[IVX]+/,
       '1/2$': /^[+\-]?(?:[0-9]+|\$[a-z]\$|[a-z])\/[0-9]+(?:\$[a-z]\$|[a-z])?$/,
       'amount': function amount(input) {
-        var match; // e.g. 2, 0.5, 1/2, -2, n/2, +;  $a$ could be added later in parsing
-
+        var match;
+        // e.g. 2, 0.5, 1/2, -2, n/2, +;  $a$ could be added later in parsing
         match = input.match(/^(?:(?:(?:\([+\-]?[0-9]+\/[0-9]+\)|[+\-]?(?:[0-9]+|\$[a-z]\$|[a-z])\/[0-9]+|[+\-]?[0-9]+[.,][0-9]+|[+\-]?\.[0-9]+|[+\-]?[0-9]+)(?:[a-z](?=\s*[A-Z]))?)|[+\-]?[a-z](?=\s*[A-Z])|\+(?!\s))/);
-
         if (match) {
           return {
             match_: match[0],
             remainder: input.substr(match[0].length)
           };
         }
-
         var a = mhchemParser.patterns.findObserveGroups(input, "", "$", "$", "");
-
         if (a) {
           // e.g. $2n-1$, $-$
           match = a.match_.match(/^\$(?:\(?[+\-]?(?:[0-9]*[a-z]?[+\-])?[0-9]*[a-z](?:[+\-][0-9]*[a-z]?)?\)?|\+|-)\$$/);
-
           if (match) {
             return {
               match_: match[0],
@@ -455,7 +429,6 @@ var mhchemParser = {
             };
           }
         }
-
         return null;
       },
       'amount2': function amount2(input) {
@@ -466,17 +439,13 @@ var mhchemParser = {
         if (input.match(/^\([a-z]+\)$/)) {
           return null;
         } // state of aggregation = no formula
-
-
         var match = input.match(/^(?:[a-z]|(?:[0-9\ \+\-\,\.\(\)]+[a-z])+[0-9\ \+\-\,\.\(\)]*|(?:[a-z][0-9\ \+\-\,\.\(\)]+)+[a-z]?)$/);
-
         if (match) {
           return {
             match_: match[0],
             remainder: input.substr(match[0].length)
           };
         }
-
         return null;
       },
       'uprightEntities': /^(?:pH|pOH|pC|pK|iPr|iBu)(?=$|[^a-zA-Z])/,
@@ -491,29 +460,21 @@ var mhchemParser = {
           if (input.indexOf(pattern) !== 0) {
             return null;
           }
-
           return pattern;
         } else {
           var match = input.match(pattern);
-
           if (!match) {
             return null;
           }
-
           return match[0];
         }
       };
       /** @type {{(input: string, i: number, endChars: string | RegExp): {endMatchBegin: number, endMatchEnd: number} | null;}} */
-
-
       var _findObserveGroups = function _findObserveGroups(input, i, endChars) {
         var braces = 0;
-
         while (i < input.length) {
           var a = input.charAt(i);
-
           var match = _match(input.substr(i), endChars);
-
           if (match !== null && braces === 0) {
             return {
               endMatchBegin: i,
@@ -528,38 +489,27 @@ var mhchemParser = {
               braces--;
             }
           }
-
           i++;
         }
-
         if (braces > 0) {
           return null;
         }
-
         return null;
       };
-
       var match = _match(input, begExcl);
-
       if (match === null) {
         return null;
       }
-
       input = input.substr(match.length);
       match = _match(input, begIncl);
-
       if (match === null) {
         return null;
       }
-
       var e = _findObserveGroups(input, match.length, endIncl || endExcl);
-
       if (e === null) {
         return null;
       }
-
       var match1 = input.substring(0, endIncl ? e.endMatchEnd : e.endMatchBegin);
-
       if (!(beg2Excl || beg2Incl)) {
         return {
           match_: match1,
@@ -567,13 +517,10 @@ var mhchemParser = {
         };
       } else {
         var group2 = this.findObserveGroups(input.substr(e.endMatchEnd), beg2Excl, beg2Incl, end2Incl, end2Excl);
-
         if (group2 === null) {
           return null;
         }
         /** @type {string[]} */
-
-
         var matchRet = [match1, group2.match_];
         return {
           match_: combine ? matchRet.join("") : matchRet,
@@ -588,7 +535,6 @@ var mhchemParser = {
     //
     match_: function match_(m, input) {
       var pattern = mhchemParser.patterns.patterns[m];
-
       if (pattern === undefined) {
         throw ["MhchemBugP", "mhchem bug P. Please report. (" + m + ")"]; // Trying to use non-existing pattern
       } else if (typeof pattern === "function") {
@@ -596,10 +542,8 @@ var mhchemParser = {
       } else {
         // RegExp
         var match = input.match(pattern);
-
         if (match) {
           var mm;
-
           if (match[2]) {
             mm = [match[1], match[2]];
           } else if (match[1]) {
@@ -607,13 +551,11 @@ var mhchemParser = {
           } else {
             mm = match[0];
           }
-
           return {
             match_: mm,
             remainder: input.substr(match[0].length)
           };
         }
-
         return null;
       }
     }
@@ -685,7 +627,7 @@ var mhchemParser = {
     'tex-math': function texMath(buffer, m) {
       return mhchemParser.go(m, 'tex-math');
     },
-    'tex-math tight': function texMathTight(buffer, m) {
+    'tex-math tight': function texMath_tight(buffer, m) {
       return mhchemParser.go(m, 'tex-math tight');
     },
     'bond': function bond(buffer, m, k) {
@@ -703,15 +645,13 @@ var mhchemParser = {
     'ce': function ce(buffer, m) {
       return mhchemParser.go(m);
     },
-    '1/2': function _(buffer, m) {
+    '1/2': function _2(buffer, m) {
       /** @type {ParserOutput[]} */
       var ret = [];
-
       if (m.match(/^[+\-]/)) {
         ret.push(m.substr(0, 1));
         m = m.substr(1);
       }
-
       var n = m.match(/^([0-9]+|\$[a-z]\$|[a-z])\/([0-9]+)(\$[a-z]\$|[a-z])?$/);
       n[1] = n[1].replace(/\$/g, "");
       ret.push({
@@ -719,7 +659,6 @@ var mhchemParser = {
         p1: n[1],
         p2: n[2]
       });
-
       if (n[3]) {
         n[3] = n[3].replace(/\$/g, "");
         ret.push({
@@ -727,7 +666,6 @@ var mhchemParser = {
           p1: n[3]
         });
       }
-
       return ret;
     },
     '9,9': function _(buffer, m) {
@@ -742,46 +680,37 @@ var mhchemParser = {
   createTransitions: function createTransitions(o) {
     var pattern, state;
     /** @type {string[]} */
-
     var stateArray;
-    var i; //
+    var i;
+    //
     // 1. Collect all states
     //
-
     /** @type {Transitions} */
-
     var transitions = {};
-
     for (pattern in o) {
       for (state in o[pattern]) {
         stateArray = state.split("|");
         o[pattern][state].stateArray = stateArray;
-
         for (i = 0; i < stateArray.length; i++) {
           transitions[stateArray[i]] = [];
         }
       }
-    } //
+    }
+    //
     // 2. Fill states
     //
-
-
     for (pattern in o) {
       for (state in o[pattern]) {
         stateArray = o[pattern][state].stateArray || [];
-
         for (i = 0; i < stateArray.length; i++) {
           //
           // 2a. Normalize actions into array:  'text=' ==> [{type_:'text='}]
           // (Note to myself: Resolving the function here would be problematic. It would need .bind (for *this*) and currying (for *option*).)
           //
-
           /** @type {any} */
           var p = o[pattern][state];
-
           if (p.action_) {
             p.action_ = [].concat(p.action_);
-
             for (var k = 0; k < p.action_.length; k++) {
               if (typeof p.action_[k] === "string") {
                 p.action_[k] = {
@@ -791,13 +720,11 @@ var mhchemParser = {
             }
           } else {
             p.action_ = [];
-          } //
+          }
+          //
           // 2.b Multi-insert
           //
-
-
           var patternArray = pattern.split("|");
-
           for (var j = 0; j < patternArray.length; j++) {
             if (stateArray[i] === '*') {
               // insert into all
@@ -817,14 +744,14 @@ var mhchemParser = {
         }
       }
     }
-
     return transitions;
   },
   stateMachines: {}
-}; //
+};
+
+//
 // Definition of state machines
 //
-
 mhchemParser.stateMachines = {
   //
   // \ce state machines
@@ -1470,9 +1397,8 @@ mhchemParser.stateMachines = {
       }
     }),
     actions: {
-      'o after d': function oAfterD(buffer, m) {
+      'o after d': function o_after_d(buffer, m) {
         var ret;
-
         if ((buffer.d || "").match(/^[0-9]+$/)) {
           var tmp = buffer.d;
           buffer.d = undefined;
@@ -1481,15 +1407,14 @@ mhchemParser.stateMachines = {
         } else {
           ret = this['output'](buffer);
         }
-
         mhchemParser.actions['o='](buffer, m);
         return ret;
       },
-      'd= kv': function dKv(buffer, m) {
+      'd= kv': function d_kv(buffer, m) {
         buffer.d = m;
         buffer.dType = 'kv';
       },
-      'charge or bond': function chargeOrBond(buffer, m) {
+      'charge or bond': function charge_or_bond(buffer, m) {
         if (buffer['beginsWithBond']) {
           /** @type {ParserOutput[]} */
           var ret = [];
@@ -1500,21 +1425,17 @@ mhchemParser.stateMachines = {
           buffer.d = m;
         }
       },
-      '- after o/d': function afterOD(buffer, m, isAfterD) {
+      '- after o/d': function _after_o_d(buffer, m, isAfterD) {
         var c1 = mhchemParser.patterns.match_('orbital', buffer.o || "");
         var c2 = mhchemParser.patterns.match_('one lowercase greek letter $', buffer.o || "");
         var c3 = mhchemParser.patterns.match_('one lowercase latin letter $', buffer.o || "");
         var c4 = mhchemParser.patterns.match_('$one lowercase latin letter$ $', buffer.o || "");
         var hyphenFollows = m === "-" && (c1 && c1.remainder === "" || c2 || c3 || c4);
-
         if (hyphenFollows && !buffer.a && !buffer.b && !buffer.p && !buffer.d && !buffer.q && !c1 && c3) {
           buffer.o = '$' + buffer.o + '$';
         }
         /** @type {ParserOutput[]} */
-
-
         var ret = [];
-
         if (hyphenFollows) {
           mhchemParser.concatArray(ret, this['output'](buffer));
           ret.push({
@@ -1522,7 +1443,6 @@ mhchemParser.stateMachines = {
           });
         } else {
           c1 = mhchemParser.patterns.match_('digits', buffer.d || "");
-
           if (isAfterD && c1 && c1.remainder === '') {
             mhchemParser.concatArray(ret, mhchemParser.actions['d='](buffer, m));
             mhchemParser.concatArray(ret, this['output'](buffer));
@@ -1531,10 +1451,9 @@ mhchemParser.stateMachines = {
             mhchemParser.concatArray(ret, mhchemParser.actions['bond'](buffer, m, "-"));
           }
         }
-
         return ret;
       },
-      'a to o': function aToO(buffer) {
+      'a to o': function a_to_o(buffer) {
         buffer.o = buffer.a;
         buffer.a = undefined;
       },
@@ -1556,7 +1475,7 @@ mhchemParser.stateMachines = {
       'parenthesisLevel--': function parenthesisLevel(buffer) {
         buffer['parenthesisLevel']--;
       },
-      'state of aggregation': function stateOfAggregation(buffer, m) {
+      'state of aggregation': function state_of_aggregation(buffer, m) {
         return {
           type_: 'state of aggregation',
           p1: mhchemParser.go(m, 'o')
@@ -1565,7 +1484,6 @@ mhchemParser.stateMachines = {
       'comma': function comma(buffer, m) {
         var a = m.replace(/\s*$/, '');
         var withSpace = a !== m;
-
         if (withSpace && buffer['parenthesisLevel'] === 0) {
           return {
             type_: 'comma enumeration L',
@@ -1583,20 +1501,16 @@ mhchemParser.stateMachines = {
         //   undefined = if we have nothing else to output, also ignore the just read space (buffer.sb)
         //   1 = an entity follows, never omit the space if there was one just read before (can only apply to state 1)
         //   2 = 1 + the entity can have an amount, so output a\, instead of converting it to o (can only apply to states a|as)
-
         /** @type {ParserOutput | ParserOutput[]} */
         var ret;
-
         if (!buffer.r) {
           ret = [];
-
           if (!buffer.a && !buffer.b && !buffer.p && !buffer.o && !buffer.q && !buffer.d && !entityFollows) ; else {
             if (buffer.sb) {
               ret.push({
                 type_: 'entitySkip'
               });
             }
-
             if (!buffer.o && !buffer.q && !buffer.d && !buffer.b && !buffer.p && entityFollows !== 2) {
               buffer.o = buffer.a;
               buffer.a = undefined;
@@ -1612,7 +1526,6 @@ mhchemParser.stateMachines = {
                 buffer.dType = undefined;
               }
             }
-
             ret.push({
               type_: 'chemfive',
               a: mhchemParser.go(buffer.a, 'a'),
@@ -1626,10 +1539,8 @@ mhchemParser.stateMachines = {
           }
         } else {
           // r
-
           /** @type {ParserOutput[]} */
           var rd;
-
           if (buffer.rdt === 'M') {
             rd = mhchemParser.go(buffer.rd, 'tex-math');
           } else if (buffer.rdt === 'T') {
@@ -1641,10 +1552,7 @@ mhchemParser.stateMachines = {
             rd = mhchemParser.go(buffer.rd);
           }
           /** @type {ParserOutput[]} */
-
-
           var rq;
-
           if (buffer.rqt === 'M') {
             rq = mhchemParser.go(buffer.rq, 'tex-math');
           } else if (buffer.rqt === 'T') {
@@ -1655,7 +1563,6 @@ mhchemParser.stateMachines = {
           } else {
             rq = mhchemParser.go(buffer.rq);
           }
-
           ret = {
             type_: 'arrow',
             r: buffer.r,
@@ -1663,13 +1570,11 @@ mhchemParser.stateMachines = {
             rq: rq
           };
         }
-
         for (var p in buffer) {
           if (p !== 'parenthesisLevel' && p !== 'beginsWithBond') {
             delete buffer[p];
           }
         }
-
         return ret;
       },
       'oxidation-output': function oxidationOutput(buffer, m) {
@@ -1867,11 +1772,9 @@ mhchemParser.stateMachines = {
             type_: 'text',
             p1: buffer.text_
           };
-
           for (var p in buffer) {
             delete buffer[p];
           }
-
           return ret;
         }
       }
@@ -1976,7 +1879,7 @@ mhchemParser.stateMachines = {
       }
     }),
     actions: {
-      'state of aggregation': function stateOfAggregation(buffer, m) {
+      'state of aggregation': function state_of_aggregation(buffer, m) {
         return {
           type_: 'state of aggregation subscript',
           p1: mhchemParser.go(m, 'o')
@@ -2160,11 +2063,9 @@ mhchemParser.stateMachines = {
             type_: 'tex-math',
             p1: buffer.o
           };
-
           for (var p in buffer) {
             delete buffer[p];
           }
-
           return ret;
         }
       }
@@ -2199,7 +2100,7 @@ mhchemParser.stateMachines = {
       }
     }),
     actions: {
-      'tight operator': function tightOperator(buffer, m) {
+      'tight operator': function tight_operator(buffer, m) {
         buffer.o = (buffer.o || "") + "{" + m + "}";
       },
       'output': function output(buffer) {
@@ -2209,11 +2110,9 @@ mhchemParser.stateMachines = {
             type_: 'tex-math',
             p1: buffer.o
           };
-
           for (var p in buffer) {
             delete buffer[p];
           }
-
           return ret;
         }
       }
@@ -2326,16 +2225,13 @@ mhchemParser.stateMachines = {
       'enumber': function enumber(buffer, m) {
         /** @type {ParserOutput[]} */
         var ret = [];
-
         if (m[0] === "+-" || m[0] === "+/-") {
           ret.push("\\pm ");
         } else if (m[0]) {
           ret.push(m[0]);
         }
-
         if (m[1]) {
           mhchemParser.concatArray(ret, mhchemParser.go(m[1], 'pu-9,9'));
-
           if (m[2]) {
             if (m[2].match(/[,.]/)) {
               mhchemParser.concatArray(ret, mhchemParser.go(m[2], 'pu-9,9'));
@@ -2343,12 +2239,9 @@ mhchemParser.stateMachines = {
               ret.push(m[2]);
             }
           }
-
           m[3] = m[4] || m[3];
-
           if (m[3]) {
             m[3] = m[3].trim();
-
             if (m[3] === "e" || m[3].substr(0, 1) === "*") {
               ret.push({
                 type_: 'cdot'
@@ -2360,23 +2253,19 @@ mhchemParser.stateMachines = {
             }
           }
         }
-
         if (m[3]) {
           ret.push("10^{" + m[5] + "}");
         }
-
         return ret;
       },
       'number^': function number(buffer, m) {
         /** @type {ParserOutput[]} */
         var ret = [];
-
         if (m[0] === "+-" || m[0] === "+/-") {
           ret.push("\\pm ");
         } else if (m[0]) {
           ret.push(m[0]);
         }
-
         mhchemParser.concatArray(ret, mhchemParser.go(m[1], 'pu-9,9'));
         ret.push("^{" + m[2] + "}");
         return ret;
@@ -2396,22 +2285,17 @@ mhchemParser.stateMachines = {
         /** @type {ParserOutput | ParserOutput[]} */
         var ret;
         var md = mhchemParser.patterns.match_('{(...)}', buffer.d || "");
-
         if (md && md.remainder === '') {
           buffer.d = md.match_;
         }
-
         var mq = mhchemParser.patterns.match_('{(...)}', buffer.q || "");
-
         if (mq && mq.remainder === '') {
           buffer.q = mq.match_;
         }
-
         if (buffer.d) {
           buffer.d = buffer.d.replace(/\u00B0C|\^oC|\^{o}C/g, "{}^{\\circ}C");
           buffer.d = buffer.d.replace(/\u00B0F|\^oF|\^{o}F/g, "{}^{\\circ}F");
         }
-
         if (buffer.q) {
           // fraction
           buffer.q = buffer.q.replace(/\u00B0C|\^oC|\^{o}C/g, "{}^{\\circ}C");
@@ -2420,7 +2304,6 @@ mhchemParser.stateMachines = {
             d: mhchemParser.go(buffer.d, 'pu'),
             q: mhchemParser.go(buffer.q, 'pu')
           };
-
           if (buffer.o === '//') {
             ret = {
               type_: 'pu-frac',
@@ -2429,7 +2312,6 @@ mhchemParser.stateMachines = {
             };
           } else {
             ret = b5.d;
-
             if (b5.d.length > 1 || b5.q.length > 1) {
               ret.push({
                 type_: ' / '
@@ -2439,18 +2321,15 @@ mhchemParser.stateMachines = {
                 type_: '/'
               });
             }
-
             mhchemParser.concatArray(ret, b5.q);
           }
         } else {
           // no fraction
           ret = mhchemParser.go(buffer.d, 'pu-2');
         }
-
         for (var p in buffer) {
           delete buffer[p];
         }
-
         return ret;
       }
     }
@@ -2518,10 +2397,8 @@ mhchemParser.stateMachines = {
       'output': function output(buffer) {
         /** @type {ParserOutput | ParserOutput[]} */
         var ret = [];
-
         if (buffer.rm) {
           var mrm = mhchemParser.patterns.match_('{(...)}', buffer.rm || "");
-
           if (mrm && mrm.remainder === '') {
             ret = mhchemParser.go(mrm.match_, 'pu');
           } else {
@@ -2531,11 +2408,9 @@ mhchemParser.stateMachines = {
             };
           }
         }
-
         for (var p in buffer) {
           delete buffer[p];
         }
-
         return ret;
       }
     }
@@ -2578,109 +2453,90 @@ mhchemParser.stateMachines = {
         /** @type {ParserOutput[]} */
         var ret = [];
         buffer.text_ = buffer.text_ || "";
-
         if (buffer.text_.length > 4) {
           var a = buffer.text_.length % 3;
-
           if (a === 0) {
             a = 3;
           }
-
           for (var i = buffer.text_.length - 3; i > 0; i -= 3) {
             ret.push(buffer.text_.substr(i, 3));
             ret.push({
               type_: '1000 separator'
             });
           }
-
           ret.push(buffer.text_.substr(0, a));
           ret.reverse();
         } else {
           ret.push(buffer.text_);
         }
-
         for (var p in buffer) {
           delete buffer[p];
         }
-
         return ret;
       },
       'output-o': function outputO(buffer) {
         /** @type {ParserOutput[]} */
         var ret = [];
         buffer.text_ = buffer.text_ || "";
-
         if (buffer.text_.length > 4) {
           var a = buffer.text_.length - 3;
-
           for (var i = 0; i < a; i += 3) {
             ret.push(buffer.text_.substr(i, 3));
             ret.push({
               type_: '1000 separator'
             });
           }
-
           ret.push(buffer.text_.substr(i));
         } else {
           ret.push(buffer.text_);
         }
-
         for (var p in buffer) {
           delete buffer[p];
         }
-
         return ret;
       }
     }
-  } //#endregion
+  }
+  //#endregion
+};
 
-}; //
+//
 // texify: Take MhchemParser output and convert it to TeX
 //
-
 /** @type {Texify} */
-
 var texify = {
   go: function go(input, isInner) {
     // (recursive, max 4 levels)
     if (!input) {
       return "";
     }
-
     var res = "";
     var cee = false;
-
     for (var i = 0; i < input.length; i++) {
       var inputi = input[i];
-
       if (typeof inputi === "string") {
         res += inputi;
       } else {
         res += texify._go2(inputi);
-
         if (inputi.type_ === '1st-level escape') {
           cee = true;
         }
       }
     }
-
     if (!isInner && !cee && res) {
       res = "{" + res + "}";
     }
-
     return res;
   },
   _goInner: function _goInner(input) {
     if (!input) {
       return input;
     }
-
     return texify.go(input, true);
   },
   _go2: function _go2(buf) {
     /** @type {undefined | string} */
     var res;
-
     switch (buf.type_) {
       case 'chemfive':
         res = "";
@@ -2691,52 +2547,45 @@ var texify = {
           o: texify._goInner(buf.o),
           q: texify._goInner(buf.q),
           d: texify._goInner(buf.d)
-        }; //
+        };
+        //
         // a
         //
-
         if (b5.a) {
           if (b5.a.match(/^[+\-]/)) {
             b5.a = "{" + b5.a + "}";
           }
-
           res += b5.a + "\\,";
-        } //
+        }
+        //
         // b and p
         //
-
-
         if (b5.b || b5.p) {
           res += "{\\vphantom{X}}";
           res += "^{\\hphantom{" + (b5.b || "") + "}}_{\\hphantom{" + (b5.p || "") + "}}";
           res += "{\\vphantom{X}}";
           res += "^{\\smash[t]{\\vphantom{2}}\\mathllap{" + (b5.b || "") + "}}";
           res += "_{\\vphantom{2}\\mathllap{\\smash[t]{" + (b5.p || "") + "}}}";
-        } //
+        }
+        //
         // o
         //
-
-
         if (b5.o) {
           if (b5.o.match(/^[+\-]/)) {
             b5.o = "{" + b5.o + "}";
           }
-
           res += b5.o;
-        } //
+        }
+        //
         // q and d
         //
-
-
         if (buf.dType === 'kv') {
           if (b5.d || b5.q) {
             res += "{\\vphantom{X}}";
           }
-
           if (b5.d) {
             res += "^{" + b5.d + "}";
           }
-
           if (b5.q) {
             res += "_{\\smash[t]{" + b5.q + "}}";
           }
@@ -2745,7 +2594,6 @@ var texify = {
             res += "{\\vphantom{X}}";
             res += "^{" + b5.d + "}";
           }
-
           if (b5.q) {
             res += "{\\vphantom{X}}";
             res += "_{\\smash[t]{" + b5.q + "}}";
@@ -2755,19 +2603,15 @@ var texify = {
             res += "{\\vphantom{X}}";
             res += "_{\\smash[t]{" + b5.q + "}}";
           }
-
           if (b5.d) {
             res += "{\\vphantom{X}}";
             res += "^{" + b5.d + "}";
           }
         }
-
         break;
-
       case 'rm':
         res = "\\mathrm{" + buf.p1 + "}";
         break;
-
       case 'text':
         if (buf.p1.match(/[\^_]/)) {
           buf.p1 = buf.p1.replace(" ", "~").replace("-", "\\text{-}");
@@ -2775,190 +2619,142 @@ var texify = {
         } else {
           res = "\\text{" + buf.p1 + "}";
         }
-
         break;
-
       case 'roman numeral':
         res = "\\mathrm{" + buf.p1 + "}";
         break;
-
       case 'state of aggregation':
         res = "\\mskip2mu " + texify._goInner(buf.p1);
         break;
-
       case 'state of aggregation subscript':
         res = "\\mskip1mu " + texify._goInner(buf.p1);
         break;
-
       case 'bond':
         res = texify._getBond(buf.kind_);
-
         if (!res) {
           throw ["MhchemErrorBond", "mhchem Error. Unknown bond type (" + buf.kind_ + ")"];
         }
-
         break;
-
       case 'frac':
         var c = "\\frac{" + buf.p1 + "}{" + buf.p2 + "}";
         res = "\\mathchoice{\\textstyle" + c + "}{" + c + "}{" + c + "}{" + c + "}";
         break;
-
       case 'pu-frac':
         var d = "\\frac{" + texify._goInner(buf.p1) + "}{" + texify._goInner(buf.p2) + "}";
         res = "\\mathchoice{\\textstyle" + d + "}{" + d + "}{" + d + "}{" + d + "}";
         break;
-
       case 'tex-math':
         res = buf.p1 + " ";
         break;
-
       case 'frac-ce':
         res = "\\frac{" + texify._goInner(buf.p1) + "}{" + texify._goInner(buf.p2) + "}";
         break;
-
       case 'overset':
         res = "\\overset{" + texify._goInner(buf.p1) + "}{" + texify._goInner(buf.p2) + "}";
         break;
-
       case 'underset':
         res = "\\underset{" + texify._goInner(buf.p1) + "}{" + texify._goInner(buf.p2) + "}";
         break;
-
       case 'underbrace':
         res = "\\underbrace{" + texify._goInner(buf.p1) + "}_{" + texify._goInner(buf.p2) + "}";
         break;
-
       case 'color':
         res = "{\\color{" + buf.color1 + "}{" + texify._goInner(buf.color2) + "}}";
         break;
-
       case 'color0':
         res = "\\color{" + buf.color + "}";
         break;
-
       case 'arrow':
         var b6 = {
           rd: texify._goInner(buf.rd),
           rq: texify._goInner(buf.rq)
         };
-
         var arrow = "\\x" + texify._getArrow(buf.r);
-
         if (b6.rq) {
           arrow += "[{" + b6.rq + "}]";
         }
-
         if (b6.rd) {
           arrow += "{" + b6.rd + "}";
         } else {
           arrow += "{}";
         }
-
         res = arrow;
         break;
-
       case 'operator':
         res = texify._getOperator(buf.kind_);
         break;
-
       case '1st-level escape':
         res = buf.p1 + " "; // &, \\\\, \\hlin
-
         break;
-
       case 'space':
         res = " ";
         break;
-
       case 'entitySkip':
         res = "~";
         break;
-
       case 'pu-space-1':
         res = "~";
         break;
-
       case 'pu-space-2':
         res = "\\mkern3mu ";
         break;
-
       case '1000 separator':
         res = "\\mkern2mu ";
         break;
-
       case 'commaDecimal':
         res = "{,}";
         break;
-
       case 'comma enumeration L':
         res = "{" + buf.p1 + "}\\mkern6mu ";
         break;
-
       case 'comma enumeration M':
         res = "{" + buf.p1 + "}\\mkern3mu ";
         break;
-
       case 'comma enumeration S':
         res = "{" + buf.p1 + "}\\mkern1mu ";
         break;
-
       case 'hyphen':
         res = "\\text{-}";
         break;
-
       case 'addition compound':
         res = "\\,{\\cdot}\\,";
         break;
-
       case 'electron dot':
         res = "\\mkern1mu \\bullet\\mkern1mu ";
         break;
-
       case 'KV x':
         res = "{\\times}";
         break;
-
       case 'prime':
         res = "\\prime ";
         break;
-
       case 'cdot':
         res = "\\cdot ";
         break;
-
       case 'tight cdot':
         res = "\\mkern1mu{\\cdot}\\mkern1mu ";
         break;
-
       case 'times':
         res = "\\times ";
         break;
-
       case 'circa':
         res = "{\\sim}";
         break;
-
       case '^':
         res = "uparrow";
         break;
-
       case 'v':
         res = "downarrow";
         break;
-
       case 'ellipsis':
         res = "\\ldots ";
         break;
-
       case '/':
         res = "/";
         break;
-
       case ' / ':
         res = "\\,/\\,";
         break;
-
       default:
         throw ["MhchemBugT", "mhchem bug T. Please report."];
       // Missing texify rule or unknown MhchemParser output
@@ -2969,34 +2765,24 @@ var texify = {
     switch (a) {
       case "->":
         return "rightarrow";
-
       case "\u2192":
         return "rightarrow";
-
       case "\u27F6":
         return "rightarrow";
-
       case "<-":
         return "leftarrow";
-
       case "<->":
         return "leftrightarrow";
-
       case "<-->":
         return "rightleftarrows";
-
       case "<=>":
         return "rightleftharpoons";
-
       case "\u21CC":
         return "rightleftharpoons";
-
       case "<=>>":
         return "rightequilibrium";
-
       case "<<=>":
         return "leftequilibrium";
-
       default:
         throw ["MhchemBugT", "mhchem bug T. Please report."];
     }
@@ -3005,55 +2791,38 @@ var texify = {
     switch (a) {
       case "-":
         return "{-}";
-
       case "1":
         return "{-}";
-
       case "=":
         return "{=}";
-
       case "2":
         return "{=}";
-
       case "#":
         return "{\\equiv}";
-
       case "3":
         return "{\\equiv}";
-
       case "~":
         return "{\\tripledash}";
-
       case "~-":
         return "{\\mathrlap{\\raisebox{-.1em}{$-$}}\\raisebox{.1em}{$\\tripledash$}}";
-
       case "~=":
         return "{\\mathrlap{\\raisebox{-.2em}{$-$}}\\mathrlap{\\raisebox{.2em}{$\\tripledash$}}-}";
-
       case "~--":
         return "{\\mathrlap{\\raisebox{-.2em}{$-$}}\\mathrlap{\\raisebox{.2em}{$\\tripledash$}}-}";
-
       case "-~-":
         return "{\\mathrlap{\\raisebox{-.2em}{$-$}}\\mathrlap{\\raisebox{.2em}{$-$}}\\tripledash}";
-
       case "...":
         return "{{\\cdot}{\\cdot}{\\cdot}}";
-
       case "....":
         return "{{\\cdot}{\\cdot}{\\cdot}{\\cdot}}";
-
       case "->":
         return "{\\rightarrow}";
-
       case "<-":
         return "{\\leftarrow}";
-
       case "<":
         return "{<}";
-
       case ">":
         return "{>}";
-
       default:
         throw ["MhchemBugT", "mhchem bug T. Please report."];
     }
@@ -3062,48 +2831,34 @@ var texify = {
     switch (a) {
       case "+":
         return " {}+{} ";
-
       case "-":
         return " {}-{} ";
-
       case "=":
         return " {}={} ";
-
       case "<":
         return " {}<{} ";
-
       case ">":
         return " {}>{} ";
-
       case "<<":
         return " {}\\ll{} ";
-
       case ">>":
         return " {}\\gg{} ";
-
       case "\\pm":
         return " {}\\pm{} ";
-
       case "\\approx":
         return " {}\\approx{} ";
-
       case "$\\approx$":
         return " {}\\approx{} ";
-
       case "v":
         return " \\downarrow{} ";
-
       case "(v)":
         return " \\downarrow{} ";
-
       case "^":
         return " \\uparrow{} ";
-
       case "(^)":
         return " \\uparrow{} ";
-
       default:
         throw ["MhchemBugT", "mhchem bug T. Please report."];
     }
   }
-}; //
+};
