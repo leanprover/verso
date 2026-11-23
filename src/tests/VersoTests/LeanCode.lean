@@ -275,3 +275,20 @@ Type u
 There is no instance of {inst +error}`ToString (Nat → Nat)`, and no class named
 {inst +error}`NoSuchClass Nat`.
 :::::::
+
+-- An auxiliary lemma made in a `lean` block gets the module's private prefix, as in a Lean file,
+-- so documents in different modules that each make one can be imported together.
+#test_msgs in
+#docs (Genre.Manual) auxLemmaName "Test" :=
+:::::::
+```lean
+open Lean Meta in
+run_meta do
+  let p := mkNot (mkConst ``False)
+  let h := mkApp (mkConst ``id [levelZero])
+    (mkConst ``False)
+  let n ← mkAuxLemma [] p h
+  unless isPrivateName n do
+    throwError m!"`{n}` has no private prefix"
+```
+:::::::
