@@ -11,6 +11,16 @@ open Lean (ToJson FromJson)
 namespace Verso.Genre.Manual
 
 /--
+A titled part of a license or notice.
+-/
+public structure LicenseInfo.Section where
+  /-- The heading of the section, if it has one -/
+  header? : Option String
+  /-- The section's text in plain text -/
+  text : String
+deriving Repr, DecidableEq, ToJson, FromJson, Hashable, Inhabited
+
+/--
 A description of an open-source license used by a frontend component that's included in
 generated HTML. This is used to create an attribution page.
 -/
@@ -36,6 +46,6 @@ public structure LicenseInfo where
   /--
   The license or notice text in plain text, divided into sections with optional headers.
    -/
-  text : Array (Option String × String)
+  text : Array LicenseInfo.Section
 
 deriving Repr, DecidableEq, ToJson, FromJson, Hashable, Inhabited

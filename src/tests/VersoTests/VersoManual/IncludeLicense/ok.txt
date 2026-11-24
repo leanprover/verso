@@ -1,0 +1,4 @@
+Example License
+
+Permission is granted.
+Second line.

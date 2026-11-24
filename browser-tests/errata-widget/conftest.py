@@ -25,6 +25,12 @@ def expect_timeout():
     expect.set_options(timeout=PLAYWRIGHT_EXPECT_TIMEOUT)
 
 
+@pytest.fixture
+def missing_file_allowlist():
+    """The InfoView asks for an icon font that the harness doesn't serve."""
+    return ["/infoview/codicon.ttf"]
+
+
 @pytest.fixture(scope="session")
 def browser(playwright_instance):
     """The widget runs in the InfoView of VS Code, whose webviews are Chromium."""

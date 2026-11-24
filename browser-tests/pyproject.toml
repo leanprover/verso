@@ -12,5 +12,6 @@ test = [
 [tool.pytest.ini_options]
 markers = [
     "errata_widget: tests of Errata's run-test widget, which need a built Verso and `npm ci`; select them with `-m errata_widget`",
+    "allow_missing_files: the test may trigger requests that fail or return an error status",
 ]
 addopts = "-m 'not errata_widget'"
