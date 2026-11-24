@@ -1,19 +1,21 @@
 // @ts-check
+/* global katex */
+/// <reference path="../vendored-js/katex/katex.d.ts" />
 
 /**
  * Typesets the math elements inside `root` with KaTeX.
  * @param {ParentNode} root
  */
 function versoRenderMath(root) {
-    const katex =
-        /** @type {{katex?: {render: (tex: string, elem: Element, opts: object) => void}}} */ (
-            /** @type {unknown} */ (window)
-        ).katex;
-    if (!katex) return;
-    for (const m of root.querySelectorAll(".math.inline")) {
+    if (typeof katex === "undefined") return;
+    for (const m of /** @type {NodeListOf<HTMLElement>} */ (
+        root.querySelectorAll(".math.inline")
+    )) {
         katex.render(m.textContent, m, { throwOnError: false, displayMode: false });
     }
-    for (const m of root.querySelectorAll(".math.display")) {
+    for (const m of /** @type {NodeListOf<HTMLElement>} */ (
+        root.querySelectorAll(".math.display")
+    )) {
         katex.render(m.textContent, m, { throwOnError: false, displayMode: true });
     }
 }

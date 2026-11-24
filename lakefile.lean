@@ -52,7 +52,7 @@ lean_lib VersoBlog where
 lean_lib VersoManual where
   srcDir := "src/verso-manual"
   roots := #[`VersoManual]
-  needs := #[staticWeb]
+  needs := #[staticWeb, vendorJs]
   precompileLibrary := true
 
 @[default_target]

@@ -19,8 +19,10 @@ public import UsersGuide.Releases.Entries.ExtraStep
 public import UsersGuide.Releases.Entries.FoldingRanges
 public import UsersGuide.Releases.Entries.FullPageSearch
 public import UsersGuide.Releases.Entries.HeadingIds
+public import UsersGuide.Releases.Entries.IncludeLicense
 public import UsersGuide.Releases.Entries.InlineLeanElaboration
 public import UsersGuide.Releases.Entries.InlineLeanInfoview
+public import UsersGuide.Releases.Entries.KatexUpgrade
 public import UsersGuide.Releases.Entries.LeanHtml
 public import UsersGuide.Releases.Entries.LegacyInlineRoles
 public import UsersGuide.Releases.Entries.LinkFootnoteResolution

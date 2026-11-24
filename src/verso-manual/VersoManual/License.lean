@@ -53,13 +53,13 @@ def LicenseInfo.toHtml (license : LicenseInfo) (headerLevel : Nat) : Html :=
     </section>}
 where
   textHtml
-    | (hdr?, txt) =>
+    | { header?, text } =>
       let hdrHtml :=
-        if let some hdr := hdr? then
+        if let some hdr := header? then
           Html.element s!"h{headerLevel+1}" #[] hdr
         else
           .empty
-      html%{<section>{hdrHtml}{paragraphedHtml txt}</section>}
+      html%{<section>{hdrHtml}{paragraphedHtml text}</section>}
 
 public section
 
