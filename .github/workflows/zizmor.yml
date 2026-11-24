@@ -23,4 +23,4 @@ jobs:
               env:
                   GH_TOKEN: ${{ github.token }}
               run:
-                  uvx zizmor@1.32.0 --format github --min-severity low --config .github/zizmor.yml .
+                  uvx zizmor@1.33.1 --format github --min-severity low --config .github/zizmor.yml .

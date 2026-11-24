@@ -74,6 +74,9 @@ workflows:
     '.github/workflows/upload-snapshots.yml':
         - 'actions/checkout@v7.0.1'
         - 'nwtgck/actions-netlify@v4.0.0'
+    '.github/workflows/zizmor.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'astral-sh/setup-uv@v10.3.3'
 dependencies:
     'actions/cache@v6.1.0':
         ref: 'v6.1.0'
