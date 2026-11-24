@@ -171,7 +171,7 @@ def page(browser, request, missing_file_allowlist):
     """A fresh page that fails its test if the site's own files are missing or fail to load.
 
     Only HTTP errors and network failures for the site, the origin of the first navigation, count.
-    Requests that the browser aborts itself, such as those cancelled by a navigation, and the
+    Requests that the browser cancels itself, such as those that a navigation replaces, and the
     browser's favicon probe are ignored.
     Paths in `missing_file_allowlist` and tests that carry the `allow_missing_files` marker are
     exempt.
@@ -202,8 +202,11 @@ def page(browser, request, missing_file_allowlist):
     def on_request_failed(req):
         reason = req.failure or ""
         # Browsers name a request that they cancel themselves differently (ERR_ABORTED,
-        # NS_BINDING_ABORTED, NS_ERROR_ABORT).
-        if "ABORT" not in reason.upper() and counts(req.url):
+        # NS_BINDING_ABORTED, NS_ERROR_ABORT). A document whose load another navigation
+        # replaces fails with a generic error in Firefox, so failures of navigations are
+        # not counted; their HTTP errors are.
+        cancelled = "ABORT" in reason.upper() or req.is_navigation_request()
+        if not cancelled and counts(req.url):
             failures.append(f"failed ({reason}) {req.url}")
 
     page.on("request", on_request)
