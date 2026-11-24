@@ -5,6 +5,7 @@ import socket
 import subprocess
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright
 
 # TODO: adjust default path to built site relative to this directory
@@ -151,8 +152,70 @@ def browser(request, playwright_instance):
     browser.close()
 
 
+def _origin(url):
+    parts = urlsplit(url)
+    return (parts.scheme, parts.netloc)
+
+
 @pytest.fixture
-def page(browser):
+def missing_file_allowlist():
+    """URL paths of the site that may be missing without failing a test.
+
+    A `conftest.py` in a test directory overrides this fixture for sites that have known gaps.
+    """
+    return []
+
+
+@pytest.fixture
+def page(browser, request, missing_file_allowlist):
+    """A fresh page that fails its test if the site's own files are missing or fail to load.
+
+    Only HTTP errors and network failures for the site, the origin of the first navigation, count.
+    Requests that the browser cancels itself, such as those that a navigation replaces, and the
+    browser's favicon probe are ignored.
+    Paths in `missing_file_allowlist` and tests that carry the `allow_missing_files` marker are
+    exempt.
+    """
     page = browser.new_page()
+    failures = []
+    site = []
+
+    def on_request(req):
+        # The site is the origin of the page's first navigation.
+        if not site and req.is_navigation_request() and req.frame == page.main_frame:
+            if urlsplit(req.url).scheme in ("http", "https"):
+                site.append(_origin(req.url))
+
+    def counts(url):
+        path = urlsplit(url).path
+        return (
+            bool(site)
+            and _origin(url) == site[0]
+            and path != "/favicon.ico"
+            and path not in missing_file_allowlist
+        )
+
+    def on_response(response):
+        if response.status >= 400 and counts(response.url):
+            failures.append(f"{response.status} {response.url}")
+
+    def on_request_failed(req):
+        reason = req.failure or ""
+        # Browsers name a request that they cancel themselves differently (ERR_ABORTED,
+        # NS_BINDING_ABORTED, NS_ERROR_ABORT). A document whose load another navigation
+        # replaces fails with a generic error in Firefox, so failures of navigations are
+        # not counted; their HTTP errors are.
+        cancelled = "ABORT" in reason.upper() or req.is_navigation_request()
+        if not cancelled and counts(req.url):
+            failures.append(f"failed ({reason}) {req.url}")
+
+    page.on("request", on_request)
+    page.on("response", on_response)
+    page.on("requestfailed", on_request_failed)
     yield page
+    page.remove_listener("request", on_request)
+    page.remove_listener("response", on_response)
+    page.remove_listener("requestfailed", on_request_failed)
     page.close()
+    if failures and request.node.get_closest_marker("allow_missing_files") is None:
+        pytest.fail("requests for missing or unloadable files:\n" + "\n".join(failures))

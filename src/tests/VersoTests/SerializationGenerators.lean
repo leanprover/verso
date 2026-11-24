@@ -93,6 +93,11 @@ instance : Shrinkable Search.DomainMapper where
     (shrink m.dataToSearchables |>.map ({ m with dataToSearchables := ·})) ++
     (shrink m.quickJumpCss |>.map ({ m with quickJumpCss := ·}))
 
+instance : Shrinkable LicenseInfo.Section where
+  shrink s :=
+    (shrink s.header? |>.map ({ s with header? := · })) ++
+    (shrink s.text |>.map ({ s with text := · }))
+
 instance : Shrinkable LicenseInfo where
   shrink i :=
     (shrink i.identifier |>.map ({ i with identifier := · })) ++
@@ -192,6 +197,10 @@ instance : Arbitrary Search.DomainMappers where
     for _ in 0...count do
       out := out.insert (← arbitrary) (← arbitrary.resize (· / count))
     return out
+
+instance : Arbitrary LicenseInfo.Section where
+  arbitrary := do
+    return { header? := ← arbitrary, text := ← arbitrary }
 
 instance : Arbitrary LicenseInfo where
   arbitrary := do
