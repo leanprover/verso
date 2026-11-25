@@ -190,6 +190,11 @@ The `'unsafe-eval'` and `'wasm-unsafe-eval'` keywords are controlled by the {nam
 Because the policy trusts the page's origin, scripts from other sites that share the same origin can run.
 For example, two separate GitHub Pages sites that are under the same account share an origin.
 
+Classic scripts that are marked `nomodule` provide fallbacks for browsers without JavaScript module support.
+Verso includes the fallback in the page's policy so those browsers can run it.
+If the fallback loads from a CDN, the policy allows scripts from that CDN even in browsers that skip the fallback.
+Serving the fallback from the page's own origin avoids granting that permission to another host.
+
 If a genre or user extensions generate content embedded in an `<iframe>`, care is required.
 The generated policy restricts scripts in the Verso document.
 A separate document loaded over HTTP or HTTPS in an iframe has its own policy, and scripts in a same-origin frame can normally access the parent document.

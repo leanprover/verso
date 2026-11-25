@@ -286,8 +286,6 @@ def maliciousSources : Array String := #[
   "https://a.example' 'unsafe-inline",
   "https://a.example 'unsafe-inline'",
   "https://a.example,https://b.example",
-  " https://a.example/x.js",
-  "https://a.example\n/x.js",
   "https://a.example:80x/x.js",
   "https://a.example:/x.js",
   "https://a.example:99999/x.js",
@@ -317,7 +315,14 @@ def unicodeWhitespace : Array Char := #[
 ]
 
 #test_guard unicodeWhitespace.all fun c =>
-  policyOf (page #[srcScript s!"https://a.example{c}/x.js"] #[]) == basePolicy
+  let expected := if c == '\t' || c == '\n' || c == '\r' then
+    "script-src 'self' https://a.example; base-uri 'self'" else basePolicy
+  policyOf (page #[srcScript s!"https://a.example{c}/x.js"] #[]) == expected
+
+#test_guard policyOf (page #[srcScript " https://a.example/x.js", srcScript "\n//b.example\t "] #[]) ==
+  "script-src 'self' b.example https://a.example; base-uri 'self'"
+#test_guard policyOf (page #[srcScript "  https://a.example;bad/x.js "] #[]) == basePolicy
+#test_guard policyOf (page #[srcScript "\x00https://a.example/x.js"] #[]) == basePolicy
 
 #test_guard #[
     "https://a.example/assets/a,b;c.js",
@@ -445,6 +450,16 @@ def policyMeta : String :=
 def noHead : Html := html%{<html><body>{script (.raw "x")}</body></html>}
 
 #test_guard (apply {} noHead).isOk == false
+
+#test_guard #["", "two names", "x>", "x/y", "x=y", "x\"", "x'", "x<", "x\n"].all fun name =>
+  let attrs := #[(name, "value")]
+  let head := Html.element "head" #[] .empty
+  let badHead := Html.element "head" attrs .empty
+  #[(Html.element "html" attrs head), Html.element "html" #[] badHead, badHead].all
+    fun html => !(apply {} html).isOk
+
+#test_guard (apply {} (.element "html" #[("xml:lang", "en")]
+  (.element "head" #[("data-theme", "light")] .empty))).isOk
 #test_guard (apply {} html%{<html><body><script><head></head></script></body></html>}).isOk == false
 #test_guard (apply {} html%{<html><template><head></head></template><body></body></html>}).isOk == false
 #test_guard (apply {} (.raw "<html><head></head><body></body></html>")).isOk == false

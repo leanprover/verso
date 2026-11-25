@@ -239,6 +239,11 @@ Browsers treat `\` like `/` in these URLs, so a protocol-relative URL with a `\`
 source.
 -/
 def scriptOrigin? (src : String) : Option Source :=
+  -- HTML parsing replaces NUL with U+FFFD before URL parsing. Trim the remaining
+  -- leading and trailing C0 controls and space, then remove tabs and newlines.
+  let trim (c : Char) := c != '\x00' && c ≤ ' '
+  let src := (src.dropWhile trim |>.dropEndWhile trim).copy
+    |>.replace "\t" "" |>.replace "\n" "" |>.replace "\r" ""
   -- Only the validated authority is emitted. Path, query, and fragment punctuation
   -- cannot become part of the CSP source.
   match splitHttpUrl? src with
@@ -414,6 +419,13 @@ def isWhitespaceNode : Html → Bool
   | .text t | .raw t => t.all isAsciiWhitespace
   | _ => false
 
+-- The HTML printer writes attribute names verbatim. On an opening tag before the
+-- policy, each name must survive serialization as a single attribute name.
+def hasValidAttributeNames (attrs : Array (String × String)) : Bool :=
+  attrs.all fun (name, _) =>
+    !name.isEmpty && name.all fun c =>
+      c > ' ' && c != '\x7f' && !(c == '"' || c == '\'' || c == '>' || c == '<' || c == '/' || c == '=')
+
 -- The policy follows a leading `<meta charset>` so that the charset stays within the first
 -- 1024 bytes of the page, where browsers look for it.
 def addToHead (policyElement : Html) (children : Html) : Html :=
@@ -435,7 +447,7 @@ public def isDocumentPreamble (text : String) : Bool :=
 def insertIntoLeadingHead (policyElement : Html) (nodes : Array Html) : Option (Array Html) := do
   let index ← nodes.findIdx? (!isWhitespaceNode ·)
   let .element tag attrs children := nodes[index]! | none
-  if tag.toLower != "head" then none
+  if tag.toLower != "head" || !hasValidAttributeNames attrs then none
   else some (nodes.set! index (.element tag attrs (addToHead policyElement children)))
 
 -- Require a structured head at the start of the document or of its outer html element.
@@ -447,6 +459,7 @@ def insertIntoHead (policyElement : Html) (html : Html) : Option Html := do
   let .element tag attrs children := nodes[index]! | none
   let nodes ←
     if tag.toLower == "html" then
+      guard (hasValidAttributeNames attrs)
       let children ← insertIntoLeadingHead policyElement (flatten children)
       pure (nodes.set! index (.element tag attrs (.seq children)))
     else
@@ -467,4 +480,4 @@ public def apply (config : Config) (html : Html) : Except String Html :=
       html%{<meta http-equiv="Content-Security-Policy" content={(collect config html).render}/>}
     match insertIntoHead policyElement html with
     | some html => .ok html
-    | none => .error "Cannot install the content security policy: expected a leading structured <head>."
+    | none => .error "Cannot install the content security policy: expected a leading structured <head> and valid attribute names on <html> and <head>."
