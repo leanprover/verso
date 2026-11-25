@@ -144,7 +144,9 @@ def scripts_in(html):
         else:
             url = urlsplit(source.group(1))
             if url.netloc:
-                origins.append(f"{url.scheme}://{url.netloc}" if url.scheme else url.netloc)
+                origins.append(
+                    f"{url.scheme}://{url.netloc}" if url.scheme else url.netloc
+                )
     return bodies, origins
 
 
@@ -423,10 +425,13 @@ def test():
         "<script>\n  track()\n</script>\n"
     )
     assert scripts_in(stats) == (["\n  track()\n"], ["https://stats.example"])
-    assert scripts_in('<script src="//cdn.example/a.js"></script>') == ([], ["cdn.example"])
+    assert scripts_in('<script src="//cdn.example/a.js"></script>') == (
+        [],
+        ["cdn.example"],
+    )
     assert scripts_in('<script src="local.js"></script>') == ([], [])
 
-    meta = '<meta http-equiv="Content-Security-Policy" content="script-src \'self\'; base-uri \'self\'"/>'
+    meta = "<meta http-equiv=\"Content-Security-Policy\" content=\"script-src 'self'; base-uri 'self'\"/>"
     find_page = (
         f'<html><head><meta charset="UTF-8"/>{meta}</head><body>'
         '<script>let xref = {"a": 1};\nold()</script></body></html>'
