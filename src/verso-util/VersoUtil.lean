@@ -7,6 +7,7 @@ module
 public import VersoUtil.Base64
 public import VersoUtil.BinFiles
 public import VersoUtil.Elan
+public import VersoUtil.Hash
 public import VersoUtil.InfoTree
 public import VersoUtil.LzCompress
 public import VersoUtil.Zip
