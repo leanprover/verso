@@ -210,8 +210,8 @@ def EmitM.writeHtmlFile (path : System.FilePath) (content : Html) : EmitM Unit :
   if (← readThe EmitContext).config.verbose then
     IO.println s!"Writing {path}"
   let policy := (← readThe EmitContext).config.contentSecurityPolicy
-  IO.FS.writeFile path <| doctype ++ "\n" ++
-    (Output.Html.ContentSecurityPolicy.apply policy (Hoist.postprocess content)).render
+  let content ← IO.ofExcept <| Output.Html.ContentSecurityPolicy.apply policy (Hoist.postprocess content)
+  IO.FS.writeFile path <| doctype ++ "\n" ++ content.render
 
 def LocalToC.ofPage (path : Path) (text : Part Blog.Page) : EmitM LocalToC := do
   let title := text.titleString

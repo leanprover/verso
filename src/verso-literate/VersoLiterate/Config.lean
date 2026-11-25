@@ -169,7 +169,8 @@ def decodeContentSecurityPolicy (v : Value) : EDecodeM ContentSecurityPolicy.Con
   let allowWebAssemblyCompilation ← t.decodeD `allow_web_assembly_compilation false
   let extraScriptSources ←
     t.decodeD `extra_script_sources (#[] : Array ContentSecurityPolicy.Source)
-  return { enabled, allowEval, allowWebAssemblyCompilation, extraScriptSources }
+  let extraInlineScripts ← t.decodeD `extra_inline_scripts (#[] : Array String)
+  return { enabled, allowEval, allowWebAssemblyCompilation, extraScriptSources, extraInlineScripts }
 
 instance : DecodeToml ContentSecurityPolicy.Config := ⟨decodeContentSecurityPolicy⟩
 

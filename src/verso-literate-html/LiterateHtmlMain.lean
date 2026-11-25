@@ -363,7 +363,7 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod)
 
   let outFile := ctx.outPath outDir
 
-  let pageHtml := ContentSecurityPolicy.apply litConfig.contentSecurityPolicy pageHtml
+  let pageHtml ← IO.ofExcept <| ContentSecurityPolicy.apply litConfig.contentSecurityPolicy pageHtml
 
   IO.FS.createDirAll outFile
 
@@ -404,7 +404,7 @@ partial def emitLandingPage (outDir : System.FilePath) (dir : Dir) (litConfig : 
       </body>
     </html>
   }
-  let pageContents := ContentSecurityPolicy.apply litConfig.contentSecurityPolicy pageContents
+  let pageContents ← IO.ofExcept <| ContentSecurityPolicy.apply litConfig.contentSecurityPolicy pageContents
   IO.FS.writeFile (outDir / "index.html") <| "<!DOCTYPE html>\n" ++ pageContents.render
 where
   buildToc (dir : Dir) : Html :=
@@ -454,7 +454,7 @@ def emitSearchResultsPage (outDir : System.FilePath) (litConfig : LiterateConfig
       </body>
     </html>
   }
-  let pageContents := ContentSecurityPolicy.apply litConfig.contentSecurityPolicy pageContents
+  let pageContents ← IO.ofExcept <| ContentSecurityPolicy.apply litConfig.contentSecurityPolicy pageContents
   IO.FS.createDirAll (outDir / "search")
   IO.FS.writeFile (outDir / "search" / "index.html") <| "<!DOCTYPE html>\n" ++ pageContents.render
 
@@ -486,7 +486,7 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
     | some siteTitle => s!"{modLabel} — {siteTitle}"
     | none => modLabel
   let pageHtml := page landingPageTitle siteRoot headContents mod.name root htmlId? body (pageToc := tocHtml) (litConfig := litConfig)
-  let pageHtml := ContentSecurityPolicy.apply litConfig.contentSecurityPolicy pageHtml
+  let pageHtml ← IO.ofExcept <| ContentSecurityPolicy.apply litConfig.contentSecurityPolicy pageHtml
   IO.FS.writeFile (outDir / "index.html") <| "<!DOCTYPE html>\n" ++ pageHtml.render
   return hlState
 

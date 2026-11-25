@@ -166,8 +166,11 @@ def writePage (theme : Theme) (params : Template.Params) (template : Template :=
   ensureDir <| (← currentDir)
   let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (← currentPath) |>.getD ⟨template, id⟩
   let output ← rewriteOutput <| ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| params
-  let output := ContentSecurityPolicy.apply (← read).contentSecurityPolicy output
+  let policy := (← read).contentSecurityPolicy
   let header := (← read).header
+  if policy.enabled && !ContentSecurityPolicy.isDocumentPreamble header then
+    throw <| IO.userError "Cannot install the content security policy after a custom HTML header containing markup."
+  let output ← IO.ofExcept <| ContentSecurityPolicy.apply policy output
   IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
     h.putStrLn header
     h.putStrLn output.render

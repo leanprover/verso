@@ -379,6 +379,11 @@ The `[content_security_policy]` table has the following keys:
   Controls whether JavaScript code can compile WebAssembly.
   Defaults to `false`.
 
+: `extra_inline_scripts`
+
+  An array of exact trusted inline script bodies that defaults to empty.
+  Use this to authorize inline scripts in raw HTML.
+
 : `extra_script_sources`
 
   An array of tables that defaults to empty. The tables have the following keys:

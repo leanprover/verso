@@ -99,7 +99,7 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
   modify ({ · with hlState := st })
 
   let contents := page (toString mod.name) siteRoot headContents mod.name root htmlId? body
-  let contents := ContentSecurityPolicy.apply {} contents
+  let contents ← IO.ofExcept <| ContentSecurityPolicy.apply {} contents
 
   let outFile := mod.name.components.map (·.toString) |>.foldl (init := outDir) (· / ·)
 
@@ -150,7 +150,7 @@ def emitSearchResultsPage (outDir : System.FilePath) : IO Unit := do
       </body>
     </html>
   }
-  let pageHtml := ContentSecurityPolicy.apply {} pageHtml
+  let pageHtml ← IO.ofExcept <| ContentSecurityPolicy.apply {} pageHtml
   IO.FS.createDirAll (outDir / "search")
   IO.FS.writeFile (outDir / "search" / "index.html") <| "<!DOCTYPE html>\n" ++ pageHtml.render
 

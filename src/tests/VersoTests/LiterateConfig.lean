@@ -308,12 +308,14 @@ optional key, and the host is lowercased.
 def contentSecurityPolicyTable : Test := do
   let toml := String.intercalate "\n"
     ["[content_security_policy]", "enabled = false", "allow_eval = true",
+     "extra_inline_scripts = [\"trusted()\"]",
      "allow_web_assembly_compilation = true", "",
      "[[content_security_policy.extra_script_sources]]", "host = \"cdn.example.com\"", "",
      "[[content_security_policy.extra_script_sources]]", "scheme = \"https\"",
      "host = \"Example.org\"", "only_subdomains = true", "port = 8443", ""]
   let config ← loadFromString toml
   let policy := config.contentSecurityPolicy
+  assertBEq #["trusted()"] policy.extraInlineScripts
   assertTrue (!policy.enabled) "enabled = false"
   assertTrue policy.allowEval "allow_eval = true"
   assertTrue policy.allowWebAssemblyCompilation "allow_web_assembly_compilation = true"

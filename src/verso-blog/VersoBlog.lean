@@ -802,7 +802,8 @@ Optional parameters:
  * `components` contains the implementation of the components. This is automatically filled out from
    a table.
  * `header` is emitted prior to each HTML document. By default, it produces a `<doctype>`, but it
-   can be overridden to integrate with other static site generators.
+   can be overridden to integrate with other static site generators. With content security policies
+   enabled, the header must be whitespace or the standard HTML doctype.
 -/
 
 def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets TraverseContext := {})

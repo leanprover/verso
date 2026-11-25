@@ -10,6 +10,7 @@ from release_utils import (
     find_latest_version,
     find_latest_stable_version,
 )
+from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
 from extend_content_security_policy import extend_policy
@@ -20,9 +21,6 @@ UNICODE_INPUT_FILES = [
 ]
 
 STATS_HTML_FILE = "stats.html"
-
-SCRIPT_ELEMENT = re.compile(r"<script\b([^>]*)>(.*?)</script>", re.DOTALL)
-SCRIPT_SOURCE = re.compile(r'\ssrc="([^"]*)"')
 
 # The commit from which the permalink and search scripts are taken.
 VERSO_SCRIPTS_REF = "72f606748cc5f4e1ce9f6d0b7abbd37cf767c9fd"
@@ -131,23 +129,59 @@ def replace_unicode_input_files(directory, unicode_input_files):
                     print(f"Skipped (not present): {filepath}")
 
 
+class StatsScriptParser(HTMLParser):
+    # With scripting enabled, these elements contain text rather than nested markup.
+    CDATA_CONTENT_ELEMENTS = (
+        "script",
+        "style",
+        "title",
+        "textarea",
+        "xmp",
+        "iframe",
+        "noembed",
+        "noframes",
+        "noscript",
+    )
+
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self.bodies = []
+        self.origins = []
+        self.body = None
+        self.template_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "template":
+            self.template_depth += 1
+        if tag != "script" or self.template_depth:
+            return
+        for name, value in attrs:
+            if name == "src":
+                url = urlsplit(value or "")
+                if url.netloc:
+                    origin = f"{url.scheme}://{url.netloc}" if url.scheme else url.netloc
+                    self.origins.append(origin)
+                return
+        self.body = []
+
+    def handle_data(self, data):
+        if self.body is not None:
+            self.body.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "template" and self.template_depth:
+            self.template_depth -= 1
+        if tag == "script" and self.body is not None:
+            self.bodies.append("".join(self.body))
+            self.body = None
+
+
 def scripts_in(html):
-    """
-    Returns the inline script bodies and the origins of external scripts in a snippet of HTML.
-    """
-    bodies = []
-    origins = []
-    for attributes, body in SCRIPT_ELEMENT.findall(html):
-        source = SCRIPT_SOURCE.search(attributes)
-        if source is None:
-            bodies.append(body)
-        else:
-            url = urlsplit(source.group(1))
-            if url.netloc:
-                origins.append(
-                    f"{url.scheme}://{url.netloc}" if url.scheme else url.netloc
-                )
-    return bodies, origins
+    """Returns the inline script bodies and external origins in a trusted stats snippet."""
+    parser = StatsScriptParser()
+    parser.feed(html)
+    parser.close()
+    return parser.bodies, parser.origins
 
 
 def inject_stats_html(directory, stats_html_content, extensions=(".html", ".htm")):
@@ -430,6 +464,17 @@ def test():
         ["cdn.example"],
     )
     assert scripts_in('<script src="local.js"></script>') == ([], [])
+    assert scripts_in(
+        "<SCRIPT SRC = 'https://stats.example/s.js'></SCRIPT>"
+        '<script src=https://stats.example/t.js src="https://ignored.example/"></script>'
+        '<!-- <script src="https://ignored.example/"></script> -->'
+        '<template><script src="https://ignored.example/"></script></template>'
+        '<noscript><script src="https://ignored.example/"></script></noscript>'
+        '<script data-test=">">let x = 1 < 2 && "&amp;";</script>'
+    ) == (
+        ['let x = 1 < 2 && "&amp;";'],
+        ["https://stats.example", "https://stats.example"],
+    )
 
     meta = "<meta http-equiv=\"Content-Security-Policy\" content=\"script-src 'self'; base-uri 'self'\"/>"
     find_page = (

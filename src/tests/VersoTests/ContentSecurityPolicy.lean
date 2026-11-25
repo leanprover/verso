@@ -72,7 +72,7 @@ def jsSource : String := "if (a && b < c) { log(\"héllo\"); }"
 #test_guard hashesOf (page #[script (.raw jsSource)] #[]) ==
   #["'sha256-EW9HhRel9YXibtoCk63tLBdMCOlhPacfTwc5zLrW+e0='"]
 
-/- Scripts in SVG and MathML are hashed as the text that the browser decodes -/
+/- SVG scripts use browser-decoded text. MathML scripts are inert. -/
 
 def svg (children : Html) : Html := html%{<svg>{children}</svg>}
 
@@ -84,21 +84,25 @@ def svg (children : Html) : Html := html%{<svg>{children}</svg>}
   #[scriptHash "ac"]
 #test_guard hashesOf (page #[] #[html%{<SVG><g>{script (.text "a < b")}</g></SVG>}]) ==
   #[scriptHash "a < b"]
-#test_guard hashesOf (page #[] #[html%{<math><mrow>{script (.text "a < b")}</mrow></math>}]) ==
-  #[scriptHash "a < b"]
+#test_guard hashesOf (page #[] #[html%{<math><mrow>{script (.text "a < b")}</mrow></math>}]) == #[]
 
 -- Integration points return to HTML parsing, where a script body is raw text.
 #test_guard #["foreignObject", "desc", "title"].all fun tag =>
   hashesOf (page #[] #[svg (.element tag #[] (script (.text "a < b")))]) == #[scriptHash "a &lt; b"]
-#test_guard #["mi", "mo", "mn", "ms", "mtext", "annotation-xml"].all fun tag =>
+#test_guard #["mi", "mo", "mn", "ms", "mtext"].all fun tag =>
   hashesOf (page #[] #[html%{<math>{Html.element tag #[] (script (.text "a < b"))}</math>}]) ==
     #[scriptHash "a &lt; b"]
+#test_guard hashesOf (page #[] #[html%{<math><annotation-xml>{script (.raw "data")}</annotation-xml></math>}]) == #[]
+#test_guard hashesOf (page #[] #[html%{<math><annotation-xml encoding="text/html">{script (.raw "active")}</annotation-xml></math>}]) ==
+  #[scriptHash "active"]
+#test_guard hashesOf (page #[] #[html%{<math><annotation-xml>{svg (script (.text "a < b"))}</annotation-xml></math>}]) ==
+  #[scriptHash "a < b"]
+
 #test_guard hashesOf (page #[] #[svg html%{<foreignObject><div>{svg (script (.text "a < b"))}</div></foreignObject>}]) ==
   #[scriptHash "a < b"]
-#test_guard hashesOf (page #[] #[html%{<title>{script (.text "a < b")}</title>}]) ==
-  #[scriptHash "a &lt; b"]
+#test_guard hashesOf (page #[] #[html%{<title>{script (.text "a < b")}</title>}]) == #[]
 
-/- Every inline script counts, wherever it is and whatever its type -/
+/- Only browser-processed scripts contribute hashes and origins. -/
 
 #test_guard hashesOf (page
     #[script (.raw "one")]
@@ -106,9 +110,20 @@ def svg (children : Html) : Html := html%{<svg>{children}</svg>}
       html%{<script type="module">{.raw "three"}</script>},
       html%{<script type="application/json">{.raw "four"}</script>},
       html%{<noscript>{script (.raw "five")}</noscript>},
-      html%{<svg>{script (.raw "six")}</svg>}]) ==
-  sorted #[scriptHash "one", scriptHash "two", scriptHash "three", scriptHash "four",
-    scriptHash "five", scriptHash "six"]
+      html%{<svg>{script (.raw "six")}</svg>},
+      html%{<template>{script (.raw "seven")}{srcScript "https://inert.example/app.js"}</template>},
+      html%{<script type="importmap">{.raw "{}"}</script>},
+      html%{<script type=" Text/JavaScript ">{.raw "legacy"}</script>}]) ==
+  sorted #[scriptHash "one", scriptHash "two", scriptHash "three", scriptHash "six",
+    scriptHash "{}", scriptHash "legacy"]
+
+#test_guard page #[] #[
+    html%{<template>{srcScript "https://inert.example/app.js"}</template>},
+    html%{<script src="https://data.example/data.js" type="application/json"></script>},
+    html%{<script src="https://map.example/map.json" type="importmap"></script>}
+  ] |> collect {} |>.origins.isEmpty
+
+#test_guard (collect { extraInlineScripts := #["trusted()"] } (page #[] #[])).inlineScripts.contains "trusted()"
 
 #test_guard hashesOf (page #[] #[script (.raw "same"), script (.raw "other"), script (.raw "same")]) ==
   sorted #[scriptHash "same", scriptHash "other"]
@@ -344,22 +359,23 @@ def headed : Html :=
       srcScript "https://cdn.example/lib.js"]
     #[script (.raw "last")]
 
-#test_guard apply {} headed ==
-  page
-    #[metaOf headed,
+#test_guard (apply {} headed).toOption.isEqSome <|
+  page #[
+    metaOf headed,
       html%{<base href="../"/>},
       script (.raw "first"),
-      srcScript "https://cdn.example/lib.js"]
+      srcScript "https://cdn.example/lib.js"
+    ]
     #[script (.raw "last")]
 
-#test_guard (apply {} (page #[] #[])).render == (page #[metaOf (page #[] #[])] #[]).render
+#test_guard ((apply {} (page #[] #[])).toOption.getD (.seq #[])).render == (page #[metaOf (page #[] #[])] #[]).render
 
-#test_guard (apply {} (.seq #[.raw "<!DOCTYPE html>",
-    html%{<html><head>{.raw "<title>t</title>"}</head><body></body></html>}])).render ==
+#test_guard ((apply {} (.seq #[.raw "<!DOCTYPE html>",
+    html%{<html><head>{.raw "<title>t</title>"}</head><body></body></html>}])).toOption.map Html.render) == some
   "<!DOCTYPE html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"script-src 'self'; base-uri 'self'\"/><title>t</title></head><body></body></html>"
 
 def placed (head : Array Html) : String :=
-  (apply {} (page head #[])).render
+  ((apply {} (page head #[])).toOption.getD (.seq #[])).render
 
 def policyMeta : String :=
   "<meta http-equiv=\"Content-Security-Policy\" content=\"script-src 'self'; base-uri 'self'\"/>"
@@ -399,17 +415,16 @@ def policyMeta : String :=
 
 def noHead : Html := html%{<html><body>{script (.raw "x")}</body></html>}
 
-#test_guard apply {} noHead == noHead
-#test_guard apply {} html%{<html><body><script><head></head></script></body></html>} ==
-  html%{<html><body><script><head></head></script></body></html>}
+#test_guard (apply {} noHead).isOk == false
+#test_guard (apply {} html%{<html><body><script><head></head></script></body></html>}).isOk == false
+#test_guard (apply {} html%{<html><template><head></head></template><body></body></html>}).isOk == false
+#test_guard (apply {} (.raw "<html><head></head><body></body></html>")).isOk == false
+#test_guard (apply {} html%{<html><script></script><head></head><body></body></html>}).isOk == false
+#test_guard (apply {} (.seq #[.raw "<title>Prefix</title>", headed])).isOk == false
+#test_guard (apply {} (.seq #[.raw "\x0b", headed])).isOk == false
 
-def headInScript : Html := html%{<html><script><head></head></script><head></head><body></body></html>}
-
-#test_guard (apply {} headInScript).render ==
-  s!"<html><script><head></head></script><head>{(metaOf headInScript).render}</head><body></body></html>"
-
-#test_guard (apply {} (.seq #[.raw "<!DOCTYPE html>", html%{<HEAD></HEAD>}])).render ==
-  s!"<!DOCTYPE html><HEAD>{policyMeta}</HEAD>"
+#test_guard (apply {} (.seq #[.raw "<!DOCTYPE html>", html%{<HEAD></HEAD>}])).toOption.map Html.render ==
+  some s!"<!DOCTYPE html><HEAD>{policyMeta}</HEAD>"
 
 /- Extra sources and origins -/
 
@@ -423,10 +438,10 @@ def headInScript : Html := html%{<html><script><head></head></script><head></hea
 def troublesome : Html :=
   page #[] #[.raw "<script>x</script>", html%{<a onclick="f()" href="javascript:f()"></a>}]
 
-#test_guard apply { enabled := false } headed == headed
-#test_guard apply { enabled := false } troublesome == troublesome
-#test_guard apply { enabled := false, allowEval := true, extraScriptSources := sourceOf "a.example" } headed ==
-  headed
+#test_guard (apply { enabled := false } headed).toOption == some headed
+#test_guard (apply { enabled := false } troublesome).toOption == some troublesome
+#test_guard (apply { enabled := false, allowEval := true, extraScriptSources := sourceOf "a.example" } headed).toOption ==
+  some headed
 
 /- A complete page, as the rehash helper must reproduce it -/
 
@@ -447,8 +462,8 @@ def samplePage : Html := html%{
 
 def sampleConfig : Config := { extraScriptSources := sourceOf "analytics.example" (some .https) }
 
-#test_guard (apply sampleConfig samplePage).render ==
+#test_guard ((apply sampleConfig samplePage).toOption.getD (.seq #[])).render ==
   s!"<html lang=\"en\"><head><meta charset=\"utf-8\"/><meta http-equiv=\"Content-Security-Policy\" content=\"script-src 'self' https://analytics.example https://cdn.example {scriptHash "window.inBody = 2;"} {scriptHash "window.inHead = 1;"}; base-uri 'self'\"/><base href=\"/\"/><script src=\"https://cdn.example/lib.js\"></script><script>window.inHead = 1;</script></head><body><p>Hello</p><script>window.inBody = 2;</script></body></html>"
 
-#test_guard (apply sampleConfig samplePage).render ==
+#test_guard ((apply sampleConfig samplePage).toOption.getD (.seq #[])).render ==
   "<html lang=\"en\"><head><meta charset=\"utf-8\"/><meta http-equiv=\"Content-Security-Policy\" content=\"script-src 'self' https://analytics.example https://cdn.example 'sha256-Whc1+XOKQqbV1dL/y8vYlrbk7cdgZzIo/FIVuZ0RExY=' 'sha256-zagrBsqmUpNTNqf2zXEe6chvc+8vg1v2GKWMvG30r34='; base-uri 'self'\"/><base href=\"/\"/><script src=\"https://cdn.example/lib.js\"></script><script>window.inHead = 1;</script></head><body><p>Hello</p><script>window.inBody = 2;</script></body></html>"

@@ -180,9 +180,9 @@ Stylesheets, images, fonts, connections, frames, and objects are not restricted 
 The script policy allows the following scripts:
 
 * Those from the site's own [origin](https://developer.mozilla.org/en-US/docs/Glossary/Origin)
-* All the inline scripts that are present in the page's source when HTML is generated
-* The origin of each external script that is loaded in the page's source when HTML is generated
-* Any additional configured script sources
+* Browser-processed inline scripts in the structured HTML, including classic scripts, modules, import maps, and speculation rules
+* The origins of external scripts in the structured HTML
+* Any additional configured script sources and trusted inline script bodies
 
 The `'unsafe-eval'` and `'wasm-unsafe-eval'` keywords are controlled by the {name Verso.Output.Html.ContentSecurityPolicy.Config.allowEval}`allowEval` and {name Verso.Output.Html.ContentSecurityPolicy.Config.allowWebAssemblyCompilation}`allowWebAssemblyCompilation` flags in the configuration.
 :::
@@ -191,7 +191,7 @@ Because the policy trusts the page's origin, scripts from other sites that share
 For example, two separate GitHub Pages sites that are under the same account share an origin.
 
 :::paragraph
-Browsers block the following, reporting each blocked script in the developer console:
+By default, browsers block the following and report each violation in the developer console:
 
 * Inline `<script>` elements inside raw HTML strings as well as those that load scripts from origins that the policy does not permit
 * Inline event handler attributes, such as `onclick`
@@ -199,6 +199,8 @@ Browsers block the following, reporting each blocked script in the developer con
 * Further scripts from origins that are not listed in the policy, but are loaded by a script that is allowed.
 
 Verso doesn't warn about such scripts when it generates the site.
+Data blocks and scripts inside inert content, such as `<template>` and `<noscript>`, do not contribute to the policy.
+Extensions can explicitly authorize an exact trusted inline script body with {name Verso.Output.Html.ContentSecurityPolicy.Config.extraInlineScripts}`extraInlineScripts`.
 Scripts that load other scripts from remote hosts need those hosts to be listed in {name Verso.Output.Html.ContentSecurityPolicy.Config.extraScriptSources}`extraScriptSources`.
 Event handlers can be attached with `addEventListener` in a script instead of using attributes like `onclick`.
 :::
@@ -224,8 +226,9 @@ tag := "html-content-security-policy-genres"
 
 Authors of Verso genres can enable content security policies for HTML content using {name Verso.Output.Html.ContentSecurityPolicy.apply}`ContentSecurityPolicy.apply` on each page.
 This should be the last step in the pipeline, after all scripts have been added.
-{name Verso.Output.Html.ContentSecurityPolicy.apply}`ContentSecurityPolicy.apply` first collects all inline scripts in the page and adds their hashes to the set of allowed scripts.
-It then inserts the resulting policy tag into the page's first `<head>` element, right after a leading `<meta charset>` tag if present.
+{name Verso.Output.Html.ContentSecurityPolicy.apply}`ContentSecurityPolicy.apply` collects browser-processed inline scripts and adds their hashes to the set of allowed scripts.
+It inserts the policy into the document's leading structured `<head>` element, immediately after a leading `<meta charset>` tag if present.
+When enabled, it returns an error if it cannot locate that head. Custom templates should construct the document head as structured HTML.
 If the {name Verso.Output.Html.ContentSecurityPolicy.Config.enabled}`enabled` flag in the configuration is not set, then the HTML is not modified.
 
 Genre authors who need to examine or modify the policy before applying it should call {name Verso.Output.Html.ContentSecurityPolicy.collect}`ContentSecurityPolicy.collect` to collect the inline scripts in the page.

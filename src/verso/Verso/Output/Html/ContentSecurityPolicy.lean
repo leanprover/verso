@@ -128,6 +128,8 @@ public structure Config where
   hosts if Verso does not automatically detect them.
   -/
   extraScriptSources : Array Source := #[]
+  /-- Trusted inline script bodies to authorize explicitly, for example scripts in raw HTML. -/
+  extraInlineScripts : Array String := #[]
 deriving Repr, BEq, Inhabited, ToJson, FromJson
 
 /-- A content security policy that can be added to `<head>`. -/
@@ -258,21 +260,31 @@ def scriptOrigin? (src : String) : Option Source :=
 def attribute? (attrs : Array (String × String)) (name : String) : Option String :=
   attrs.find? (·.1.toLower == name) |>.map (·.2)
 
+inductive ScriptNamespace where
+  | html | svg | math
+deriving BEq
+
+-- The children of foreign integration points are parsed as HTML. An SVG child of MathML
+-- annotation-xml also enters the SVG namespace regardless of the annotation's encoding.
+def childNamespace (ns : ScriptNamespace) (tag : String) (attrs : Array (String × String)) :
+    ScriptNamespace :=
+  match ns with
+  | .html =>
+    if tag == "svg" then .svg else if tag == "math" then .math else .html
+  | .svg =>
+    if #["foreignobject", "desc", "title"].contains tag then .html else .svg
+  | .math =>
+    if #["mi", "mo", "mn", "ms", "mtext"].contains tag then .html
+    else if tag == "annotation-xml" &&
+        (attribute? attrs "encoding").any
+          (fun value => #["text/html", "application/xhtml+xml"].contains value.toLower) then .html
+    else .math
+
 /--
-Checks whether the HTML parser reads the children of an SVG or MathML element as HTML.
+The text of an SVG script element, as the browser builds it.
 
-These elements are the HTML integration points and the MathML text integration points
-(https://html.spec.whatwg.org/multipage/parsing.html#tree-construction-dispatcher).
--/
-def isHtmlIntegrationPoint (tag : String) : Bool :=
-  #["foreignobject", "desc", "title", "mi", "mo", "mn", "ms", "mtext", "annotation-xml"].contains
-    tag
-
-/--
-The text of a script element in SVG or MathML, as the browser builds it.
-
-In SVG and MathML, the HTML parser decodes character references in a script and turns markup into
-child elements, which are not part of the script's text. A text node contributes the string that it
+In SVG, the HTML parser decodes character references in a script and turns markup into child
+elements, which are not part of the script's text. A text node contributes the string that it
 holds. A raw node contributes its string as written, which is the browser's text whenever it
 contains neither `&` nor `<`.
 -/
@@ -281,31 +293,63 @@ def foreignScriptText : Html → String
   | .seq hs => hs.attach.foldl (fun text ⟨h, _⟩ => text ++ foreignScriptText h) ""
   | .element .. => ""
 
+-- https://mimesniff.spec.whatwg.org/#javascript-mime-type
+def isJavaScriptMimeType (type : String) : Bool :=
+  #["application/ecmascript", "application/javascript", "application/x-ecmascript",
+    "application/x-javascript", "text/ecmascript", "text/javascript", "text/javascript1.0",
+    "text/javascript1.1", "text/javascript1.2", "text/javascript1.3", "text/javascript1.4",
+    "text/javascript1.5", "text/jscript", "text/livescript", "text/x-ecmascript",
+    "text/x-javascript"].contains type
+
+def scriptType (attrs : Array (String × String)) : String :=
+  match attribute? attrs "type" with
+  | some type => type.toLower
+  | none =>
+    match attribute? attrs "language" with
+    | some lang => if lang.isEmpty then "" else "text/" ++ lang.toLower
+    | none => ""
+
+-- Descendants of these HTML elements are inert or are parsed as text.
+def isInertContainer (tag : String) : Bool :=
+  #["template", "noscript", "title", "textarea", "style", "xmp", "iframe",
+    "noembed", "noframes", "plaintext"].contains tag
+
 structure Scripts where
   origins : Std.HashSet Source := {}
   inlineScripts : Std.HashSet String := {}
 
 /--
-Collects the scripts in an HTML tree. `foreign` is `true` inside SVG and MathML, where the browser
-parses script bodies as text with character references.
+Collects browser-processed scripts in the structured HTML tree.
 -/
-def Scripts.visit (scripts : Scripts) (foreign : Bool) : Html → Scripts
-  | .seq hs => hs.foldl (init := scripts) (fun s h => s.visit foreign h)
+def Scripts.visit (scripts : Scripts) (ns : ScriptNamespace) (inMathAnnotation := false) : Html → Scripts
+  | .seq hs => hs.foldl (init := scripts) (fun s h => s.visit ns inMathAnnotation h)
   | .element tag attrs children =>
     let tag := tag.toLower
     if tag == "script" then
-      match attribute? attrs "src" with
+      if ns == .math then scripts else
+      let foreign := ns == .svg
+      let type := if foreign then (attribute? attrs "type").getD "" |>.toLower else scriptType attrs
+      let mime := (type.dropWhile isAsciiWhitespace |>.dropEndWhile isAsciiWhitespace).copy
+      let canExecute := type.isEmpty || isJavaScriptMimeType mime || type == "module"
+      let inlineOnly := !foreign && (type == "importmap" || type == "speculationrules")
+      let src := if foreign then (attribute? attrs "href").orElse (fun _ => attribute? attrs "xlink:href")
+        else attribute? attrs "src"
+      match src with
       | some src =>
-        match scriptOrigin? src with
-        | some origin => { scripts with origins := scripts.origins.insert origin }
-        | none => scripts
+        if canExecute then
+          match scriptOrigin? src with
+          | some origin => { scripts with origins := scripts.origins.insert origin }
+          | none => scripts
+        else scripts
       | none =>
-        let body := if foreign then foreignScriptText children else children.render
-        { scripts with inlineScripts := scripts.inlineScripts.insert body }
+        if canExecute || inlineOnly then
+          let body := if foreign then foreignScriptText children else children.render
+          { scripts with inlineScripts := scripts.inlineScripts.insert body }
+        else scripts
+    else if ns == .html && isInertContainer tag then scripts
     else
-      let foreign :=
-        if foreign then !isHtmlIntegrationPoint tag else tag == "svg" || tag == "math"
-      scripts.visit foreign children
+      let current := if inMathAnnotation && tag == "svg" then .svg else ns
+      scripts.visit (childNamespace current tag attrs) (current == .math && tag == "annotation-xml") children
   | _ => scripts
 
 /--
@@ -313,7 +357,7 @@ Converts a configuration to a suitable policy for `html` by collecting the docum
 and setting other properties as specified.
 -/
 public def collect (config : Config) (html : Html) : Policy :=
-  let scripts := Scripts.visit {} false html
+  let scripts := Scripts.visit {} .html false html
   let extras := config.extraScriptSources.foldl (init := {}) fun extras source =>
     if source ∈ scripts.origins then extras else extras.insert source
   {
@@ -321,7 +365,7 @@ public def collect (config : Config) (html : Html) : Policy :=
     allowWebAssemblyCompilation := config.allowWebAssemblyCompilation
     origins := scripts.origins
     extraSources := extras
-    inlineScripts := scripts.inlineScripts
+    inlineScripts := config.extraInlineScripts.foldl (·.insert ·) scripts.inlineScripts
   }
 
 def flatten : Html → Array Html
@@ -329,7 +373,9 @@ def flatten : Html → Array Html
   | h => #[h]
 
 def isCharsetMeta : Html → Bool
-  | .element tag attrs _ => tag.toLower == "meta" && attrs.any (·.1.toLower == "charset")
+  | .element tag attrs children =>
+    tag.toLower == "meta" && children.isEmpty && attrs.size == 1 &&
+      attrs.any (·.1.toLower == "charset")
   | _ => false
 
 def isWhitespaceText : Html → Bool
@@ -347,28 +393,48 @@ def addToHead (policyElement : Html) (children : Html) : Html :=
     else policyElement ++ children
   | none => policyElement ++ children
 
--- Adds the policy to the first `head` element in document order outside scripts.
-def insertIntoHead (policyElement : Html) : Html → Option Html
-  | .element tag attrs children =>
-    let lower := tag.toLower
-    if lower == "head" then some (.element tag attrs (addToHead policyElement children))
-    else if lower == "script" then none
-    else (insertIntoHead policyElement children).map (.element tag attrs ·)
-  | .seq hs =>
-    let (inserted, hs) := hs.foldl (init := (false, #[])) fun (inserted, nodes) h =>
-      if inserted then (true, nodes.push h)
-      else match insertIntoHead policyElement h with
-        | some h => (true, nodes.push h)
-        | none => (false, nodes.push h)
-    if inserted then some (.seq hs) else none
-  | _ => none
+/-- Checks that a serialized document prefix contains only whitespace or the HTML doctype. -/
+public def isDocumentPreamble (text : String) : Bool :=
+  let text := text.toSlice.dropWhile isAsciiWhitespace
+  text.isEmpty ||
+    (text.copy.toLower.dropPrefix? "<!doctype html>").any (·.all isAsciiWhitespace)
+
+-- Identify the head before any element or text that could cause the parser to leave the head.
+def insertIntoLeadingHead (policyElement : Html) (nodes : Array Html) : Option (Array Html) := do
+  let index ← nodes.findIdx? fun
+    | .raw s => !s.all isAsciiWhitespace
+    | node => !isWhitespaceText node
+  let .element tag attrs children := nodes[index]! | none
+  if tag.toLower != "head" then none
+  else some (nodes.set! index (.element tag attrs (addToHead policyElement children)))
+
+-- Require a structured head at the start of the document or of its outer html element.
+def insertIntoHead (policyElement : Html) (html : Html) : Option Html := do
+  let nodes := flatten html
+  let index ← nodes.findIdx? fun
+    | .raw s => !isDocumentPreamble s
+    | node => !isWhitespaceText node
+  let .element tag attrs children := nodes[index]! | none
+  let nodes ←
+    if tag.toLower == "html" then
+      let children ← insertIntoLeadingHead policyElement (flatten children)
+      pure (nodes.set! index (.element tag attrs (.seq children)))
+    else
+      let head ← insertIntoLeadingHead policyElement (nodes.extract index)
+      pure (nodes.extract 0 index ++ head)
+  return match html with
+    | .element .. => nodes[0]!
+    | _ => .seq nodes
 
 /--
-Applies a policy configuration to an HTML document by inserting the appropriate `<meta>` element in the head.
+Applies a policy configuration to an HTML document by inserting a policy in its leading `<head>`
+When the policy is enabled, documents without such a head are rejected.
 -/
-public def apply (config : Config) (html : Html) : Html :=
-  if !config.enabled then html
+public def apply (config : Config) (html : Html) : Except String Html :=
+  if !config.enabled then .ok html
   else
     let policyElement :=
       html%{<meta http-equiv="Content-Security-Policy" content={(collect config html).render}/>}
-    (insertIntoHead policyElement html).getD html
+    match insertIntoHead policyElement html with
+    | some html => .ok html
+    | none => .error "Cannot install the content security policy: expected a leading structured <head>."
