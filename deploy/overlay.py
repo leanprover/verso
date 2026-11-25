@@ -159,7 +159,9 @@ class StatsScriptParser(HTMLParser):
             if name == "src":
                 url = urlsplit(value or "")
                 if url.netloc:
-                    origin = f"{url.scheme}://{url.netloc}" if url.scheme else url.netloc
+                    origin = (
+                        f"{url.scheme}://{url.netloc}" if url.scheme else url.netloc
+                    )
                     self.origins.append(origin)
                 return
         self.body = []
