@@ -24,6 +24,8 @@ MARKERS = [
     "packageManualExtraHead",
     "packageManualEscapedText",
     "packageManualHtmlComment",
+    "packageManualSvgText",
+    "packageManualForeignObjectText",
     EXTERNAL_SCRIPT_MARKER,
 ]
 
@@ -65,6 +67,17 @@ class TestContentSecurityPolicy:
         assert (
             loaded_page.evaluate("window.packageManualEscapedText")
             == "a &amp;&amp; b &lt; c"
+        )
+
+    # In SVG, the browser decodes the printer's escapes before it runs the script.
+    def test_svg_script_text_is_decoded(self, loaded_page: Page):
+        assert loaded_page.evaluate("window.packageManualSvgText") == "a && b < c"
+
+    # In an SVG `foreignObject`, the browser runs the escaped text, as in HTML.
+    def test_foreign_object_script_text_is_escaped(self, loaded_page: Page):
+        assert (
+            loaded_page.evaluate("window.packageManualForeignObjectText")
+            == "a &amp;&amp; b"
         )
 
     # The NUL in the string literal arrives as U+FFFD, which is also what the policy hashes.

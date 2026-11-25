@@ -170,6 +170,8 @@ If configuration is needed, each genre has a means of specifying it, which is de
 * {ref "manual-content-security-policy"}[manuals and tutorials]
 * {ref "blog-content-security-policy"}[websites]
 * {ref "literate-content-security-policy"}[literate programs]
+
+Pages from `verso-html` always use the default policy.
 :::
 
 :::paragraph
@@ -227,8 +229,8 @@ It then inserts the resulting policy tag into the page's first `<head>` element,
 If the {name Verso.Output.Html.ContentSecurityPolicy.Config.enabled}`enabled` flag in the configuration is not set, then the HTML is not modified.
 
 Genre authors who need to examine or modify the policy before applying it should call {name Verso.Output.Html.ContentSecurityPolicy.collect}`ContentSecurityPolicy.collect` to collect the inline scripts in the page.
-The resulting {name Verso.Output.Html.ContentSecurityPolicy.Policy}`Policy` includes sources for the page's external scripts, hashes for its inline scripts, and the provided configuration values.
-Use {name Verso.Output.Html.ContentSecurityPolicy.Policy.render}`Policy.render` to construct a string that's suitable for the `<meta>` tag.
+The resulting {name Verso.Output.Html.ContentSecurityPolicy.Policy}`Policy` includes sources for the page's external scripts, the code of its inline scripts, and the provided configuration values.
+Use {name Verso.Output.Html.ContentSecurityPolicy.Policy.render}`Policy.render` to construct a string that's suitable for the `<meta>` tag, in which inline scripts are allowed based on hashes of their source.
 
 {docstring Verso.Output.Html.ContentSecurityPolicy.apply}
 

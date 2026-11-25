@@ -144,27 +144,12 @@ public structure Policy where
   -/
   allowWebAssemblyCompilation : Bool := false
   /-- Allowed origins for scripts, as collected from the HTML. -/
-  origins : Array Source := #[]
+  origins : Std.HashSet Source := {}
   /-- Further allowed origins for scripts, provided by the author. -/
-  extraSources : Array Source := #[]
-  /--
-  Hashes of inline scripts to allow, each a complete source expression such as `'sha256-…'`.
-  -/
-  hashes : Array String := #[]
+  extraSources : Std.HashSet Source := {}
+  /-- The inline script source texts to allow by hashes in the final policy value. -/
+  inlineScripts : Std.HashSet String := {}
 deriving Repr, BEq, Inhabited
-
-def pushNew [BEq α] (xs : Array α) (x : α) : Array α :=
-  if xs.contains x then xs else xs.push x
-
-/-- Converts a policy to a string that's suitable for a `<meta>` tag. -/
-public def Policy.render (policy : Policy) : String :=
-  let keywords :=
-    (if policy.allowEval then #["'unsafe-eval'"] else #[]) ++
-    (if policy.allowWebAssemblyCompilation then #["'wasm-unsafe-eval'"] else #[])
-  let sources :=
-    ((policy.origins ++ policy.extraSources).map (·.render) ++ policy.hashes).foldl pushNew
-      (#["'self'"] ++ keywords)
-  sources.foldl (fun policy source => policy ++ " " ++ source) "script-src" ++ "; base-uri 'self'"
 
 /--
 Normalizes the body of a script using the same algorithm as browsers:
@@ -188,30 +173,43 @@ public def normalizeScriptBody (body : String) : String := Id.run do
 public def scriptHash (body : String) : String :=
   s!"'sha256-{normalizeScriptBody body |>.toUTF8 |> Hash.sha256 |> Base64.encode}'"
 
+/-- Converts a policy to a string that's suitable for a `<meta>` tag. -/
+public def Policy.render (policy : Policy) : String :=
+  let keywords :=
+    (if policy.allowEval then #["'unsafe-eval'"] else #[]) ++
+    (if policy.allowWebAssemblyCompilation then #["'wasm-unsafe-eval'"] else #[])
+  let sorted (items : Std.HashSet String) := items.toArray.qsort (· < ·)
+  let hosts := (policy.origins ∪ policy.extraSources).fold (·.insert ·.render) {}
+  let hashes := policy.inlineScripts.fold (·.insert <| scriptHash ·) {}
+  let sources := #["'self'"] ++ keywords ++ sorted hosts ++ sorted hashes
+  sources.foldl (fun policy source => policy ++ " " ++ source) "script-src" ++ "; base-uri 'self'"
+
 def isAsciiWhitespace (c : Char) : Bool :=
   c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\x0c'
 
-def isSchemeChar (c : Char) : Bool :=
-  c.isAlphanum || c == '+' || c == '-' || c == '.'
+def isDecimal (s : String.Slice) : Bool :=
+  !s.isEmpty && s.all Char.isDigit
 
--- Browsers strip leading C0 controls and spaces and remove tabs and newlines before they read
--- the scheme of a URL.
-def urlSchemeText (url : String) : String :=
-  (url.dropWhile (fun (c : Char) => c.toNat ≤ 0x20)).foldl (init := "") fun text c =>
-    if c == '\t' || c == '\n' || c == '\r' then text else text.push c
+/--
+Checks whether the URL parser changes or rejects a host name.
 
-def urlScheme? (url : String) : Option String :=
-  let text := urlSchemeText url
-  let scheme := text.takeWhile isSchemeChar
-  match scheme.front? with
-  | some c =>
-    if c.isAlpha && (text.dropWhile isSchemeChar).startsWith ':' then some scheme.copy.toLower
-    else none
-  | none => none
+The parser reads a host as an IPv4 address when its last label is a decimal or hexadecimal number
+(https://url.spec.whatwg.org/#ends-in-a-number-checker). It writes a valid address as four decimal
+numbers from 0 to 255 without leading zeros (https://url.spec.whatwg.org/#concept-ipv4-serializer).
+-/
+def isRewrittenIpv4 (host : Host) : Bool :=
+  let labels := (host.name.split '.').toArray
+  let last := labels.back?.getD "".toSlice
+  let endsInNumber := isDecimal last || (last.dropPrefix? "0x").any (·.all Char.isHexDigit)
+  let isCanonical (label : String.Slice) : Bool :=
+    isDecimal label && label.toNat?.all (· ≤ 255) &&
+      (label.utf8ByteSize == 1 || !label.startsWith '0')
+  endsInNumber && !(labels.size == 4 && labels.all isCanonical)
 
 /-- Parses `host[:port]` from a URL without a wildcard. -/
 def authoritySource? (scheme : Option Scheme) (authority : String.Slice) : Option Source := do
   let host ← (Host.ofString (authority.takeWhile (· != ':')).copy).toOption
+  if isRewrittenIpv4 host then none
   let afterHost := authority.dropWhile (· != ':')
   let port ←
     if afterHost.isEmpty then pure none
@@ -242,64 +240,88 @@ def hasForbiddenChar (s : String) : Bool :=
   s.any fun c => c.toNat ≤ 0x20 || isUnicodeWhitespace c || c == ';' || c == ',' || c == '\''
 
 /--
+The origin that a script `src` loads from, for absolute `http(s)` and protocol-relative URLs.
+
 A protocol-relative URL such as `//cdn.example/x.js` results in a host source without a scheme.
-Browsers treat `\` like `/` here.
+Browsers treat `\` like `/` in these URLs, so a protocol-relative URL with a `\` doesn't result in a
+source.
 -/
-def protocolRelativeOrigin? (src : String) : Option Source :=
-  if hasForbiddenChar src || src.contains '\\' || !src.startsWith "//" then none
-  else authoritySource? none (authorityOf (src.drop 2))
-
-def isProtocolRelative (src : String) : Bool :=
-  let isSlash (c : Char) : Bool := c == '/' || c == '\\'
-  match (urlSchemeText src).dropPrefix? isSlash with
-  | some rest => rest.startsWith isSlash
-  | none => false
-
-/-- The origin that a script `src` loads from, for absolute `http(s)` and protocol-relative URLs. -/
 def scriptOrigin? (src : String) : Option Source :=
-  match urlScheme? src with
-  | some "http" | some "https" =>
-    if hasForbiddenChar src then none
-    else match splitHttpUrl? src with
-      | none => none
-      | some (scheme, rest) => authoritySource? (some scheme) (authorityOf rest)
-  | some _ => none
-  | none => if isProtocolRelative src then protocolRelativeOrigin? src else none
+  if hasForbiddenChar src then none
+  else match splitHttpUrl? src with
+    | some (scheme, rest) => authoritySource? (some scheme) (authorityOf rest)
+    | none =>
+      if src.startsWith "//" && !src.contains '\\' then
+        authoritySource? none (authorityOf (src.drop 2))
+      else none
 
 def attribute? (attrs : Array (String × String)) (name : String) : Option String :=
   attrs.find? (·.1.toLower == name) |>.map (·.2)
 
-structure Scripts where
-  origins : Array Source := #[]
-  hashes : Array String := #[]
+/--
+Checks whether the HTML parser reads the children of an SVG or MathML element as HTML.
 
-def Scripts.visit (scripts : Scripts) : Html → Scripts
-  | .seq hs => hs.foldl (init := scripts) (fun s h => s.visit h)
+These elements are the HTML integration points and the MathML text integration points
+(https://html.spec.whatwg.org/multipage/parsing.html#tree-construction-dispatcher).
+-/
+def isHtmlIntegrationPoint (tag : String) : Bool :=
+  #["foreignobject", "desc", "title", "mi", "mo", "mn", "ms", "mtext", "annotation-xml"].contains
+    tag
+
+/--
+The text of a script element in SVG or MathML, as the browser builds it.
+
+In SVG and MathML, the HTML parser decodes character references in a script and turns markup into
+child elements, which are not part of the script's text. A text node contributes the string that it
+holds. A raw node contributes its string as written, which is the browser's text whenever it
+contains neither `&` nor `<`.
+-/
+def foreignScriptText : Html → String
+  | .text s | .raw s => s
+  | .seq hs => hs.attach.foldl (fun text ⟨h, _⟩ => text ++ foreignScriptText h) ""
+  | .element .. => ""
+
+structure Scripts where
+  origins : Std.HashSet Source := {}
+  inlineScripts : Std.HashSet String := {}
+
+/--
+Collects the scripts in an HTML tree. `foreign` is `true` inside SVG and MathML, where the browser
+parses script bodies as text with character references.
+-/
+def Scripts.visit (scripts : Scripts) (foreign : Bool) : Html → Scripts
+  | .seq hs => hs.foldl (init := scripts) (fun s h => s.visit foreign h)
   | .element tag attrs children =>
-    if tag.toLower == "script" then
+    let tag := tag.toLower
+    if tag == "script" then
       match attribute? attrs "src" with
       | some src =>
         match scriptOrigin? src with
-        | some origin => { scripts with origins := pushNew scripts.origins origin }
+        | some origin => { scripts with origins := scripts.origins.insert origin }
         | none => scripts
-      | none => { scripts with hashes := pushNew scripts.hashes (scriptHash children.render) }
-    else scripts.visit children
+      | none =>
+        let body := if foreign then foreignScriptText children else children.render
+        { scripts with inlineScripts := scripts.inlineScripts.insert body }
+    else
+      let foreign :=
+        if foreign then !isHtmlIntegrationPoint tag else tag == "svg" || tag == "math"
+      scripts.visit foreign children
   | _ => scripts
 
 /--
-Converts a configuration to a suitable policy for `html` by collecting the hashes of the document's
-inline scripts and setting other properties as specified.
+Converts a configuration to a suitable policy for `html` by collecting the document's inline scripts
+and setting other properties as specified.
 -/
 public def collect (config : Config) (html : Html) : Policy :=
-  let scripts := Scripts.visit {} html
-  let extras := config.extraScriptSources.foldl (init := #[]) fun extras source =>
-    if scripts.origins.contains source then extras else pushNew extras source
+  let scripts := Scripts.visit {} false html
+  let extras := config.extraScriptSources.foldl (init := {}) fun extras source =>
+    if source ∈ scripts.origins then extras else extras.insert source
   {
     allowEval := config.allowEval
     allowWebAssemblyCompilation := config.allowWebAssemblyCompilation
     origins := scripts.origins
     extraSources := extras
-    hashes := scripts.hashes
+    inlineScripts := scripts.inlineScripts
   }
 
 def flatten : Html → Array Html

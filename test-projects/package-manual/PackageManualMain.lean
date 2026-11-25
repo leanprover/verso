@@ -89,6 +89,15 @@ def config (localhost : Host) (port : Option Port) : Config where
     -- line comment. This checks that the body is hashed exactly as written.
     html%{<script>{Lean.Html.raw "<!-- a comment in HTML syntax\nwindow.packageManualHtmlComment = true;"}</script>},
   ] ++ (port.map fun port => html%{<script src={externalScriptUrl port}></script>}).toArray
+  extraContents := #[
+    -- A script in inline SVG whose body is a text node with `&&` and `<`. In SVG, the browser
+    -- decodes the printer's escapes, so it runs and hashes the original text. This checks that the
+    -- policy hashes the decoded body.
+    html%{<svg width="0" height="0"><script>{"window.packageManualSvgText = \"a && b < c\";"}</script></svg>},
+    -- A script in an SVG `foreignObject`, where the browser parses HTML again. It runs and hashes
+    -- the escaped text, as in `extraHead`.
+    html%{<svg width="0" height="0"><foreignObject><script>{"window.packageManualForeignObjectText = \"a && b\";"}</script></foreignObject></svg>}
+  ]
   extraDataFiles := {externalScript}
   contentSecurityPolicy :=
     { extraScriptSources := (port.map (externalScriptSource localhost)).toArray }
