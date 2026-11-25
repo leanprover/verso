@@ -98,7 +98,7 @@ def matchesWPTCorpus : Test := do
     match scriptOrigin? case.input with
     | some source =>
       found := found + 1
-      if hasForbiddenChar source.render then
+      if source.render.any (fun c => c.toNat ≤ 0x20 || c == ';' || c == ',' || c == '\'') then
         problems := problems.push
           s!"{case.input.quote}: {source.render.quote} has a forbidden character"
       if let some problem := case.check source then

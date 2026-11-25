@@ -208,7 +208,7 @@ def isRewrittenIpv4 (host : Host) : Bool :=
       (label.utf8ByteSize == 1 || !label.startsWith '0')
   endsInNumber && !(labels.size == 4 && labels.all isCanonical)
 
-/-- Parses `host[:port]` from a URL without a wildcard. -/
+/-- Parses the entire authority as `host[:port]`, without a wildcard. -/
 def authoritySource? (scheme : Option Scheme) (authority : String.Slice) : Option Source := do
   let host ← (Host.ofString (authority.takeWhile (· != ':')).copy).toOption
   if isRewrittenIpv4 host then none
@@ -216,9 +216,9 @@ def authoritySource? (scheme : Option Scheme) (authority : String.Slice) : Optio
   let port ←
     if afterHost.isEmpty then pure none
     else
-      let digits := afterHost.drop 1
-      if digits.isEmpty || !digits.all Char.isDigit then none
-      else some <$> (Port.ofInt (digits.toNat?.getD 0)).toOption
+      let digits ← afterHost.dropPrefix? ':'
+      let number ← digits.toNat?
+      some <$> (Port.ofInt number).toOption
   return { scheme, host, port }
 
 def authorityOf (rest : String.Slice) : String.Slice :=
@@ -231,16 +231,6 @@ def splitHttpUrl? (url : String) : Option (Scheme × String.Slice) :=
   else if lower.startsWith "http://" then some (.http, url.drop 7)
   else none
 
-/-- The characters with the Unicode `White_Space` property. -/
-def isUnicodeWhitespace (c : Char) : Bool :=
-  (c.toNat ≥ 0x09 && c.toNat ≤ 0x0D) || c == ' ' || c == '\u0085' || c == '\u00A0' ||
-  c == '\u1680' || (c.toNat ≥ 0x2000 && c.toNat ≤ 0x200A) || c == '\u2028' || c == '\u2029' ||
-  c == '\u202F' || c == '\u205F' || c == '\u3000'
-
-/-- Characters that could end a source or start a new one in the rendered policy. -/
-def hasForbiddenChar (s : String) : Bool :=
-  s.any fun c => c.toNat ≤ 0x20 || isUnicodeWhitespace c || c == ';' || c == ',' || c == '\''
-
 /--
 The origin that a script `src` loads from, for absolute `http(s)` and protocol-relative URLs.
 
@@ -249,13 +239,14 @@ Browsers treat `\` like `/` in these URLs, so a protocol-relative URL with a `\`
 source.
 -/
 def scriptOrigin? (src : String) : Option Source :=
-  if hasForbiddenChar src then none
-  else match splitHttpUrl? src with
-    | some (scheme, rest) => authoritySource? (some scheme) (authorityOf rest)
-    | none =>
-      if src.startsWith "//" && !src.contains '\\' then
-        authoritySource? none (authorityOf (src.drop 2))
-      else none
+  -- Only the validated authority is emitted. Path, query, and fragment punctuation
+  -- cannot become part of the CSP source.
+  match splitHttpUrl? src with
+  | some (scheme, rest) => authoritySource? (some scheme) (authorityOf rest)
+  | none =>
+    if src.startsWith "//" && !src.contains '\\' then
+      authoritySource? none (authorityOf (src.drop 2))
+    else none
 
 def attribute? (attrs : Array (String × String)) (name : String) : Option String :=
   attrs.find? (·.1.toLower == name) |>.map (·.2)

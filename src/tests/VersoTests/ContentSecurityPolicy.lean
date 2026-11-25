@@ -285,7 +285,6 @@ def maliciousSources : Array String := #[
   "https://evil.example; script-src *",
   "https://a.example' 'unsafe-inline",
   "https://a.example 'unsafe-inline'",
-  "https://a.example/x.js 'unsafe-inline'",
   "https://a.example,https://b.example",
   " https://a.example/x.js",
   "https://a.example\n/x.js",
@@ -317,18 +316,30 @@ def unicodeWhitespace : Array Char := #[
   '\u2009', '\u200A', '\u2028', '\u2029', '\u202F', '\u205F', '\u3000'
 ]
 
-def whitespaceSources : Array String :=
-  unicodeWhitespace.foldl (init := #[]) fun acc c =>
-    acc ++ #[s!"https://a.example/{c}x.js", s!"https://a.example{c}/x.js", s!"//a.example/{c}x.js",
-      s!"http://a.example/x.js{c}"]
+#test_guard unicodeWhitespace.all fun c =>
+  policyOf (page #[srcScript s!"https://a.example{c}/x.js"] #[]) == basePolicy
 
-#test_guard whitespaceSources.size == 4 * 25
+#test_guard #[
+    "https://a.example/assets/a,b;c.js",
+    "https://a.example/x.js?v=1,2;3",
+    "https://a.example?file=app.js;v=1",
+    "https://a.example#some,fragment;with'apostrophe",
+    "https://a.example/some path/x.js",
+    "https://a.example/x.js 'unsafe-inline'",
+    "https://a.example/\u200Bx.js"
+  ].all fun src =>
+    policyOf (page #[srcScript src] #[]) ==
+      "script-src 'self' https://a.example; base-uri 'self'"
 
-#test_guard whitespaceSources.all fun src =>
-  policyOf (page #[srcScript src] #[]) == basePolicy
+#test_guard policyOf (page #[srcScript "//a.example/x.js?v=1,2;3"] #[]) ==
+  "script-src 'self' a.example; base-uri 'self'"
 
-#test_guard policyOf (page #[srcScript "https://a.example/\u200Bx.js"] #[]) ==
-  "script-src 'self' https://a.example; base-uri 'self'"
+#test_guard #["", "/app.js", "?v=1", "#app"].all fun suffix =>
+  policyOf (page #[srcScript s!"https://a.example:8443{suffix}"] #[]) ==
+    "script-src 'self' https://a.example:8443; base-uri 'self'"
+
+#test_guard #["", "/app.js", "?v=1", "#app"].all fun suffix =>
+  policyOf (page #[srcScript s!"https://a.example:8443x{suffix}"] #[]) == basePolicy
 
 /- Hosts that the URL parser reads as IPv4 addresses -/
 
