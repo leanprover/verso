@@ -7,13 +7,13 @@ module
 
 namespace Verso.Base64
 
-private def alphabet : ByteArray :=
+def alphabet : ByteArray :=
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".toByteArray
 
-private theorem alphabet_size : alphabet.size = 64 := by decide
+theorem alphabet_size : alphabet.size = 64 := by decide
 
 /-- The character for the six bits of `v` that start at bit `shift`. -/
-private def sextet (v : UInt32) (shift : UInt32) : Char :=
+def sextet (v : UInt32) (shift : UInt32) : Char :=
   let i := (v >>> shift).toNat % 64
   Char.ofUInt8 (alphabet[i]'(alphabet_size ▸ Nat.mod_lt _ (by decide)))
 
@@ -24,8 +24,8 @@ public def encode (bytes : ByteArray) : String := Id.run do
   let mut out := ""
   let mut i := 0
   while h : i + 3 ≤ bytes.size do
-    let v := (bytes[i]!.toUInt32 <<< 16) ||| (bytes[i + 1].toUInt32 <<< 8) |||
-      bytes[i + 2]!.toUInt32
+    let v := (bytes[i].toUInt32 <<< 16) ||| (bytes[i + 1].toUInt32 <<< 8) |||
+      bytes[i + 2].toUInt32
     out := out.push (sextet v 18) |>.push (sextet v 12) |>.push (sextet v 6) |>.push (sextet v 0)
     i := i + 3
   match h : bytes.size - i with

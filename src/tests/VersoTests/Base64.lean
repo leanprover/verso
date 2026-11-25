@@ -12,7 +12,7 @@ namespace Verso.Tests.Base64
 
 open Verso.Base64 Errata
 
-private def checkEncode (input : ByteArray) (expected : String)
+def checkEncode (input : ByteArray) (expected : String)
     (loc : Location := by exact here%) : TestM Unit := do
   let actual := encode input
   unless actual == expected do
@@ -54,7 +54,7 @@ def thirtyTwoBytes : Test := do
     ]
   checkEncode input "ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0="
 
-private def opensslBase64 (input : ByteArray) : TestM String := do
+def opensslBase64 (input : ByteArray) : TestM String := do
   let spawned ← IO.Process.spawn {
       cmd := "openssl", args := #["base64", "-A"],
       stdin := .piped, stdout := .piped, stderr := .piped
@@ -75,10 +75,10 @@ private def opensslBase64 (input : ByteArray) : TestM String := do
     failHere s!"openssl exited with code {exitCode}" (detail? := some err)
   return out
 
-private def randomBytes (gen : StdGen) (size : Nat) : ByteArray × StdGen := Id.run do
+def randomBytes (gen : StdGen) (size : Nat) : ByteArray × StdGen := Id.run do
   let mut gen := gen
   let mut bytes := ByteArray.emptyWithCapacity size
-  for _ in [0:size] do
+  for _ in 0...size do
     let (b, gen') := randNat gen 0 255
     gen := gen'
     bytes := bytes.push b.toUInt8
@@ -86,7 +86,7 @@ private def randomBytes (gen : StdGen) (size : Nat) : ByteArray × StdGen := Id.
 
 -- The index of the first character at which `s` and `t` differ, with its position in each string.
 -- When one string is a prefix of the other, the index is the length of the shorter one.
-private def firstDifference (s t : String) : Nat × s.Pos × t.Pos := Id.run do
+def firstDifference (s t : String) : Nat × s.Pos × t.Pos := Id.run do
   let mut idx := 0
   let mut p := s.startPos
   let mut q := t.startPos
@@ -101,7 +101,7 @@ private def firstDifference (s t : String) : Nat × s.Pos × t.Pos := Id.run do
   return (idx, p, q)
 
 -- The 20 characters that start 10 characters before `p`, clipped to the string.
-private def window {s : String} (p : s.Pos) : String.Slice :=
+def window {s : String} (p : s.Pos) : String.Slice :=
   let start := p.prevn 10
   s.slice start (start.nextn 20) String.Pos.le_nextn
 
@@ -109,8 +109,8 @@ private def window {s : String} (p : s.Pos) : String.Slice :=
 def matchesOpenssl : Test := do
   let seed := (← read).seed
   let mut gen := mkStdGen seed
-  let mut sizes := (List.range 301).toArray
-  for _ in [0:5] do
+  let mut sizes := Array.range 301
+  for _ in 0...5 do
     let (size, gen') := randNat gen 2000 10000
     gen := gen'
     sizes := sizes.push size
