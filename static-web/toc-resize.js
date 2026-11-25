@@ -24,6 +24,21 @@
     const KEY_STEP = 16;
     const KEY_STEP_LARGE = 64;
 
+    // On mobile, clicking the backdrop beside the open ToC closes it by clicking the
+    // ToC toggle.
+    function wireBackdrop() {
+        const backdrop = document.querySelector(".toc-backdrop");
+        if (!backdrop) return;
+        backdrop.addEventListener("click", () => {
+            document.getElementById("toggle-toc-click")?.click();
+        });
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", wireBackdrop);
+    } else {
+        wireBackdrop();
+    }
+
     const handleEl = document.querySelector(".toc-resize-handle");
     const tocEl = document.getElementById("toc");
     if (!(handleEl instanceof HTMLElement) || !(tocEl instanceof HTMLElement)) return;

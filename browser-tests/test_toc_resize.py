@@ -123,6 +123,24 @@ class TestTocResize:
             f"Expected the saved width to remain as a custom property, got {user_width!r}"
         )
 
+    def test_backdrop_click_closes_mobile_toc(self, server: str, page: Page):
+        """Clicking on the backdrop in the mobile layout closes the ToC."""
+        page.set_viewport_size({"width": 390, "height": 800})
+        page.goto(f"{server}/")
+        page.wait_for_load_state("networkidle")
+
+        toggle = page.locator("#toggle-toc")
+        expect(toggle).not_to_be_checked()
+        page.locator("#toggle-toc-click").click()
+        expect(toggle).to_be_checked()
+
+        # The ToC covers the left part of the screen, so click to its right.
+        backdrop = page.locator(".toc-backdrop")
+        expect(backdrop).to_have_css("position", "fixed")
+        backdrop.click(position={"x": 370, "y": 400})
+        expect(toggle).not_to_be_checked()
+        expect(backdrop).not_to_have_css("position", "fixed")
+
     def test_saved_width_applies_when_widening_from_mobile(
         self, server: str, page: Page
     ):
