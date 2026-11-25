@@ -1,4 +1,5 @@
 import pytest
+from content_security_policy_checks import assert_injected_inline_script_blocked
 from playwright.sync_api import Page, expect
 
 # Markers that the demo site's custom scripts set on `window` when they run. Every page has the
@@ -11,7 +12,7 @@ THEME_MARKERS = [
 ]
 
 # The about page uses a component that adds a header script.
-COMPONENT_MARKERS = ["versoTestComponentHeaderJs"]
+COMPONENT_MARKERS = ["versoTestComponentHeaderJs", "versoTestShadowScript"]
 
 # The front page, the about page with components and math, the blog index, a post, and a post
 # with Lean code and hovers.
@@ -98,15 +99,4 @@ def test_injected_inline_script_is_blocked(
     server: str, page: Page, content_security_policy_violations
 ):
     page.goto(f"{server}/")
-    ran = page.evaluate("""() => {
-      const script = document.createElement("script");
-      script.textContent = "window.versoTestInjectedScript = true;";
-      document.body.append(script);
-      return window.versoTestInjectedScript === true;
-    }""")
-    assert not ran, "an injected inline script ran"
-    violations = content_security_policy_violations.wait_for()
-    content_security_policy_violations.take()
-    assert any(
-        (v.get("effectiveDirective") or "").startswith("script-src") for v in violations
-    ), f"no script-src violation was reported: {violations}"
+    assert_injected_inline_script_blocked(page, content_security_policy_violations)

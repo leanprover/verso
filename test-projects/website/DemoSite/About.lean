@@ -107,7 +107,12 @@ hash the script, so the marker that it sets shows that component header scripts 
 block_component +directive scriptMarker where
   toHtml _ _ _ goB contents := do
     saveJs "window.versoTestComponentHeaderJs = true;"
-    pure html%{<div class="script-marker">{← contents.mapM goB}</div>}
+    pure html%{<div class="script-marker">
+      <template shadowrootmode="open"><slot></slot>
+        <script>{.raw "window.versoTestShadowScript = true;"}</script>
+      </template>
+      {← contents.mapM goB}
+    </div>}
 
 structure ButtonArgs where
   onClick : String

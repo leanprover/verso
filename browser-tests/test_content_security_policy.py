@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import pytest
 from conftest import load_redirects
 from content_security_policy_checks import (
@@ -56,3 +58,28 @@ class TestContentSecurityPolicy:
         page.wait_for_url(lambda url: "/find/" not in url)
         page.wait_for_load_state("networkidle")
         assert_policy_precedes_scripts(page)
+
+
+def test_expected_violation_preserves_unrelated_reports(content_security_policy_violations):
+    recorder = content_security_policy_violations
+    page = Mock()
+    page.url = "https://docs.example/"
+    recorder.attach(page)
+    first_party = {
+        "documentURI": page.url,
+        "effectiveDirective": "script-src-elem",
+        "blockedURI": "https://assets.example/site.js",
+    }
+    recorder.violations.append(first_party)
+    with pytest.raises(AssertionError, match="assets.example"):
+        recorder.assert_clean()
+
+    recorder.violations.append(dict(first_party, blockedURI="inline"))
+    recorder.console_messages.extend([
+        "error: Loading the script 'https://assets.example/site.js' violates the following Content Security Policy directive",
+        "error: Executing inline script violates the following Content Security Policy directive",
+    ])
+    recorder.expect_blocked_script("inline")
+    assert recorder.violations == [first_party]
+    assert len(recorder.console_messages) == 1
+    assert "assets.example" in recorder.console_messages[0]

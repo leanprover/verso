@@ -242,18 +242,44 @@ class ContentSecurityPolicyViolations:
                 "() => new Promise((resolve) => setTimeout(resolve, 0))"
             )
 
-    def wait_for(self, count=1, timeout=5000):
-        deadline = time.monotonic() + timeout / 1000
-        while len(self.violations) < count and time.monotonic() < deadline:
-            self._page.wait_for_timeout(50)
-        return list(self.violations)
-
-    def take(self):
+    def assert_clean(self):
         self.settle()
-        violations = self.violations
-        self.violations = []
-        self.console_messages = []
-        return violations
+        failure = self.failure_message()
+        assert failure is None, failure
+
+    def expect_blocked_script(self, uri):
+        # Cross-origin violation reports may omit the path of the blocked resource.
+        url = urlsplit(uri)
+        allowed_uris = {uri}
+        if url.netloc:
+            allowed_uris.add(f"{url.scheme}://{url.netloc}")
+
+        def matches(event):
+            return (
+                event["blockedURI"] in allowed_uris
+                and event["effectiveDirective"] in {"script-src", "script-src-elem"}
+                and event["documentURI"].split("#")[0] == self._page.url.split("#")[0]
+            )
+
+        deadline = time.monotonic() + 5
+        while not any(map(matches, self.violations)) and time.monotonic() < deadline:
+            self._page.wait_for_timeout(50)
+        self.settle()
+        event = next((v for v in self.violations if matches(v)), None)
+        assert event is not None, self.failure_message() or f"No blocked script for {uri}"
+        self.violations.remove(event)
+
+        # Chromium and Firefox also log the violation. Match the operation in the
+        # diagnostic, excluding the policy text (which can mention unrelated URLs).
+        for index, message in enumerate(self.console_messages):
+            operation = message.lower().split(" violates ")[0].split(" because ")[0]
+            if uri == "inline":
+                expected = "inline script" in operation
+            else:
+                expected = uri.lower() in operation and "script" in operation
+            if expected:
+                self.console_messages.pop(index)
+                break
 
     def failure_message(self):
         if not self.violations and not self.console_messages:

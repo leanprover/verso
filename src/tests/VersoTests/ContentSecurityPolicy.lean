@@ -404,7 +404,7 @@ def policyMeta : String :=
   s!"<html><head>{policyMeta}<!-- generated --><meta charset=\"utf-8\"/></head><body></body></html>"
 
 #test_guard placed #[.raw " ", charset] ==
-  s!"<html><head>{policyMeta} <meta charset=\"utf-8\"/></head><body></body></html>"
+  s!"<html><head> <meta charset=\"utf-8\"/>{policyMeta}</head><body></body></html>"
 
 #test_guard placed #[.seq #[.seq #[charset], html%{<title>t</title>}]] ==
   s!"<html><head><meta charset=\"utf-8\"/>{policyMeta}<title>t</title></head><body></body></html>"
@@ -423,6 +423,24 @@ def policyMeta : String :=
 
 #test_guard placed #[.raw "<title>t</title>", charset] ==
   s!"<html><head>{policyMeta}<title>t</title><meta charset=\"utf-8\"/></head><body></body></html>"
+
+#test_guard Id.run do
+  let declaration := html%{<meta id="encoding" charset="utf-8"/>}
+  let largePolicy := (List.range 24).map fun i => script (.raw s!"f({i})")
+  let html := placed (#[.raw "\n", declaration] ++ largePolicy.toArray)
+  return html.startsWith ("<html><head>\n" ++ declaration.render) &&
+    (html.takeWhile (· != ';')).utf8ByteSize > 1024
+
+#test_guard Id.run do
+  let active := script (.raw "active()")
+  let inert := script (.raw "inert()")
+  let shadow (mode : String) (body : Html) :=
+    html%{<template shadowrootmode={mode}>{body}</template>}
+  return #["open", "CLOSED"].all fun mode =>
+    hashesOf (page #[] #[html%{<div>
+      <template>{inert}</template>{shadow "invalid" inert}
+      {shadow mode active}{shadow mode inert}</div>},
+      html%{<button>{shadow mode inert}</button>}]) == #[scriptHash "active()"]
 
 def noHead : Html := html%{<html><body>{script (.raw "x")}</body></html>}
 

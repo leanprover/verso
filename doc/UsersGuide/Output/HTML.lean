@@ -204,7 +204,8 @@ By default, browsers block the following and report each violation in the develo
 * Further scripts from origins that are not listed in the policy, but are loaded by a script that is allowed.
 
 Verso doesn't warn about such scripts when it generates the site.
-Data blocks and scripts inside inert content, such as `<template>` and `<noscript>`, do not contribute to the policy.
+Data blocks and scripts inside inert content, such as ordinary `<template>` and `<noscript>` elements, are not included in the policy.
+Scripts in a declarative shadow root are collected with the rest of the page.
 Extensions can explicitly authorize an exact trusted inline script body with {name Verso.Output.Html.ContentSecurityPolicy.Config.extraInlineScripts}`extraInlineScripts`.
 Scripts that load other scripts from remote hosts need those hosts to be listed in {name Verso.Output.Html.ContentSecurityPolicy.Config.extraScriptSources}`extraScriptSources`.
 Event handlers can be attached with `addEventListener` in a script instead of using attributes like `onclick`.

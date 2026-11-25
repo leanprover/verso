@@ -309,10 +309,35 @@ structure Scripts where
   origins : Std.HashSet Source := {}
   inlineScripts : Std.HashSet String := {}
 
+def flatten : Html → Array Html
+  | .seq hs => hs.foldl (fun nodes h => nodes ++ flatten h) #[]
+  | h => #[h]
+termination_by h => h
+
+/--
+The DOM Standard lists the built-in [valid shadow host names](https://dom.spec.whatwg.org/#valid-shadow-host-name)
+and also permits [valid custom element names](https://html.spec.whatwg.org/multipage/custom-elements.html#valid-custom-element-name).
+-/
+def canHostShadowRoot (tag : String) : Bool :=
+  #["article", "aside", "blockquote", "body", "div", "footer", "h1", "h2", "h3", "h4",
+    "h5", "h6", "header", "main", "nav", "p", "section", "span"].contains tag ||
+    (tag.contains '-' && tag.front.isLower &&
+      !tag.any (fun c => isAsciiWhitespace c || c == '\x00' || c == '/' || c == '>') &&
+      !(#["annotation-xml", "color-profile", "font-face", "font-face-src", "font-face-uri",
+          "font-face-format", "font-face-name", "missing-glyph"].contains tag))
+
+def shadowContents? : Html → Option Html
+  | .element tag attrs children => do
+    guard (tag.toLower == "template")
+    let mode ← attribute? attrs "shadowrootmode"
+    guard (#["open", "closed"].contains mode.toLower)
+    return children
+  | _ => none
+
 /--
 Collects browser-processed scripts in the structured HTML tree.
 -/
-def Scripts.visit (scripts : Scripts) (ns : ScriptNamespace) (inMathAnnotation := false) : Html → Scripts
+partial def Scripts.visit (scripts : Scripts) (ns : ScriptNamespace) (inMathAnnotation := false) : Html → Scripts
   | .seq hs => hs.foldl (init := scripts) (fun s h => s.visit ns inMathAnnotation h)
   | .element tag attrs children =>
     let tag := tag.toLower
@@ -340,8 +365,23 @@ def Scripts.visit (scripts : Scripts) (ns : ScriptNamespace) (inMathAnnotation :
     else if ns == .html && isInertContainer tag then scripts
     else
       let current := if inMathAnnotation && tag == "svg" then .svg else ns
-      scripts.visit (childNamespace current tag attrs) (current == .math && tag == "annotation-xml") children
+      if current == .html && canHostShadowRoot tag then
+        visitShadowHostChildren scripts children
+      else
+        scripts.visit (childNamespace current tag attrs) (current == .math && tag == "annotation-xml") children
   | _ => scripts
+where
+  visitShadowHostChildren (scripts : Scripts) (children : Html) : Scripts := Id.run do
+    let mut scripts := scripts
+    let mut attached := false
+    for child in flatten children do
+      if !attached then
+        if let some contents := shadowContents? child then
+          attached := true
+          scripts := scripts.visit .html false contents
+          continue
+      scripts := scripts.visit .html false child
+    return scripts
 
 /--
 Converts a configuration to a suitable policy for `html` by collecting the document's inline scripts
@@ -359,25 +399,26 @@ public def collect (config : Config) (html : Html) : Policy :=
     inlineScripts := config.extraInlineScripts.foldl (·.insert ·) scripts.inlineScripts
   }
 
-def flatten : Html → Array Html
-  | .seq hs => hs.attach.foldl (fun nodes ⟨h, _⟩ => nodes ++ flatten h) #[]
-  | h => #[h]
-
 def isCharsetMeta : Html → Bool
   | .element tag attrs children =>
-    tag.toLower == "meta" && children.isEmpty && attrs.size == 1 &&
+    tag.toLower == "meta" && children.isEmpty &&
+      -- Only passive metadata may precede the policy.
+      attrs.all (fun (name, _) =>
+        let name := name.toLower
+        (name.all fun c => c.isAlphanum || c == '-' || c == '_') &&
+          !name.startsWith "on" && name != "http-equiv" && name != "is") &&
       attrs.any (·.1.toLower == "charset")
   | _ => false
 
-def isWhitespaceText : Html → Bool
-  | .text t => t.all isAsciiWhitespace
+def isWhitespaceNode : Html → Bool
+  | .text t | .raw t => t.all isAsciiWhitespace
   | _ => false
 
 -- The policy follows a leading `<meta charset>` so that the charset stays within the first
 -- 1024 bytes of the page, where browsers look for it.
 def addToHead (policyElement : Html) (children : Html) : Html :=
   let nodes := flatten children
-  match nodes.findIdx? (!isWhitespaceText ·) with
+  match nodes.findIdx? (!isWhitespaceNode ·) with
   | some i =>
     if isCharsetMeta nodes[i]! then
       .seq (nodes.extract 0 (i + 1) ++ #[policyElement] ++ nodes.extract (i + 1))
@@ -392,9 +433,7 @@ public def isDocumentPreamble (text : String) : Bool :=
 
 -- Identify the head before any element or text that could cause the parser to leave the head.
 def insertIntoLeadingHead (policyElement : Html) (nodes : Array Html) : Option (Array Html) := do
-  let index ← nodes.findIdx? fun
-    | .raw s => !s.all isAsciiWhitespace
-    | node => !isWhitespaceText node
+  let index ← nodes.findIdx? (!isWhitespaceNode ·)
   let .element tag attrs children := nodes[index]! | none
   if tag.toLower != "head" then none
   else some (nodes.set! index (.element tag attrs (addToHead policyElement children)))
@@ -404,7 +443,7 @@ def insertIntoHead (policyElement : Html) (html : Html) : Option Html := do
   let nodes := flatten html
   let index ← nodes.findIdx? fun
     | .raw s => !isDocumentPreamble s
-    | node => !isWhitespaceText node
+    | node => !isWhitespaceNode node
   let .element tag attrs children := nodes[index]! | none
   let nodes ←
     if tag.toLower == "html" then

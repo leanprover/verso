@@ -79,15 +79,10 @@ INJECT_INLINE_SCRIPT = """
 
 # A script that the page didn't ship has no hash in the policy, so the browser refuses to run it.
 def assert_injected_inline_script_blocked(page: Page, violations):
+    violations.assert_clean()
     ran = page.evaluate(INJECT_INLINE_SCRIPT)
     assert not ran, "an injected inline script ran"
-    reported = violations.wait_for(1)
-    violations.take()
-    assert reported, "the browser reported no violation for an injected inline script"
-    directive = reported[0].get("effectiveDirective") or reported[0].get(
-        "violatedDirective"
-    )
-    assert directive.startswith("script-src"), reported
+    violations.expect_blocked_script("inline")
 
 
 INJECT_EXTERNAL_SCRIPT = """
@@ -103,15 +98,10 @@ INJECT_EXTERNAL_SCRIPT = """
 
 # A script from an origin that the policy doesn't list is blocked.
 def assert_unlisted_origin_blocked(page: Page, violations, origin: str):
-    assert (
-        page.evaluate(
-            INJECT_EXTERNAL_SCRIPT, f"{origin}/-verso-data/external-script.js"
-        )
-        == "blocked"
-    )
-    reported = violations.wait_for(1)
-    violations.take()
-    assert any(v.get("blockedURI", "").startswith(origin) for v in reported), reported
+    violations.assert_clean()
+    src = f"{origin}/-verso-data/external-script.js"
+    assert page.evaluate(INJECT_EXTERNAL_SCRIPT, src) == "blocked"
+    violations.expect_blocked_script(src)
 
 
 MISSING_MARKERS = "(markers) => markers.filter((m) => window[m] === undefined)"
