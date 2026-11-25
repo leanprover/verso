@@ -190,6 +190,11 @@ The `'unsafe-eval'` and `'wasm-unsafe-eval'` keywords are controlled by the {nam
 Because the policy trusts the page's origin, scripts from other sites that share the same origin can run.
 For example, two separate GitHub Pages sites that are under the same account share an origin.
 
+If a genre or user extensions generate content embedded in an `<iframe>`, care is required.
+The generated policy restricts scripts in the Verso document.
+A separate document loaded over HTTP or HTTPS in an iframe has its own policy, and scripts in a same-origin frame can normally access the parent document.
+When embedding content you don't fully trust, serve it from a separate origin or use an iframe sandbox that prevents same-origin access.
+
 :::paragraph
 By default, browsers block the following and report each violation in the developer console:
 
