@@ -88,8 +88,10 @@ def print_diagnostics(page, console, session):
     print("--- Lean server stderr ---\n" + session.lean.stderr_tail())
 
 
+# The relay comes before the page so that it is set up first and closed last. The page's
+# long-polling `/lsp` request then doesn't fail when the relay closes.
 @pytest.fixture
-def editor(request, page: Page, relay: LspRelay, lean_session: LeanSession):
+def editor(request, relay: LspRelay, page: Page, lean_session: LeanSession):
     page.set_default_timeout(120_000)
     console = []
     page.on(
