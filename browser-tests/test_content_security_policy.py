@@ -60,7 +60,9 @@ class TestContentSecurityPolicy:
         assert_policy_precedes_scripts(page)
 
 
-def test_expected_violation_preserves_unrelated_reports(content_security_policy_violations):
+def test_expected_violation_preserves_unrelated_reports(
+    content_security_policy_violations,
+):
     recorder = content_security_policy_violations
     page = Mock()
     page.url = "https://docs.example/"
@@ -75,10 +77,12 @@ def test_expected_violation_preserves_unrelated_reports(content_security_policy_
         recorder.assert_clean()
 
     recorder.violations.append(dict(first_party, blockedURI="inline"))
-    recorder.console_messages.extend([
-        "error: Loading the script 'https://assets.example/site.js' violates the following Content Security Policy directive",
-        "error: Executing inline script violates the following Content Security Policy directive",
-    ])
+    recorder.console_messages.extend(
+        [
+            "error: Loading the script 'https://assets.example/site.js' violates the following Content Security Policy directive",
+            "error: Executing inline script violates the following Content Security Policy directive",
+        ]
+    )
     recorder.expect_blocked_script("inline")
     assert recorder.violations == [first_party]
     assert len(recorder.console_messages) == 1

@@ -266,7 +266,9 @@ class ContentSecurityPolicyViolations:
             self._page.wait_for_timeout(50)
         self.settle()
         event = next((v for v in self.violations if matches(v)), None)
-        assert event is not None, self.failure_message() or f"No blocked script for {uri}"
+        assert event is not None, (
+            self.failure_message() or f"No blocked script for {uri}"
+        )
         self.violations.remove(event)
 
         # Chromium and Firefox also log the violation. Match the operation in the
