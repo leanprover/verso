@@ -156,9 +156,9 @@ def decodeSource (v : Value) : EDecodeM ContentSecurityPolicy.Source := do
   let t ← v.decodeTable
   let scheme ← t.decode? (α := ContentSecurityPolicy.Scheme) `scheme
   let host ← t.decode (α := ContentSecurityPolicy.Host) `host (ref := v.ref)
-  let includeSubdomains ← t.decodeD `include_subdomains false
+  let onlySubdomains ← t.decodeD `only_subdomains false
   let port ← t.decode? (α := ContentSecurityPolicy.Port) `port
-  return { scheme, host, includeSubdomains, port }
+  return { scheme, host, onlySubdomains, port }
 
 instance : DecodeToml ContentSecurityPolicy.Source := ⟨decodeSource⟩
 

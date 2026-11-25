@@ -122,9 +122,9 @@ def portNumber? (port : Int) : Option UInt16 := (Port.ofInt port).toOption.map (
   | .error message => !message.isEmpty
 
 def sourceOf (host : String) (scheme : Option Scheme := none)
-    (includeSubdomains : Bool := false) (port : Option Int := none) : Array Source :=
+    (onlySubdomains : Bool := false) (port : Option Int := none) : Array Source :=
   match Host.ofString host, port.mapM Port.ofInt with
-  | .ok host, .ok port => #[{ scheme, host, includeSubdomains, port }]
+  | .ok host, .ok port => #[{ scheme, host, onlySubdomains, port }]
   | _, _ => #[]
 
 def renderSources (sources : Array Source) : Array String := sources.map (·.render)
@@ -132,7 +132,7 @@ def renderSources (sources : Array Source) : Array String := sources.map (·.ren
 #test_guard renderSources (sourceOf "cdn.example" (some .https)) == #["https://cdn.example"]
 #test_guard renderSources (sourceOf "cdn.example" (some .http)) == #["http://cdn.example"]
 #test_guard renderSources (sourceOf "cdn.example" (port := some 8443)) == #["cdn.example:8443"]
-#test_guard renderSources (sourceOf "example.com" (includeSubdomains := true)) == #["*.example.com"]
+#test_guard renderSources (sourceOf "example.com" (onlySubdomains := true)) == #["*.example.com"]
 #test_guard renderSources (sourceOf "example.com" (some .https) true (some 443)) ==
   #["https://*.example.com:443"]
 #test_guard renderSources (sourceOf "CDN.Example" (some .https)) == #["https://cdn.example"]
@@ -166,7 +166,7 @@ def renderSources (sources : Array Source) : Array String := sources.map (·.ren
 def extraSources : Array Source :=
   sourceOf "b.example" (some .https) ++ sourceOf "d.example" (some .https) ++
   sourceOf "d.example" (some .https) ++ sourceOf "cdn.example" ++
-  sourceOf "cdn.example" (includeSubdomains := true) (port := some 443) ++
+  sourceOf "cdn.example" (onlySubdomains := true) (port := some 443) ++
   sourceOf "E.example" (some .https)
 
 #test_guard extraSources.size == 6

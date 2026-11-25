@@ -311,7 +311,7 @@ def contentSecurityPolicyTable : Test := do
      "allow_web_assembly_compilation = true", "",
      "[[content_security_policy.extra_script_sources]]", "host = \"cdn.example.com\"", "",
      "[[content_security_policy.extra_script_sources]]", "scheme = \"https\"",
-     "host = \"Example.org\"", "include_subdomains = true", "port = 8443", ""]
+     "host = \"Example.org\"", "only_subdomains = true", "port = 8443", ""]
   let config ← loadFromString toml
   let policy := config.contentSecurityPolicy
   assertTrue (!policy.enabled) "enabled = false"

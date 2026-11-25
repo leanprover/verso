@@ -15,7 +15,9 @@ open Lean (Html Json ToJson FromJson)
 
 /-- A URL scheme, either HTTP or HTTPS. -/
 public inductive Scheme where
+  /-- Unencrypted HTTP. -/
   | http
+  /-- Encrypted HTTPS. -/
   | https
 deriving Repr, DecidableEq, Hashable, Inhabited, ToJson, FromJson
 
@@ -24,9 +26,13 @@ public def Scheme.render : Scheme → String
   | .http => "http"
   | .https => "https"
 
+/--
+A validated host name. Use `Host.ofString` to construct one.
+-/
 public structure Host where
   -- The constructor is private so that every host passes `Host.ofString`.
   private mk ::
+  /-- The validated host name. -/
   name : String
 deriving Repr, DecidableEq, Hashable
 
@@ -50,8 +56,11 @@ public instance : ToJson Host where
 public instance : FromJson Host where
   fromJson? json := do Host.ofString (← json.getStr?)
 
+/-- A port. -/
 public structure Port where
+  /-- The port number. -/
   number : UInt16
+  /-- `0` is not a valid port number. -/
   nonzero : number ≠ 0
 deriving Repr, DecidableEq, Hashable
 
@@ -70,31 +79,77 @@ public instance : FromJson Port where
 A source expression, which may occur in a source list, in a content security policy.
 -/
 public structure Source where
+  /--
+  The URL scheme (e.g. `https`). If it is omitted, the source matches the page's own scheme.
+  -/
   scheme : Option Scheme := none
+  /-- The host name (e.g. `example.com`). -/
   host : Host
-  includeSubdomains : Bool := false
+  /--
+  Whether the source matches only the subdomains of `host`, such as `test.example.com` for
+  `example.com`.
+
+  A source with this flag doesn't match `host` itself. Allowing both takes two sources.
+  -/
+  onlySubdomains : Bool := false
+  /-- A port number. If it is omitted, the source matches the scheme's default port. -/
   port : Option Port := none
 deriving Repr, DecidableEq, Hashable, ToJson, FromJson
 
+/--
+Renders a specification of a source expression into a form suitable for use in a content security
+policy.
+-/
 public def Source.render (source : Source) : String :=
   let scheme := source.scheme.map (·.render ++ "://") |>.getD ""
-  let subdomains := if source.includeSubdomains then "*." else ""
+  let subdomains := if source.onlySubdomains then "*." else ""
   let port := source.port.map (s!":{·.number}") |>.getD ""
   scheme ++ subdomains ++ source.host.name ++ port
 
+/--
+A specification of a content security policy that can be translated into an appropriate `<meta>` tag.
+-/
 public structure Config where
+  /-- Whether to generate the `<meta>` tag. -/
   enabled : Bool := true
+  /--
+  Whether JavaScript code should be able to call `eval`.
+
+  Code that can call `eval` can also compile WebAssembly, so the `allowWebAssemblyCompilation` field
+  is irrelevant if `allowEval` is `true`.
+  -/
   allowEval : Bool := false
+  /--
+  Whether scripts in the page may compile WebAssembly code.
+  -/
   allowWebAssemblyCompilation : Bool := false
+  /--
+  Additional sources from which scripts may be executed. Use this for scripts loaded from remote
+  hosts if Verso does not automatically detect them.
+  -/
   extraScriptSources : Array Source := #[]
 deriving Repr, BEq, Inhabited, ToJson, FromJson
 
 /-- A content security policy that can be added to `<head>`. -/
 public structure Policy where
+  /--
+  Whether JavaScript code should be able to call `eval`.
+
+  Code that can call `eval` can also compile WebAssembly, so the `allowWebAssemblyCompilation` field
+  is irrelevant if `allowEval` is `true`.
+  -/
   allowEval : Bool := false
+  /--
+  Whether scripts in the page may compile WebAssembly code.
+  -/
   allowWebAssemblyCompilation : Bool := false
+  /-- Allowed origins for scripts, as collected from the HTML. -/
   origins : Array Source := #[]
+  /-- Further allowed origins for scripts, provided by the author. -/
   extraSources : Array Source := #[]
+  /--
+  Hashes of inline scripts to allow, each a complete source expression such as `'sha256-…'`.
+  -/
   hashes : Array String := #[]
 deriving Repr, BEq, Inhabited
 

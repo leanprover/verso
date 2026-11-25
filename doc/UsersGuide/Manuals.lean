@@ -55,6 +55,15 @@ Use {name}`HtmlAssets.combine` to combine multiple assets.
 
 :::
 
+# Content Security Policy
+%%%
+tag := "manual-content-security-policy"
+%%%
+
+The {ref "html-content-security-policy"}[content security policy] for manuals and tutorials is configured in {name}`HtmlConfig.contentSecurityPolicy`.
+The scripts that it allows include those in {name}`HtmlAssets.extraJs`, {name}`HtmlAssets.extraJsFiles`, and `<script>` elements in {name}`HtmlConfig.extraHead`.
+It also automatically allows scripts that are part of block and inline extensions, as configured through their {name}`HtmlAssets` fields.
+
 # Tags and References
 %%%
 tag := "manual-tags"
