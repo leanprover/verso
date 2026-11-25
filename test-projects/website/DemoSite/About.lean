@@ -100,6 +100,15 @@ inline_component button (onclick : String) where
       </button>
     }
 
+/--
+A component that adds a script to the page header with `saveJs`. The content security policy must
+hash the script, so the marker that it sets shows that component header scripts still run.
+-/
+block_component +directive scriptMarker where
+  toHtml _ _ _ goB contents := do
+    saveJs "window.versoTestComponentHeaderJs = true;"
+    pure html%{<div class="script-marker">{← contents.mapM goB}</div>}
+
 structure ButtonArgs where
   onClick : String
 
@@ -139,5 +148,13 @@ It contains things. {button ""}[like a button! *hooray!*]
 Here's a button
 
 and a paragraph
+
+:::
+
+The math below lets the browser tests check that KaTeX runs under the content security policy.
+
+:::scriptMarker
+
+This component adds a script to the page header, and here is some math: $`e^{i\pi} + 1 = 0`.
 
 :::

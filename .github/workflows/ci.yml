@@ -260,6 +260,11 @@ jobs:
             - name: Generate the test website
               id: test-website
               continue-on-error: true
+              # The port of `http://localhost`, from which the demo site loads a script that the
+              # blog browser tests check. It matches the blog tests' `--port`, and `localhost`
+              # is a different origin from the `127.0.0.1` that serves the pages.
+              env:
+                  VERSO_TEST_EXTERNAL_SCRIPT_PORT: 8120
               run: |
                   lake run versoMain test-projects/website/DemoSiteMain.lean --output _out/test-projects/demosite
 
@@ -392,6 +397,12 @@ jobs:
                         uv run --project browser-tests --extra test pytest \
                           browser-tests/package-manual -v \
                           --site-dir "$(pwd)/_out/package-manual/html-multi" --port 8105
+
+                  - name: Run blog browser tests
+                    run: |
+                        uv run --project browser-tests --extra test pytest \
+                          browser-tests/blog -v \
+                          --site-dir "$(pwd)/_out/test-projects/demosite" --port 8120
 
                   - name: Check internal links on the test website
                     run: |

@@ -807,7 +807,8 @@ Optional parameters:
 
 def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets TraverseContext := {})
     (options : List String) (components : Components := by exact %registered_components)
-    (header : String := Html.doctype) :
+    (header : String := Html.doctype)
+    (contentSecurityPolicy : ContentSecurityPolicy.Config := {}) :
     IO UInt32 :=
   withLogger fun logger => do
     let cfg ← opts {} options
@@ -819,6 +820,7 @@ def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets Trave
       dir := cfg.destination,
       config := cfg,
       header := header,
+      contentSecurityPolicy := contentSecurityPolicy,
       linkTargets := linkTargets,
       components := components
     }
