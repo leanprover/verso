@@ -56,7 +56,7 @@ class TestSearchPage:
         page.goto(f"{server}/search/?q=hello")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(
-            "/\\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
+            "() => /\\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
             timeout=5_000,
         )
         expect(page.locator("#search-page-count")).to_be_visible()
@@ -98,7 +98,7 @@ class TestSearchPage:
         inbody_box.type("double", delay=20)
 
         page.wait_for_function(
-            "new URL(location.href).searchParams.get('q') === 'double'",
+            "() => new URL(location.href).searchParams.get('q') === 'double'",
             timeout=5_000,
         )
         assert page.evaluate("window.__noReload") is True, "page reloaded on input"

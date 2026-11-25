@@ -8,10 +8,12 @@ import Lake.Toml
 public import Lake.Toml.Data.Value
 public import Lake.Toml.Decode
 public import Lean.Data.NameMap.Basic
+public import Verso.Output.Html.ContentSecurityPolicy
 
 open Lean
 open Lake (DecodeToml decodeToml)
 open Lake.Toml
+open Verso.Output.Html
 
 public section
 
@@ -106,6 +108,7 @@ structure LiterateConfig where
   themeDark : Std.TreeMap String String compare := {}
   /-- Per-module configuration overrides keyed by module name. -/
   modules : NameMap ModuleConfig := {}
+  contentSecurityPolicy : ContentSecurityPolicy.Config := {}
 deriving Repr, Inhabited
 
 /-- Decodes a `[[targets]]` table entry into a `Target`. -/
@@ -126,6 +129,49 @@ def decodeMetadata (v : Value) : EDecodeM Metadata := do
   return { title, description, favicon }
 
 instance : DecodeToml Metadata := ⟨decodeMetadata⟩
+
+def decodeScheme (v : Value) : EDecodeM ContentSecurityPolicy.Scheme := do
+  match ← v.decodeString with
+  | "http" => return .http
+  | "https" => return .https
+  | other => throwDecodeErrorAt v.ref s!"expected \"http\" or \"https\", got {other.quote}"
+
+instance : DecodeToml ContentSecurityPolicy.Scheme := ⟨decodeScheme⟩
+
+def decodeHost (v : Value) : EDecodeM ContentSecurityPolicy.Host := do
+  match ContentSecurityPolicy.Host.ofString (← v.decodeString) with
+  | .ok host => return host
+  | .error message => throwDecodeErrorAt v.ref message
+
+instance : DecodeToml ContentSecurityPolicy.Host := ⟨decodeHost⟩
+
+def decodePort (v : Value) : EDecodeM ContentSecurityPolicy.Port := do
+  match ContentSecurityPolicy.Port.ofInt (← v.decodeInt) with
+  | .ok port => return port
+  | .error message => throwDecodeErrorAt v.ref message
+
+instance : DecodeToml ContentSecurityPolicy.Port := ⟨decodePort⟩
+
+def decodeSource (v : Value) : EDecodeM ContentSecurityPolicy.Source := do
+  let t ← v.decodeTable
+  let scheme ← t.decode? (α := ContentSecurityPolicy.Scheme) `scheme
+  let host ← t.decode (α := ContentSecurityPolicy.Host) `host (ref := v.ref)
+  let includeSubdomains ← t.decodeD `include_subdomains false
+  let port ← t.decode? (α := ContentSecurityPolicy.Port) `port
+  return { scheme, host, includeSubdomains, port }
+
+instance : DecodeToml ContentSecurityPolicy.Source := ⟨decodeSource⟩
+
+def decodeContentSecurityPolicy (v : Value) : EDecodeM ContentSecurityPolicy.Config := do
+  let t ← v.decodeTable
+  let enabled ← t.decodeD `enabled true
+  let allowEval ← t.decodeD `allow_eval false
+  let allowWebAssemblyCompilation ← t.decodeD `allow_web_assembly_compilation false
+  let extraScriptSources ←
+    t.decodeD `extra_script_sources (#[] : Array ContentSecurityPolicy.Source)
+  return { enabled, allowEval, allowWebAssemblyCompilation, extraScriptSources }
+
+instance : DecodeToml ContentSecurityPolicy.Config := ⟨decodeContentSecurityPolicy⟩
 
 /-- Decodes a `[modules."Foo.Bar"]` table entry into a `ModuleConfig`. -/
 def decodeModuleConfig (v : Value) : EDecodeM ModuleConfig := do
@@ -260,10 +306,13 @@ def decodeLiterateConfig (table : Table) : Except String LiterateConfig :=
     let showImports ← Table.tryDecodeD `show_imports (true : Bool) table
     let (theme, themeDark) ← decodeTheme table
     let modules ← decodeModulesMap table
+    let contentSecurityPolicy ←
+      tryDecodeD {} (table.decodeD `content_security_policy ({} : ContentSecurityPolicy.Config))
     return { targets, exclude, order, orderChildren, landingPage,
              hideCommands, metadata, extraCss, extraJs,
              showDocstrings, showDocstringsFor, hideDocstringsFor,
-             docstringsAsText, showOutput, showImports, theme, themeDark, modules }
+             docstringsAsText, showOutput, showImports, theme, themeDark, modules,
+             contentSecurityPolicy }
   match decodeAction #[] with
   | .ok config errors =>
     if errors.isEmpty then

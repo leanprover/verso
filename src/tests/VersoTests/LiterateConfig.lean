@@ -292,3 +292,84 @@ def resolveOverridesGlobal : Test := do
   let resolved2 := config.resolveForModule `Other
   assertTrue resolved2.showImports "resolve global: showImports"
   assertTrue resolved2.showDocstrings "resolve global: showDocstrings"
+
+/-- A file without a `[content_security_policy]` table gets the default policy, which is enabled. -/
+@[test]
+def contentSecurityPolicyDefault : Test := do
+  let config ← loadFromString "title = \"x\"\n"
+  assertTrue (config.contentSecurityPolicy == {}) "the default policy configuration"
+  assertTrue config.contentSecurityPolicy.enabled "the policy is enabled by default"
+
+/--
+Every key of the table is decoded. The two extra sources cover a bare host and a source with every
+optional key, and the host is lowercased.
+-/
+@[test]
+def contentSecurityPolicyTable : Test := do
+  let toml := String.intercalate "\n"
+    ["[content_security_policy]", "enabled = false", "allow_eval = true",
+     "allow_web_assembly_compilation = true", "",
+     "[[content_security_policy.extra_script_sources]]", "host = \"cdn.example.com\"", "",
+     "[[content_security_policy.extra_script_sources]]", "scheme = \"https\"",
+     "host = \"Example.org\"", "include_subdomains = true", "port = 8443", ""]
+  let config ← loadFromString toml
+  let policy := config.contentSecurityPolicy
+  assertTrue (!policy.enabled) "enabled = false"
+  assertTrue policy.allowEval "allow_eval = true"
+  assertTrue policy.allowWebAssemblyCompilation "allow_web_assembly_compilation = true"
+  assertBEq #["cdn.example.com", "https://*.example.org:8443"]
+    (policy.extraScriptSources.map (·.render))
+
+/-- Keys that are absent from the table keep their default values. -/
+@[test]
+def contentSecurityPolicyFlagDefaults : Test := do
+  let config ← loadFromString "[content_security_policy]\nallow_eval = true\n"
+  let policy := config.contentSecurityPolicy
+  assertTrue policy.enabled "enabled defaults to true"
+  assertTrue policy.allowEval "allow_eval = true"
+  assertTrue (!policy.allowWebAssemblyCompilation) "allow_web_assembly_compilation defaults to false"
+  assertBEq 0 policy.extraScriptSources.size
+
+/--
+Checks that loading the TOML fails with an error that contains each expected text. The texts include
+the keys that lead to the invalid value.
+-/
+private def assertConfigError (toml : String) (expected : Array String) : Test :=
+  assertThrowsIO (loadFromString toml) fun e => expected.all fun text => (toString e).contains text
+
+/-- A file with one extra script source that has the given keys. -/
+private def sourceToml (fields : String) : String :=
+  "[[content_security_policy.extra_script_sources]]\n" ++ fields
+
+/--
+Hostnames rejected by `Host.ofString` rejects are config errors. The second host would add a
+directive to the policy if it were accepted.
+-/
+@[test]
+def contentSecurityPolicyInvalidHost : Test := do
+  assertConfigError (sourceToml "host = \"bad host\"\n")
+    #["extra_script_sources", "host", "contains ' '"]
+  assertConfigError (sourceToml "host = \"example.com; script-src *\"\n") #["host", "contains ';'"]
+  assertConfigError (sourceToml "host = \"\"\n") #["host", "The host is empty."]
+  assertConfigError (sourceToml "host = \"a..b\"\n") #["host", "contains '..'"]
+  assertConfigError (sourceToml "host = 5\n") #["host", "expected string"]
+
+/-- Ports outside the range from 1 to 65535 and ports that aren't integers are config errors. -/
+@[test]
+def contentSecurityPolicyInvalidPort : Test := do
+  assertConfigError (sourceToml "host = \"example.com\"\nport = 0\n")
+    #["extra_script_sources", "port", "outside the range from 1 to 65535"]
+  assertConfigError (sourceToml "host = \"example.com\"\nport = 65536\n")
+    #["port", "outside the range from 1 to 65535"]
+  assertConfigError (sourceToml "host = \"example.com\"\nport = -1\n")
+    #["port", "outside the range from 1 to 65535"]
+  assertConfigError (sourceToml "host = \"example.com\"\nport = \"80\"\n")
+    #["port", "expected integer"]
+
+/-- Unknown schemes, sources without a host, and flags that aren't Booleans are config errors. -/
+@[test]
+def contentSecurityPolicyInvalidSource : Test := do
+  assertConfigError (sourceToml "scheme = \"ftp\"\nhost = \"example.com\"\n")
+    #["scheme", "expected \"http\" or \"https\""]
+  assertConfigError (sourceToml "port = 80\n") #["missing required key: host"]
+  assertConfigError "[content_security_policy]\nenabled = \"no\"\n" #["enabled", "expected boolean"]
