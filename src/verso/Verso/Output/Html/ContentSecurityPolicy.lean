@@ -5,18 +5,19 @@ Author: David Thrane Christiansen
 -/
 module
 public import Lean.Data.Html
+public import Lean.Data.Json.FromToJson
 import VersoUtil.Base64
 import VersoUtil.Hash
 
 namespace Verso.Output.Html.ContentSecurityPolicy
 
-open Lean (Html)
+open Lean (Html Json ToJson FromJson)
 
 /-- A URL scheme, either HTTP or HTTPS. -/
 public inductive Scheme where
   | http
   | https
-deriving Repr, DecidableEq, Hashable, Inhabited
+deriving Repr, DecidableEq, Hashable, Inhabited, ToJson, FromJson
 
 /-- Converts a scheme to a string. -/
 public def Scheme.render : Scheme → String
@@ -43,6 +44,12 @@ public def Host.ofString (text : String) : Except String Host := do
     throw s!"The host {text.quote} starts or ends with '.' or contains '..'."
   return ⟨text.toLower⟩
 
+public instance : ToJson Host where
+  toJson host := host.name
+
+public instance : FromJson Host where
+  fromJson? json := do Host.ofString (← json.getStr?)
+
 public structure Port where
   number : UInt16
   nonzero : number ≠ 0
@@ -53,6 +60,12 @@ public def Port.ofInt (port : Int) : Except String Port :=
   if h : 1 ≤ port ∧ port ≤ 65535 then .ok ⟨port.toNat.toUInt16, by grind⟩
   else .error s!"The port {port} is outside the range from 1 to 65535."
 
+public instance : ToJson Port where
+  toJson port := port.number.toNat
+
+public instance : FromJson Port where
+  fromJson? json := do Port.ofInt (← json.getInt?)
+
 /--
 A source expression, which may occur in a source list, in a content security policy.
 -/
@@ -61,7 +74,7 @@ public structure Source where
   host : Host
   includeSubdomains : Bool := false
   port : Option Port := none
-deriving Repr, DecidableEq, Hashable
+deriving Repr, DecidableEq, Hashable, ToJson, FromJson
 
 public def Source.render (source : Source) : String :=
   let scheme := source.scheme.map (·.render ++ "://") |>.getD ""
@@ -74,7 +87,7 @@ public structure Config where
   allowEval : Bool := false
   allowWebAssemblyCompilation : Bool := false
   extraScriptSources : Array Source := #[]
-deriving Repr, BEq, Inhabited
+deriving Repr, BEq, Inhabited, ToJson, FromJson
 
 /-- A content security policy that can be added to `<head>`. -/
 public structure Policy where
