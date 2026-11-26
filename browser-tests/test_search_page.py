@@ -69,7 +69,7 @@ class TestSearchPage:
         page.goto(f"{server}/search/?q=Html")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(
-            "/\\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
+            "() => /\\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
             timeout=5_000,
         )
         count = page.locator("#search-page-count")
@@ -80,7 +80,7 @@ class TestSearchPage:
         page.goto(f"{server}/search/?q=xyzzyqwertasdf")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(
-            "document.getElementById('search-page-count')?.textContent === '0 results'",
+            "() => document.getElementById('search-page-count')?.textContent === '0 results'",
             timeout=5_000,
         )
 
@@ -112,7 +112,7 @@ class TestSearchPage:
         page.goto(f"{server}/search/?q=Html.rewritePo")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(
-            "/\\d+ (of \\d+ )?results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
+            "() => /\\d+ (of \\d+ )?results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
             timeout=5_000,
         )
 
@@ -147,7 +147,7 @@ class TestSearchPage:
         page.goto(f"{server}/search/?q=Html")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(
-            "/\\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
+            "() => /\\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
             timeout=5_000,
         )
 
@@ -159,7 +159,7 @@ class TestSearchPage:
 
         # After unchecking, count paragraph shows `M of N results` and results thin out.
         page.wait_for_function(
-            "/of \\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
+            "() => /of \\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
             timeout=5_000,
         )
         after = page.locator("ul.search-page-list li").count()
@@ -175,7 +175,7 @@ class TestSearchPage:
         page.goto(f"{server}/search/?q=Html")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(
-            "/\\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
+            "() => /\\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
             timeout=5_000,
         )
 
@@ -185,7 +185,7 @@ class TestSearchPage:
         full_text_cb.uncheck()
         # After unchecking, the count paragraph switches to the `M of N` form.
         page.wait_for_function(
-            "/of \\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
+            "() => /of \\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
             timeout=5_000,
         )
 
@@ -200,7 +200,7 @@ class TestSearchPage:
 
         inbody_box.type("Html", delay=20)
         page.wait_for_function(
-            "/of \\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
+            "() => /of \\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
             timeout=5_000,
         )
         # Filter choice survived the round-trip through the empty state.
@@ -214,7 +214,7 @@ class TestSearchPage:
         page.goto(f"{server}/search/?q=search")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(
-            "document.querySelector('ul.search-page-list li.search-result.full-text .header em') !== null",
+            "() => document.querySelector('ul.search-page-list li.search-result.full-text .header em') !== null",
             timeout=5_000,
         )
         display = page.locator(
@@ -232,7 +232,7 @@ class TestSearchPage:
         page.wait_for_load_state("networkidle")
         # Wait for the list to render.
         page.wait_for_function(
-            "document.querySelector('ul.search-page-list .section-domain') !== null",
+            "() => document.querySelector('ul.search-page-list .section-domain') !== null",
             timeout=5_000,
         )
         weight = page.locator("ul.search-page-list .section-domain").first.evaluate(
@@ -294,7 +294,7 @@ class TestSearchPage:
         # Wait for debounce + re-render. The count paragraph ends with
         # `N result(s)` once the render completes.
         page.wait_for_function(
-            "/\\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
+            "() => /\\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
             timeout=5_000,
         )
         # The sentinel survives iff the page did NOT reload.
@@ -316,7 +316,8 @@ class TestSearchPage:
 
         # Eventually the URL reflects the final query.
         page.wait_for_function(
-            "new URL(location.href).searchParams.get('q') === 'Html'", timeout=5_000
+            "() => new URL(location.href).searchParams.get('q') === 'Html'",
+            timeout=5_000,
         )
         assert page.evaluate("window.__noReload") is True, "page reloaded on input"
 
@@ -330,7 +331,7 @@ class TestSearchPage:
         # Give search-page.js time to complete rendering (full-text results await
         # per-bucket loads).
         page.wait_for_function(
-            "document.querySelectorAll('ul.search-page-list li').length > 30",
+            "() => document.querySelectorAll('ul.search-page-list li').length > 30",
             timeout=15_000,
         )
         results = page.locator("ul.search-page-list li")

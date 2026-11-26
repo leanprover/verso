@@ -553,6 +553,14 @@ def relativizeLinks (html : Html) : Html :=
     -- Make all absolute URLS be relative to the site root, because that'll make them `<base>`-relative
     Html.relativize #[] html
 
+open Verso.Output.Html in
+def renderPage (config : Config) (html : Html) : IO String := do
+  -- The policy pass comes last so that it sees every script that ends up on the page.
+  let html ← IO.ofExcept <| ContentSecurityPolicy.apply config.contentSecurityPolicy
+    (Hoist.postprocess (relativizeLinks html))
+  pure html.render
+
+
 open Output.Html in
 def xref (toc : List Html.Toc) (xrefJson : String) (findJs : String) (state : TraverseState) (config : Config) : Html :=
   page toc #["find"] "Cross-Reference Redirection" "Cross-Reference Redirection" html%{
@@ -576,7 +584,7 @@ def emitFindHtml (toc : List Html.Toc) (dir : System.FilePath) (state : Traverse
   emitXrefsJson dir state
   ensureDir (dir / "find")
   IO.FS.writeFile (dir / "find" / "index.html")
-    (Html.doctype ++ (Hoist.postprocess <| relativizeLinks <| xref toc xrefJson find.js state config).render)
+    (Html.doctype ++ (← renderPage config (xref toc xrefJson find.js state config)))
 
 open Output.Html in
 /--
@@ -611,7 +619,7 @@ def emitSearchResultsHtml
   ensureDir (dir / "search")
   IO.FS.writeFile
     (dir / "search" / "index.html")
-    (Html.doctype ++ (Hoist.postprocess <| relativizeLinks <| searchResultsPage toc bookTitle state config).render)
+    (Html.doctype ++ (← renderPage config (searchResultsPage toc bookTitle state config)))
 
 
 section
@@ -817,12 +825,13 @@ where
         IO.FS.writeFile (dir / "-verso-data" / m.filename) m.contents
     state.writeFiles (dir / "-verso-data")
 
+    let rendered ← renderPage config.toConfig <|
+      page toc ctxt.path text.titleString titleToShow pageContent state config.toConfig thisPageToc (showNavButtons := false)
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn <| Html.render <| Hoist.postprocess <| relativizeLinks <|
-        page toc ctxt.path text.titleString titleToShow pageContent state config.toConfig thisPageToc (showNavButtons := false)
+      h.putStrLn rendered
 
 
 /--
@@ -933,12 +942,13 @@ where
         html%{<section>{heading.toHtml}{introHtml}{contents}{subTocHtml}</section>}
 
     ensureDir dir
+    let rendered ← renderPage config.toConfig <|
+      page bookContents ctxt.path part.titleString bookTitle pageContent state config.toConfig thisPageToc
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn <| Html.render <| Hoist.postprocess <| relativizeLinks <|
-        page bookContents ctxt.path part.titleString bookTitle pageContent state config.toConfig thisPageToc
+      h.putStrLn rendered
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)

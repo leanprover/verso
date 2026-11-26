@@ -209,7 +209,9 @@ def EmitM.writeFile (path : System.FilePath) (content : String) : EmitM Unit := 
 def EmitM.writeHtmlFile (path : System.FilePath) (content : Html) : EmitM Unit := do
   if (← readThe EmitContext).config.verbose then
     IO.println s!"Writing {path}"
-  IO.FS.writeFile path <| doctype ++ "\n" ++ (Hoist.postprocess content).render
+  let policy := (← readThe EmitContext).config.contentSecurityPolicy
+  let content ← IO.ofExcept <| Output.Html.ContentSecurityPolicy.apply policy (Hoist.postprocess content)
+  IO.FS.writeFile path <| doctype ++ "\n" ++ content.render
 
 def LocalToC.ofPage (path : Path) (text : Part Blog.Page) : EmitM LocalToC := do
   let title := text.titleString
@@ -505,6 +507,7 @@ def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.Trav
     config := (← EmitM.blogConfig),
     header := Html.doctype,
     rewriteHtml := some fun _ html => pure (Hoist.postprocess html),
+    contentSecurityPolicy := (← read).config.contentSecurityPolicy,
     components := (← read).components,
     extraParams
   }

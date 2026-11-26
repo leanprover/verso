@@ -1,0 +1,16 @@
+# Configuration for the literate test site. The browser tests in `browser-tests/literate` check
+# the generated pages against these settings.
+
+# An extra script file. It is served from the site's own origin, so it runs under the content
+# security policy's 'self' source, and the marker that it sets on `window` shows that it ran.
+extra_js = ["scripts/extra-script-marker.js"]
+
+# The content security policy keeps its defaults except for one extra script source. The page
+# doesn't load anything from this source; the browser tests check that the source appears in the
+# policy of every page.
+[content_security_policy]
+
+[[content_security_policy.extra_script_sources]]
+scheme = "https"
+host = "scripts.example.com"
+port = 8443

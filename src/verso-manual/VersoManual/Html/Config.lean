@@ -12,9 +12,11 @@ import VersoUtil.BinFiles.Z85
 public import VersoManual.Html.Features
 public import VersoManual.Html.JsFile
 public import VersoManual.LicenseInfo
+public import Verso.Output.Html.ContentSecurityPolicy
 
 namespace Verso.Genre.Manual
 open Lean
+open Verso.Output.Html
 
 public structure HtmlConfig extends HtmlAssets where
   htmlDepth := 2
@@ -41,13 +43,14 @@ public structure HtmlConfig extends HtmlAssets where
   `none` means "unlimited".
   -/
   rootTocDepth : Option Nat := some 1
+  contentSecurityPolicy : ContentSecurityPolicy.Config := {}
   -- This overrides the default value in HtmlAssets. That type may be used in other contexts where
   -- KaTeX isn't appropriate; here, we want to initialize it properly.
   features := .all
 
 public instance : ToJson HtmlConfig where
   toJson := private fun
-    | { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth } =>
+    | { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth, contentSecurityPolicy } =>
       json%{
         "toHtmlAssets": $toHtmlAssets,
         "htmlDepth": $htmlDepth,
@@ -59,7 +62,8 @@ public instance : ToJson HtmlConfig where
         "sourceLink": $sourceLink,
         "issueLink": $issueLink,
         "sectionTocDepth": $sectionTocDepth,
-        "rootTocDepth": $rootTocDepth
+        "rootTocDepth": $rootTocDepth,
+        "contentSecurityPolicy": $contentSecurityPolicy
       }
 
 public instance : FromJson HtmlConfig where
@@ -75,4 +79,5 @@ public instance : FromJson HtmlConfig where
     let issueLink <- v.getObjValAs? _ "issueLink"
     let sectionTocDepth <- v.getObjValAs? _ "sectionTocDepth"
     let rootTocDepth <- v.getObjValAs? _ "rootTocDepth"
-    return { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth }
+    let contentSecurityPolicy <- v.getObjValAs? _ "contentSecurityPolicy"
+    return { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth, contentSecurityPolicy }

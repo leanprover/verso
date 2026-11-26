@@ -355,6 +355,69 @@ extra_js = ["custom/analytics.js"]
 
 These files are copied into the output directory and linked after the default Verso styles, so custom CSS can override any built-in rules.
 
+## Content Security Policy
+%%%
+tag := "literate-content-security-policy"
+%%%
+
+The {ref "html-content-security-policy"}[content security policy] of literate Verso programs can be configured via the `[content_security_policy]` table.
+By default, a policy is applied that allows the inline scripts in the HTML, those from the same [origin](https://developer.mozilla.org/en-US/docs/Glossary/Origin) as the page, and those from the origins of external scripts that the page loads.
+In particular, this policy allows the scripts in `extra_js` to run because they load from the site's own origin.
+
+The `[content_security_policy]` table has the following keys:
+: `enabled`
+
+  Controls whether the policy is used at all. Defaults to `true`.
+
+: `allow_eval`
+
+  Controls whether JavaScript code can call `eval`.
+  Defaults to `false`.
+
+: `allow_web_assembly_compilation`
+
+  Controls whether JavaScript code can compile WebAssembly.
+  Defaults to `false`.
+
+: `extra_inline_scripts`
+
+  An array of exact trusted inline script bodies that defaults to empty.
+  Use this to authorize inline scripts in raw HTML.
+
+: `extra_script_sources`
+
+  An array of tables that defaults to empty. The tables have the following keys:
+
+  : `host`
+
+    A string that contains only ASCII letters, digits, `-`, and `.`. Required.
+
+  : `scheme`
+
+    An optional string that is either `"https"` or `"http"`.
+    Omitting it allows the page's own scheme.
+
+  : `only_subdomains`
+
+    If `true`, the source matches only the subdomains of `host`, and not `host` itself. Defaults to `false`.
+
+  : `port`
+
+    An optional integer from 1 to 65535.
+    Defaults to the scheme's default port.
+
+For example, this configuration allows scripts from `https://cdn.example.com` and from the subdomains of `example.org`:
+
+```
+[[content_security_policy.extra_script_sources]]
+scheme = "https"
+host = "cdn.example.com"
+
+[[content_security_policy.extra_script_sources]]
+host = "example.org"
+only_subdomains = true
+```
+
 # Deployment
 %%%
 tag := "literate-deployment"

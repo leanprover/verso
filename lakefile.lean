@@ -144,6 +144,11 @@ lean_exe «verso-literate-plan» where
   srcDir := "src/verso-literate-plan"
   supportInterpreter := true
 
+-- URL parser test cases from web-platform-tests, which a test module embeds when it is elaborated.
+input_dir wptUrlTests where
+  text := true
+  path := "src/tests/data/wpt-url"
+
 -- All test code: Errata test modules, compile-time tests, fixtures, and generators. Submodules are
 -- globbed so each is built and every `@[test]` module is discoverable.
 @[default_target]
@@ -151,6 +156,7 @@ lean_lib VersoTests where
   srcDir := "src/tests"
   roots := #[`VersoTests]
   globs := #[Glob.andSubmodules `VersoTests]
+  needs := #[wptUrlTests]
 
 -- Everything below is Errata's own implementation: its library, the single-test runner and widget
 -- support exe, its self-tests, the generated discovery runner, and the `lake test` driver.

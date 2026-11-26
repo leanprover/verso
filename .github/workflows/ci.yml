@@ -260,6 +260,11 @@ jobs:
             - name: Generate the test website
               id: test-website
               continue-on-error: true
+              # The port of `http://localhost`, from which the demo site loads a script that the
+              # blog browser tests check. It matches the blog tests' `--port`, and `localhost`
+              # is a different origin from the `127.0.0.1` that serves the pages.
+              env:
+                  VERSO_TEST_EXTERNAL_SCRIPT_PORT: 8120
               run: |
                   lake run versoMain test-projects/website/DemoSiteMain.lean --output _out/test-projects/demosite
 
@@ -279,6 +284,11 @@ jobs:
             - name: Generate the test tutorial site
               id: tutorial-site
               continue-on-error: true
+              # The tutorial site loads a script that the tutorial browser tests check from
+              # `localhost` on this port, the tutorial tests' port. That origin differs from the
+              # `127.0.0.1` origin that serves the pages.
+              env:
+                  VERSO_TEST_EXTERNAL_SCRIPT_PORT: "8106"
               run: |
                   lake run versoMain test-projects/tutorial-test/TutorialExampleMain.lean
 
@@ -331,6 +341,11 @@ jobs:
             - name: Build the package-manual site for browser tests
               id: package-manual-site
               continue-on-error: true
+              # The package manual loads a script that the package-manual browser tests check from
+              # `localhost` on this port, those tests' port. That origin differs from the
+              # `127.0.0.1` origin that serves the pages.
+              env:
+                  VERSO_TEST_EXTERNAL_SCRIPT_PORT: "8105"
               run: |
                   lake run versoMain test-projects/package-manual/PackageManualMain.lean --output _out/package-manual
 
@@ -379,7 +394,9 @@ jobs:
                           browser-tests/test_search_path_prefix.py \
                           browser-tests/test_toc_resize.py \
                           browser-tests/test_redirect.py \
-                          browser-tests/test_katex.py -v --port 8103
+                          browser-tests/test_katex.py \
+                          browser-tests/test_content_security_policy.py \
+                          -v --port 8103
 
                   - name: Run VersoHtml browser tests
                     run: |
@@ -392,6 +409,18 @@ jobs:
                         uv run --project browser-tests --extra test pytest \
                           browser-tests/package-manual -v \
                           --site-dir "$(pwd)/_out/package-manual/html-multi" --port 8105
+
+                  - name: Run blog browser tests
+                    run: |
+                        uv run --project browser-tests --extra test pytest \
+                          browser-tests/blog -v \
+                          --site-dir "$(pwd)/_out/test-projects/demosite" --port 8120
+
+                  - name: Run tutorial browser tests
+                    run: |
+                        uv run --project browser-tests --extra test pytest \
+                          browser-tests/tutorial -v \
+                          --site-dir "$(pwd)/_out/tut" --port 8106
 
                   - name: Check internal links on the test website
                     run: |

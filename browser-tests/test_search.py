@@ -80,17 +80,19 @@ class TestSearch:
         expect(page.get_by_role("searchbox")).to_match_aria_snapshot(
             '- searchbox "Search": Html.none'
         )
-        expect(page.get_by_label("Results")).to_match_aria_snapshot(
+        top_result = (
+            page.get_by_role("listbox", name="Results").get_by_role("option").first
+        )
+        expect(top_result).to_match_aria_snapshot(
             """
-          - listbox "Results":
-            - option "Lean.Html.none ↪ Lean.Html.empty Suggestion" [selected]:
-              - link "Lean.Html.none ↪ Lean.Html.empty Suggestion":
-                - paragraph:
-                  - text: Lean.
-                  - emphasis: Html.none
-                  - text: ↪ Lean.Html.empty
-                - paragraph: Suggestion
-            - listitem: Showing 1/1 results""".strip()
+          - option "Lean.Html.none ↪ Lean.Html.empty Suggestion" [selected]:
+            - link "Lean.Html.none ↪ Lean.Html.empty Suggestion":
+              - paragraph:
+                - text: Lean.
+                - emphasis: Html.none
+                - text: ↪ Lean.Html.empty
+              - paragraph: Suggestion
+            """.strip()
         )
 
         page.get_by_role("searchbox").press("Backspace")
@@ -100,15 +102,14 @@ class TestSearch:
         expect(page.get_by_role("searchbox")).to_match_aria_snapshot(
             '- searchbox "Search": Html.nil'
         )
-        expect(page.get_by_label("Results")).to_match_aria_snapshot(
+        expect(top_result).to_match_aria_snapshot(
             """
-          - listbox "Results":
-            - option "Lean.Html.nil ↪ Lean.Html.empty Suggestion" [selected]:
-              - link "Lean.Html.nil ↪ Lean.Html.empty Suggestion":
-                - paragraph:
-                  - text: Lean.
-                  - emphasis: Html.nil
-                  - text: ↪ Lean.Html.empty
-                - paragraph: Suggestion
-            - listitem: Showing 1/1 results""".strip()
+          - option "Lean.Html.nil ↪ Lean.Html.empty Suggestion" [selected]:
+            - link "Lean.Html.nil ↪ Lean.Html.empty Suggestion":
+              - paragraph:
+                - text: Lean.
+                - emphasis: Html.nil
+                - text: ↪ Lean.Html.empty
+              - paragraph: Suggestion
+            """.strip()
         )

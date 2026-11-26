@@ -4,8 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
+public import VersoUtil.Base64
 public import VersoUtil.BinFiles
 public import VersoUtil.Elan
+public import VersoUtil.Hash
 public import VersoUtil.InfoTree
 public import VersoUtil.LzCompress
 public import VersoUtil.Zip

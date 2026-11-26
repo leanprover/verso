@@ -9,6 +9,8 @@ htmlout
 .playwright-browsers
 
 # Vendored files
+src/tests/data/wpt-url/LICENSE.md
+src/tests/data/wpt-url/urltestdata.json
 vendored-js
 *.min.js
 licenses.md

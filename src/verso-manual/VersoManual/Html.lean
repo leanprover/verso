@@ -438,6 +438,7 @@ public def page
   html%{
     <html>
       <head>
+        <meta charset="utf-8"/>
         <script>
           {addSlashJs}
         </script>
@@ -445,7 +446,6 @@ public def page
           {tocWidthPreloadJs}
         </script>
         <base href={relativeRoot}/>
-        <meta charset="utf-8"/>
         <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/>
         <title>{textTitle}</title>
         <link rel="stylesheet" href="book.css" />
@@ -479,7 +479,7 @@ public def page
           <span class="line line3"/>
         </label>
         <div class="with-toc">
-          <div class="toc-backdrop" onclick="document.getElementById('toggle-toc-click')?.click()"></div>
+          <div class="toc-backdrop"></div>
           <nav id="toc">
             <input type="checkbox" id="toggle-toc" />
             <div class="first">

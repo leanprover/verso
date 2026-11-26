@@ -9,6 +9,7 @@ public import MultiVerso.Path
 public import VersoBlog.Basic
 public import VersoBlog.Template
 public import VersoBlog.Theme
+public import Verso.Output.Html.ContentSecurityPolicy
 
 public section
 
@@ -36,6 +37,7 @@ structure Generate.Context where
   dir : System.FilePath
   config : Config
   header : String
+  contentSecurityPolicy : ContentSecurityPolicy.Config := {}
   rewriteHtml : Option (TraverseContext → Html → BuildLogT IO Html) := none
   components : Components := {}
   theme : Theme
@@ -164,7 +166,11 @@ def writePage (theme : Theme) (params : Template.Params) (template : Template :=
   ensureDir <| (← currentDir)
   let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (← currentPath) |>.getD ⟨template, id⟩
   let output ← rewriteOutput <| ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| params
+  let policy := (← read).contentSecurityPolicy
   let header := (← read).header
+  if policy.enabled && !ContentSecurityPolicy.isDocumentPreamble header then
+    throw <| IO.userError "Cannot install the content security policy after a custom HTML header containing markup."
+  let output ← IO.ofExcept <| ContentSecurityPolicy.apply policy output
   IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
     h.putStrLn header
     h.putStrLn output.render

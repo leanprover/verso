@@ -153,3 +153,105 @@ The helper function {name}`Html.writeKaTeX` writes all of these files to a direc
 {docstring Html.math.js}
 
 {docstring Html.writeKaTeX}
+
+# Content Security Policy
+%%%
+tag := "html-content-security-policy"
+%%%
+
+To reduce the risk of cross-site scripting vulnerabilities even for users who write their own document extensions, Verso applies a [content security policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP) by default to every HTML page it generates.
+This policy restricts the set of scripts that can be executed in the page, which makes it much more difficult for a bad actor to take over the page by injecting HTML through a bug, such as an extension that doesn't escape its input.
+In particular, an inline script runs only if its content is identical to an inline script in the HTML that Verso generated, and an external script runs only if it loads from the page's own origin or from an origin that is listed in the policy.
+An injected `<script>` element that loads a file from one of these origins still runs, so the policy doesn't protect against an attacker who can place files on the site or on one of the origins allowed by the policy.
+
+:::paragraph
+This feature does not usually require configuration because Verso automatically ensures that the right scripts are allowed to run.
+If configuration is needed, each genre has a means of specifying it, which is described in the appropriate section of this guide:
+* {ref "manual-content-security-policy"}[manuals and tutorials]
+* {ref "blog-content-security-policy"}[websites]
+* {ref "literate-content-security-policy"}[literate programs]
+
+Pages from `verso-html` always use the default policy.
+:::
+
+:::paragraph
+Verso's content security policy `<meta>` tag restricts only scripts and the page's `<base>` URL.
+Stylesheets, images, fonts, connections, frames, and objects are not restricted by the policy.
+The script policy allows the following scripts:
+
+* Those from the site's own [origin](https://developer.mozilla.org/en-US/docs/Glossary/Origin)
+* Browser-processed inline scripts in the structured HTML, including classic scripts, modules, import maps, and speculation rules
+* The origins of external scripts in the structured HTML
+* Any additional configured script sources and trusted inline script bodies
+
+The `'unsafe-eval'` and `'wasm-unsafe-eval'` keywords are controlled by the {name Verso.Output.Html.ContentSecurityPolicy.Config.allowEval}`allowEval` and {name Verso.Output.Html.ContentSecurityPolicy.Config.allowWebAssemblyCompilation}`allowWebAssemblyCompilation` flags in the configuration.
+:::
+
+Because the policy trusts the page's origin, scripts from other sites that share the same origin can run.
+For example, two separate GitHub Pages sites that are under the same account share an origin.
+
+Classic scripts that are marked `nomodule` provide fallbacks for browsers without JavaScript module support.
+Verso includes the fallback in the page's policy so those browsers can run it.
+If the fallback loads from a CDN, the policy allows scripts from that CDN even in browsers that skip the fallback.
+Serving the fallback from the page's own origin avoids granting that permission to another host.
+
+If a genre or user extensions generate content embedded in an `<iframe>`, care is required.
+The generated policy restricts scripts in the Verso document.
+A separate document loaded over HTTP or HTTPS in an iframe has its own policy, and scripts in a same-origin frame can normally access the parent document.
+When embedding content you don't fully trust, serve it from a separate origin or use an iframe sandbox that prevents same-origin access.
+
+:::paragraph
+By default, browsers block the following and report each violation in the developer console:
+
+* Inline `<script>` elements inside raw HTML strings as well as those that load scripts from origins that the policy does not permit
+* Inline event handler attributes, such as `onclick`
+* `javascript:` URLs
+* Further scripts from origins that are not listed in the policy, but are loaded by a script that is allowed.
+
+Verso doesn't warn about such scripts when it generates the site.
+Data blocks and scripts inside inert content, such as ordinary `<template>` and `<noscript>` elements, are not included in the policy.
+Scripts in a declarative shadow root are collected with the rest of the page.
+Extensions can explicitly authorize an exact trusted inline script body with {name Verso.Output.Html.ContentSecurityPolicy.Config.extraInlineScripts}`extraInlineScripts`.
+Scripts that load other scripts from remote hosts need those hosts to be listed in {name Verso.Output.Html.ContentSecurityPolicy.Config.extraScriptSources}`extraScriptSources`.
+Event handlers can be attached with `addEventListener` in a script instead of using attributes like `onclick`.
+:::
+
+{docstring Verso.Output.Html.ContentSecurityPolicy.Config}
+
+{docstring Verso.Output.Html.ContentSecurityPolicy.Source}
+
+{docstring Verso.Output.Html.ContentSecurityPolicy.Scheme}
+
+{docstring Verso.Output.Html.ContentSecurityPolicy.Host}
+
+{docstring Verso.Output.Html.ContentSecurityPolicy.Host.ofString}
+
+{docstring Verso.Output.Html.ContentSecurityPolicy.Port}
+
+{docstring Verso.Output.Html.ContentSecurityPolicy.Port.ofInt}
+
+## Policies in Genres
+%%%
+tag := "html-content-security-policy-genres"
+%%%
+
+Authors of Verso genres can enable content security policies for HTML content using {name Verso.Output.Html.ContentSecurityPolicy.apply}`ContentSecurityPolicy.apply` on each page.
+This should be the last step in the pipeline, after all scripts have been added.
+{name Verso.Output.Html.ContentSecurityPolicy.apply}`ContentSecurityPolicy.apply` collects browser-processed inline scripts and adds their hashes to the set of allowed scripts.
+It inserts the policy into the document's first `<head>` element, immediately after the first `<meta charset>` tag (if present).
+If a plain `<meta charset="utf-8">` occurs later among the head's children, Verso moves it to the front so the policy cannot push the encoding declaration past the first 1024 bytes.
+When enabled, it returns an error if it cannot locate that head. Custom templates should construct the document head as structured HTML.
+If the {name Verso.Output.Html.ContentSecurityPolicy.Config.enabled}`enabled` flag in the configuration is not set, then the HTML is not modified.
+
+Genre authors who need to examine or modify the policy before applying it should call {name Verso.Output.Html.ContentSecurityPolicy.collect}`ContentSecurityPolicy.collect` to collect the inline scripts in the page.
+If Verso cannot determine the text of an inline SVG script, collection returns an error.
+On success, the resulting {name Verso.Output.Html.ContentSecurityPolicy.Policy}`Policy` includes sources for the page's external scripts, the code of its inline scripts, and the provided configuration values.
+Use {name Verso.Output.Html.ContentSecurityPolicy.Policy.render}`Policy.render` to construct a string that's suitable for the `<meta>` tag, in which inline scripts are allowed based on hashes of their source.
+
+{docstring Verso.Output.Html.ContentSecurityPolicy.apply}
+
+{docstring Verso.Output.Html.ContentSecurityPolicy.collect}
+
+{docstring Verso.Output.Html.ContentSecurityPolicy.Policy}
+
+{docstring Verso.Output.Html.ContentSecurityPolicy.Policy.render}
