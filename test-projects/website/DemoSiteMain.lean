@@ -10,8 +10,31 @@ import DemoSite
 open Verso Genre Blog Site Syntax
 open Lean (Html)
 
+open Output.Html.ContentSecurityPolicy
+
+/--
+An inline script in the theme.
+-/
+-- The content security policy must hash it, so the marker that it sets shows that theme scripts
+-- still run.
+--
+-- With an external port, the script also loads `static/external-script.js` from
+-- `http://localhost` on that port, as analytics snippets load their code. The browser tests serve
+-- the site from `127.0.0.1`, which is a different origin, so that script runs only because the
+-- policy lists the external origin as an extra script source. Its marker shows that extra sources
+-- work.
+def themeScript (externalPort : Option Port) : String :=
+  "window.versoTestThemeInlineScript = true;\n" ++
+  (externalPort.map fun port =>
+    "(() => {\n" ++
+    "  const script = document.createElement('script');\n" ++
+    s!"  script.src = 'http://localhost:{port.number}/static/external-script.js';\n" ++
+    "  document.head.append(script);\n" ++
+    "})();\n").getD ""
+
 open Output Html Template Theme in
-def theme : Theme := { Theme.default with
+def theme (externalPort : Option Port) : Theme := { Theme.default with
+  jsFiles := #[("demo-theme.js", "window.versoTestThemeJsFile = true;", false)]
   primaryTemplate := do
     let postList :=
       match (← param? "posts") with
@@ -39,6 +62,7 @@ def theme : Theme := { Theme.default with
           <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sakura.css/css/sakura.css" type="text/css"/>
           <title>{ (← param (α := String) "title") } — Verso </title>
           {← builtinHeader }
+          <script>{Html.raw (themeScript externalPort)}</script>
           <link rel="stylesheet" href="static/style.css"/>
         </head>
         <body>
@@ -94,4 +118,22 @@ def linkTargets : Code.LinkTargets TraverseContext where
   const n _ := #[{shortDescription := "doc", description := s!"Documentation for {n}", href := s!"http://site.example/constlink/{n}"}]
   definition d _ := #[{shortDescription := "def", description := "Definition", href := s!"http://site.example/deflink/{d}"}]
 
-def main := blogMain theme demoSite (linkTargets := linkTargets)
+-- `VERSO_TEST_EXTERNAL_SCRIPT_PORT` is the port of `http://localhost` from which the theme's inline
+-- script loads `static/external-script.js`. The browser tests set it. Without it, the site doesn't
+-- refer to an external origin.
+def main (options : List String) : IO UInt32 := do
+  let externalPort ←
+    match ← IO.getEnv "VERSO_TEST_EXTERNAL_SCRIPT_PORT" with
+    | none | some "" => pure none
+    | some text =>
+      let some n := text.toNat?
+        | throw <| .userError s!"VERSO_TEST_EXTERNAL_SCRIPT_PORT: {text.quote} isn't a number."
+      match Port.ofInt n with
+      | .ok port => pure (some port)
+      | .error e => throw <| .userError s!"VERSO_TEST_EXTERNAL_SCRIPT_PORT: {e}"
+  let externalOrigin ← externalPort.mapM fun port => do
+    match Host.ofString "localhost" with
+    | .ok host => pure ({ scheme := some .http, host, port := some port } : Source)
+    | .error e => throw <| .userError e
+  blogMain (theme externalPort) demoSite (linkTargets := linkTargets) options
+    (contentSecurityPolicy := { extraScriptSources := externalOrigin.toArray })

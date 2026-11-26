@@ -25,7 +25,7 @@ class SearchPageAccessibilityBase:
         page.goto(f"{server}/search/?q={self.QUERY}")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(
-            "document.querySelectorAll('ul.search-page-list li').length > 0",
+            "() => document.querySelectorAll('ul.search-page-list li').length > 0",
             timeout=5_000,
         )
         ul = page.locator("ul.search-page-list")
@@ -53,7 +53,7 @@ class SearchPageAccessibilityBase:
         page.goto(f"{server}/search/?q={self.QUERY}")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(
-            "document.querySelectorAll('ul.search-page-list li').length > 0",
+            "() => document.querySelectorAll('ul.search-page-list li').length > 0",
             timeout=5_000,
         )
         is_focusable = page.locator("ul.search-page-list li").first.evaluate(
@@ -78,7 +78,7 @@ class SearchPageAccessibilityBase:
         page.goto(f"{server}/search/?q={self.QUERY}")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(
-            "document.querySelectorAll('ul.search-page-list li').length > 0",
+            "() => document.querySelectorAll('ul.search-page-list li').length > 0",
             timeout=5_000,
         )
         first_result = page.locator("ul.search-page-list li").first
@@ -98,7 +98,7 @@ class SearchPageAccessibilityBase:
         page.goto(f"{server}/search/?q={self.QUERY}")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(
-            "document.querySelectorAll('ul.search-page-list li').length > 0",
+            "() => document.querySelectorAll('ul.search-page-list li').length > 0",
             timeout=5_000,
         )
         first_result = page.locator("ul.search-page-list li").first

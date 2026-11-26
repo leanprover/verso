@@ -49,6 +49,14 @@ It is responsible for {ref "traversal"}[traversing] the site and generating the 
 
 {docstring Blog.blogMain}
 
+## Content Security Policy
+%%%
+tag := "blog-content-security-policy"
+%%%
+
+The {ref "html-content-security-policy"}[content security policy] for websites is configured in the `contentSecurityPolicy` argument of {name Blog.blogMain}`blogMain`.
+The generated policy allows those in `<script>` elements in the theme's templates and the scripts in the site's components and extensions.
+
 # Configuring a Site
 %%%
 tag := "site-config"

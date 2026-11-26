@@ -10,6 +10,7 @@ public import UsersGuide.Releases.Entries.BlogLeanRole
 public import UsersGuide.Releases.Entries.BuildLog
 public import UsersGuide.Releases.Entries.BuildTimeDocstringMarkdown
 public import UsersGuide.Releases.Entries.CodeColorVariables
+public import UsersGuide.Releases.Entries.ContentSecurityPolicy
 public import UsersGuide.Releases.Entries.DevelopmentServer
 public import UsersGuide.Releases.Entries.Diagrams
 public import UsersGuide.Releases.Entries.DocSourceRanges

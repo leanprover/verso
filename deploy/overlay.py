@@ -10,7 +10,10 @@ from release_utils import (
     find_latest_version,
     find_latest_stable_version,
 )
+from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urlsplit
+from extend_content_security_policy import extend_policy
 
 UNICODE_INPUT_FILES = [
     "unicode-input.min.js",
@@ -126,15 +129,75 @@ def replace_unicode_input_files(directory, unicode_input_files):
                     print(f"Skipped (not present): {filepath}")
 
 
+class StatsScriptParser(HTMLParser):
+    # With scripting enabled, these elements contain text rather than nested markup.
+    CDATA_CONTENT_ELEMENTS = (
+        "script",
+        "style",
+        "title",
+        "textarea",
+        "xmp",
+        "iframe",
+        "noembed",
+        "noframes",
+        "noscript",
+    )
+
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self.bodies = []
+        self.origins = []
+        self.body = None
+        self.template_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "template":
+            self.template_depth += 1
+        if tag != "script" or self.template_depth:
+            return
+        for name, value in attrs:
+            if name == "src":
+                url = urlsplit(value or "")
+                if url.netloc:
+                    origin = (
+                        f"{url.scheme}://{url.netloc}" if url.scheme else url.netloc
+                    )
+                    self.origins.append(origin)
+                return
+        self.body = []
+
+    def handle_data(self, data):
+        if self.body is not None:
+            self.body.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "template" and self.template_depth:
+            self.template_depth -= 1
+        if tag == "script" and self.body is not None:
+            self.bodies.append("".join(self.body))
+            self.body = None
+
+
+def scripts_in(html):
+    """Returns the inline script bodies and external origins in a trusted stats snippet."""
+    parser = StatsScriptParser()
+    parser.feed(html)
+    parser.close()
+    return parser.bodies, parser.origins
+
+
 def inject_stats_html(directory, stats_html_content, extensions=(".html", ".htm")):
     """
     Recursively walk through `directory`, find all HTML files,
     and insert stats_html_content as the last element of <head>.
 
+    The Content Security Policy of each page is extended to allow the snippet's scripts.
+
     Args:
         directory (Path): The directory in which to recursively modify files
         stats_html_content (str): HTML content to inject before </head>
     """
+    stats_scripts, stats_origins = scripts_in(stats_html_content)
     for root, _, files in os.walk(directory):
         for filename in files:
             if filename.lower().endswith(extensions):
@@ -145,6 +208,9 @@ def inject_stats_html(directory, stats_html_content, extensions=(".html", ".htm"
                 if "</head>" in content:
                     new_content = content.replace(
                         "</head>", f"{stats_html_content}</head>"
+                    )
+                    new_content = extend_policy(
+                        new_content, stats_scripts, stats_origins
                     )
                     with open(filepath, "w", encoding="utf-8") as f:
                         f.write(new_content)
@@ -159,6 +225,7 @@ def update_find_page(version_dir, find_js):
 
     The page's cross-reference data is kept. Older pages declare it with `let xref`, and the
     updated page declares it as `window.xref`, which is where the current script reads it from.
+    The page's Content Security Policy, if any, is extended to allow the new script.
 
     Args:
         version_dir (Path): The version's directory
@@ -173,18 +240,22 @@ def update_find_page(version_dir, find_js):
         print(f"No cross-reference data, skipping: {page}")
         return
     _, data_end = json.JSONDecoder().raw_decode(content, match.end())
+    script_start = content.rfind("<script", 0, match.start())
     script_end = content.find("</script>", data_end)
-    if script_end < 0:
+    if script_start < 0 or script_end < 0:
         print(f"Unexpected find page layout, skipping: {page}")
         return
-    new_content = (
-        content[: match.start()]
+    body_start = content.index(">", script_start) + 1
+    body = (
+        content[body_start : match.start()]
         + "window.xref = "
         + content[match.end() : data_end]
         + ";\n"
         + find_js
         + "\n"
-        + content[script_end:]
+    )
+    new_content = extend_policy(
+        content[:body_start] + body + content[script_end:], [body]
     )
     page.write_text(new_content, encoding="utf-8")
     print(f"Updated: {page}")
@@ -377,6 +448,56 @@ def deploy_overlays(deploy_dir, src_branch, tgt_branch):
         run_git_command(["git", "reset", "--hard", "HEAD^^"])
     finally:
         run_git_command(["git", "switch", current_branch])
+
+
+# Run from deploy/ with:
+#   python3 -B -c "import overlay; overlay.test()"
+def test():
+    import tempfile
+    from extend_content_security_policy import script_hash
+
+    stats = (
+        '<script async src="https://stats.example/s.js"></script>\n'
+        "<script>\n  track()\n</script>\n"
+    )
+    assert scripts_in(stats) == (["\n  track()\n"], ["https://stats.example"])
+    assert scripts_in('<script src="//cdn.example/a.js"></script>') == (
+        [],
+        ["cdn.example"],
+    )
+    assert scripts_in('<script src="local.js"></script>') == ([], [])
+    assert scripts_in(
+        "<SCRIPT SRC = 'https://stats.example/s.js'></SCRIPT>"
+        '<script src=https://stats.example/t.js src="https://ignored.example/"></script>'
+        '<!-- <script src="https://ignored.example/"></script> -->'
+        '<template><script src="https://ignored.example/"></script></template>'
+        '<noscript><script src="https://ignored.example/"></script></noscript>'
+        '<script data-test=">">let x = 1 < 2 && "&amp;";</script>'
+    ) == (
+        ['let x = 1 < 2 && "&amp;";'],
+        ["https://stats.example", "https://stats.example"],
+    )
+
+    meta = "<meta http-equiv=\"Content-Security-Policy\" content=\"script-src 'self'; base-uri 'self'\"/>"
+    find_page = (
+        f'<html><head><meta charset="UTF-8"/>{meta}</head><body>'
+        '<script>let xref = {"a": 1};\nold()</script></body></html>'
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        version = Path(tmp)
+        (version / "find").mkdir()
+        page = version / "find" / "index.html"
+        page.write_text(find_page, encoding="utf-8")
+        update_find_page(version, "find()")
+        result = page.read_text(encoding="utf-8")
+        body = 'window.xref = {"a": 1};\nfind()\n'
+        assert f"<script>{body}</script>" in result, result
+        assert script_hash(body) in result, result
+
+        inject_stats_html(version, stats)
+        result = page.read_text(encoding="utf-8")
+        assert script_hash("\n  track()\n") in result, result
+        assert "'self' https://stats.example 'sha256-" in result, result
 
 
 def main():

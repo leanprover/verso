@@ -802,12 +802,14 @@ Optional parameters:
  * `components` contains the implementation of the components. This is automatically filled out from
    a table.
  * `header` is emitted prior to each HTML document. By default, it produces a `<doctype>`, but it
-   can be overridden to integrate with other static site generators.
+   can be overridden to integrate with other static site generators. With content security policies
+   enabled, the header must be whitespace or the standard HTML doctype.
 -/
 
 def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets TraverseContext := {})
     (options : List String) (components : Components := by exact %registered_components)
-    (header : String := Html.doctype) :
+    (header : String := Html.doctype)
+    (contentSecurityPolicy : ContentSecurityPolicy.Config := {}) :
     IO UInt32 :=
   withLogger fun logger => do
     let cfg ← opts {} options
@@ -819,6 +821,7 @@ def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets Trave
       dir := cfg.destination,
       config := cfg,
       header := header,
+      contentSecurityPolicy := contentSecurityPolicy,
       linkTargets := linkTargets,
       components := components
     }

@@ -132,3 +132,10 @@ private def singlePageToc : Toc where
 #test_guard (singlePageToc.html none).render.contains "href=\"/#Repro--Second-section\""
 
 end
+
+-- The character encoding declaration comes first in `<head>`, so that it falls within the first
+-- 1024 bytes of the page.
+#test_guard
+  let toc : Toc := .entry { title := "Book", path := #[], id := none, sectionNum := none } []
+  let html := page toc #["a", "b"] "Book" "Book" .empty {} {} #[]
+  html.render.startsWith "<html><head><meta charset=\"utf-8\"/>"
