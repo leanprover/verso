@@ -64,7 +64,7 @@ jobs:
 
             - name: Install uv
               if: steps.check-changes.outputs.changed == 'true'
-              uses: astral-sh/setup-uv@v10.3.3
+              uses: astral-sh/setup-uv@v10.4.0
               with:
                   enable-cache: true
                   cache-dependency-glob: "browser-tests/pyproject.toml"
