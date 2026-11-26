@@ -22,12 +22,13 @@ def script (body : Html) : Html := html%{<script>{body}</script>}
 
 def srcScript (src : String) : Html := html%{<script src={src}></script>}
 
-def policyOf (h : Html) (config : Config := {}) : String := (collect config h).render
+def policyOf (h : Html) (config : Config := {}) : Option String :=
+  (collect config h).toOption.map Policy.render
 
 def sorted (xs : Array String) : Array String := xs.qsort (· < ·)
 
-def hashesOf (h : Html) : Array String :=
-  sorted <| (collect {} h).inlineScripts.toArray.map scriptHash
+def hashesOf (h : Html) : Option (Array String) :=
+  (collect {} h).toOption.map fun policy => sorted (policy.inlineScripts.toArray.map scriptHash)
 
 def basePolicy : String := "script-src 'self'; base-uri 'self'"
 
@@ -78,13 +79,24 @@ def svg (children : Html) : Html := html%{<svg>{children}</svg>}
 
 #test_guard hashesOf (page #[] #[svg (script (.text jsSource))]) == #[scriptHash jsSource]
 #test_guard hashesOf (page #[] #[svg (script (.raw "a = 1;"))]) == #[scriptHash "a = 1;"]
+#test_guard hashesOf (page #[] #[svg (script (.seq #[
+    .raw "<![CDA", .raw "TA[a && b < c; &amp;]]>", .raw "&#x3b1;&am", .raw "p;"]))]) ==
+  #[scriptHash "a && b < c; &amp;α&"]
+#test_guard hashesOf (page #[] #[svg (script (.raw "a&&b < c; &copy! &#65 &#x42 &unknown;"))]) ==
+  #[scriptHash "a&&b < c; ©! A B &unknown;"]
+#test_guard Id.run do
+  let doc := page #[] #[svg (script (.raw "<![CDATA[unfinished"))]
+  let .error message := collect {} doc | return false
+  let .error applied := apply {} doc | return false
+  return message.contains "inline SVG script" && applied == message &&
+    (apply { enabled := false } doc).toOption == some doc
 #test_guard hashesOf (page #[] #[svg (script (.seq #[.raw "x = ", .text "a && b", .raw ";"]))]) ==
   #[scriptHash "x = a && b;"]
 #test_guard hashesOf (page #[] #[svg (script (.seq #[.text "a", html%{<b>{.text "ignored"}</b>}, .text "c"]))]) ==
   #[scriptHash "ac"]
 #test_guard hashesOf (page #[] #[html%{<SVG><g>{script (.text "a < b")}</g></SVG>}]) ==
   #[scriptHash "a < b"]
-#test_guard hashesOf (page #[] #[html%{<math><mrow>{script (.text "a < b")}</mrow></math>}]) == #[]
+#test_guard hashesOf (page #[] #[html%{<math><mrow>{script (.text "a < b")}</mrow></math>}]) == some #[]
 
 -- Integration points return to HTML parsing, where a script body is raw text.
 #test_guard #["foreignObject", "desc", "title"].all fun tag =>
@@ -92,7 +104,7 @@ def svg (children : Html) : Html := html%{<svg>{children}</svg>}
 #test_guard #["mi", "mo", "mn", "ms", "mtext"].all fun tag =>
   hashesOf (page #[] #[html%{<math>{Html.element tag #[] (script (.text "a < b"))}</math>}]) ==
     #[scriptHash "a &lt; b"]
-#test_guard hashesOf (page #[] #[html%{<math><annotation-xml>{script (.raw "data")}</annotation-xml></math>}]) == #[]
+#test_guard hashesOf (page #[] #[html%{<math><annotation-xml>{script (.raw "data")}</annotation-xml></math>}]) == some #[]
 #test_guard hashesOf (page #[] #[html%{<math><annotation-xml encoding="text/html">{script (.raw "active")}</annotation-xml></math>}]) ==
   #[scriptHash "active"]
 #test_guard hashesOf (page #[] #[html%{<math><annotation-xml>{svg (script (.text "a < b"))}</annotation-xml></math>}]) ==
@@ -100,9 +112,23 @@ def svg (children : Html) : Html := html%{<svg>{children}</svg>}
 
 #test_guard hashesOf (page #[] #[svg html%{<foreignObject><div>{svg (script (.text "a < b"))}</div></foreignObject>}]) ==
   #[scriptHash "a < b"]
-#test_guard hashesOf (page #[] #[html%{<title>{script (.text "a < b")}</title>}]) == #[]
+#test_guard hashesOf (page #[] #[html%{<title>{script (.text "a < b")}</title>}]) == some #[]
 
 /- Only browser-processed scripts contribute hashes and origins. -/
+
+#test_guard policyOf (page #[] #[
+    html%{<script for="window" event="onresize" src="https://unused.example/a.js"></script>},
+    html%{<script FOR=" Window " EVENT={"\tOnLoad()\r"} src="https://used.example/a.js"></script>}]) ==
+  "script-src 'self' https://used.example; base-uri 'self'"
+
+#test_guard hashesOf (page #[] #[
+    html%{<script for="document" event="onload">{"skipped"}</script>},
+    html%{<script for="window" event="onload">{"load"}</script>},
+    html%{<script for="document">{"target"}</script>},
+    html%{<script event="onresize">{"eventOnly"}</script>},
+    html%{<script type="module" for="document" event="onresize">{"mod"}</script>},
+    svg html%{<script for="document" event="onresize">{"foreign"}</script>}]) ==
+  sorted (#["load", "target", "eventOnly", "mod", "foreign"].map scriptHash)
 
 #test_guard hashesOf (page
     #[script (.raw "one")]
@@ -121,16 +147,17 @@ def svg (children : Html) : Html := html%{<svg>{children}</svg>}
     html%{<template>{srcScript "https://inert.example/app.js"}</template>},
     html%{<script src="https://data.example/data.js" type="application/json"></script>},
     html%{<script src="https://map.example/map.json" type="importmap"></script>}
-  ] |> collect {} |>.origins.isEmpty
+  ] |> collect {} |>.toOption.any (·.origins.isEmpty)
 
-#test_guard (collect { extraInlineScripts := #["trusted()"] } (page #[] #[])).inlineScripts.contains "trusted()"
+#test_guard (collect { extraInlineScripts := #["trusted()"] } (page #[] #[])).toOption.any
+  (·.inlineScripts.contains "trusted()")
 
 #test_guard hashesOf (page #[] #[script (.raw "same"), script (.raw "other"), script (.raw "same")]) ==
   sorted #[scriptHash "same", scriptHash "other"]
 
 #test_guard hashesOf (page #[] #[html%{<SCRIPT>{.raw "upper"}</SCRIPT>}]) == #[scriptHash "upper"]
 
-#test_guard hashesOf (page #[] #[html%{<script SRC="/a.js">{.raw "ignored"}</script>}]) == #[]
+#test_guard hashesOf (page #[] #[html%{<script SRC="/a.js">{.raw "ignored"}</script>}]) == some #[]
 
 /- Hosts and sources -/
 
@@ -222,8 +249,8 @@ def extraSources : Array Source :=
     (page #[srcScript "https://b.example/x.js", script (.raw "s")] #[script (.raw "s")]) ==
   s!"script-src 'self' *.cdn.example:443 cdn.example https://b.example https://d.example https://e.example {scriptHash "s"}; base-uri 'self'"
 
-#test_guard renderSourceSet (collect { extraScriptSources := sourceOf "x.example" (some .https) }
-    (page #[] #[])).extraSources == #["https://x.example"]
+#test_guard (collect { extraScriptSources := sourceOf "x.example" (some .https) }
+    (page #[] #[])).toOption.any fun p => renderSourceSet p.extraSources == #["https://x.example"]
 
 def duplicatedPolicy : Policy where
   origins := .ofArray (sourceOf "a.example" (some .https))
@@ -235,9 +262,10 @@ def duplicatedPolicy : Policy where
 
 /- The policy includes each distinct inline script source text just once -/
 
-#test_guard sorted (collect {} (page #[script (.raw "same")] #[script (.raw "same"), script (.text "a < b")])).inlineScripts.toArray ==
-  sorted #["same", "a &lt; b"]
-#test_guard (collect {} (page #[] #[svg (script (.text "a < b"))])).inlineScripts.toArray == #["a < b"]
+#test_guard (collect {} (page #[script (.raw "same")] #[script (.raw "same"), script (.text "a < b")])).toOption.any
+  fun p => sorted p.inlineScripts.toArray == sorted #["same", "a &lt; b"]
+#test_guard (collect {} (page #[] #[svg (script (.text "a < b"))])).toOption.any
+  fun p => p.inlineScripts.toArray == #["a < b"]
 
 /- Keyword flags -/
 
@@ -364,7 +392,7 @@ def unicodeWhitespace : Array Char := #[
 /- Insertion into `head` -/
 
 def metaOf (h : Html) (config : Config := {}) : Html :=
-  html%{<meta http-equiv="Content-Security-Policy" content={policyOf h config}/>}
+  html%{<meta http-equiv="Content-Security-Policy" content={(policyOf h config).getD ""}/>}
 
 def charset : Html := html%{<meta charset="utf-8"/>}
 
@@ -406,7 +434,7 @@ def policyMeta : String :=
   s!"<html><head>\n  \x0c\t\r <meta charset=\"utf-8\"/>{policyMeta}\n</head><body></body></html>"
 
 #test_guard placed #[.raw "<!-- generated -->", charset] ==
-  s!"<html><head>{policyMeta}<!-- generated --><meta charset=\"utf-8\"/></head><body></body></html>"
+  s!"<html><head><meta charset=\"utf-8\"/>{policyMeta}<!-- generated --></head><body></body></html>"
 
 #test_guard placed #[.raw " ", charset] ==
   s!"<html><head> <meta charset=\"utf-8\"/>{policyMeta}</head><body></body></html>"
@@ -418,16 +446,31 @@ def policyMeta : String :=
   s!"<html><head><META CharSet=\"utf-8\"/>{policyMeta}</head><body></body></html>"
 
 #test_guard placed #[html%{<base href="/"/>}, charset] ==
-  s!"<html><head>{policyMeta}<base href=\"/\"/><meta charset=\"utf-8\"/></head><body></body></html>"
+  s!"<html><head><meta charset=\"utf-8\"/>{policyMeta}<base href=\"/\"/></head><body></body></html>"
 
 #test_guard placed #[html%{<meta name="viewport" content="width=device-width"/>}, charset] ==
-  s!"<html><head>{policyMeta}<meta name=\"viewport\" content=\"width=device-width\"/><meta charset=\"utf-8\"/></head><body></body></html>"
+  s!"<html><head><meta charset=\"utf-8\"/>{policyMeta}<meta name=\"viewport\" content=\"width=device-width\"/></head><body></body></html>"
+
+#test_guard Id.run do
+  let viewport := html%{<meta name="viewport" content="width=device-width"/>}
+  let scripts := (Array.range 20).map fun i => script (.raw s!"/* {i} */")
+  let original := page (#[viewport, charset] ++ scripts) #[]
+  let doc := "<!DOCTYPE html>\n" ++ placed (#[viewport, charset] ++ scripts)
+  let throughCharset := "<!DOCTYPE html>\n<html><head>" ++ charset.render
+  return throughCharset.utf8ByteSize ≤ 1024 && (metaOf original).render.utf8ByteSize > 1024 &&
+    doc.startsWith (throughCharset ++ (metaOf original).render ++ viewport.render) &&
+    (doc.splitOn charset.render).length == 2
+
+#test_guard Id.run do
+  let customized := html%{<meta charset="utf-8" is="custom-meta"/>}
+  return (placed #[.raw "<!-- first -->", customized]).startsWith
+    ("<html><head>" ++ policyMeta ++ "<!-- first -->" ++ customized.render)
 
 #test_guard placed #[.text "x", charset] ==
-  s!"<html><head>{policyMeta}x<meta charset=\"utf-8\"/></head><body></body></html>"
+  s!"<html><head><meta charset=\"utf-8\"/>{policyMeta}x</head><body></body></html>"
 
 #test_guard placed #[.raw "<title>t</title>", charset] ==
-  s!"<html><head>{policyMeta}<title>t</title><meta charset=\"utf-8\"/></head><body></body></html>"
+  s!"<html><head><meta charset=\"utf-8\"/>{policyMeta}<title>t</title></head><body></body></html>"
 
 #test_guard Id.run do
   let declaration := html%{<meta id="encoding" charset="utf-8"/>}
@@ -472,10 +515,11 @@ def noHead : Html := html%{<html><body>{script (.raw "x")}</body></html>}
 
 /- Extra sources and origins -/
 
-#test_guard renderSourceSet (collect { extraScriptSources := sourceOf "a.example" (some .https) }
-    (page #[srcScript "https://a.example/x.js"] #[])).extraSources == #[]
-#test_guard renderSourceSet (collect { extraScriptSources := sourceOf "a.example" (some .https) }
-    (page #[srcScript "https://a.example/x.js"] #[])).origins == #["https://a.example"]
+#test_guard (collect { extraScriptSources := sourceOf "a.example" (some .https) }
+    (page #[srcScript "https://a.example/x.js"] #[])).toOption.any (·.extraSources.isEmpty)
+#test_guard (collect { extraScriptSources := sourceOf "a.example" (some .https) }
+    (page #[srcScript "https://a.example/x.js"] #[])).toOption.any
+  fun p => renderSourceSet p.origins == #["https://a.example"]
 
 /- Disabled configuration -/
 

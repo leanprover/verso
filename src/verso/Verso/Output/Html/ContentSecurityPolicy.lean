@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 module
 public import Lean.Data.Html
 public import Lean.Data.Json.FromToJson
+import Verso.Output.Html.Entities
 import VersoUtil.Base64
 import VersoUtil.Hash
 
@@ -276,19 +277,6 @@ def childNamespace (ns : ScriptNamespace) (tag : String) (attrs : Array (String 
           (fun value => #["text/html", "application/xhtml+xml"].contains value.toLower) then .html
     else .math
 
-/--
-The text of an SVG script element, as the browser builds it.
-
-In SVG, the HTML parser decodes character references in a script and turns markup into child
-elements, which are not part of the script's text. A text node contributes the string that it
-holds. A raw node contributes its string as written, which is the browser's text whenever it
-contains neither `&` nor `<`.
--/
-def foreignScriptText : Html → String
-  | .text s | .raw s => s
-  | .seq hs => hs.attach.foldl (fun text ⟨h, _⟩ => text ++ foreignScriptText h) ""
-  | .element .. => ""
-
 -- https://mimesniff.spec.whatwg.org/#javascript-mime-type
 def isJavaScriptMimeType (type : String) : Bool :=
   #["application/ecmascript", "application/javascript", "application/x-ecmascript",
@@ -305,10 +293,19 @@ def scriptType (attrs : Array (String × String)) : String :=
     | some lang => if lang.isEmpty then "" else "text/" ++ lang.toLower
     | none => ""
 
+-- HTML's legacy event restriction applies only to classic HTML scripts with both attributes.
+def allowsLegacyEvent (attrs : Array (String × String)) : Bool :=
+  let clean (s : String) := (s.dropWhile isAsciiWhitespace |>.dropEndWhile isAsciiWhitespace).copy.toLower
+  match attribute? attrs "for", attribute? attrs "event" with
+  | some target, some event => clean target == "window" && clean event ∈ #["onload", "onload()"]
+  | _, _ => true
+
 -- Descendants of these HTML elements are inert or are parsed as text.
 def isInertContainer (tag : String) : Bool :=
-  #["template", "noscript", "title", "textarea", "style", "xmp", "iframe",
-    "noembed", "noframes", "plaintext"].contains tag
+  match tag with
+  | "template" | "noscript" | "title" | "textarea" | "style" | "xmp" | "iframe"
+  | "noembed" | "noframes" | "plaintext" => true
+  | _ => false
 
 structure Scripts where
   origins : Std.HashSet Source := {}
@@ -318,6 +315,65 @@ def flatten : Html → Array Html
   | .seq hs => hs.foldl (fun nodes h => nodes ++ flatten h) #[]
   | h => #[h]
 termination_by h => h
+
+-- The HTML tokenizer consumes the longest named reference in the table, including legacy
+-- spellings without a semicolon. If nothing matches, the ampersand is literal.
+def svgReference (rest : String.Slice) : Option (String × String.Slice) := do
+  if let some number := rest.dropPrefix? '#' then
+    let hex := number.startsWith 'x' || number.startsWith 'X'
+    let digits := if hex then (number.drop 1).takeWhile Char.isHexDigit else number.takeWhile Char.isDigit
+    if !digits.isEmpty then
+      let ref := (if hex then "#x" else "#") ++ digits.copy
+      let after := number.drop (digits.utf8ByteSize + (if hex then 1 else 0))
+      return (← Html.characterReference? ref, after.dropPrefix ';')
+  else
+    -- The longest name in the HTML entity table has 31 letters.
+    let name := (rest.take 31).takeWhile Char.isAlphanum
+    let mut len := name.utf8ByteSize
+    let after := rest.drop len
+    if after.startsWith ';' then
+      if let some value := Entities.entityStrings["&" ++ name.copy ++ ";"]? then
+        return (value, after.drop 1)
+    while len > 0 do
+      if let some value := Entities.entityStrings["&" ++ (name.take len).copy]? then
+        return (value, rest.drop len)
+      len := len - 1
+  return ("&", rest)
+
+-- Decode the serialized text between child elements of an SVG script. In foreign content,
+-- CDATA is literal and character references outside CDATA are decoded by the HTML tokenizer.
+-- Decline markup we cannot interpret exactly, so we never authorize a guessed script body.
+def decodeSvgText (source : String) : Option String := do
+  let mut rest := (normalizeScriptBody source).toSlice
+  let mut text := ""
+  while let some pos := rest.find? (fun c => c == '<' || c == '&') do
+    text := text ++ (rest.sliceTo pos).copy
+    rest := rest.sliceFrom pos
+    if let some data := rest.dropPrefix? "<![CDATA[" then
+      let endPos ← data.find? "]]>"
+      text := text ++ (data.sliceTo endPos).copy
+      rest := (data.sliceFrom endPos).drop 3
+    else if let some ref := rest.dropPrefix? '&' then
+      let (decoded, after) ← svgReference ref
+      text := text ++ decoded
+      rest := after
+    else
+      rest := rest.drop 1
+      guard (!(rest.startsWith Char.isAlpha || rest.startsWith '!' || rest.startsWith '/' || rest.startsWith '?'))
+      text := text.push '<'
+  return text ++ rest.copy
+
+def foreignScriptText? (children : Html) : Option String := do
+  let mut text := ""
+  let mut run := ""
+  -- Adjacent raw and text nodes share tokenizer state, even across nested sequences.
+  for child in flatten children do
+    match child with
+    | .element .. =>
+      text := text ++ (← decodeSvgText run)
+      run := ""
+    | _ => run := run ++ child.render
+  return text ++ (← decodeSvgText run)
 
 /--
 The DOM Standard lists the built-in [valid shadow host names](https://dom.spec.whatwg.org/#valid-shadow-host-name)
@@ -342,16 +398,17 @@ def shadowContents? : Html → Option Html
 /--
 Collects browser-processed scripts in the structured HTML tree.
 -/
-partial def Scripts.visit (scripts : Scripts) (ns : ScriptNamespace) (inMathAnnotation := false) : Html → Scripts
-  | .seq hs => hs.foldl (init := scripts) (fun s h => s.visit ns inMathAnnotation h)
+partial def Scripts.visit (scripts : Scripts) (ns : ScriptNamespace) (inMathAnnotation := false) : Html → Except String Scripts
+  | .seq hs => hs.foldlM (init := scripts) (fun s h => s.visit ns inMathAnnotation h)
   | .element tag attrs children =>
     let tag := tag.toLower
     if tag == "script" then
-      if ns == .math then scripts else
+      if ns == .math then pure scripts else
       let foreign := ns == .svg
       let type := if foreign then (attribute? attrs "type").getD "" |>.toLower else scriptType attrs
       let mime := (type.dropWhile isAsciiWhitespace |>.dropEndWhile isAsciiWhitespace).copy
-      let canExecute := type.isEmpty || isJavaScriptMimeType mime || type == "module"
+      let classic := type.isEmpty || isJavaScriptMimeType mime
+      let canExecute := type == "module" || (classic && (foreign || allowsLegacyEvent attrs))
       let inlineOnly := !foreign && (type == "importmap" || type == "speculationrules")
       let src := if foreign then (attribute? attrs "href").orElse (fun _ => attribute? attrs "xlink:href")
         else attribute? attrs "src"
@@ -359,44 +416,45 @@ partial def Scripts.visit (scripts : Scripts) (ns : ScriptNamespace) (inMathAnno
       | some src =>
         if canExecute then
           match scriptOrigin? src with
-          | some origin => { scripts with origins := scripts.origins.insert origin }
-          | none => scripts
-        else scripts
+          | some origin => pure { scripts with origins := scripts.origins.insert origin }
+          | none => pure scripts
+        else pure scripts
       | none =>
         if canExecute || inlineOnly then
-          let body := if foreign then foreignScriptText children else children.render
-          { scripts with inlineScripts := scripts.inlineScripts.insert body }
-        else scripts
-    else if ns == .html && isInertContainer tag then scripts
+          match (if foreign then foreignScriptText? children else some children.render) with
+          | some body => pure { scripts with inlineScripts := scripts.inlineScripts.insert body }
+          | none => throw "Cannot determine the text of an inline SVG script for the content security policy. Use Html.text for its JavaScript source, or wrap the raw source in a CDATA section."
+        else pure scripts
+    else if ns == .html && isInertContainer tag then pure scripts
     else
       let current := if inMathAnnotation && tag == "svg" then .svg else ns
       if current == .html && canHostShadowRoot tag then
         visitShadowHostChildren scripts children
       else
         scripts.visit (childNamespace current tag attrs) (current == .math && tag == "annotation-xml") children
-  | _ => scripts
+  | _ => pure scripts
 where
-  visitShadowHostChildren (scripts : Scripts) (children : Html) : Scripts := Id.run do
+  visitShadowHostChildren (scripts : Scripts) (children : Html) : Except String Scripts := do
     let mut scripts := scripts
     let mut attached := false
     for child in flatten children do
       if !attached then
         if let some contents := shadowContents? child then
           attached := true
-          scripts := scripts.visit .html false contents
+          scripts ← scripts.visit .html false contents
           continue
-      scripts := scripts.visit .html false child
+      scripts ← scripts.visit .html false child
     return scripts
 
 /--
-Converts a configuration to a suitable policy for `html` by collecting the document's inline scripts
-and setting other properties as specified.
+Collects the document's scripts and builds a policy using `config`. Returns an error if the
+text of an inline SVG script cannot be determined.
 -/
-public def collect (config : Config) (html : Html) : Policy :=
-  let scripts := Scripts.visit {} .html false html
+public def collect (config : Config) (html : Html) : Except String Policy := do
+  let scripts ← Scripts.visit {} .html false html
   let extras := config.extraScriptSources.foldl (init := {}) fun extras source =>
     if source ∈ scripts.origins then extras else extras.insert source
-  {
+  return {
     allowEval := config.allowEval
     allowWebAssemblyCompilation := config.allowWebAssemblyCompilation
     origins := scripts.origins
@@ -430,12 +488,19 @@ def hasValidAttributeNames (attrs : Array (String × String)) : Bool :=
 -- 1024 bytes of the page, where browsers look for it.
 def addToHead (policyElement : Html) (children : Html) : Html :=
   let nodes := flatten children
-  match nodes.findIdx? (!isWhitespaceNode ·) with
+  match nodes.findFinIdx? (!isWhitespaceNode ·) with
   | some i =>
-    if isCharsetMeta nodes[i]! then
-      .seq (nodes.extract 0 (i + 1) ++ #[policyElement] ++ nodes.extract (i + 1))
+    if isCharsetMeta nodes[i] then
+      .seq (nodes.extract 0 (i.val + 1) ++ #[policyElement] ++ nodes.extract (i.val + 1))
+    else if let some j := nodes.findFinIdx? isPlainUtf8 then
+      .seq (#[nodes[j], policyElement] ++ nodes.eraseIdx j)
     else policyElement ++ children
   | none => policyElement ++ children
+where
+  isPlainUtf8 : Html → Bool
+    | .element tag #[(name, value)] body =>
+      tag.toLower == "meta" && name.toLower == "charset" && value.toLower == "utf-8" && body.isEmpty
+    | _ => false
 
 /-- Checks that a serialized document prefix contains only whitespace or the HTML doctype. -/
 public def isDocumentPreamble (text : String) : Bool :=
@@ -445,29 +510,29 @@ public def isDocumentPreamble (text : String) : Bool :=
 
 -- Identify the head before any element or text that could cause the parser to leave the head.
 def insertIntoLeadingHead (policyElement : Html) (nodes : Array Html) : Option (Array Html) := do
-  let index ← nodes.findIdx? (!isWhitespaceNode ·)
-  let .element tag attrs children := nodes[index]! | none
+  let index ← nodes.findFinIdx? (!isWhitespaceNode ·)
+  let .element tag attrs children := nodes[index] | none
   if tag.toLower != "head" || !hasValidAttributeNames attrs then none
-  else some (nodes.set! index (.element tag attrs (addToHead policyElement children)))
+  else some (nodes.set index (.element tag attrs (addToHead policyElement children)))
 
 -- Require a structured head at the start of the document or of its outer html element.
 def insertIntoHead (policyElement : Html) (html : Html) : Option Html := do
   let nodes := flatten html
-  let index ← nodes.findIdx? fun
+  let index ← nodes.findFinIdx? fun
     | .raw s => !isDocumentPreamble s
     | node => !isWhitespaceNode node
-  let .element tag attrs children := nodes[index]! | none
+  let .element tag attrs children := nodes[index] | none
   let nodes ←
     if tag.toLower == "html" then
       guard (hasValidAttributeNames attrs)
       let children ← insertIntoLeadingHead policyElement (flatten children)
-      pure (nodes.set! index (.element tag attrs (.seq children)))
+      pure (nodes.set index (.element tag attrs (.seq children)))
     else
       let head ← insertIntoLeadingHead policyElement (nodes.extract index)
       pure (nodes.extract 0 index ++ head)
-  return match html with
-    | .element .. => nodes[0]!
-    | _ => .seq nodes
+  match html with
+  | .element .. => nodes[0]?
+  | _ => some (.seq nodes)
 
 /--
 Applies a policy configuration to an HTML document by inserting a policy in its leading `<head>`
@@ -475,9 +540,10 @@ When the policy is enabled, documents without such a head are rejected.
 -/
 public def apply (config : Config) (html : Html) : Except String Html :=
   if !config.enabled then .ok html
-  else
+  else do
+    let policy ← collect config html
     let policyElement :=
-      html%{<meta http-equiv="Content-Security-Policy" content={(collect config html).render}/>}
+      html%{<meta http-equiv="Content-Security-Policy" content={policy.render}/>}
     match insertIntoHead policyElement html with
     | some html => .ok html
     | none => .error "Cannot install the content security policy: expected a leading structured <head> and valid attribute names on <html> and <head>."

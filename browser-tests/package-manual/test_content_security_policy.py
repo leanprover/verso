@@ -72,6 +72,7 @@ class TestContentSecurityPolicy:
     # In SVG, the browser decodes the printer's escapes before it runs the script.
     def test_svg_script_text_is_decoded(self, loaded_page: Page):
         assert loaded_page.evaluate("window.packageManualSvgText") == "a && b < c"
+        assert loaded_page.evaluate("window.packageManualSvgRaw") == "a < b &amp;&"
 
     # In an SVG `foreignObject`, the browser runs the escaped text, as in HTML.
     def test_foreign_object_script_text_is_escaped(self, loaded_page: Page):

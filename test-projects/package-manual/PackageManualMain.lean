@@ -94,6 +94,8 @@ def config (localhost : Host) (port : Option Port) : Config where
     -- decodes the printer's escapes, so it runs and hashes the original text. This checks that the
     -- policy hashes the decoded body.
     html%{<svg width="0" height="0"><script>{"window.packageManualSvgText = \"a && b < c\";"}</script></svg>},
+    html%{<svg width="0" height="0"><script>{Lean.Html.raw
+      "<![CDATA[window.packageManualSvgRaw = 'a < b &amp;']]> + '&amp;';"}</script></svg>},
     -- A script in an SVG `foreignObject`, where the browser parses HTML again. It runs and hashes
     -- the escaped text, as in `extraHead`.
     html%{<svg width="0" height="0"><foreignObject><script>{"window.packageManualForeignObjectText = \"a && b\";"}</script></foreignObject></svg>}

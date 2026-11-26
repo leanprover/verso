@@ -238,12 +238,14 @@ tag := "html-content-security-policy-genres"
 Authors of Verso genres can enable content security policies for HTML content using {name Verso.Output.Html.ContentSecurityPolicy.apply}`ContentSecurityPolicy.apply` on each page.
 This should be the last step in the pipeline, after all scripts have been added.
 {name Verso.Output.Html.ContentSecurityPolicy.apply}`ContentSecurityPolicy.apply` collects browser-processed inline scripts and adds their hashes to the set of allowed scripts.
-It inserts the policy into the document's leading structured `<head>` element, immediately after a leading `<meta charset>` tag if present.
+It inserts the policy into the document's first `<head>` element, immediately after the first `<meta charset>` tag (if present).
+If a plain `<meta charset="utf-8">` occurs later among the head's children, Verso moves it to the front so the policy cannot push the encoding declaration past the first 1024 bytes.
 When enabled, it returns an error if it cannot locate that head. Custom templates should construct the document head as structured HTML.
 If the {name Verso.Output.Html.ContentSecurityPolicy.Config.enabled}`enabled` flag in the configuration is not set, then the HTML is not modified.
 
 Genre authors who need to examine or modify the policy before applying it should call {name Verso.Output.Html.ContentSecurityPolicy.collect}`ContentSecurityPolicy.collect` to collect the inline scripts in the page.
-The resulting {name Verso.Output.Html.ContentSecurityPolicy.Policy}`Policy` includes sources for the page's external scripts, the code of its inline scripts, and the provided configuration values.
+If Verso cannot determine the text of an inline SVG script, collection returns an error.
+On success, the resulting {name Verso.Output.Html.ContentSecurityPolicy.Policy}`Policy` includes sources for the page's external scripts, the code of its inline scripts, and the provided configuration values.
 Use {name Verso.Output.Html.ContentSecurityPolicy.Policy.render}`Policy.render` to construct a string that's suitable for the `<meta>` tag, in which inline scripts are allowed based on hashes of their source.
 
 {docstring Verso.Output.Html.ContentSecurityPolicy.apply}
