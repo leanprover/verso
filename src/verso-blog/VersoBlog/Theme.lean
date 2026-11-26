@@ -313,6 +313,10 @@ def post : Template := do
           <div class="date">
             {md.date.toIso8601String}
           </div>
+          { match md.subtitle with
+            | some subtitle => html%{<div class="subtitle">{subtitle}</div>}
+            | none => Html.empty
+          }
           {if md.categories.isEmpty then Html.empty
             else html%{
               <ul class="categories">
@@ -358,6 +362,14 @@ def archiveEntry : Template := do
             <div class="date">
               {md.date.toIso8601String}
             </div>
+            { match md.featuredImage with
+              | some imgpath => html%{<div class="featured-image"><img src={imgpath}/></div>}
+              | none => Html.empty
+            }
+            { match md.subtitle with
+              | some subtitle => html%{<div class="subtitle">{subtitle}</div>}
+              | none => Html.empty
+            }
             {if md.categories.isEmpty then Html.empty
               else html%{
                 <ul class="categories">

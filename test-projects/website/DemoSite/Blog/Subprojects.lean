@@ -23,6 +23,7 @@ set_option pp.rawOnError true
 %%%
 authors := ["Fictional Author", "Another Fictional Author"]
 date := {year := 2024, month := 3, day := 5}
+featuredImage := "static/A.svg"
 categories := [examples, other]
 %%%
 

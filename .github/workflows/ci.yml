@@ -318,6 +318,7 @@ jobs:
                   # Fail if the generated about page doesn't have the expected base tag and blog link
                   grep -qF '<a href="blog/">blog</a> genre' _out/demosite/about/index.html
                   grep -qF '<base href=".././"/>' _out/demosite/about/index.html
+                  grep -qF '<img src="./static/A.svg"' _out/demosite/blog/index.html
 
             # The sites are copied to `_out/literate-sites`, which is where the browser tests
             # read them.
