@@ -254,20 +254,29 @@ macro_rules
 end
 
 /--
-Returns an `InputContext` and start position for parsing the contents of a string literal that was
-part of the original source file.
+Returns an `InputContext` and start position for parsing the source region identified by `str`.
 
-Throws an error if the string literal has no source position (e.g. because it was created by a
-macro or quotation rather than parsed from the source). The end position is clamped to the end of
-the source.
+The positions refer to the current `FileMap`, whose source and line endings are preserved. They must
+be UTF-8 character boundaries and delimit the contents, without enclosing quotes or markup fences.
+Any line-ending normalization required by the Lean parser must precede assigning these positions,
+as it does in Lean's ordinary frontend; this helper never normalizes an existing source snapshot.
+Only the positions are used: the syntax's value is not decoded or checked against the source.
+Positioned synthetic syntax is therefore accepted when its range identifies the intended source
+text. Use a standalone-string parser for decoded or generated text without such a source region.
+
+Throws an error if the start position is missing or the range is reversed or starts past the source.
+A missing end position denotes an empty region; an end past the source is clamped to its end.
 -/
 public def strLitInputContext [Monad m] [MonadFileMap m] [MonadError m] (str : Syntax) (fileName : String) : m (InputContext × String.Pos.Raw) := do
   let some startPos := str.getPos?
-    | throwErrorAt str "Expected an original string literal with source positions, but it has none"
+    | throwErrorAt str "Expected source positions for parsing a source region"
   let endPos := str.getTailPos?.getD startPos
   let text ← getFileMap
   let endPos := if endPos > text.source.rawEndPos then text.source.rawEndPos else endPos
-  let ictx := Parser.mkInputContext text.source fileName (endPos := endPos) (endPos_valid := by grind)
+  unless startPos ≤ endPos do
+    throwErrorAt str "Invalid source region: start position is past its end"
+  let ictx := InputContext.mk text.source fileName (fileMap := text)
+    (endPos := endPos) (endPos_valid := by grind)
   return (ictx, startPos)
 
 /--
@@ -586,5 +595,31 @@ public def runParserCategory' (env : Environment) (opts : Lean.Options) (catName
 where
   toSyntaxErrors (ictx : InputContext) (s : ParserState) : Array SyntaxError :=
     s.allErrors.map fun (pos, stk, e) => (mkSyntaxError ictx pos stk e)
+
+/--
+Parses the current source region identified by `input` according to the extensible syntax category
+`catName`, using the caller's environment and options. Successful syntax and formatted parse errors
+refer to the current file's coordinates.
+
+The source-region requirements are those of `strLitInputContext`: validation errors throw through
+`MonadError`, while ordinary parse failures return `.error`. The syntax's value is not decoded.
+For example, use `parseSourceCategory` on a Verso code-content token. Parse decoded or generated
+strings with the existing standalone-string parser helpers instead.
+For content that needs decoding and source-mapped errors, use the `Literal`-based
+`parseStrLitAsCategory` instead.
+-/
+public def parseSourceCategory [Monad m] [MonadEnv m] [MonadLog m] [MonadOptions m] [MonadError m]
+    (catName : Name) (input : Syntax) : m (Except String Syntax) := do
+  let (ictx, pos) ← strLitInputContext input (← getFileName)
+  let env ← getEnv
+  let p := andthenFn whitespace (categoryParserFnImpl catName)
+  let s := p.run ictx { env, options := ← getOptions } (getTokenTable env)
+    { mkParserState ictx.inputString with pos }
+  return if !s.allErrors.isEmpty then
+    .error (s.toErrorMsg ictx)
+  else if ictx.atEnd s.pos then
+    .ok s.stxStack.back
+  else
+    .error ((s.mkError "end of input").toErrorMsg ictx)
 
 end Verso.SyntaxUtils
